@@ -9562,3 +9562,164 @@ class 주소는_값만_보고는_틀린_줄_모른다(TestCase):
         self.assertTrue(company_verify_enabled())
         with override_settings(OCR_COMPANY_VERIFY=False):
             self.assertFalse(company_verify_enabled())
+
+
+class 이론치로_표를_만든다(TestCase):
+    """
+    공인기관 성적서 없이 표를 만드는 일이 흔하다. 그때 현장에서 쓰는 엑셀이
+    이렇게 생겼다 — 실제로 받은 시트다.
+
+        프로그램 100g   오차    오차범위 100g   결과
+        열량   299.87           300.325        299.40
+        탄수화물 64.05           64.05          64
+        당류    33.74   15%      38.801         39
+        지방     2.30   15%       2.645          2.6
+        나트륨 242.12   15%     278.438        280
+
+    세 걸음이다 — 계산값에 오차를 물리고, 표시 단위로 반올림하고, 열량은
+    그렇게 만든 탄단지로 다시 계산한다. 그 계산을 여기로 옮긴다.
+    """
+
+    def test_오차는_성분마다_방향이_다르다(self):
+        """
+        규정이 한쪽 방향으로만 정해 두었다.
+          실측이 표시량의 120% 미만이어야 하는 것 -> 높여 적어야 안전하다
+          실측이 표시량의  80% 이상이어야 하는 것 -> 낮춰 적어야 안전하다
+        """
+        from v1.label.services.nutrition_calc import tolerance_direction
+
+        for field in ('calories', 'natriums', 'sugars', 'fats',
+                      'trans_fats', 'saturated_fats', 'cholesterols'):
+            self.assertEqual(tolerance_direction(field), 1, field)
+        for field in ('carbohydrates', 'proteins', 'dietary_fiber',
+                      'calcium', 'vitamin_c'):
+            self.assertEqual(tolerance_direction(field), -1, field)
+
+    def test_시트와_같은_값이_나온다(self):
+        from v1.label.services.nutrition_calc import apply_tolerance
+
+        calc = {'carbohydrates': 64.05, 'sugars': 33.74, 'proteins': 5.08,
+                'fats': 2.30, 'saturated_fats': 0.65, 'trans_fats': 0.01,
+                'cholesterols': 0.26, 'natriums': 242.12}
+        out = apply_tolerance(calc, 15)
+        self.assertAlmostEqual(out['sugars'], 38.801, places=3)
+        self.assertAlmostEqual(out['fats'], 2.645, places=3)
+        self.assertAlmostEqual(out['saturated_fats'], 0.7475, places=4)
+        self.assertAlmostEqual(out['trans_fats'], 0.0115, places=4)
+        self.assertAlmostEqual(out['cholesterols'], 0.299, places=3)
+        self.assertAlmostEqual(out['natriums'], 278.438, places=3)
+        # 낮추는 쪽은 고르지 않았으면 그대로 둔다
+        self.assertEqual(out['carbohydrates'], 64.05)
+        self.assertEqual(out['proteins'], 5.08)
+
+    def test_두_방향을_고르면_이상_성분은_낮춘다(self):
+        """탄수화물·단백질을 그대로 두면 실측이 표시량의 80% 밑으로 떨어질 수 있다."""
+        from v1.label.services.nutrition_calc import apply_tolerance
+
+        out = apply_tolerance({'carbohydrates': 100.0, 'sugars': 10.0}, 15,
+                              mode='both')
+        self.assertAlmostEqual(out['carbohydrates'], 85.0)
+        self.assertAlmostEqual(out['sugars'], 11.5)
+
+    def test_열량에는_곱하지_않는다(self):
+        """
+        열량은 탄단지가 정하는 값이다. 따로 부풀리면 표 안이 서로 맞지 않는다.
+        시트도 열량 줄의 오차 칸만 비워 두고 결과는 탄단지의 합으로 적는다.
+        """
+        from v1.label.services.nutrition_calc import apply_tolerance
+
+        out = apply_tolerance({'calories': 299.87, 'fats': 2.30}, 15)
+        self.assertEqual(out['calories'], 299.87)
+
+    def test_보정한_탄단지로_열량을_다시_계산한다(self):
+        from v1.label.services.nutrition_calc import (
+            apply_tolerance, calories_from_macros)
+
+        calc = {'carbohydrates': 64.05, 'proteins': 5.08, 'fats': 2.30}
+        self.assertAlmostEqual(
+            calories_from_macros(apply_tolerance(calc, 15)), 300.325, places=3)
+        # 반올림한 표시값으로 다시 계산하면 시트의 결과와 같다
+        self.assertAlmostEqual(
+            calories_from_macros({'carbohydrates': 64, 'proteins': 5, 'fats': 2.6}),
+            299.4, places=3)
+
+    def test_식이섬유는_계수가_다르다(self):
+        """
+        규정은 식이섬유 2 kcal/g, 당알코올 2.4 kcal/g 을 따로 정한다. 둘 다
+        탄수화물 안에 들어 있으므로 그만큼을 빼고 각자의 계수로 세야 한다.
+        빼먹으면 식이섬유가 많은 제품의 열량이 실제보다 높게 나온다.
+        """
+        from v1.label.services.nutrition_calc import calories_from_macros
+
+        plain = calories_from_macros({'carbohydrates': 64, 'proteins': 5, 'fats': 2.6})
+        fiber = calories_from_macros({'carbohydrates': 64, 'proteins': 5, 'fats': 2.6,
+                                      'dietary_fiber': 10})
+        self.assertAlmostEqual(plain - fiber, 20.0)      # 10 g x (4 - 2)
+
+    def test_기준량을_모르면_환산하지_않는다(self):
+        from v1.label.services.nutrition_calc import per_serving
+
+        self.assertIsNone(per_serving({'calories': 300}, 100, None))
+        self.assertIsNone(per_serving({'calories': 300}, 100, '0'))
+        self.assertEqual(per_serving({'calories': 300}, 100, 30)['calories'], 90.0)
+
+
+class 고열량_저영양_식품인가(TestCase):
+    """
+    「어린이 식생활안전관리 특별법」이 정한 기준이다. **1회 제공량 기준**이라
+    우리 저장값(100 g 당)을 그 양으로 환산한 뒤에 견줘야 한다.
+
+    받은 시트의 아래쪽 패널이 이 판정이다 — 1회 섭취참고량 30 g 에 열량 89.7,
+    당류 11.7, 단백질 1.5, 포화지방 0.21 로 "아니다" 가 나왔다.
+    """
+
+    def _snack(self, **values):
+        from v1.label.services.nutrition_calc import hieng_lntrt
+        return hieng_lntrt(values, 'snack')
+
+    def test_시트의_그_제품은_아니다(self):
+        from v1.label.services.nutrition_calc import hieng_lntrt, per_serving
+
+        per30 = per_serving({'calories': 299, 'sugars': 39, 'proteins': 5,
+                             'saturated_fats': 0.7, 'natriums': 280}, 100, 30)
+        self.assertAlmostEqual(per30['calories'], 89.7, places=1)
+        self.assertAlmostEqual(per30['sugars'], 11.7, places=1)
+        self.assertIs(hieng_lntrt(per30, 'snack')['verdict'], False)
+
+    def test_간식용_조합_기준에_걸린다(self):
+        # 열량 250 kcal 초과 + 단백질 2 g 미만
+        result = self._snack(calories=260, proteins=1.5, sugars=10,
+                             saturated_fats=1, natriums=100)
+        self.assertIs(result['verdict'], True)
+        self.assertIn('열량', result['hits'][0])
+        self.assertIn('단백질', result['hits'][0])
+
+    def test_단백질이_넉넉하면_조합_기준을_비껴간다(self):
+        result = self._snack(calories=260, proteins=3, sugars=10,
+                             saturated_fats=1, natriums=100)
+        self.assertIs(result['verdict'], False)
+
+    def test_단독_기준은_단백질을_보지_않는다(self):
+        # 열량 500 kcal 초과는 그것만으로 걸린다
+        result = self._snack(calories=520, proteins=30, sugars=1,
+                             saturated_fats=1, natriums=10)
+        self.assertIs(result['verdict'], True)
+
+    def test_용기면_국수류는_나트륨_기준이_다르다(self):
+        from v1.label.services.nutrition_calc import hieng_lntrt
+
+        values = {'calories': 520, 'proteins': 12, 'saturated_fats': 1,
+                  'sugars': 1, 'natriums': 800}
+        self.assertIs(hieng_lntrt(values, 'meal')['verdict'], True)
+        self.assertIs(hieng_lntrt(values, 'meal', noodle=True)['verdict'], False)
+
+    def test_모르는_것과_아닌_것은_다르다(self):
+        """
+        아니라고 말해 놓고 실제로는 걸리는 제품이 나오면 그 말을 믿은 사람이
+        다친다. 값이 비어 있으면 판정하지 않는다.
+        """
+        from v1.label.services.nutrition_calc import hieng_lntrt
+
+        self.assertIsNone(hieng_lntrt({'calories': 260}, 'snack')['verdict'])
+        self.assertIsNone(hieng_lntrt({'proteins': 1}, 'snack')['verdict'])
+        self.assertIsNone(hieng_lntrt({'calories': 100}, '')['verdict'])

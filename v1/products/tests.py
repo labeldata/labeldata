@@ -3061,13 +3061,33 @@ class BomGridHasTheRestTests(TestCase):
             self.assertIn(field, self.bom)
 
     def test_머리글_이름과_칸_수가_맞는다(self):
+        """
+        너비는 자리가 아니라 **이름**에 붙어 있다. 붙여넣기가 칸을 엑셀 순서로
+        옮겨 놓으면 자리로 정한 너비는 엉뚱한 칸에 남는다 — 배합비가 넓어지고
+        원재료 표시명이 좁아졌다.
+        """
         import re
         head = self.bom.index('const BOM_SHEET_HEADERS')
         names = re.findall(r"'([^']+)'", self.bom[head:self.bom.index('];', head)])
         self.assertEqual(len(names), 9)
-        head = self.bom.index('const ratios')
-        ratios = re.findall(r'0\.\d+', self.bom[head:head + 200])
-        self.assertEqual(len(ratios), 9)
+
+        head = self.bom.index('const BOM_COL_WIDTH')
+        block = self.bom[head:self.bom.index('};', head)]
+        for name in names:
+            self.assertIn("'%s':" % name, block, name)
+        # 성격이 다른 칸은 폭도 달라야 한다
+        self.assertLess(block.index("'배합비(%)'"), len(block))
+        self.assertIn('max: 108', block)      # 숫자 네 자리면 끝이다
+        self.assertIn('min: 200', block)      # 원재료 표시명은 문장이 온다
+
+    def test_칸을_옮기면_너비도_따라간다(self):
+        head = self.bom.index('function getBomColWidths')
+        block = self.bom[head:head + 1200]
+        self.assertIn('hot.toPhysicalColumn(v)', block)
+        self.assertIn('Math.max(spec.min, Math.min(spec.max, share))', block)
+        # 옮긴 뒤 다시 잡아 주지 않으면 자리와 너비가 어긋난 채로 남는다
+        head = self.bom.index("hot.addHook('afterColumnMove'")
+        self.assertIn('colWidths: getBomColWidths()', self.bom[head:head + 400])
 
     def test_붙여넣기도_그_칸을_안다(self):
         head = self.bom.index('const BOM_SHEET_ALIASES')

@@ -432,8 +432,74 @@ body.in-iframe .bom-page-header { display: none !important; }
         bindPaletteToggle();
     });
 
-    // 컨테이너 너비 기준 비율 콜너비 계산
-    // 비율: 원료명(17%): 표시명(38%): 식품유형(12%): 배합비(9%): 제조사(15%): 비고(9%)
+    /* 양식의 열 이름. 화면 머리글이자 엑셀 양식의 머리글이고, 붙여넣기가
+       머리글 줄을 알아보는 잣대이기도 하다. 한 곳에서만 정한다. */
+    const BOM_SHEET_HEADERS = ['원료명', '원재료 표시명', '식품유형',
+                               '배합비(%)', '제조사/수입사',
+                               '알레르기 성분', 'GMO', '품목보고번호', '비고'];
+
+    /* 엑셀에서 실제로 쓰는 이름들. 회사마다 다르게 부르므로, 열 순서가
+       달라도 머리글만 있으면 제자리를 찾아간다.
+
+       AI 를 쓰지 않는다. 이름을 견주는 사전 대조라 결과가 늘 같고,
+       무엇을 어떻게 맞췄는지 그대로 말해 줄 수 있다. 새 이름이 나오면
+       여기 한 줄을 더한다. */
+    const BOM_SHEET_ALIASES = {
+        '원료명':        ['원료명', '원재료명', '원재료/원료명', '원재료',
+                         '품명', '재료명', '원료'],
+        '원재료 표시명': ['원재료 표시명', '표시명', '표시용 원료명',
+                         '원재료명 및 함량', '원재료명 및 함량 / 성분',
+                         '원재료명및함량', '성분'],
+        '식품유형':      ['식품유형', '유형', '품목유형', '분류'],
+        '배합비(%)':     ['배합비(%)', '배합비율', '원료함량',
+                         '배합비율/원료함량', '배합비', '함량', '비율'],
+        '제조사/수입사': ['제조사/수입사', '업체명', '제조사', '수입사',
+                         '제조업체', '제조원', '공급사', '거래처'],
+        '알레르기 성분': ['알레르기 성분', '알레르기', '알러지', '알레르겐',
+                         '알레르기유발물질', '알레르기 유발물질'],
+        'GMO':          ['gmo', 'gmo성분', '유전자변형', '유전자재조합',
+                         'gmo여부'],
+        '품목보고번호':   ['품목보고번호', '보고번호', '품목번호',
+                         '품목제조보고번호'],
+        '비고':          ['비고', '메모', '참고', '비고사항']
+    };
+
+    /* 열 이름 자체가 값인 경우. 알레르기를 이렇게 적는 표가 흔하다.
+           계란  우유  밀  대두
+            O    X    X   O
+       이름 목록은 서버가 준다 — 표시 명칭 판정과 같은 자리에서 온다
+       (allergen_names.HEADER_NAMES). */
+    const BOM_SHEET_MARKS = {
+        into: '알레르기 성분',
+        names: window.ALLERGEN_HEADER_NAMES || {}
+    };
+
+    /*
+     * 칸 너비는 **그 칸에 무엇이 들어오는가**로 정한다.
+     *
+     * 예전에는 자리 순서대로 비율을 늘어놓았다(첫 칸 13%, 둘째 20% …).
+     * 그런데 붙여넣기가 칸을 엑셀 순서로 옮겨 놓으면 너비만 제자리에 남는다 —
+     * 배합비가 둘째 자리로 오면 20% 를 가져가 숫자 네 자리에 넓은 칸이 생기고,
+     * 원재료 표시명은 셋째 자리의 9% 로 밀려 문장이 여섯 줄로 접힌다.
+     *
+     * 그래서 이름표를 붙여 둔다. 칸이 어디로 옮겨 가든 너비가 따라간다.
+     *
+     *   weight  남는 폭을 나눠 가지는 몫
+     *   min/max 그 칸이 담는 것의 성격. 배합비는 "41.958" 이면 끝이고,
+     *           원재료 표시명·비고는 문장이 들어온다
+     */
+    const BOM_COL_WIDTH = {
+        '원료명':        { weight: 13, min: 110, max: 240 },
+        '원재료 표시명': { weight: 24, min: 200, max: 460 },
+        '식품유형':      { weight: 9,  min: 84,  max: 150 },
+        '배합비(%)':     { weight: 7,  min: 78,  max: 108 },
+        '제조사/수입사': { weight: 11, min: 96,  max: 220 },
+        '알레르기 성분': { weight: 10, min: 96,  max: 220 },
+        'GMO':          { weight: 6,  min: 64,  max: 110 },
+        '품목보고번호':   { weight: 9,  min: 96,  max: 170 },
+        '비고':          { weight: 11, min: 110, max: 340 },
+    };
+
     // rowHeaders(행 번호 열) 너비 ~52px를 제외하고 계산해야 스크롤 방지
     function getBomColWidths() {
         const bomGrid = document.getElementById('bom-grid');
@@ -441,14 +507,19 @@ body.in-iframe .bom-page-header { display: none !important; }
         const ROW_HEADER_W = 52; // Handsontable 행 번호 열 기본 너비
         // 아홉 칸이 다 읽히려면 최소 폭이 있어야 한다. 좁으면 가로로 민다.
         const w = Math.max(1080, containerW - ROW_HEADER_W);
-        /* 원료명 · 표시명 · 식품유형 · 배합비 · 제조사 · 알레르기 · GMO ·
-           품목보고번호 · 비고. 아홉 칸이 되면서 좁아졌으니 표가 화면보다
-           넓어질 수 있다 — 그때는 표 안에서 가로로 민다. */
-        const ratios = [0.13, 0.20, 0.09, 0.07, 0.11, 0.11, 0.07, 0.11, 0.11];
-        // 각 컬럼 너비를 floor 후 나머지 픽셀을 마지막 컬럼(비고)에 합산 → 합계 = w 보장
-        const widths = ratios.map(r => Math.floor(w * r));
-        const sum = widths.reduce((a, b) => a + b, 0);
-        widths[widths.length - 1] += (w - sum); // 나머지 픽셀 보정
+
+        const rule = name => BOM_COL_WIDTH[name] || { weight: 10, min: 90, max: 260 };
+        const total = BOM_SHEET_HEADERS.reduce((sum, name) => sum + rule(name).weight, 0);
+
+        /* 화면에 보이는 순서대로 돌려준다. 칸을 옮겨 뒀으면(붙여넣기·손으로
+           끌기) 그 자리에 **지금 놓여 있는 칸**의 너비여야 한다. */
+        const widths = [];
+        for (let v = 0; v < BOM_SHEET_HEADERS.length; v++) {
+            const physical = (hot && hot.toPhysicalColumn) ? hot.toPhysicalColumn(v) : v;
+            const spec = rule(BOM_SHEET_HEADERS[physical]);
+            const share = Math.floor(w * spec.weight / total);
+            widths.push(Math.max(spec.min, Math.min(spec.max, share)));
+        }
         return widths;
     }
 
@@ -456,48 +527,6 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (!data.length) {
             data = Array.from({ length: 15 }, () => ({}));
         }
-
-        /* 양식의 열 이름. 화면 머리글이자 엑셀 양식의 머리글이고, 붙여넣기가
-           머리글 줄을 알아보는 잣대이기도 하다. 한 곳에서만 정한다. */
-        const BOM_SHEET_HEADERS = ['원료명', '원재료 표시명', '식품유형',
-                                   '배합비(%)', '제조사/수입사',
-                                   '알레르기 성분', 'GMO', '품목보고번호', '비고'];
-
-        /* 엑셀에서 실제로 쓰는 이름들. 회사마다 다르게 부르므로, 열 순서가
-           달라도 머리글만 있으면 제자리를 찾아간다.
-
-           AI 를 쓰지 않는다. 이름을 견주는 사전 대조라 결과가 늘 같고,
-           무엇을 어떻게 맞췄는지 그대로 말해 줄 수 있다. 새 이름이 나오면
-           여기 한 줄을 더한다. */
-        const BOM_SHEET_ALIASES = {
-            '원료명':        ['원료명', '원재료명', '원재료/원료명', '원재료',
-                             '품명', '재료명', '원료'],
-            '원재료 표시명': ['원재료 표시명', '표시명', '표시용 원료명',
-                             '원재료명 및 함량', '원재료명 및 함량 / 성분',
-                             '원재료명및함량', '성분'],
-            '식품유형':      ['식품유형', '유형', '품목유형', '분류'],
-            '배합비(%)':     ['배합비(%)', '배합비율', '원료함량',
-                             '배합비율/원료함량', '배합비', '함량', '비율'],
-            '제조사/수입사': ['제조사/수입사', '업체명', '제조사', '수입사',
-                             '제조업체', '제조원', '공급사', '거래처'],
-            '알레르기 성분': ['알레르기 성분', '알레르기', '알러지', '알레르겐',
-                             '알레르기유발물질', '알레르기 유발물질'],
-            'GMO':          ['gmo', 'gmo성분', '유전자변형', '유전자재조합',
-                             'gmo여부'],
-            '품목보고번호':   ['품목보고번호', '보고번호', '품목번호',
-                             '품목제조보고번호'],
-            '비고':          ['비고', '메모', '참고', '비고사항']
-        };
-
-        /* 열 이름 자체가 값인 경우. 알레르기를 이렇게 적는 표가 흔하다.
-               계란  우유  밀  대두
-                O    X    X   O
-           이름 목록은 서버가 준다 — 표시 명칭 판정과 같은 자리에서 온다
-           (allergen_names.HEADER_NAMES). */
-        const BOM_SHEET_MARKS = {
-            into: '알레르기 성분',
-            names: window.ALLERGEN_HEADER_NAMES || {}
-        };
 
         hot = new Handsontable(container, {
             data: data,
@@ -663,10 +692,15 @@ body.in-iframe .bom-page-header { display: none !important; }
                 window.sheetPasteApplyOrder(hot, window.GRID_ORDER, {
                     headers: BOM_SHEET_HEADERS
                 });
+                // 아래 afterColumnMove 를 아직 달기 전이라 여기서 한 번 잡는다
+                hot.updateSettings({ colWidths: getBomColWidths() });
             }
 
-            /* 손으로 끌어다 옮긴 것도 남긴다 — 붙여넣기로 놓은 것과 같은 자리 */
+            /* 손으로 끌어다 옮긴 것도 남긴다 — 붙여넣기로 놓은 것과 같은 자리.
+               너비도 다시 잡는다. 칸이 옮겨 갔는데 너비가 자리에 남아 있으면
+               배합비 칸이 넓고 원재료 표시명이 좁아진다. */
             hot.addHook('afterColumnMove', function () {
+                hot.updateSettings({ colWidths: getBomColWidths() });
                 var order = [];
                 for (var v = 0; v < BOM_SHEET_HEADERS.length; v++) {
                     order.push(BOM_SHEET_HEADERS[hot.toPhysicalColumn(v)]);

@@ -188,6 +188,18 @@ class MyLabel(models.Model):
     serving_size_unit = models.CharField(max_length=10, verbose_name="단위 내용량 단위", null=True, blank=True)
 
     units_per_package = models.CharField(max_length=10, verbose_name="포장 당 갯수", null=True, blank=True)
+
+    # 1회 섭취참고량. 단위내용량과 다른 값이다 — 단위내용량은 한 개의 양이고
+    # 이것은 "한 번에 이만큼 먹는다" 는 식품유형별 기준량이다. 고열량·저영양
+    # 판정과 영양강조표시가 이 값을 분모로 쓴다(단위는 serving_size_unit 을 따른다).
+    serving_reference = models.CharField(max_length=10, verbose_name="1회 섭취참고량", null=True, blank=True)
+    # 고열량·저영양 판정 구분 — 'snack'(간식용) / 'meal'(식사대용) / 빈값(판정 안 함)
+    hieng_kind = models.CharField(max_length=10, verbose_name="고열량저영양 판정 구분", null=True, blank=True)
+    # 이론치로 표를 만들었다는 사실과 그 근거. 공인기관 성적서 없이 계산한
+    # 표는 그 자체가 감사 대상이라, 무엇으로 어떻게 냈는지가 값과 함께 남아야 한다.
+    nutrition_source = models.CharField(max_length=20, verbose_name="영양성분 산출 방법", null=True, blank=True)
+    nutrition_source_note = models.TextField(max_length=500, verbose_name="영양성분 산출 근거", null=True, blank=True)
+    nutrition_tolerance = models.CharField(max_length=10, verbose_name="적용한 허용오차(%)", null=True, blank=True)
     nutrition_display_unit = models.CharField(max_length=10, verbose_name="영양성분 표시 단위", null=True, blank=True)
     basic_display_type = models.CharField(max_length=20, verbose_name="기본형 표시 기준", null=True, blank=True)
     parallel_display_type = models.CharField(max_length=20, verbose_name="병렬형 표시 기준", null=True, blank=True)
