@@ -147,6 +147,8 @@ urlpatterns = [
 
     # 표시사항 서버측 검증 (클라이언트 우회 방지용 최종 판정)
     path('<int:label_id>/validate/', views.validate_label_server, name='validate_label_server'),
+    path('<int:label_id>/validation-readiness/', views.validation_readiness_api,
+         name='validation_readiness'),
 
     # 표시사항 AI 2차 검증 (파일럿: 원재료명 표시 순서) — 비용/지연 있어 별도 opt-in 호출
     path('<int:label_id>/validate/ai/', views.validate_label_ai, name='validate_label_ai'),

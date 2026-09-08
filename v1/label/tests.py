@@ -11793,3 +11793,91 @@ class UploadPagesTests(TestCase):
                      'v1/templates/products/_tab_label.html'):
             html = open(path, encoding='utf-8').read()
             self.assertIn('accept="image/*,.pdf"', html, path)
+
+
+class ValidationTabTests(TestCase):
+    """
+    검증 두 갈래를 나란히 둔다.
+
+    예전에는 시안 대조가 탭의 띠에, 규정 검증이 iframe 안 도구 줄에 있었다.
+    두 검증이 다른 레이어에 있어 나란히 놓인 적이 없고, 이름도 "규정 검증" 과
+    "대조" 로 갈려 같은 종류로 보이지 않았다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(username='vtab', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='검증')
+        self.client.force_login(self.user)
+        self.proof, _ = DocumentType.objects.get_or_create(
+            type_code='DESIGN_PROOF', defaults={'type_name': '포장지 시안'})
+
+    def _attach(self, filename):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from v1.products.models import ProductDocument
+
+        return ProductDocument.objects.create(
+            label=self.label, document_type=self.proof,
+            file=SimpleUploadedFile(filename, b'x'),
+            original_filename=filename)
+
+    def _readiness(self):
+        response = self.client.get(
+            reverse('label:validation_readiness', args=[self.label.my_label_id]))
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_탭_이름이_검증이다(self):
+        from v1.products.views import _WORKFLOW_STEPS
+
+        names = {tab: name for tab, name, _ in _WORKFLOW_STEPS}
+        self.assertEqual(names['tab-label'], '검증')
+
+    def test_1차는_늘_시작할_수_있다(self):
+        """대상이 이 화면의 표라 준비물이 따로 없다."""
+        first = self._readiness()['first']
+        self.assertTrue(first['ready'])
+        self.assertIn('표시사항', first['target'])
+        self.assertGreater(first['check_count'], 20)
+
+    def test_시안이_없으면_2차는_막힌다(self):
+        second = self._readiness()['second']
+        self.assertFalse(second['ready'])
+        self.assertIn('시안', second['blocked_reason'])
+        self.assertIn('포장지 시안', second['missing'])
+
+    def test_시안이_있으면_열린다(self):
+        self._attach('proof.pdf')
+        second = self._readiness()['second']
+        self.assertTrue(second['ready'])
+
+    def test_형식마다_무엇까지_보는지_알려_준다(self):
+        """올리고 나서야 "값불명" 을 보면 그때는 이미 판독 비용을 썼다."""
+        self._attach('proof.jpg')
+        docs = {d['type_code']: d for d in self._readiness()['second']['documents']}
+        proof = docs['DESIGN_PROOF']
+        self.assertFalse(proof['reads_font'])
+        self.assertIn('눈으로', proof['note'])
+
+    def test_pdf_면_활자까지_읽는다(self):
+        self._attach('proof.pdf')
+        docs = {d['type_code']: d for d in self._readiness()['second']['documents']}
+        self.assertTrue(docs['DESIGN_PROOF']['reads_font'])
+        self.assertIn('활자 크기', docs['DESIGN_PROOF']['note'])
+
+    def test_무엇이_없으면_무엇을_못_보는지_말한다(self):
+        """갖추라고만 하고 끝내면 사용자가 필요 여부를 스스로 정할 수 없다."""
+        docs = self._readiness()['second']['documents']
+        self.assertTrue(all(d['gives'] for d in docs))
+
+    def test_화면에_두_칸이_있다(self):
+        html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
+        self.assertIn('1차', html)
+        self.assertIn('표시문구 검증', html)
+        self.assertIn('2차', html)
+        self.assertIn('디자인시안 검증', html)
+        # 각 칸에 대상이 못 박혀 있다
+        self.assertIn('이 화면의 표시사항', html)
+        self.assertIn('문서함의 포장지 시안', html)

@@ -46,16 +46,56 @@
       사용자가 "내 정본" 으로 보는 화면이 여기다.
     {% endcomment %}
     {% if can_edit %}
-    <div class="lt-toolbar">
-      <i class="bi bi-git-compare text-primary"></i>
-      <span class="lt-toolbar-title">디자인 시안 대조</span>
-      <span class="lt-toolbar-note">
-        디자인 담당자가 만든 포장지 시안을 올리면 아래 표시사항과
-        <strong>다른 곳만</strong> 보여 줍니다. 값은 바뀌지 않습니다.
-      </span>
-      <button type="button" class="btn btn-outline-primary v2-btn-sm ms-auto" id="ltCompareBtn">
-        <i class="bi bi-upload"></i>시안 올려 대조
-      </button>
+    {% comment %}
+      검증 두 갈래를 **나란히** 둔다.
+
+      예전에는 시안 대조가 이 띠에, 규정 검증이 iframe 안 도구 줄에 있었다.
+      두 검증이 다른 레이어에 있어서 나란히 놓인 적이 없고, 이름도 "규정 검증"
+      과 "대조" 로 갈려 같은 종류로 보이지 않았다. 사용자가 무엇을 검증하는
+      중인지 헷갈렸다.
+
+      각 칸에 **대상**을 못 박는다 — 1차는 우리가 만든 것, 2차는 받은 것.
+      2차는 시안이 있어야 시작되므로, 무엇을 올리면 무엇까지 보는지를
+      누르기 **전에** 보여 준다(validation_readiness).
+    {% endcomment %}
+    <div class="lt-verify" id="ltVerify">
+      <section class="lt-verify-card" id="ltFirstCard">
+        <div class="lt-verify-head">
+          <span class="lt-verify-step">1차</span>
+          <strong>표시문구 검증</strong>
+        </div>
+        <p class="lt-verify-what">
+          <span class="lt-verify-label">대상</span> 이 화면의 표시사항
+        </p>
+        <p class="lt-verify-note">우리가 만든 표시사항이 규정에 맞는지 봅니다.</p>
+        <div class="lt-verify-foot">
+          <button type="button" class="btn btn-primary v2-btn-sm" id="ltFirstBtn">
+            <i class="bi bi-list-check"></i> 1차 검증
+          </button>
+          <span class="lt-verify-meta" id="ltFirstMeta"></span>
+        </div>
+      </section>
+
+      <section class="lt-verify-card" id="ltSecondCard">
+        <div class="lt-verify-head">
+          <span class="lt-verify-step">2차</span>
+          <strong>디자인시안 검증</strong>
+        </div>
+        <p class="lt-verify-what">
+          <span class="lt-verify-label">대상</span> 문서함의 포장지 시안
+        </p>
+        <p class="lt-verify-note">
+          받은 시안이 확정한 표시사항과 같은지, 인쇄 규정에 맞는지 봅니다.
+          값은 바뀌지 않습니다.
+        </p>
+        <div class="lt-verify-docs" id="ltSecondDocs"></div>
+        <div class="lt-verify-foot">
+          <button type="button" class="btn btn-outline-primary v2-btn-sm" id="ltCompareBtn">
+            <i class="bi bi-upload"></i> 시안 올려 2차 검증
+          </button>
+          <span class="lt-verify-meta" id="ltSecondMeta"></span>
+        </div>
+      </section>
       <input type="file" id="ltCompareFile" accept="image/*,.pdf" hidden>
     </div>
     {% endif %}
@@ -335,5 +375,87 @@
     window.ltLoad = ltLoad;
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
+})();
+</script>
+
+<style>
+/* 검증 두 갈래를 나란히. 좁으면 위아래로 접힌다 */
+.lt-verify {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
+    flex-shrink: 0;
+}
+.lt-verify-card {
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fff;
+}
+.lt-verify-head { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.lt-verify-step {
+    background: var(--ez-info, #1a73e8); color: #fff;
+    border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 700;
+}
+.lt-verify-what { margin: 6px 0 2px; font-size: 12.5px; color: #202124; }
+.lt-verify-label {
+    display: inline-block; min-width: 30px;
+    color: #5f6368; font-size: 11px; font-weight: 700;
+}
+.lt-verify-note { margin: 0 0 6px; font-size: 11.5px; color: #5f6368; }
+.lt-verify-docs { margin: 0 0 6px; font-size: 11.5px; }
+.lt-verify-docs .doc { display: flex; gap: 6px; align-items: baseline; padding: 1px 0; }
+.lt-verify-docs .doc-have { color: #188038; }
+.lt-verify-docs .doc-miss { color: #b06000; }
+.lt-verify-docs .doc-gives { color: #80868b; font-size: 11px; }
+.lt-verify-foot { display: flex; align-items: center; gap: 8px; }
+.lt-verify-meta { font-size: 11.5px; color: #5f6368; }
+</style>
+<script>
+/* 검증 전에 무엇이 갖춰졌는지 보여 준다.
+   올리고 나서야 "값불명" 을 보는 일이 없게 — 그때는 이미 판독 비용을 썼다. */
+(function () {
+    var root = document.getElementById('ltVerify');
+    if (!root) return;
+    var labelId = '{{ product.my_label_id }}';
+    if (!labelId) return;
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function draw(data) {
+        var first = document.getElementById('ltFirstMeta');
+        if (first && data.first) {
+            first.textContent = '검사 ' + data.first.check_count + '개';
+        }
+        var second = data.second || {};
+        var box = document.getElementById('ltSecondDocs');
+        if (box) {
+            box.innerHTML = (second.documents || []).map(function (d) {
+                if (d.hidden) return '';
+                var mark = d.present ? '✓' : (d.required ? '!' : '·');
+                var cls = d.present ? 'doc-have' : (d.required ? 'doc-miss' : '');
+                var tail = d.present && d.note ? ' — ' + esc(d.note) : '';
+                return '<div class="doc"><span class="' + cls + '">' + mark + '</span>'
+                    + '<span>' + esc(d.name) + '</span>'
+                    + '<span class="doc-gives">' + esc(d.gives) + esc(tail) + '</span></div>';
+            }).join('');
+        }
+        var meta = document.getElementById('ltSecondMeta');
+        if (meta) {
+            meta.textContent = second.ready
+                ? '시안이 있습니다 — 바로 검증할 수 있습니다.'
+                : (second.blocked_reason || '');
+        }
+    }
+
+    fetch('/label/' + labelId + '/validation-readiness/', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) { if (data && data.success) draw(data); })
+        .catch(function () {});
 })();
 </script>

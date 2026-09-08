@@ -3456,6 +3456,22 @@ def generate_rawmtrl_display(request, label_id):
 
 
 @login_required
+def validation_readiness_api(request, label_id):
+    """
+    검증 두 갈래의 준비 상태.
+
+    검증을 누르기 **전에** 무엇이 있어야 더 정확한지 알려 준다. 지금까지는
+    올리고 나서야 알았다 — 시안을 JPG 로 올리면 활자 크기가 "값불명" 이 되고,
+    그때는 이미 판독 비용을 쓴 뒤다.
+    """
+    label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
+
+    from .services.validation_readiness import readiness
+
+    return JsonResponse({'success': True, **readiness(label)})
+
+
+@login_required
 @require_GET
 def validate_label_server(request, label_id):
     """
