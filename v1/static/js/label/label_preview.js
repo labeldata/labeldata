@@ -1,4 +1,4 @@
-// 즉시 실행 함수로 전역 함수들 정의
+﻿// 즉시 실행 함수로 전역 함수들 정의
 // 디버그 모드 비활성화
 
 // ===== 전역 validateSettings 함수 =====
@@ -683,7 +683,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // constants.js에서 로드된 상수들 사용
     const DEFAULT_SETTINGS = window.DEFAULT_SETTINGS;
-    const REGULATIONS = { ...window.REGULATIONS };
+    /* 서버가 이 페이지에 심어 준 값(regulations-data). constants.js 에
+       박아 두면 로그인 없이 누구나 표 전체를 받아 간다. */
+    const REGULATIONS = { ...(window.PREVIEW_REGULATIONS || {}) };
     const recyclingMarkGroups = window.recyclingMarkGroupsDetailed;
     
     // 백엔드에서 전달된 소비기한 권장 데이터를 REGULATIONS 객체에 주입
@@ -3788,7 +3790,7 @@ window.checkFoodTypePhrasesUnified = function checkFoodTypePhrasesUnified() {
     }
 
     // 5. 필수 문구 검증
-    const REGULATIONS = window.REGULATIONS || {};
+    const REGULATIONS = window.PREVIEW_REGULATIONS || {};
     let requiredPhrases = [];
     Object.keys(REGULATIONS.food_type_phrases || {}).forEach(key => {
         if (foodType.includes(key)) {

@@ -1,4 +1,4 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -460,6 +460,24 @@
   <script id="country-mapping-data" type="application/json">{{ country_mapping|safe }}</script>
   <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
   <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation_json|safe }}</script>
+  {# 이 라벨에 걸리는 규정값만. 표 전체는 더 이상 나가지 않는다 #}
+  <script id="regulations-data" type="application/json">{{ regulations_json|safe }}</script>
+  <script>
+    /* 규정값을 **한 곳에서** 읽어 창에 올린다.
+       label_preview.js 와 이 파일의 인라인 스크립트가 같은 값을 봐야 하고,
+       label_preview.js 는 아래(508줄)에서 불리므로 여기서 먼저 채운다. */
+    window.PREVIEW_REGULATIONS = (function () {
+        function read(id) {
+            try {
+                var el = document.getElementById(id);
+                return (el && el.textContent.trim()) ? JSON.parse(el.textContent) : {};
+            } catch (e) { return {}; }
+        }
+        var rules = read('regulations-data');
+        rules.expiry_recommendation = read('expiry-recommendation-data');
+        return rules;
+    })();
+  </script>
   <script id="allergens-data" type="application/json">{{ allergens|safe }}</script>
   <script id="custom-fields-data" type="application/json">{{ custom_fields|safe }}</script>
     <script id="label-data" type="application/json">{{ label_data|safe }}</script>
@@ -704,11 +722,11 @@
         
         // constants.js에서 로드된 상수들 사용
         const DEFAULT_SETTINGS = window.DEFAULT_SETTINGS;
-        const REGULATIONS = { ...window.REGULATIONS };
-        // 백엔드 데이터 주입
-        if (safeJsonParse('expiry-recommendation-data')) {
-            REGULATIONS.expiry_recommendation = safeJsonParse('expiry-recommendation-data');
-        }
+        /* 규정값은 서버가 이 페이지에 심어 준다(regulations-data).
+           예전에는 constants.js 안에 표가 통째로 있었고, 그 파일은 로그인
+           없이 누구나 받는다. fetch 로 받으면 첫 검증이 빈 표로 돌아서,
+           비동기가 아니라 페이지에 심는 방식이라야 한다. */
+        const REGULATIONS = window.PREVIEW_REGULATIONS || {};
         
         const recyclingMarkGroups = window.recyclingMarkGroupsDetailed;
         const recyclingMarkMap = {};

@@ -1,4 +1,4 @@
-"""
+﻿"""
 표시사항(label) 앱 회귀 테스트.
 
 눈으로는 회귀를 잡기 어려운 것들만 고정해 둔다.
@@ -12775,3 +12775,77 @@ class 배율은_미리보기_패널_왼쪽_위다(TestCase):
         html = open('v1/templates/label/label_preview.html', encoding='utf-8').read()
         zoom = html.index('zoom-controls zoom-floating')
         self.assertLess(zoom, html.index('<section class="preview-panel">'))
+
+
+class 규정표는_화면에_박아_두지_않는다(TestCase):
+    """
+    면적 임계값·글꼴 최소 크기·자간 범위, 그리고 **식품유형별 필수 표시 문구
+    표 전체**가 static/js/label/constants.js 에 박혀 있었다. /static/ 은
+    로그인 없이 누구나 받으므로 그게 그대로 공개돼 있었다. 그 파일 주석에도
+    이미 "백엔드에서 전달받을 예정" 이라고 적혀 있었다.
+
+    더 나쁜 것은 **필수 문구 표가 서버에는 아예 없었다**는 점이다. 규정
+    판정의 한 조각이 화면에만 있었다.
+
+    서버로 옮기고, 화면에는 **그 라벨에 걸리는 것만** 심어 준다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/constants.js').read_text(encoding='utf-8-sig')
+        self.preview = (base / 'templates/label/label_preview.html'
+                        ).read_text(encoding='utf-8-sig')
+
+    def test_공개_파일에_표가_없다(self):
+        for key in ('area_thresholds', 'food_type_phrases', 'small_area_min',
+                    '캔주의', '해동 후 재냉동 금지'):
+            self.assertNotIn(key, self.js, '%s 가 아직 공개 파일에 있다' % key)
+
+    def test_필수_문구_표는_서버에_있다(self):
+        from v1.label.constants import LABEL_REGULATIONS
+
+        table = LABEL_REGULATIONS['food_type_phrases']
+        self.assertIn('냉동식품', table)
+        self.assertEqual(table['냉동식품'], ['해동 후 재냉동 금지'])
+
+    def test_그_라벨에_걸리는_것만_내려간다(self):
+        from v1.label.services import client_rules
+
+        frozen = client_rules.for_label('냉동식품(기타)')
+        self.assertEqual(list(frozen['food_type_phrases']), ['냉동식품'])
+
+        snack = client_rules.for_label('과자')
+        self.assertEqual(snack['food_type_phrases'], {})   # 표가 통째로 안 나간다
+
+    def test_식품유형이_없어도_터지지_않는다(self):
+        from v1.label.services import client_rules
+
+        for empty in (None, '', '   '):
+            self.assertEqual(client_rules.for_label(empty)['food_type_phrases'], {})
+
+    def test_화면은_심어_준_값을_읽는다(self):
+        """
+        fetch 로 받으면 첫 검증이 빈 표로 돈다 — 검증은 첫 렌더에 바로
+        붙으므로 비동기로는 늦는다. 페이지에 심는다.
+        """
+        self.assertIn('id="regulations-data"', self.preview)
+        self.assertIn('window.PREVIEW_REGULATIONS', self.preview)
+        # 심는 자리가 label_preview.js 를 부르기 **전**이어야 한다
+        seed = self.preview.index('window.PREVIEW_REGULATIONS =')
+        script = self.preview.index("js/label/label_preview.js")
+        self.assertLess(seed, script)
+
+    def test_읽는_곳이_한_곳이다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+              ).read_text(encoding='utf-8-sig')
+        self.assertNotIn('window.REGULATIONS', js)
+        self.assertNotIn('window.REGULATIONS', self.preview)
+        self.assertIn('window.PREVIEW_REGULATIONS', js)

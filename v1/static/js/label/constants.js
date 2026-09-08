@@ -1,4 +1,4 @@
-// constants.js - 프론트엔드 전용 상수
+﻿// constants.js - 프론트엔드 전용 상수
 
 // === 프론트엔드 데이터 목록 (정적 데이터) ===
 
@@ -60,36 +60,15 @@ const DEFAULT_SETTINGS = {
     fontFamily: "'Noto Sans KR'"
 };
 
-// === 표시사항 규정 상수 (백엔드에서 전달받을 예정) ===
-// 주의: 이 상수들은 향후 서버에서 동적으로 로드하도록 변경 예정
-
-const REGULATIONS = {
-    area_thresholds: { 
-        small: 100, 
-        medium: 3000, 
-        large: 3000 
-    },
-    font_size: { 
-        product_name: { min: 16, small_area_min: 10 }, 
-        origin: { min: 14, small_area_min: 10 }, 
-        content_weight: { min: 12, small_area_min: 10 }, 
-        general: { min: 10, small_area_min: 10 } 
-    },
-    spacing: {
-        letter: { default: -5, min: -10, max: 10 },
-        line: { default: 1.2, min: 1.0, max: 3.0 },
-        word: { min: 90, small_area_min: 50 }
-    },
-    // 식품유형별 필수 표시 문구
-    food_type_phrases: { 
-        "과ㆍ채가공품(살균제품/산성통조림)": ["캔주의"], 
-        "유함유가공품": ["알레르기 주의"], 
-        "고카페인": ["어린이, 임산부, 카페인 민감자는 섭취에 주의"], 
-        "젤리/곤약": ["질식주의"], 
-        "방사선 조사": ["감마선/전자선으로 조사처리"], 
-        "냉동식품": ["해동 후 재냉동 금지"] 
-    }
-};
+// === 표시사항 규정 상수는 여기 없다 ===
+//
+// 면적 임계값·글꼴 최소 크기·자간 범위, 그리고 **식품유형별 필수 표시 문구
+// 표 전체**가 여기 박혀 있었다. /static/ 은 로그인 없이 누구나 받으므로 그게
+// 그대로 공개돼 있었고, 서버 LABEL_REGULATIONS 와 같은 숫자가 두 벌이었다.
+//
+// 이제 서버가 **그 라벨에 걸리는 것만** 페이지에 심어 준다
+// (v1/label/services/client_rules.py → <script id="regulations-data">).
+// 읽는 쪽은 window.PREVIEW_REGULATIONS 를 본다.
 
 // === 상세 UI 데이터 ===
 
@@ -282,8 +261,9 @@ window.LABEL_CONSTANTS = {
     recyclingMarkGroupsDetailed: RECYCLING_MARK_GROUPS_DETAILED,
 
     // 설정값 (프론트엔드 전용)
-    defaultSettings: DEFAULT_SETTINGS,
-    regulations: REGULATIONS  // 추후 서버에서 동적 로드 예정
+    // regulations 는 여기 없다 — 서버가 페이지에 심어 준다
+    // (window.PREVIEW_REGULATIONS). 위 주석 참고.
+    defaultSettings: DEFAULT_SETTINGS
 };
 
 // === 기존 코드 호환성 유지 ===
@@ -293,7 +273,6 @@ window.forbiddenPhrases = FORBIDDEN_PHRASES;
 window.recyclingMarkGroups = RECYCLING_MARK_GROUPS;
 window.recyclingMarkMap = RECYCLING_MARK_MAP;
 window.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
-window.REGULATIONS = REGULATIONS;
 window.recyclingMarkGroupsDetailed = RECYCLING_MARK_GROUPS_DETAILED;
 window.allergenKeywords = ALLERGEN_KEYWORDS;
 window.findAllergenSynonyms = findAllergenSynonyms;

@@ -46,6 +46,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
+from v1.label.services import client_rules
 from .services import food_type_settings as fts
 from .services.validation_service import validate_label
 from .services import note_fields, upload_pages
@@ -2593,6 +2594,11 @@ def preview_popup(request):
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
             'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
             'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
+            # 규정값은 **이 라벨에 걸리는 것만** 내려보낸다. 예전에는
+            # constants.js 에 표가 통째로 박혀 있었고, /static/ 은 로그인
+            # 없이 누구나 받는다(client_rules).
+            'regulations_json': json.dumps(
+                client_rules.for_label(label.prdlst_dcnm), ensure_ascii=False),
             'custom_fields': json.dumps(custom_fields, ensure_ascii=False),  # 맞춤항목 추가
             'label_data': json.dumps(label_data, ensure_ascii=False),
             # 표의 항목 배치(순서·폭·세로/2단). 라벨에 붙어 있어야 다른 사람도
