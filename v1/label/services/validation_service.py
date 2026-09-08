@@ -1908,6 +1908,41 @@ _NOT_A_COUNTRY = frozenset({
     '재래', '토', '한', '냉동', '냉장', '유기농', '무농약',
 })
 
+_ADDITIVE_TAIL_CACHE_KEY = 'label_validation:origin_false_friends'
+
+
+def _origin_false_friends() -> frozenset:
+    """
+    "○○산" 인데 원산지가 아닌 말. 코드 목록과 첨가물 공전을 합쳐 쓴다.
+
+    운영에서 "초산, 젖산을 국가명으로 알아보지 못했습니다" 가 나왔다. 원재료명에
+    산으로 끝나는 이름이 아주 많은데 검사가 그것을 전부 원산지 후보로 봤다 —
+    사용자가 고칠 방법이 없는 경고다.
+
+    **DB 만 믿지 않는다.** 첨가물 공전이 비어 있으면(개발 DB 가 그렇다) 검사가
+    조용히 오탐을 쏟는다. 코드 목록이 그 바닥을 받친다.
+    """
+    cached = cache.get(_ADDITIVE_TAIL_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    from v1.label.constants import ORIGIN_FALSE_FRIENDS
+
+    names = set(ORIGIN_FALSE_FRIENDS)
+    try:
+        from v1.label.models import FoodAdditive
+        names.update(
+            row for row in FoodAdditive.objects
+            .filter(name_kr__endswith='산')
+            .values_list('name_kr', flat=True)
+            if row)
+    except Exception:
+        logger.exception('첨가물 이름 조회 실패 — 코드 목록만으로 거른다')
+
+    result = frozenset(names)
+    cache.set(_ADDITIVE_TAIL_CACHE_KEY, result, _FARM_SEAFOOD_CACHE_TTL)
+    return result
+
 _ORIGIN_RE = re.compile(r'([가-힣]{1,10})산(?![가-힣])')
 
 
@@ -1956,11 +1991,15 @@ def check_origin_emphasis(label) -> list[dict]:
     if not known:
         return []       # 목록을 못 읽었으면 판정하지 않는다
 
+    false_friends = _origin_false_friends()
     unknown = []
     for name in _ORIGIN_RE.findall(text):
         if name in _NOT_A_COUNTRY or name in known:
             continue
         if f'{name}산' in known:      # 목록에 "○○산" 째로 들어 있는 경우
+            continue
+        # 산으로 끝나는 원료·첨가물 이름은 원산지가 아니다 (초산·젖산·구연산…)
+        if f'{name}산' in false_friends:
             continue
         if name not in unknown:
             unknown.append(name)

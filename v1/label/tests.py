@@ -11390,3 +11390,61 @@ class DesignNameFontTests(TestCase):
         from v1.label.services.validation_service import _CHECKS
 
         self.assertIn('check_design_name_font', {c.__name__ for c in _CHECKS})
+
+
+class OriginFalseFriendTests(TestCase):
+    """
+    "○○산" 인데 원산지가 아닌 말.
+
+    운영에서 나왔다 — 원재료명의 "초산", "젖산" 을 국가명으로 알아보지
+    못했다는 지적. 식품 원료에는 산으로 끝나는 이름이 아주 많은데 검사가
+    그것을 전부 원산지 후보로 봤다. **사용자가 고칠 방법이 없는 경고다.**
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        from v1.label.models import CountryList
+
+        self.user = User.objects.create_user(username='off', password='x')
+        for index, name in enumerate(['미국', '캐나다']):
+            CountryList.objects.create(country_name_ko=name,
+                                       country_code2='F%d' % index)
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def _messages(self, text):
+        from v1.label.services.validation_service import check_origin_emphasis
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='산',
+                                       rawmtrl_nm_display=text)
+        return [i['message'] for i in check_origin_emphasis(label)]
+
+    def test_원료_이름은_원산지로_보지_않는다(self):
+        self.assertEqual(
+            self._messages('정제수, 초산, 젖산, 구연산, 아황산, 스테아르산'), [])
+
+    def test_진짜_모르는_국가는_그대로_짚는다(self):
+        """거르기를 넓히면 잡아야 할 것을 놓친다."""
+        messages = self._messages('소고기/우간다산')
+        self.assertEqual(len(messages), 1)
+        self.assertIn('우간다', messages[0])
+
+    def test_아는_국가는_조용하다(self):
+        self.assertEqual(self._messages('밀가루(밀/미국산, 캐나다산)'), [])
+
+    def test_표가_비어도_거른다(self):
+        """
+        첨가물 공전이 비어 있으면(개발 DB 가 그렇다) 검사가 조용히 오탐을
+        쏟는다. 코드 목록이 그 바닥을 받친다.
+        """
+        from v1.label.models import FoodAdditive
+        from v1.label.services.validation_service import _origin_false_friends
+
+        self.assertEqual(FoodAdditive.objects.count(), 0)
+        friends = _origin_false_friends()
+        for name in ('초산', '젖산', '구연산'):
+            self.assertIn(name, friends)
