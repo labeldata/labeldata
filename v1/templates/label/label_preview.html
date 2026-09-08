@@ -828,6 +828,22 @@
             /* 설정값은 **최소 너비**다. 거기 안 들어가는 이름이 있으면 넓힌다.
                "유통전문판매원" 은 24mm 를 넘는데, 예전에는 그대로 잘리거나
                삐져나갔다. 잘린 항목명은 인쇄물에서 그냥 틀린 표시가 된다. */
+            /* **글꼴이 아직 안 왔으면 재지 않는다.**
+               아래에서 글자 폭을 재서 칸 너비를 정하는데, 웹글꼴(노토 산스 등)이
+               도착하기 전에는 대체 글꼴로 재게 된다. 그 폭은 실제보다 좁아서
+               칸이 작게 잡히고, 글꼴이 도착하는 순간 글자가 칸을 넘친다 —
+               사용자가 숫자를 한 번 건드리면 그제야 맞아 보이는 이유가 이것이다.
+
+               글꼴이 준비되면 이 함수를 다시 부른다. 한 번만 건다. */
+            if (document.fonts && document.fonts.status !== 'loaded'
+                && !updatePreviewStyles._fontsPending) {
+                updatePreviewStyles._fontsPending = true;
+                document.fonts.ready.then(function () {
+                    updatePreviewStyles._fontsPending = false;
+                    updatePreviewStyles();
+                });
+            }
+
             const colMm = parseFloat(document.getElementById('labelColWidthInput')?.value) || 24;
             const minPx = colMm / 10 * CM_TO_PX;
 
@@ -860,6 +876,14 @@
                두 칸이면 그것만으로 표가 넘친다. */
             const pairs = previewContent.querySelector('tbody.layout-horizontal') ? 2 : 1;
             const usable = previewContent.clientWidth || 0;
+            /* 표가 아직 자리를 못 잡았으면(폭 0) 정하지 않는다. 0 으로 계산하면
+               capPx 가 바닥값 24px 이 되어 항목명이 통째로 잘린다. 다음 프레임에
+               다시 부른다 — 그때는 폭이 잡혀 있다. */
+            if (!usable) {
+                previewContent.style.removeProperty('--label-col-width');
+                requestAnimationFrame(function () { updatePreviewStyles(); });
+                return;
+            }
             const share = pairs === 2 ? 0.22 : 0.45;
             // 값 칸에도 읽을 만큼은 남긴다
             const roomForLabel = Math.max(24, usable / pairs - 60);
