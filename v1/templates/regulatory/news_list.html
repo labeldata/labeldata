@@ -597,16 +597,10 @@
         {% else %}
         <span class="rs-page-btn disabled">‹</span>
         {% endif %}
-        {% for n in page_obj.paginator.page_range %}
-          {% if n == page_obj.number %}
-          <span class="rs-page-btn active">{{ n }}</span>
-          {% elif n >= page_obj.number|add:"-2" and n <= page_obj.number|add:"2" %}
-          <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ n }}">{{ n }}</a>
-          {% elif n == 1 or n == page_obj.paginator.num_pages %}
-          <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ n }}">{{ n }}</a>
-          {% elif n == page_obj.number|add:"-3" or n == page_obj.number|add:"3" %}
-          <span class="rs-page-info">…</span>
-          {% endif %}
+        {% for p in page_window %}
+          {% if p.ellipsis %}<span class="rs-page-info">…</span>
+          {% elif p.active %}<span class="rs-page-btn active">{{ p.n }}</span>
+          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&page={{ p.n }}">{{ p.n }}</a>{% endif %}
         {% endfor %}
         {% if page_obj.has_next %}
         <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ page_obj.next_page_number }}">›</a>
@@ -623,16 +617,10 @@
         {% if insp_page_obj.has_previous %}
         <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ insp_page_obj.previous_page_number }}">‹</a>
         {% else %}<span class="rs-page-btn disabled">‹</span>{% endif %}
-        {% for n in insp_paginator.page_range %}
-          {% if n == insp_page_obj.number %}
-          <span class="rs-page-btn active">{{ n }}</span>
-          {% elif n >= insp_page_obj.number|add:"-2" and n <= insp_page_obj.number|add:"2" %}
-          <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ n }}">{{ n }}</a>
-          {% elif n == 1 or n == insp_paginator.num_pages %}
-          <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ n }}">{{ n }}</a>
-          {% elif n == insp_page_obj.number|add:"-3" or n == insp_page_obj.number|add:"3" %}
-          <span class="rs-page-info">…</span>
-          {% endif %}
+        {% for p in insp_page_window %}
+          {% if p.ellipsis %}<span class="rs-page-info">…</span>
+          {% elif p.active %}<span class="rs-page-btn active">{{ p.n }}</span>
+          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ p.n }}">{{ p.n }}</a>{% endif %}
         {% endfor %}
         {% if insp_page_obj.has_next %}
         <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ insp_page_obj.next_page_number }}">›</a>
@@ -647,16 +635,10 @@
         {% if recent_insp_page_obj.has_previous %}
         <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ recent_insp_page_obj.previous_page_number }}">‹</a>
         {% else %}<span class="rs-page-btn disabled">‹</span>{% endif %}
-        {% for n in recent_insp_paginator.page_range %}
-          {% if n == recent_insp_page_obj.number %}
-          <span class="rs-page-btn active">{{ n }}</span>
-          {% elif n >= recent_insp_page_obj.number|add:"-2" and n <= recent_insp_page_obj.number|add:"2" %}
-          <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ n }}">{{ n }}</a>
-          {% elif n == 1 or n == recent_insp_paginator.num_pages %}
-          <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ n }}">{{ n }}</a>
-          {% elif n == recent_insp_page_obj.number|add:"-3" or n == recent_insp_page_obj.number|add:"3" %}
-          <span class="rs-page-info">…</span>
-          {% endif %}
+        {% for p in pub_page_window %}
+          {% if p.ellipsis %}<span class="rs-page-info">…</span>
+          {% elif p.active %}<span class="rs-page-btn active">{{ p.n }}</span>
+          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ p.n }}">{{ p.n }}</a>{% endif %}
         {% endfor %}
         {% if recent_insp_page_obj.has_next %}
         <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ recent_insp_page_obj.next_page_number }}">›</a>

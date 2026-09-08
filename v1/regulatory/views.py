@@ -77,6 +77,39 @@ class _CountedPaginator(Paginator):
         return self._known_count
 
 
+def _page_window(page_obj, radius=2):
+    """
+    페이지 단추에 실제로 그려질 것만 골라 둔다 — [1, …, 8, 9, 10, 11, 12, …, 120] 꼴.
+
+    예전에는 템플릿이 paginator.page_range 를 통째로 돌면서 {% if %} 사슬로 대부분을
+    버렸다. 수거검사 공개 목록은 원본 전체가 모수라 6만 건이면 3,000쪽이고, 단추
+    일곱 개를 그리자고 3,000번을 돌며 |add 필터를 만 오천 번 태웠다. 실측으로 이
+    화면 렌더 시간의 3분의 2가 여기였다(news_list.html 77ms 중 62ms). 원본은 계속
+    쌓이므로 이 비용도 계속 는다.
+
+    고르는 규칙은 예전 {% if %} 사슬과 같은 순서·같은 결과다.
+      ① 현재 쪽  ② 현재 ±2  ③ 첫 쪽·끝 쪽  ④ 현재 ±3 자리에만 '…'
+    """
+    if page_obj is None:
+        return []
+    last = page_obj.paginator.num_pages
+    cur  = page_obj.number
+    candidates = {1, last, cur - radius - 1, cur + radius + 1}
+    candidates.update(range(cur - radius, cur + radius + 1))
+
+    window = []
+    for n in sorted(c for c in candidates if 1 <= c <= last):
+        if n == cur:
+            window.append({'n': n, 'active': True})
+        elif cur - radius <= n <= cur + radius:
+            window.append({'n': n})
+        elif n == 1 or n == last:
+            window.append({'n': n})
+        elif n in (cur - radius - 1, cur + radius + 1):
+            window.append({'ellipsis': True})
+    return window
+
+
 def _scope_qs(request, scope):
     """내 알림 / 일반 알림 / 전체 를 오가는 주소."""
     params = request.GET.copy()
@@ -669,6 +702,10 @@ def news_list(request):
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,
         'paginator':          paginator,
+        # 페이지 단추는 그려질 것만 미리 골라 넘긴다 (_page_window 주석 참고)
+        'page_window':        _page_window(page_obj),
+        'insp_page_window':   _page_window(insp_page_obj),
+        'pub_page_window':    _page_window(recent_insp_page_obj),
         'page_query_string':  page_query_string,
         'current_tab':        current_tab,
         'selected_news':           selected_news,
