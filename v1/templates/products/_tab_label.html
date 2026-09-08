@@ -61,22 +61,21 @@
     <div class="lt-verify" id="ltVerify">
       <div class="lt-verify-row">
         <span class="lt-verify-step">1차</span>
-        <strong class="lt-verify-name">표시문구 검증</strong>
-        <span class="lt-verify-target">이 화면의 표시사항</span>
-        <button type="button" class="btn btn-primary v2-btn-sm ms-auto" id="ltFirstBtn">
+        <strong class="lt-verify-name" title="우리가 만든 표시사항이 규정에 맞는지 봅니다&#10;대상: 이 화면의 표시사항">표시문구 검증</strong>
+        <button type="button" class="btn btn-primary v2-btn-sm" id="ltFirstBtn">
           <i class="bi bi-list-check"></i> 1차 검증
         </button>
         <span class="lt-verify-meta" id="ltFirstMeta"></span>
-      </div>
-      <div class="lt-verify-row">
+
+        <span class="lt-verify-gap"></span>
+
         <span class="lt-verify-step lt-step-2">2차</span>
-        <strong class="lt-verify-name">디자인시안 검증</strong>
-        <span class="lt-verify-target">문서함의 포장지 시안</span>
+        <strong class="lt-verify-name" title="받은 시안이 확정한 표시사항과 같은지, 인쇄 규정에 맞는지 봅니다&#10;대상: 문서함의 포장지 시안">디자인시안 검증</strong>
         <details class="lt-verify-more">
           <summary>무엇을 올리면 더 정확한가</summary>
           <div class="lt-verify-docs" id="ltSecondDocs"></div>
         </details>
-        <button type="button" class="btn btn-outline-primary v2-btn-sm ms-auto" id="ltCompareBtn">
+        <button type="button" class="btn btn-outline-primary v2-btn-sm" id="ltCompareBtn">
           <i class="bi bi-upload"></i> 시안 올려 2차 검증
         </button>
         <span class="lt-verify-meta" id="ltSecondMeta"></span>
@@ -364,14 +363,11 @@
 </script>
 
 <style>
-/* 검증 두 갈래 — **각각 한 줄.**
-   처음에는 카드 두 개에 설명을 여러 줄 넣었더니 표시사항 미리보기와 설정이
-   화면 아래로 밀려났다. 검증은 누르는 자리이지 읽는 자리가 아니다.
-   자세한 것(무엇을 올리면 더 정확한가)은 접어 둔다. */
+/* 검증 두 갈래를 **한 줄에.**
+   처음에는 카드 둘에 설명을 여러 줄 넣었고, 다음에는 줄 둘로 줄였다. 그래도
+   위쪽에 다섯 겹이 쌓여 작업 영역이 뷰포트의 3분의 2였다. 검증은 누르는
+   자리이지 읽는 자리다 — 설명은 이름에 붙인 말풍선으로 옮긴다. */
 .lt-verify {
-    /* 탭 바로 아래에 **붙는다.** 위 여백을 두면 탭과 사이가 벌어져 보이고,
-       그만큼 미리보기가 아래로 밀린다 — BOM 탭은 안내 줄이 바로 붙어 있어
-       그런 틈이 없다. 배경을 옅게 깔아 탭에 딸린 띠로 읽히게 한다. */
     padding: 4px 12px 5px;
     background: var(--ez-gray-50, #f8f9fa);
     border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
@@ -379,23 +375,19 @@
 }
 .lt-verify-row {
     display: flex;
+    flex-wrap: wrap;          /* 좁으면 2차가 아래로 내려간다 */
     align-items: center;
-    gap: 8px;
-    padding: 3px 0;
+    gap: 6px;
     font-size: 12.5px;
 }
+.lt-verify-gap { flex: 1 1 20px; }   /* 둘을 갈라 놓는다 */
 .lt-verify-step {
     background: var(--ez-info, #1a73e8); color: #fff;
     border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700;
     flex-shrink: 0;
 }
 .lt-verify-step.lt-step-2 { background: #7b1fa2; }
-.lt-verify-name { flex-shrink: 0; }
-.lt-verify-target {
-    color: #5f6368; font-size: 11.5px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.lt-verify-target::before { content: '대상 '; color: #9aa0a6; }
+.lt-verify-name { flex-shrink: 0; cursor: help; }
 .lt-verify-more { font-size: 11.5px; flex-shrink: 0; }
 .lt-verify-more > summary { cursor: pointer; color: var(--ez-info, #1a73e8); }
 .lt-verify-docs {

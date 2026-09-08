@@ -12386,3 +12386,50 @@ class BomNoteColumnTests(TestCase):
         self.assertIn('readOnly: true', html)
         # 고르는 자리에도 나온다
         self.assertIn('NOTE_COLUMN_NAMES', html)
+
+
+class ChromeHeightTests(TestCase):
+    """
+    화면 위쪽에 다섯 겹이 쌓여 작업 영역이 뷰포트의 3분의 2였다.
+
+        앱 띠 56 + 제품 헤더 64 + 탭 바 48 + 검증 띠 52 + 미리보기 헤더 64
+        = 284px
+
+    작업하는 자리를 되찾는다.
+    """
+
+    def _read(self, path):
+        return open(path, encoding='utf-8').read()
+
+    def test_미리보기_제목은_창으로_열_때만_나온다(self):
+        """탭 안에서는 탭 이름이 이미 「검증」이고 그 아래가 표인 것이 자명하다."""
+        html = self._read('v1/templates/label/label_preview.html')
+        self.assertIn('{% if not request.GET.in_tab %}', html)
+        # 설명 두 줄은 통째로 걷어냈다
+        self.assertNotIn('라벨 디자인을 미리 확인하고 PDF로 다운로드하세요', html)
+
+    def test_검증이_한_줄이다(self):
+        html = self._read('v1/templates/products/_tab_label.html')
+        self.assertEqual(html.count('class="lt-verify-row"'), 1)
+        # 설명은 이름에 붙인 말풍선으로 옮겼다
+        self.assertIn('lt-verify-name" title=', html)
+
+    def test_제품_상세는_앱_띠를_접고_시작한다(self):
+        detail = self._read('v1/templates/products/product_detail.html')
+        self.assertIn('{% block max_default %}1{% endblock %}', detail)
+
+    def test_다른_화면은_펼친_채로_시작한다(self):
+        base = self._read('v1/templates/base_v2.html')
+        self.assertIn("{% block max_default %}0{% endblock %}", base)
+
+    def test_고른_것이_기본값을_이긴다(self):
+        """한 번이라도 펴면 그 선택이 남아야 한다."""
+        base = self._read('v1/templates/base_v2.html')
+        self.assertIn("saved === null ? MAX_DEFAULT : saved === '1'", base)
+
+    def test_접혀도_검색이_닿는다(self):
+        """자주 안 쓴다고 닿을 수 없게 두면 없앤 것과 같다."""
+        base = self._read('v1/templates/base_v2.html')
+        self.assertIn("e.key === 'k'", base)
+        self.assertIn('.v2-topbar-search input', base)
+        self.assertIn('Ctrl+K', base)
