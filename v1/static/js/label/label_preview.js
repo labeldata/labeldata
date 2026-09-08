@@ -3080,6 +3080,20 @@ document.addEventListener('DOMContentLoaded', function () {
     safeAddEventListener('downloadTextBtn', 'click', downloadLabelText);
     safeAddEventListener('downloadDocBtn', 'click', downloadLabelDoc);
     safeAddEventListener('saveSettingsBtn', 'click', savePreviewSettings);
+
+    /* 탭 안에 끼워져 있으면 이 단추를 감춘다.
+     *
+     * 표시사항 탭은 이 화면을 iframe 으로 품고, 바깥 화면의 "저장" 이 이미
+     * 여기 savePreviewSettings() 를 부른다(product_detail.html). 같은 것을
+     * 하는 단추가 둘이면 어느 것을 눌러야 하는지 묻게 되고, 하나만 누르고
+     * 나갔다가 나머지가 안 저장된 줄 안다.
+     *
+     * **창으로 따로 열었을 때는 그대로 둔다** — 그때는 여기가 유일한 저장이다.
+     */
+    if (window.parent !== window) {
+        const embeddedSave = document.getElementById('saveSettingsBtn');
+        if (embeddedSave) embeddedSave.remove();
+    }
     // 부모 프레임(탭에 끼워 넣은 미리보기)이 부를 수 있게 노출한다
     window.savePreviewSettings = savePreviewSettings;
     

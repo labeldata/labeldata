@@ -11622,3 +11622,35 @@ class PackageFormTests(TestCase):
         from v1.label.services.validation_service import _CHECKS
 
         self.assertIn('check_package_form', {c.__name__ for c in _CHECKS})
+
+
+class EmbeddedSaveButtonTests(TestCase):
+    """
+    같은 것을 하는 단추가 둘이면 어느 것을 눌러야 하는지 묻게 된다.
+
+    표시사항 탭은 미리보기를 iframe 으로 품고, 바깥 화면의 "저장" 이 이미
+    iframe 안의 savePreviewSettings() 를 부른다. 그런데 iframe 안에도 "설정
+    저장" 이 있어서, 하나만 누르고 나갔다가 나머지가 안 저장된 줄 알았다.
+    """
+
+    def setUp(self):
+        self.js = open('v1/static/js/label/label_preview.js',
+                       encoding='utf-8').read()
+        self.outer = open('v1/templates/products/product_detail.html',
+                          encoding='utf-8').read()
+
+    def test_바깥_저장이_안쪽_함수를_부른다(self):
+        """이 연결이 있어야 안쪽 단추를 뺄 수 있다."""
+        self.assertIn('iframe.contentWindow.savePreviewSettings()', self.outer)
+
+    def test_끼워졌을_때만_감춘다(self):
+        head = self.js.index("safeAddEventListener('saveSettingsBtn'")
+        block = self.js[head:head + 1200]
+        self.assertIn('window.parent !== window', block)
+        self.assertIn("getElementById('saveSettingsBtn')", block)
+
+    def test_창으로_열면_남는다(self):
+        """따로 연 창에는 바깥 저장이 없다 — 여기가 유일한 저장이다."""
+        self.assertIn('id="saveSettingsBtn"',
+                      open('v1/templates/label/label_preview.html',
+                           encoding='utf-8').read())
