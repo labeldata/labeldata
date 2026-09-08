@@ -521,3 +521,93 @@ class 등록했는데_안_걸렸을_때(TestCase):
 
         html = self._html()
         self.assertIn('tab=insp&amp;q=%EB%B9%84%EC%95%8C%EC%BD%94%EB%A6%AC%EC%95%84', html)
+
+
+class AI_를_태우지_않는_것은_한_곳에서_정한다(TestCase):
+    """
+    같은 새올 파일을 어느 명령으로 넣느냐에 따라 결과가 달랐다.
+
+        collect_regulatory_news : ('I0470-', 'I0480-', 'I0482-', 'saol-')
+        sync_import_news        : ('I0470-', 'I0480-')
+
+    행정처분은 업체 단위라("무신고 영업", "영업정지 7일") AI 가 뽑을 원재료도
+    검출 물질도 없다. 그런데 sync 로 넣으면 새올 건이 ai_parsed=False 로 남고,
+    다음 날 정기 수집이 **그걸 전부 OpenAI 로 보낸다.** 백필 한 번이 만 건을
+    넘으니 조용히 큰돈이 나가는 종류다.
+    """
+
+    def test_새올은_AI_대상이_아니다(self):
+        from v1.regulatory.services.ai_parser import is_admin_disposal
+
+        self.assertTrue(is_admin_disposal('saol-namyangju-1a2b3c'))
+        self.assertTrue(is_admin_disposal('I0470-123'))
+        self.assertTrue(is_admin_disposal('I0482-123'))
+
+    def test_검사부적합은_AI_대상이다(self):
+        from v1.regulatory.services.ai_parser import is_admin_disposal
+
+        self.assertFalse(is_admin_disposal('I2620-123'))
+        self.assertFalse(is_admin_disposal('CFCEE01F01-9'))
+        self.assertFalse(is_admin_disposal(''))
+        self.assertFalse(is_admin_disposal(None))
+
+    def test_목록을_두_벌로_두지_않는다(self):
+        """두 벌이면 어느 날 한쪽만 고쳐진다 — 실제로 그렇게 갈렸다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR) / 'regulatory'
+        for name in ('collect_regulatory_news', 'sync_import_news'):
+            path = base / 'management' / 'commands' / ('%s.py' % name)
+            text = path.read_text(encoding='utf-8')
+            self.assertNotIn("= ('I0470-", text, '%s 가 목록을 또 갖고 있다' % name)
+            self.assertIn('is_admin_disposal', text)
+
+    def test_두_명령이_같은_판정을_쓴다(self):
+        import importlib
+
+        one = importlib.import_module(
+            'v1.regulatory.management.commands.collect_regulatory_news')
+        two = importlib.import_module(
+            'v1.regulatory.management.commands.sync_import_news')
+        self.assertIs(one.is_admin_disposal, two.is_admin_disposal)
+
+
+class 새올_파일도_같은_명령으로_넣는다(TestCase):
+    """
+    로컬에서 긁어 PA 서버에 올린 new_saol_data.json 을 서버가 읽는 길.
+
+    정기 수집(collect_regulatory_news)은 파일을 **읽고 지운다.** 백필처럼 큰
+    파일은 한 번 실패하면 되돌릴 수 없으므로, 파일만 넣고 싶을 때는 sync 에
+    --keep-file 로 준다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.src = (Path(dj.BASE_DIR)
+                    / 'regulatory/management/commands/sync_import_news.py'
+                    ).read_text(encoding='utf-8')
+
+    def test_새올_경로를_적어_둔다(self):
+        self.assertIn('/home/labeldata/mysite/new_saol_data.json', self.src)
+
+    def test_파일을_지키는_길이_설명에_있다(self):
+        self.assertIn('--keep-file', self.src)
+
+    def test_새올_건은_저장할_때부터_분석_완료로_들어간다(self):
+        """ai_parsed=False 로 남기면 다음 정기 수집이 OpenAI 로 보낸다."""
+        from v1.regulatory.models import RegulatoryNews
+        from v1.regulatory.services.ai_parser import is_admin_disposal
+
+        news = RegulatoryNews.objects.create(
+            source=RegulatoryNews.SOURCE_DOMESTIC,
+            external_id='saol-geoje-deadbeef',
+            api_source='saol_admin',
+            product_name='OO식당',
+            ai_parsed=is_admin_disposal('saol-geoje-deadbeef'),
+        )
+        self.assertTrue(news.ai_parsed)

@@ -54,8 +54,8 @@ logger = logging.getLogger(__name__)
 IMPORT_JSON_PATH = '/home/labeldata/mysite/new_import_data.json'
 SAOL_JSON_PATH   = '/home/labeldata/mysite/new_saol_data.json'
 
-# 행정처분 external_id 접두사 — 업체 단위 처분이므로 AI 원료 파싱 불필요
-_ADMIN_DISPOSAL_PREFIXES = ('I0470-', 'I0480-', 'I0482-', 'saol-')
+# 어느 것이 업체 단위 행정처분인가는 ai_parser 한 곳에서 정한다
+from v1.regulatory.services.ai_parser import is_admin_disposal   # noqa: E402
 
 
 class Command(BaseCommand):
@@ -227,7 +227,7 @@ class Command(BaseCommand):
             try:
                 ext_id     = item['external_id']
                 api_source = item.get('api_source', '')
-                is_admin   = any(ext_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)
+                is_admin   = is_admin_disposal(ext_id)
 
                 news, created = RegulatoryNews.objects.get_or_create(
                     external_id=ext_id,
@@ -356,8 +356,8 @@ class Command(BaseCommand):
             self.stdout.write('  → AI 파싱 대상 없음')
             return []
 
-        admin_items = [n for n in items if any(n.external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)]
-        parse_items = [n for n in items if not any(n.external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)]
+        admin_items = [n for n in items if is_admin_disposal(n.external_id)]
+        parse_items = [n for n in items if not is_admin_disposal(n.external_id)]
 
         if admin_items:
             RegulatoryNews.objects.filter(pk__in=[n.pk for n in admin_items]).update(

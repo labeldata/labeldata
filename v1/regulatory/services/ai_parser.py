@@ -28,6 +28,26 @@ import logging
 
 from django.conf import settings
 
+# ─────────────────────────────────────────────────────────────────────────
+# AI 를 태우지 않는 것 — **업체 단위 처분**이다.
+#
+# 행정처분은 "무신고 영업", "영업정지 7일" 처럼 제품이 아니라 업체에 내려진다.
+# 뽑아낼 원재료도 검출 물질도 없어서 AI 에 넣어 봐야 나오는 것이 없고, 건수는
+# 가장 많다. 새올 백필 한 번이 만 건을 넘는다.
+#
+# **이 목록이 두 벌이었다.** collect_regulatory_news 에는 'saol-' 이 있고
+# sync_import_news 에는 없어서, 같은 새올 파일을 어느 명령으로 넣느냐에 따라
+# ai_parsed 가 달라졌다. sync 로 넣으면 만 건이 미분석으로 남고, 다음 날
+# 정기 수집이 그걸 전부 OpenAI 로 보낸다. 한 곳에서만 정한다.
+# ─────────────────────────────────────────────────────────────────────────
+ADMIN_DISPOSAL_PREFIXES = ('I0470-', 'I0480-', 'I0482-', 'saol-')
+
+
+def is_admin_disposal(external_id):
+    """업체 단위 행정처분인가 — AI 파싱 대상에서 뺀다."""
+    return any(str(external_id or '').startswith(p)
+               for p in ADMIN_DISPOSAL_PREFIXES)
+
 logger = logging.getLogger(__name__)
 
 

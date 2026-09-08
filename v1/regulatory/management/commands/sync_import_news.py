@@ -12,6 +12,11 @@ Management Command: sync_import_news  [비상용 유틸리티]
   python manage.py sync_import_news --parse-ai           # DB 저장 + AI 파싱/매칭까지
   python manage.py sync_import_news --file /tmp/x.json   # 파일 경로 직접 지정
   python manage.py sync_import_news --keep-file          # 처리 후 파일 유지
+
+새올(전국 지자체 행정처분) 파일도 같은 모양이라 그대로 넣는다:
+  python manage.py sync_import_news --file /home/labeldata/mysite/new_saol_data.json --keep-file
+      → DB 저장만. AI 도 매칭도 안 돈다(행정처분은 업체 단위라 AI 가 뽑을 것이
+        없고, 백필은 만 건을 넘어 알림이 쏟아진다)
 """
 import json
 import logging
@@ -20,14 +25,14 @@ import os
 from django.core.management.base import BaseCommand
 
 from v1.regulatory.models import RegulatoryNews
+from v1.regulatory.services.ai_parser import is_admin_disposal
 
 logger = logging.getLogger(__name__)
 
 # 로컬 스크립트에서 업로드하는 파일 경로 (config.ini dest_path 와 동일)
 DEFAULT_FILE_PATH = '/home/labeldata/mysite/new_import_data.json'
-
-# 행정처분 external_id 접두사 — AI 파싱 불필요 (국내 행정처분만, 수입행정처분 I0482는 수집 안 함)
-_ADMIN_DISPOSAL_PREFIXES = ('I0470-', 'I0480-')
+# 새올(전국 지자체 행정처분)도 같은 모양이라 --file 로 이 명령에 넣는다
+SAOL_FILE_PATH    = '/home/labeldata/mysite/new_saol_data.json'
 
 
 class Command(BaseCommand):
@@ -168,7 +173,7 @@ class Command(BaseCommand):
                     errors += 1
                     continue
 
-                is_admin   = any(external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)
+                is_admin   = is_admin_disposal(external_id)
                 event_date = self._parse_event_date(item.get('event_date'))
 
                 news, created = RegulatoryNews.objects.get_or_create(
@@ -224,10 +229,8 @@ class Command(BaseCommand):
         from v1.regulatory.services.matcher import run_matching_for_all_users
 
         # 행정처분 제외 (이미 ai_parsed=True)
-        parse_targets = [
-            n for n in news_list
-            if not any(n.external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)
-        ]
+        parse_targets = [n for n in news_list
+                         if not is_admin_disposal(n.external_id)]
 
         parsed_count  = 0
         matched_total = 0
