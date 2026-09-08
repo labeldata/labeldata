@@ -3106,6 +3106,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     // 부모 프레임(탭에 끼워 넣은 미리보기)이 부를 수 있게 노출한다
     window.savePreviewSettings = savePreviewSettings;
+
+    /* 내보내기를 제품 헤더(저장 옆)로 옮겼다. 메뉴는 바깥에 있고 **일은 여기서
+       한다** — 내보내기 코드를 밖으로 옮기면 창으로 따로 열었을 때 쓸 수 없고,
+       두 벌로 두면 어느 날 한쪽만 고쳐진다. */
+    window.runPreviewExport = function (action) {
+        const ids = {
+            copyText: 'copyTextBtn', pdf: 'exportPdfBtn',
+            designRequest: 'exportDesignRequestBtn',
+            doc: 'downloadDocBtn', text: 'downloadTextBtn'
+        };
+        const btn = document.getElementById(ids[action] || '');
+        if (btn) { btn.click(); return true; }
+        return false;      // 권한이 없어 그 단추가 아예 없는 경우
+    };
     
     // 높이 계산 이벤트 리스너 설정 (중복 제거된 코드)
     const heightCalculationInputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'];
@@ -4909,12 +4923,18 @@ function cellHtmlForDoc(cell) {
 function labelDocHtml() {
     const data = labelRowData();
     /* 낱말 단위로 접으면 원재료명 300자가 스무 줄이 된다 — 워드가 쉼표 뒤에서
-       끊기 때문이다. 가로가 차면 끊고 줄간격을 좁혀 한 장에 담는다. */
+       끊기 때문이다. 가로가 차면 끊고 줄간격을 좁혀 한 장에 담는다.
+
+       왼쪽 맞춤도 못 박는다. 한글 워드의 「표준」 스타일은 양쪽 맞춤이라,
+       말하지 않으면 낱말 사이가 가로를 채우려고 벌어진다. */
     const cellStyle = 'border:1px solid #444;padding:3px 6px;font-size:10pt;'
-        + 'word-break:break-all;overflow-wrap:anywhere;line-height:1.15;'
+        + 'text-align:left;word-break:break-all;overflow-wrap:anywhere;'
+        + 'line-height:1.15;'
         + "font-family:'Malgun Gothic',sans-serif;vertical-align:middle;";
+    /* 항목 이름은 길어야 일곱 자다 — 「유통전문판매원」, 「용기·포장재질」.
+       한 줄에 들어갈 만큼만 주고 나머지는 내용에 넘긴다. */
     const headStyle = cellStyle + 'background:#f2f2f2;font-weight:bold;'
-        + 'width:110px;white-space:nowrap;';
+        + 'font-size:9.5pt;white-space:nowrap;text-align:center;';
 
     const body = data.rows.map(function (row) {
         return '<tr><td style="' + headStyle + '">' + cellHtmlForDoc(row.head) + '</td>'
@@ -4929,17 +4949,31 @@ function labelDocHtml() {
             }).join('') + '</tr>';
         }).join('');
         nutrition = '<p style="margin:14px 0 4px;font-weight:bold;">영양정보</p>'
-            + '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;">'
+            + '<table cellspacing="0" cellpadding="0" '
+            + 'style="border-collapse:collapse;width:16cm;">'
             + rows + '</table>';
     }
+
+    /* 칸 너비를 안 주면 워드가 **둘로 똑같이 나눈다.** 항목은 「제품명」 넉
+       자인데 절반을 먹고, 원재료명 300자는 남은 절반에서 스무 줄로 접힌다.
+
+       픽셀로는 못 박히지 않는다(워드가 다시 계산한다). 백분율도 안 된다 —
+       무엇의 100% 인지를 워드가 스스로 정하고, 그러면 표가 종이 밖으로
+       나간다. 쪽을 A4 로 못 박고 cm 로 적는다. 좌우 여백 2.5 cm 씩을 빼면
+       16 cm 가 남고, 항목이 2.9 cm, 내용이 13.1 cm 다. */
+    const page = '<style>@page{size:21cm 29.7cm;margin:2.5cm;}body{margin:0;}'
+        + 'td,th,p,div{text-align:left;word-break:break-all;}</style>';
+    const cols = '<colgroup><col style="width:2.9cm;">'
+        + '<col style="width:13.1cm;"></colgroup>';
+    const tableStyle = 'border-collapse:collapse;table-layout:fixed;width:16cm;';
 
     return '<html xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
         + '<meta charset="utf-8">'
         + '<title>' + (data.title || '한글표시사항') + '</title>'
-        + '</head><body>'
+        + page + '</head><body>'
         + (data.title ? '<p style="font-weight:bold;margin:0 0 8px;">' + data.title + '</p>' : '')
-        + '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;">'
-        + body + '</table>'
+        + '<table cellspacing="0" cellpadding="0" style="' + tableStyle + '">'
+        + cols + body + '</table>'
         + nutrition
         + '</body></html>';
 }

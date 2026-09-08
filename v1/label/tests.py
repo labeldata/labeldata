@@ -12433,3 +12433,181 @@ class ChromeHeightTests(TestCase):
         self.assertIn("e.key === 'k'", base)
         self.assertIn('.v2-topbar-search input', base)
         self.assertIn('Ctrl+K', base)
+
+
+class 워드로_낼_때_낱말_사이가_벌어진다(TestCase):
+    """
+    받아 본 의뢰서의 원재료명 칸이 이랬다.
+
+        백앙금 59.88%(화이트    빈38%,     정제수),     백설탕
+        말티톨      시럽,      정제소금,      밀
+
+    낱말 사이가 손가락 하나만큼 벌어졌다. 끊는 자리가 문제가 아니라
+    **맞춤**이 문제다 — 한글 워드의 「표준」 스타일은 양쪽 맞춤이라, 우리가
+    말하지 않으면 그 값이 따라온다. 마지막 줄이 아닌 모든 줄이 빈칸을 늘려
+    가로를 채운다.
+
+    왼쪽 맞춤을 못 박는다. 낱말 단위를 버리는 것(break-all)은 그대로 두되,
+    그것만으로는 벌어짐이 안 없어진다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.request_js = (base / 'static/js/label/design_request.js'
+                           ).read_text(encoding='utf-8')
+        self.preview_js = (base / 'static/js/label/label_preview.js'
+                           ).read_text(encoding='utf-8')
+
+    def test_의뢰서_칸은_왼쪽_맞춤이다(self):
+        head = self.request_js.index("var cell = 'border:1px solid #444")
+        self.assertIn('text-align:left', self.request_js[head:head + 400])
+
+    def test_의뢰서는_스타일로도_한_번_더_못_박는다(self):
+        """워드가 「표준」 스타일을 칸 안 문단에 물려주는 판이 있다."""
+        self.assertIn('td,th,p,div{text-align:left;word-break:break-all;}',
+                      self.request_js)
+
+    def test_워드_내보내기도_왼쪽_맞춤이다(self):
+        head = self.preview_js.index("const cellStyle = 'border:1px solid #444")
+        self.assertIn('text-align:left', self.preview_js[head:head + 400])
+
+    def test_낱말_단위를_버리는_것은_그대로_둔다(self):
+        """맞춤을 고쳤다고 끊는 자리를 되돌리면 300자가 스무 줄이 된다."""
+        for js in (self.request_js, self.preview_js):
+            self.assertIn('word-break:break-all', js)
+
+
+class 워드_내보내기_항목_칸이_절반을_먹는다(TestCase):
+    """
+    항목은 길어야 일곱 자(「유통전문판매원」)인데 칸이 절반이었다. 워드는
+    너비를 안 주면 둘로 똑같이 나눈다 — 「제품명」 넉 자가 8 cm 를 쓰고,
+    원재료명 300자는 남은 8 cm 에서 스무 줄로 접혔다.
+
+    의뢰서에서 이미 겪은 일이다(픽셀도 백분율도 안 되고 cm 라야 한다).
+    같은 방법을 여기에도 쓴다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+                   ).read_text(encoding='utf-8')
+
+    def _widths(self):
+        import re
+
+        head = self.js.index('const cols =')
+        end = self.js.index('</colgroup>', head)
+        return [float(m) for m in
+                re.findall(r'width:([\d.]+)cm;', self.js[head:end])]
+
+    def test_두_칸이_인쇄_폭에_들어간다(self):
+        widths = self._widths()
+        self.assertEqual(len(widths), 2)
+        self.assertLessEqual(sum(widths), 16.0)
+
+    def test_항목은_한_줄이_들어갈_만큼만(self):
+        """일곱 자 + 여백. 넉넉하게 주면 다시 내용을 밀어낸다."""
+        item, body = self._widths()
+        self.assertLessEqual(item, 3.2)
+        self.assertGreater(body, item * 3)
+
+    def test_항목_이름은_접히지_않는다(self):
+        head = self.js.index('const headStyle = cellStyle')
+        self.assertIn('white-space:nowrap', self.js[head:head + 200])
+
+    def test_너비를_픽셀로_적지_않는다(self):
+        """픽셀은 워드가 다시 계산한다 — width:110px 이 그래서 안 먹었다."""
+        head = self.js.index('const cols =')
+        self.assertNotIn('px;', self.js[head:self.js.index('</colgroup>', head)])
+        self.assertNotIn("'width:110px;", self.js)
+
+    def test_쪽_크기를_못_박는다(self):
+        """A4 라고 말하지 않으면 워드가 쪽 크기를 스스로 정한다."""
+        head = self.js.index('function labelDocHtml')
+        block = self.js[head:head + 4000]
+        self.assertIn('@page', block)
+        self.assertIn('21cm 29.7cm', block)
+        self.assertIn('table-layout:fixed;width:16cm', block)
+
+
+class 검증_단추가_작아서_안_보인다(TestCase):
+    """
+    한 줄로 줄이느라 글자까지 12.5px 로 줄였더니, 정작 **무엇을 누르는
+    자리인지**가 안 보였다. 줄 수는 그대로 두고 글자와 단추만 키운다 —
+    줄 높이는 어차피 단추가 정한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.html = (Path(dj.BASE_DIR) / 'templates/products/_tab_label.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_단추는_보통_크기다(self):
+        self.assertIn('class="btn btn-primary v2-btn" id="ltFirstBtn"', self.html)
+        self.assertIn('class="btn btn-outline-primary v2-btn" id="ltCompareBtn"',
+                      self.html)
+
+    def test_이름과_줄_글자를_키웠다(self):
+        self.assertIn('font-size: 14px;', self.html)
+        self.assertIn('.lt-verify-name { flex-shrink: 0; cursor: help; '
+                      'font-size: 14.5px; }', self.html)
+
+    def test_여전히_한_줄이다(self):
+        """키우려고 줄을 늘리면 되찾은 자리를 도로 내주는 것이다."""
+        self.assertEqual(self.html.count('class="lt-verify-row"'), 1)
+
+
+class 내보내기는_제품_헤더에_있다(TestCase):
+    """
+    미리보기 도구 줄을 걷어내면서 내보내기를 제품 헤더(저장 옆)로 옮겼다.
+    메뉴는 바깥에 있고 일은 미리보기가 한다 — 실제 내보내기 코드를 밖으로
+    옮기면 창으로 따로 열었을 때 쓸 수 없어지고, 두 벌이 되면 어느 날
+    한쪽만 고쳐진다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.detail = (base / 'templates/products/product_detail.html'
+                       ).read_text(encoding='utf-8')
+        self.preview_js = (base / 'static/js/label/label_preview.js'
+                           ).read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css'
+                    ).read_text(encoding='utf-8')
+
+    def test_저장과_공유_사이에_있다(self):
+        wrap = self.detail.index('id="headerExportWrap"')
+        share = self.detail.index('switchToShareTab()', wrap)
+        self.assertGreater(share, wrap)
+
+    def test_검증_탭에서만_보인다(self):
+        """다른 탭에서 누르면 아무 일도 안 나 고장인 줄 안다."""
+        self.assertIn("target === '#tab-label'", self.detail)
+
+    def test_일은_미리보기가_한다(self):
+        self.assertIn('win.runPreviewExport(item.dataset.export)', self.detail)
+        self.assertIn('window.runPreviewExport = function (action)',
+                      self.preview_js)
+
+    def test_없는_단추를_눌러도_조용히_넘어가지_않는다(self):
+        """권한이 없어 단추 자체가 없는 경우가 있다."""
+        head = self.preview_js.index('window.runPreviewExport')
+        self.assertIn('return false;', self.preview_js[head:head + 700])
+        self.assertIn('이 역할로는 쓸 수 없는 내보내기입니다', self.detail)
+
+    def test_배율은_미리보기_안에_뜬다(self):
+        self.assertIn('.zoom-controls.zoom-floating', self.css)
+        self.assertIn('.preview-container { position: relative; }', self.css)

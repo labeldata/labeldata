@@ -190,8 +190,16 @@
        원재료명 300자가 스무 줄이 된다 — 종이 한 장에 안 들어간다.
 
        낱말 단위를 버리고 **가로가 차면 끊는다.** 글이 중간에 끊기지만 의뢰서는
-       읽는 문서가 아니라 옮겨 적는 문서다. 높이가 먼저다. 줄간격도 좁힌다. */
+       읽는 문서가 아니라 옮겨 적는 문서다. 높이가 먼저다. 줄간격도 좁힌다.
+
+       **왼쪽 맞춤을 못 박는다.** 한글 워드의 「표준」 스타일은 양쪽 맞춤이라,
+       우리가 말하지 않으면 그 값이 따라온다. 그러면 낱말 단위로 접힌 줄의
+       빈칸이 가로를 채우려고 늘어나서 "백앙금 59.88%(화이트   빈38%,
+       정제수),    백설탕" 처럼 낱말 사이가 손가락 하나만큼 벌어진다.
+       break-all 로 끊어도 마지막 줄이 아닌 줄은 늘 늘어난다 — 벌어짐의
+       원인은 끊는 자리가 아니라 맞춤이다. */
     var cell = 'border:1px solid #444;padding:3px 6px;font-size:10pt;'
+             + 'text-align:left;text-justify:auto;'
              + 'word-break:break-all;overflow-wrap:anywhere;line-height:1.15;'
              + "font-family:'Malgun Gothic',sans-serif;vertical-align:top;";
     var head = cell + 'background:#f2f2f2;font-weight:bold;text-align:center;';
@@ -245,7 +253,10 @@
 
     /* 쪽 크기를 못 박는다. 이 말이 없으면 워드가 스스로 정한다 */
     var page = '<style>@page{size:21cm 29.7cm;margin:2.5cm;}'
-             + 'body{margin:0;}table{width:16cm;}</style>';
+             + 'body{margin:0;}table{width:16cm;}'
+             /* 스타일로도 한 번 더 못 박는다. 워드가 「표준」 스타일의 양쪽
+                맞춤을 칸 안 문단에 그대로 물려주는 판이 있다. */
+             + 'td,th,p,div{text-align:left;word-break:break-all;}</style>';
 
     return '<html xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
          + '<meta charset="utf-8"><title>표시 디자인 의뢰서</title>'
