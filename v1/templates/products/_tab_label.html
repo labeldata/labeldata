@@ -58,30 +58,53 @@
       2차는 시안이 있어야 시작되므로, 무엇을 올리면 무엇까지 보는지를
       누르기 **전에** 보여 준다(validation_readiness).
     {% endcomment %}
-    <div class="lt-verify" id="ltVerify">
-      <div class="lt-verify-row">
-        <span class="lt-verify-step">1차</span>
-        <strong class="lt-verify-name" title="우리가 만든 표시사항이 규정에 맞는지 봅니다&#10;대상: 이 화면의 표시사항">표시문구 검증</strong>
-        <button type="button" class="btn btn-primary v2-btn" id="ltFirstBtn">
-          <i class="bi bi-list-check"></i> 1차 검증
-        </button>
-        <span class="lt-verify-meta" id="ltFirstMeta"></span>
+    <ol class="lt-verify" id="ltVerify">
+      <li class="lt-step" id="ltStep1">
+        <div class="lt-step-top">
+          <span class="lt-step-no">1</span>
+          <b class="lt-step-name">표시문구 검증</b>
+          <span class="lt-step-for">이 화면의 표시사항</span>
+        </div>
+        <p class="lt-step-what">
+          우리가 적은 표시사항이 규정에 맞는지 봅니다.
+          빠진 항목·글자 크기·원산지 표시를 짚어 <b>아래 표에 표시</b>합니다.
+        </p>
+        <div class="lt-step-act">
+          <button type="button" class="btn btn-primary lt-step-btn" id="ltFirstBtn">
+            <i class="bi bi-list-check"></i> 1차 검증 실행
+          </button>
+          <span class="lt-step-state" id="ltFirstMeta">규정 항목을 불러오는 중…</span>
+        </div>
+      </li>
 
-        <span class="lt-verify-gap"></span>
+      <li class="lt-steps-arrow" aria-hidden="true">
+        <i class="bi bi-arrow-right"></i>
+        <span>문구를 확정한 뒤</span>
+      </li>
 
-        <span class="lt-verify-step lt-step-2">2차</span>
-        <strong class="lt-verify-name" title="받은 시안이 확정한 표시사항과 같은지, 인쇄 규정에 맞는지 봅니다&#10;대상: 문서함의 포장지 시안">디자인시안 검증</strong>
-        <details class="lt-verify-more">
-          <summary>무엇을 올리면 더 정확한가</summary>
-          <div class="lt-verify-docs" id="ltSecondDocs"></div>
-        </details>
-        <button type="button" class="btn btn-outline-primary v2-btn" id="ltCompareBtn">
-          <i class="bi bi-upload"></i> 시안 올려 2차 검증
-        </button>
-        <span class="lt-verify-meta" id="ltSecondMeta"></span>
-      </div>
+      <li class="lt-step lt-step-later" id="ltStep2">
+        <div class="lt-step-top">
+          <span class="lt-step-no">2</span>
+          <b class="lt-step-name">디자인시안 검증</b>
+          <span class="lt-step-for">문서함의 포장지 시안</span>
+        </div>
+        <p class="lt-step-what">
+          디자인에서 받은 <b>포장지 시안</b>을 읽어, 위에서 확정한 문구와
+          같은지·인쇄 규정에 맞는지 <b>한 줄씩 대조</b>합니다.
+        </p>
+        <div class="lt-step-act">
+          <button type="button" class="btn btn-outline-primary lt-step-btn" id="ltCompareBtn">
+            <i class="bi bi-upload"></i> 시안 올리고 2차 검증
+          </button>
+          <span class="lt-step-state" id="ltSecondMeta"></span>
+          <details class="lt-verify-more">
+            <summary>무엇을 올리면 더 정확한가요?</summary>
+            <div class="lt-verify-docs" id="ltSecondDocs"></div>
+          </details>
+        </div>
+      </li>
       <input type="file" id="ltCompareFile" accept="image/*,.pdf" hidden>
-    </div>
+    </ol>
     {% endif %}
     <div id="lt-loading">
         <div class="spinner-border text-primary" style="width:1.8rem;height:1.8rem;" role="status"></div>
@@ -363,38 +386,111 @@
 </script>
 
 <style>
-/* 검증 두 갈래를 **한 줄에.**
-   처음에는 카드 둘에 설명을 여러 줄 넣었고, 다음에는 줄 둘로 줄였다. 그래도
-   위쪽에 다섯 겹이 쌓여 작업 영역이 뷰포트의 3분의 2였다. 검증은 누르는
-   자리이지 읽는 자리다 — 설명은 이름에 붙인 말풍선으로 옮긴다. */
+/* 검증은 **두 기능이 아니라 한 절차다.**
+
+   한 줄에 늘어놓았더니 어디가 단추인지, 둘이 무슨 관계인지 읽히지 않았다.
+   1차를 하고 문구를 확정한 다음 2차를 하는 순서인데, 나란히 있으니 아무거나
+   눌러도 되는 두 기능으로 보였다.
+
+   번호를 매긴 칸 둘과 그 사이의 화살표로 **순서**를 그린다. 칸마다 세 가지를
+   적는다 — 무엇을 보는가(대상), 무엇을 하는가, 결과가 어디에 나오는가.
+   1차를 마치면 2차가 밝아진다. */
 .lt-verify {
-    padding: 6px 12px 7px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 10px;
+    margin: 0;
+    padding: 10px 12px;
+    list-style: none;
     background: var(--ez-gray-50, #f8f9fa);
     border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
     flex-shrink: 0;
 }
-.lt-verify-row {
+.lt-step {
+    flex: 1 1 320px;
+    min-width: 280px;
     display: flex;
-    flex-wrap: wrap;          /* 좁으면 2차가 아래로 내려간다 */
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px 11px;
+    background: #fff;
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: 10px;
+}
+.lt-step-top { display: flex; align-items: center; gap: 8px; }
+.lt-step-no {
+    width: 22px; height: 22px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--ez-info, #1a73e8); color: #fff;
+    font-size: 12.5px; font-weight: 700;
+}
+#ltStep2 .lt-step-no { background: #7b1fa2; }
+.lt-step-name { font-size: 15px; }
+/* **무엇을 검증하는 것인지**가 가장 헷갈렸다. 대상을 이름 옆에 붙여 둔다 */
+.lt-step-for {
+    margin-left: auto;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: var(--ez-gray-100, #f1f3f4);
+    color: #5f6368;
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+.lt-step-what {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #3c4043;
+}
+.lt-step-what b { font-weight: 600; color: #202124; }
+.lt-step-act {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    /* 12.5px 이었다. 한 줄로 줄이느라 글자까지 줄였더니 정작 **무엇을 누르는
-       자리인지가 안 보였다.** 줄 수를 늘리지 않고 글자만 키운다 — 줄 높이는
-       단추가 정하고, 단추는 어차피 손가락만 하다. */
-    font-size: 14px;
+    margin-top: auto;
+    padding-top: 2px;
 }
-.lt-verify-gap { flex: 1 1 20px; }   /* 둘을 갈라 놓는다 */
-.lt-verify-step {
-    background: var(--ez-info, #1a73e8); color: #fff;
-    border-radius: 11px; padding: 2px 9px; font-size: 12.5px; font-weight: 700;
-    flex-shrink: 0;
+/* 단추는 단추처럼. 앞서 글자만 한 크기라 눌러도 되는 자리인 줄 몰랐다 */
+.lt-step-btn {
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 8px;
+    white-space: nowrap;
 }
-.lt-verify-step.lt-step-2 { background: #7b1fa2; }
-.lt-verify-name { flex-shrink: 0; cursor: help; font-size: 14.5px; }
-.lt-verify-more { font-size: 12.5px; flex-shrink: 0; }
+.lt-step-state { font-size: 12px; color: #5f6368; }
+
+/* 순서를 눈으로 잇는다 */
+.lt-steps-arrow {
+    flex: 0 0 auto;
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    color: #9aa0a6;
+    font-size: 10.5px;
+    line-height: 1.1;
+}
+.lt-steps-arrow i { font-size: 16px; }
+
+/* 아직 차례가 아닌 칸은 한 겹 뒤에 둔다 — 1차를 마치면 밝아진다 */
+.lt-step-later { background: #fbfbfc; }
+.lt-step-later .lt-step-what,
+.lt-step-later .lt-step-name { opacity: .78; }
+.lt-verify.lt-first-done .lt-step-later { background: #fff; }
+.lt-verify.lt-first-done .lt-step-later .lt-step-what,
+.lt-verify.lt-first-done .lt-step-later .lt-step-name { opacity: 1; }
+.lt-step.is-done { border-color: #b7dfc3; background: #f6fcf8; }
+.lt-step.is-done .lt-step-no { background: #1e8e3e; }
+
+.lt-verify-more { font-size: 12px; position: relative; }
 .lt-verify-more > summary { cursor: pointer; color: var(--ez-info, #1a73e8); }
 .lt-verify-docs {
-    position: absolute; z-index: 20; margin-top: 4px;
+    position: absolute; z-index: 20; margin-top: 4px; min-width: 260px;
     background: #fff; border: 1px solid var(--ez-gray-200, #e8eaed);
     border-radius: 6px; padding: 8px 10px;
     box-shadow: 0 4px 12px rgba(60,64,67,.2);
@@ -403,7 +499,8 @@
 .lt-verify-docs .doc-have { color: #188038; }
 .lt-verify-docs .doc-miss { color: #b06000; }
 .lt-verify-docs .doc-gives { color: #80868b; font-size: 11px; }
-.lt-verify-meta { font-size: 12.5px; color: #5f6368; flex-shrink: 0; }
+
+@media (max-width: 900px) { .lt-steps-arrow { display: none; } }
 </style>
 <script>
 /* 검증 전에 무엇이 갖춰졌는지 보여 준다.
@@ -422,7 +519,7 @@
     function draw(data) {
         var first = document.getElementById('ltFirstMeta');
         if (first && data.first) {
-            first.textContent = '검사 ' + data.first.check_count + '개';
+            first.textContent = '규정 ' + data.first.check_count + '가지를 봅니다';
         }
         var second = data.second || {};
         var box = document.getElementById('ltSecondDocs');
@@ -440,8 +537,8 @@
         var meta = document.getElementById('ltSecondMeta');
         if (meta) {
             meta.textContent = second.ready
-                ? '시안이 있습니다 — 바로 검증할 수 있습니다.'
-                : (second.blocked_reason || '');
+                ? '올려 둔 시안이 있습니다 — 바로 누르면 됩니다'
+                : (second.blocked_reason || '누르면 시안을 고르는 창이 열립니다');
         }
     }
 
@@ -459,6 +556,13 @@
                 return;
             }
             win.runRuleOnlyValidation();
+
+            /* 절차라는 것이 눈에 보여야 한다 — 1차를 마치면 그 칸에 표를
+               남기고 2차 칸을 밝힌다. 순서를 글로만 적어 두면 안 읽는다. */
+            document.getElementById('ltStep1').classList.add('is-done');
+            root.classList.add('lt-first-done');
+            var done = document.getElementById('ltFirstMeta');
+            if (done) done.textContent = '검사했습니다 — 결과는 아래 표에';
         });
     }
 

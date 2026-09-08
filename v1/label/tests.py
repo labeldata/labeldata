@@ -11895,10 +11895,17 @@ class ValidationTabTests(TestCase):
         head = js.index('window.parent !== window')
         self.assertIn("getElementById('ruleValidationBtn')", js[head:head + 700])
 
-    def test_검증_줄이_화면을_적게_먹는다(self):
-        """검증은 누르는 자리이지 읽는 자리가 아니다 — 미리보기가 밀려났다."""
+    def test_검증_띠가_화면을_적게_먹는다(self):
+        """
+        누르는 자리이지 읽는 자리가 아니다 — 미리보기가 밀려났다.
+
+        그렇다고 설명을 지우면 무엇을 누르는지 몰라서 안 누른다. 칸 둘을
+        **가로로** 놓아 한 겹에 담고, 긴 목록만 접는다.
+        """
         html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
-        self.assertIn('.lt-verify-row', html)
+        self.assertIn('.lt-verify {', html)
+        self.assertIn('display: flex;', html)
+        self.assertIn('flex-wrap: wrap;', html)
         self.assertIn('<details class="lt-verify-more">', html)   # 자세한 것은 접는다
 
 
@@ -12408,11 +12415,12 @@ class ChromeHeightTests(TestCase):
         # 설명 두 줄은 통째로 걷어냈다
         self.assertNotIn('라벨 디자인을 미리 확인하고 PDF로 다운로드하세요', html)
 
-    def test_검증이_한_줄이다(self):
+    def test_검증은_띠_하나에_담긴다(self):
+        """줄을 줄이려고 설명을 지우지는 않는다 — 지웠더니 안 읽혔다."""
         html = self._read('v1/templates/products/_tab_label.html')
-        self.assertEqual(html.count('class="lt-verify-row"'), 1)
-        # 설명은 이름에 붙인 말풍선으로 옮겼다
-        self.assertIn('lt-verify-name" title=', html)
+        self.assertEqual(html.count('class="lt-verify" id="ltVerify"'), 1)
+        self.assertEqual(html.count('class="lt-step"'), 1)      # 1차
+        self.assertIn('class="lt-step lt-step-later"', html)     # 2차
 
     def test_제품_상세는_앱_띠를_접고_시작한다(self):
         detail = self._read('v1/templates/products/product_detail.html')
@@ -12537,11 +12545,18 @@ class 워드_내보내기_항목_칸이_절반을_먹는다(TestCase):
         self.assertIn('table-layout:fixed;width:16cm', block)
 
 
-class 검증_단추가_작아서_안_보인다(TestCase):
+class 검증은_두_기능이_아니라_한_절차다(TestCase):
     """
-    한 줄로 줄이느라 글자까지 12.5px 로 줄였더니, 정작 **무엇을 누르는
-    자리인지**가 안 보였다. 줄 수는 그대로 두고 글자와 단추만 키운다 —
-    줄 높이는 어차피 단추가 정한다.
+    한 줄에 나란히 늘어놓았더니 이렇게 보였다.
+
+        1차 표시문구 검증 [1차 검증] 검사 26개    2차 디자인시안 검증 [시안 올려…]
+
+    어디가 단추인지, 둘이 무슨 관계인지 읽히지 않았다. 실제로는 **1차로 문구를
+    확정한 다음 2차로 시안을 대조하는 순서**인데, 나란히 있으니 아무거나 눌러도
+    되는 두 기능으로 보였다.
+
+    번호 칸 둘과 그 사이 화살표로 순서를 그리고, 칸마다 세 가지를 적는다 —
+    무엇을 보는가(대상), 무엇을 하는가, 결과가 어디에 나오는가.
     """
 
     def setUp(self):
@@ -12552,19 +12567,48 @@ class 검증_단추가_작아서_안_보인다(TestCase):
         self.html = (Path(dj.BASE_DIR) / 'templates/products/_tab_label.html'
                      ).read_text(encoding='utf-8')
 
-    def test_단추는_보통_크기다(self):
-        self.assertIn('class="btn btn-primary v2-btn" id="ltFirstBtn"', self.html)
-        self.assertIn('class="btn btn-outline-primary v2-btn" id="ltCompareBtn"',
+    def test_순서가_있는_목록이다(self):
+        """<ol> 이라야 화면 낭독기도 '2개 중 1번' 이라고 읽는다."""
+        self.assertIn('<ol class="lt-verify" id="ltVerify">', self.html)
+
+    def test_번호와_화살표로_순서를_그린다(self):
+        self.assertIn('class="lt-step-no">1<', self.html)
+        self.assertIn('class="lt-step-no">2<', self.html)
+        self.assertIn('lt-steps-arrow', self.html)
+        self.assertIn('문구를 확정한 뒤', self.html)
+
+    def test_무엇을_검증하는지_칸마다_적는다(self):
+        """가장 헷갈린 것이 '규정 검증이냐 시안 검증이냐' 였다."""
+        self.assertIn('>이 화면의 표시사항<', self.html)
+        self.assertIn('>문서함의 포장지 시안<', self.html)
+        self.assertEqual(self.html.count('class="lt-step-for"'), 2)
+
+    def test_결과가_어디에_나오는지_말한다(self):
+        self.assertIn('아래 표에 표시', self.html)
+        self.assertIn('한 줄씩 대조', self.html)
+
+    def test_단추가_단추로_보인다(self):
+        """글자만 한 크기라 눌러도 되는 자리인 줄 몰랐다."""
+        self.assertIn('class="btn btn-primary lt-step-btn" id="ltFirstBtn"', self.html)
+        self.assertIn('class="btn btn-outline-primary lt-step-btn" id="ltCompareBtn"',
                       self.html)
+        self.assertIn('1차 검증 실행', self.html)
+        self.assertIn('시안 올리고 2차 검증', self.html)
 
-    def test_이름과_줄_글자를_키웠다(self):
-        self.assertIn('font-size: 14px;', self.html)
-        self.assertIn('.lt-verify-name { flex-shrink: 0; cursor: help; '
-                      'font-size: 14.5px; }', self.html)
+    def test_아직_차례가_아닌_칸은_한_겹_뒤에_있다(self):
+        self.assertIn('.lt-step-later { background: #fbfbfc; }', self.html)
 
-    def test_여전히_한_줄이다(self):
-        """키우려고 줄을 늘리면 되찾은 자리를 도로 내주는 것이다."""
-        self.assertEqual(self.html.count('class="lt-verify-row"'), 1)
+    def test_1차를_마치면_2차가_밝아진다(self):
+        """순서를 글로만 적어 두면 안 읽는다 — 눌렀을 때 눈에 보여야 한다."""
+        self.assertIn("classList.add('is-done')", self.html)
+        self.assertIn("root.classList.add('lt-first-done')", self.html)
+        self.assertIn('.lt-verify.lt-first-done .lt-step-later', self.html)
+
+    def test_손댈_이름은_그대로_둔다(self):
+        """모양을 바꾸느라 id 를 갈아 치우면 붙어 있던 동작이 조용히 끊긴다."""
+        for name in ('ltVerify', 'ltFirstBtn', 'ltFirstMeta', 'ltCompareBtn',
+                     'ltSecondMeta', 'ltSecondDocs', 'ltCompareFile'):
+            self.assertIn("id=\"%s\"" % name, self.html)
 
 
 class 내보내기는_제품_헤더에_있다(TestCase):
