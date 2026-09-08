@@ -625,8 +625,12 @@ body.in-iframe .bom-page-header { display: none !important; }
                 /* 여태 오른쪽 상세 패널에서만 넣을 수 있었다. 원료를 하나씩
                    골라 들어가야 해서, 엑셀로 관리하던 사람은 옮길 방법이
                    없었다. 표에 칸을 둔다 — 붙여넣기도 여기로 들어온다. */
-                { data: 'allergens', editor: 'text' },
-                { data: 'gmo', editor: 'text' },
+                /* 이 두 칸은 누르면 아래에 고르는 자리가 펴진다. 그런데
+                   칸만 봐서는 그걸 알 수 없어서, 사람들이 손으로 치다가
+                   목록이 있는 줄 몰랐다. 칸에 표시를 달아 알린다
+                   (bom.css 의 .bom-picker-cell). */
+                { data: 'allergens', editor: 'text', className: 'bom-picker-cell' },
+                { data: 'gmo', editor: 'text', className: 'bom-picker-cell' },
                 { data: 'report_no', editor: 'text' },
                 { data: 'notes', editor: 'text' }
             ],

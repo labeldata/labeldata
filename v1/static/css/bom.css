@@ -547,11 +547,38 @@ body.in-iframe .bom-main-column {
    ------------------------------------------------------------- */
 .bom-grid-card { position: relative; }
 
+/* 누르면 열리는 칸 — 알레르기·GMO.
+   칸만 봐서는 목록이 있는 줄 알 수 없어서 손으로 치다 말았다. 오른쪽에 작은
+   삼각형을 두고 손 모양 커서를 준다. 값이 있든 없든 늘 보인다 — 빈 칸일 때야
+   말로 "여기서 고를 수 있다" 를 알려야 한다. */
+.bom-picker-cell {
+    cursor: pointer;
+    position: relative;
+    padding-right: 16px !important;
+}
+.bom-picker-cell::after {
+    content: '';
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    margin-top: -2px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid var(--ez-info, #1a73e8);
+    opacity: .55;
+}
+.bom-picker-cell:hover {
+    background: var(--ez-info-bg, #e8f0fe);
+}
+.bom-picker-cell:hover::after { opacity: 1; }
+
 .bom-rowdetail {
     display: none;
     position: absolute;
     left: 0;
-    right: 0;
+    /* 창이 표를 통째로 덮으면 어느 줄의 상세인지 눈으로 이을 수가 없다.
+       고르는 자리(알레르기 칩 스무 개)가 들어갈 만큼만 잡는다. */
+    width: min(620px, 100%);
     /* Handsontable 은 행 번호 열을 본체 위에 겹쳐 그린다(.ht_clone_*,
        z-index 100~180). 30 으로 두었더니 그 겹침판이 상세의 왼쪽 52px 을
        덮어서, 원료 이름도 첫 칩도 잘려 보였다. 그 위로 올린다. */
