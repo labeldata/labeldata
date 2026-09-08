@@ -450,9 +450,15 @@ body.in-iframe .bom-main-column {
     z-index: 150;
     box-shadow: 0 2px 6px rgba(60, 64, 67, .12);
 }
+/* 왜 안 바뀌는지 알려 주는 잔글씨.
+   **행의 형제라 값과 나란히 섰다.** flex 행이라 이 문장이 가로의 절반을
+   가져가고, 정작 봐야 할 원재료명 요약이 좁은 칸에 갇혔다. 제 줄로 내린다. */
 .bom-summary-note {
-    margin-top: 4px;
+    flex: 0 0 100%;
+    order: 9;                /* 값·단추 뒤로 */
+    margin-top: 2px;
     font-size: 11px;
+    line-height: 1.4;
     color: var(--ez-warning-on-bg, #a35400);
 }
 .bom-summary-note:empty { display: none; }
@@ -491,6 +497,7 @@ body.in-iframe .bom-main-column {
 .bom-summary-body { padding: 0 10px 6px; }
 .bom-summary-row {
     display: flex;
+    flex-wrap: wrap;         /* 잔글씨가 제 줄로 내려갈 수 있게 */
     align-items: flex-start;
     gap: 8px;
     padding: 4px 0;
@@ -505,7 +512,7 @@ body.in-iframe .bom-main-column {
 }
 .bom-summary-label .bi { margin-right: 3px; }
 .bom-summary-value {
-    flex: 1;
+    flex: 1 1 60%;           /* 잔글씨가 내려가도 값이 가로를 다 쓴다 */
     min-width: 0;
     font-size: 12px;
     line-height: 1.5;
