@@ -223,3 +223,113 @@ def hieng_lntrt(values, kind, noodle=False):
                 'why': '단백질·포화지방·당류·나트륨 중 비어 있는 값이 있어 '
                        '모든 기준을 다 보지 못했습니다.'}
     return {'verdict': False, 'kind': HIENG_LNTRT_KIND_NAMES[kind], 'hits': []}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 성분별 표시 단위 —「식품등의 표시기준」
+#
+# 규정은 성분마다 다른 단위로 적으라고 한다. 나트륨은 120 mg 이하면 5 mg,
+# 넘으면 10 mg 단위. 지방은 5 g 이하면 0.1 g, 넘으면 1 g. 어떤 성분은 값이
+# 작으면 숫자 대신 "1 g 미만" 이라고 적는다.
+#
+# **이 규칙이 지금까지 화면(nutrition_calculator_popup.js)에만 있었다.** 서버는
+# generic round() 뿐이라, 표에 찍히는 값이 규정대로인지 서버가 알 수 없었다.
+# 같은 규칙이 한 곳에만 있으면 다른 쪽은 그 규칙을 모르는 채로 판정한다.
+#
+# 화면의 processNutritionValue 를 **그대로** 옮긴다. 여기서 규칙을 고치면 두
+# 쪽이 갈리고, 어느 쪽이 맞는지는 코드가 아니라 규정이 정할 일이다.
+# (확인해 둘 것: 화면은 열량 5 kcal 미만을 "5kcal 미만" 으로 적는데,
+#  표시기준 별표의 영양소 표는 "0" 표시가 가능하다고 한다. 어느 쪽으로 갈지는
+#  사람이 정해야 하므로 여기서는 화면과 같게 두었다.)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 그램 단위로 세는 무리 — 1 g 미만이면 숫자 대신 "1g 미만"
+_GRAM_WHOLE = ('carbohydrates', 'proteins', 'dietary_fiber')
+
+# 정수로 적는 무기질·비타민
+_ROUND_WHOLE = ('calcium', 'iron', 'potassium', 'magnesium', 'phosphorus',
+                'zinc', 'selenium')
+
+
+def _round_half_up(value, step=1.0):
+    """
+    step 단위로 반올림. **0.5 는 올린다.**
+
+    파이썬 기본 round() 는 은행가 반올림이라 round(2.5) 가 2 다. 화면(JS)의
+    Math.round 는 3 이고, 규정이 말하는 반올림도 그쪽이다. 두 쪽이 다른 값을
+    찍으면 사람이 어느 것을 믿을지 알 수 없다.
+
+    **계산 순서까지 화면과 같아야 한다.** 0.1 단위에서 화면은 v*10 을 반올림해
+    10 으로 나눈다. 여기서 v/0.1 로 하면 부동소수 오차가 달라 값이 갈린다 —
+    4.55 가 한쪽은 4.6, 한쪽은 4.5 가 된다(일곱 중 넷이 어긋났다).
+    """
+    import math
+
+    if step == 0.1:
+        return math.floor(value * 10 + 0.5) / 10
+    return math.floor(value / step + 0.5) * step
+
+
+def _fmt(value):
+    """자리수를 정리해 문자열로. 1234.0 -> '1,234', 4.5 -> '4.5'."""
+    rounded = round(value, 1)
+    if abs(rounded - round(rounded)) < 1e-9:
+        return '{:,}'.format(int(round(rounded)))
+    return '{:,}'.format(rounded)
+
+
+def display_value(field, value):
+    """
+    이 성분을 표에 **어떻게 적어야 하는가**. 문자열을 돌려준다.
+
+    화면의 processNutritionValue 와 같은 답을 내야 한다 — 시험이 그것을 본다.
+    """
+    number = _number(value)
+    if number is None or number == 0:
+        return '0'
+
+    if field == 'calories':
+        if number < 5:
+            return '5kcal 미만'
+        return _fmt(_round_half_up(number, 5))
+
+    if field in ('natriums', 'sodium'):
+        if number < 5:
+            return '0'
+        return _fmt(_round_half_up(number, 5 if number <= 120 else 10))
+
+    if field in ('cholesterols', 'cholesterol'):
+        if number < 2:
+            return '0'
+        if number < 5:
+            return '5mg 미만'
+        return _fmt(_round_half_up(number, 5 if number <= 100 else 10))
+
+    if field in _ROUND_WHOLE:
+        return _fmt(_round_half_up(number))
+
+    if field in _GRAM_WHOLE or field in ('carbohydrate', 'protein'):
+        if number < 1:
+            return '1g 미만'
+        return _fmt(_round_half_up(number))
+
+    if field == 'sugars':          # 당류는 "미만" 표기가 없다
+        if number < 0.5:
+            return '0'
+        return _fmt(_round_half_up(number))
+
+    if field in ('fats', 'fat', 'saturated_fats', 'saturated_fat'):
+        if number < 0.5:
+            return '0'
+        return _fmt(_round_half_up(number, 0.1 if number <= 5 else 1))
+
+    if field in ('trans_fats', 'trans_fat'):
+        if number < 0.2:
+            return '0'
+        if number < 0.5:
+            return '0.5g 미만'
+        return _fmt(_round_half_up(number, 0.1))
+
+    if number < 0.1:
+        return '0'
+    return _fmt(_round_half_up(number, 0.1))

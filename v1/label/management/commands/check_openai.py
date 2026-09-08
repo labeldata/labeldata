@@ -158,7 +158,9 @@ class Command(BaseCommand):
             self.stdout.write(f'    {name:<22} {mark}')
 
         for u in result.get('unchecked', []):
-            self.stdout.write(f'    └ {u["label"]}: {u["message"]} [{u["reason"]}]')
+            # AI 쪽은 reason(코드), 규칙 쪽은 cause(사람이 읽는 말)로 사유를 적는다
+            why = u.get('reason') or u.get('cause') or ''
+            self.stdout.write(f'    └ {u["label"]}: {u["message"]} [{why}]')
 
         self.stdout.write('\n  결과 요약')
         self.stdout.write(f'    전체 판정 : {"적합" if result.get("ok") else "확인 필요"}')

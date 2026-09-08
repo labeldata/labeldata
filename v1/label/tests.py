@@ -641,18 +641,25 @@ class AiValidationFailureTests(TestCase):
                                                       else avs.REASON_API_ERROR)
             return avs.run_full_review(self.label, self.user)
 
+    @staticmethod
+    def _ai_unchecked(result):
+        """AI 가 못 본 것만. 규칙 검사가 낸 것(cause)은 여기 이야기가 아니다."""
+        return [u for u in result['unchecked'] if 'reason' in u]
+
     def test_타임아웃이면_그렇게_알린다(self):
         result = self._run_with_failure(TimeoutError())
-        reasons = {u['reason'] for u in result['unchecked']}
-        self.assertEqual(reasons, {'timeout'})
-        for u in result['unchecked']:
+        rows = self._ai_unchecked(result)
+        self.assertEqual({u['reason'] for u in rows}, {'timeout'})
+        for u in rows:
             self.assertTrue(u['system_failure'])
             self.assertIn('늦어', u['message'])
 
     def test_호출_실패면_함량_탓으로_돌리지_않는다(self):
         """예전에는 원인과 무관하게 "함량(%)이 명시돼 있지 않아서" 라고 안내했다."""
         result = self._run_with_failure(RuntimeError())
-        for u in result['unchecked']:
+        rows = self._ai_unchecked(result)
+        self.assertTrue(rows)
+        for u in rows:
             self.assertEqual(u['reason'], 'api_error')
             self.assertNotIn('함량', u['message'])
 
@@ -678,8 +685,13 @@ class AiValidationFailureTests(TestCase):
         with patch.object(avs, 'call_openai', _fake):
             result = avs.run_full_review(self.label, self.user)
 
-        self.assertEqual(result['unchecked'], [])
+        # AI 가 전부 성공하면 AI 쪽 미검증은 없다. 규칙 검사가 "못 봤다" 고 한
+        # 것은 남아 있을 수 있다 — 그건 AI 성공 여부와 무관한 이야기다.
+        self.assertEqual(self._ai_unchecked(result), [])
         self.assertTrue(result['ingredient_order_checked'])
+        for u in result['unchecked']:
+            self.assertIn('cause', u)
+            self.assertTrue(u['label'], '화면에 찍을 이름이 없다')
 
     # ── 뷰가 500 을 내지 않는다 ─────────────────────────────────────────────
 
@@ -1027,7 +1039,9 @@ class CalorieConsistencyTests(TestCase):
     def _issues(self, **kwargs):
         from v1.label.services.validation_service import check_calorie_consistency
         label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨', **kwargs)
-        return check_calorie_consistency(label)
+        # 지적만 본다. 검사는 "못 봤다"(kind='unchecked')도 내는데 그건
+        # UncheckedCauseTests 가 따로 본다.
+        return [i for i in check_calorie_consistency(label) if i['kind'] == 'issue']
 
     def test_맞으면_지적하지_않는다(self):
         self.assertEqual(self._issues(content_weight='800 g (1240 kcal)', calories='155'), [])
@@ -2848,7 +2862,8 @@ class IngredientOrderByRatioTests(TestCase):
 
     def _issues(self, label):
         from v1.label.services.validation_service import check_ingredient_order_by_ratio
-        return check_ingredient_order_by_ratio(label)
+        rows = check_ingredient_order_by_ratio(label)
+        return [i for i in rows if i['kind'] == 'issue']
 
     def test_문구가_역순이면_지적한다(self):
         label = self._label('소브산칼륨, 소홍두깨살',
@@ -5972,7 +5987,8 @@ class ContentWeightBasisTests(TestCase):
 
     def _cats(self, label):
         from v1.label.services.validation_service import check_content_weight_basis
-        return [i['category'] for i in check_content_weight_basis(label)]
+        return [i['category'] for i in check_content_weight_basis(label)
+                if i['kind'] == 'issue']
 
     def test_총량이_같으면_조용하다(self):
         label = self._label(content_weight='65 g', serving_size='65',
@@ -7038,10 +7054,19 @@ class FontSizeCheckTests(TestCase):
         self.assertEqual(check_font_size(self._label('12')), [])
 
     def test_설정한_적_없으면_보지_않는다(self):
-        """저장한 적 없는 값을 근거로 지적하면 고칠 방법이 없는 경고가 된다."""
-        from v1.label.services.validation_service import check_font_size
+        """
+        저장한 적 없는 값을 근거로 지적하면 고칠 방법이 없는 경고가 된다.
 
-        self.assertEqual(check_font_size(self._label('')), [])
+        다만 **아무 말도 안 하면 통과처럼 보인다.** 지적은 안 하되 못 봤다고는
+        말한다.
+        """
+        from v1.label.services.validation_service import (
+            CAUSE_NO_DATA, check_font_size,
+        )
+
+        rows = check_font_size(self._label(''))
+        self.assertEqual([i for i in rows if i['kind'] == 'issue'], [])
+        self.assertEqual([i['cause'] for i in rows], [CAUSE_NO_DATA])
 
     def test_전체_검증에_들어_있다(self):
         from v1.label.services.validation_service import validate_label
@@ -7391,11 +7416,21 @@ class HumanReviewFindingsTests(TestCase):
             dietary_fiber='10')), [])
 
     def test_값이_없으면_계산하지_않는다(self):
-        from v1.label.services.validation_service import check_calorie_matches_macros
+        """지적은 안 하되, 못 봤다고는 말한다 — 조용하면 통과처럼 보인다."""
+        from v1.label.services.validation_service import (
+            CAUSE_NOT_APPLICABLE, CAUSE_NO_DATA, check_calorie_matches_macros,
+        )
 
-        self.assertEqual(check_calorie_matches_macros(self._label(calories='309')), [])
-        self.assertEqual(check_calorie_matches_macros(self._label(
-            carbohydrates='9', fats='4.5', proteins='1')), [])
+        # 탄단지가 없다 — 열량은 있으니 계산할 값이 모자란 것이다
+        rows = check_calorie_matches_macros(self._label(calories='309'))
+        self.assertEqual([i for i in rows if i['kind'] == 'issue'], [])
+        self.assertEqual([i['cause'] for i in rows], [CAUSE_NO_DATA])
+
+        # 열량 자체가 없다 — 이 라벨은 애초에 볼 대상이 아니다
+        rows = check_calorie_matches_macros(self._label(
+            carbohydrates='9', fats='4.5', proteins='1'))
+        self.assertEqual([i for i in rows if i['kind'] == 'issue'], [])
+        self.assertEqual([i['cause'] for i in rows], [CAUSE_NOT_APPLICABLE])
 
     # ── 4. 해동방법 ────────────────────────────────────────────────────────
 
@@ -10313,3 +10348,297 @@ class 설정을_성격별로_묶는다(TestCase):
         self.assertIn('표와 저장에 적용값', block)
         # 긴 규정 설명은 화면에 늘어놓지 않는다
         self.assertNotIn('트랜스지방·콜레스테롤·나트륨만 올리고', block)
+
+
+class UncheckedCauseTests(TestCase):
+    """
+    못 본 것과 통과한 것은 다르다.
+
+    검사는 대부분 "값이 있을 때만" 본다. 그래서 값을 읽지 못하면 조용히
+    return [] 하고, 화면에는 아무 말도 남지 않아 사용자는 봤는데 괜찮다는
+    뜻으로 읽는다. 이제 그런 자리는 unchecked 로 나오고 왜 못 봤는지가
+    cause 에 적힌다.
+
+    **unchecked 는 지적이 아니다** — issues 에 섞이지 않고 ok 를 바꾸지 않는다.
+    확정 검사(products/views.py)가 지적 하나로 길을 막기 때문에, 새로 보이기
+    시작한 것을 지적으로 내면 지금까지 만든 라벨이 갑자기 확정 불가가 된다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='unchecked', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='시험', **kwargs)
+
+    def _rows(self, label, category):
+        from v1.label.services.validation_service import validate_label
+        result = validate_label(label)
+        return [u for u in result['unchecked'] if u['category'] == category]
+
+    def test_내용량을_숫자로_못_읽으면_조용히_지나가지_않는다(self):
+        from v1.label.services.validation_service import CAUSE_UNREADABLE
+
+        # 열량은 병기했는데 총량이 숫자가 아니다 — 견줄 수가 없다
+        label = self._label(content_weight='한 봉지 (300 kcal)', calories='155')
+        rows = self._rows(label, 'calorie_consistency')
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['cause'], CAUSE_UNREADABLE)
+
+    def test_영양성분_탭이_비면_자료없음이다(self):
+        from v1.label.services.validation_service import CAUSE_NO_DATA
+
+        label = self._label(content_weight='500 g (350 kcal)', calories='')
+        rows = self._rows(label, 'calorie_consistency')
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['cause'], CAUSE_NO_DATA)
+
+    def test_표를_안_그리는_라벨은_미대상이다(self):
+        from v1.label.services.validation_service import CAUSE_NOT_APPLICABLE
+
+        label = self._label(content_weight='500 g')
+        rows = self._rows(label, 'content_weight_basis')
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['cause'], CAUSE_NOT_APPLICABLE)
+
+    def test_못_본_것은_지적으로_세지_않는다(self):
+        from v1.label.services.validation_service import validate_label
+
+        label = self._label(content_weight='한 봉지 (300 kcal)', calories='155')
+        result = validate_label(label)
+        # unchecked 가 있어도 issue_count 에는 안 들어간다
+        self.assertTrue(result['unchecked_count'] > 0)
+        self.assertEqual(result['issue_count'], len(result['issues']))
+        for row in result['unchecked']:
+            self.assertNotIn(row, result['issues'])
+            # 확정을 막지 않는다 — products/views.py 가 advisory 를 걸러 낸다
+            self.assertTrue(row['advisory'])
+
+    def test_지적에는_원인이_붙는다(self):
+        from v1.label.services.validation_service import CAUSE_VIOLATION, _issue
+
+        row = _issue('content_weight', '단위가 없습니다.')
+        self.assertEqual(row['kind'], 'issue')
+        self.assertEqual(row['cause'], CAUSE_VIOLATION)
+
+    def test_화면으로_나갈_때_이름이_붙는다(self):
+        """
+        unchecked 는 AI 검증이 먼저 쓰던 키다. 화면(vrUncheckedHtml)이 u.label
+        을 그리므로, 규칙 검사가 낸 행에도 이름이 붙어 나가야 한다. 안 붙이면
+        굵은 글씨 자리가 빈 채로 찍힌다.
+        """
+        label = self._label(content_weight='한 봉지 (300 kcal)', calories='155')
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('label:validate_label_server', args=[label.my_label_id]))
+        self.assertEqual(response.status_code, 200)
+        rows = response.json()['unchecked']
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertTrue(row.get('label'), '이름 없이 나간 행이 있다')
+            self.assertTrue(row.get('cause'))
+
+    def test_못_본_항목에도_한글_이름이_있다(self):
+        """화면이 unchecked 를 그릴 때 영어 키가 그대로 찍히면 안 된다."""
+        from v1.label.services.ai_validation_service import _CATEGORY_LABELS
+        from v1.label.services.validation_service import validate_label
+
+        label = self._label(content_weight='한 봉지')
+        for row in validate_label(label)['unchecked']:
+            self.assertIn(row['category'], _CATEGORY_LABELS,
+                          '%s 의 한글 이름이 없다' % row['category'])
+
+
+class RequiredDocumentTests(TestCase):
+    """
+    근거 문서가 없으면 "적합" 이 아니라 "아직 못 봤다" 다.
+
+    표시사항의 값이 맞는지는 품목제조보고서·성적서를 봐야 알 수 있는데,
+    지금까지 검증은 문서함을 한 번도 보지 않았다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(username='docs', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='문서 시험')
+        DocumentType.objects.all().delete()   # 마이그레이션 기본값에 기대지 않는다
+        self.required = DocumentType.objects.create(
+            type_code='T_REQ', type_name='품목제조보고서', required_yn=True)
+        self.optional = DocumentType.objects.create(
+            type_code='T_OPT', type_name='할랄인증서', required_yn=False)
+
+    def _slot(self, doc_type, **kwargs):
+        from v1.products.models import DocumentSlot
+
+        return DocumentSlot.objects.create(
+            label=self.label, document_type=doc_type, **kwargs)
+
+    def _rows(self):
+        from v1.label.services.validation_service import validate_label
+
+        return [u for u in validate_label(self.label)['unchecked']
+                if u['category'] == 'required_document']
+
+    def test_문서함이_없는_라벨에는_아무_말도_안_한다(self):
+        """슬롯은 제품을 만들 때 생긴다. 안 만든 것과 없는 것은 다르다."""
+        self.assertEqual(self._rows(), [])
+
+    def test_필수_문서가_비면_자료없음으로_나온다(self):
+        from v1.label.services.validation_service import CAUSE_NO_DATA
+
+        self._slot(self.required)
+        rows = self._rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['cause'], CAUSE_NO_DATA)
+        self.assertIn('품목제조보고서', rows[0]['message'])
+
+    def test_필수가_아닌_문서는_세지_않는다(self):
+        self._slot(self.optional)
+        self.assertEqual(self._rows(), [])
+
+    def test_숨긴_슬롯은_세지_않는다(self):
+        """사용자가 이 제품에는 필요 없다고 정한 것이다. 준수율도 같은 규칙이다."""
+        self._slot(self.required, hidden_yn=True)
+        self.assertEqual(self._rows(), [])
+
+    def test_문서함을_못_읽으면_그것도_말한다(self):
+        """
+
+        조용히 [] 를 내면 검사가 죽어 있어도 통과처럼 보인다. 실제로 필드
+        이름을 틀렸을 때 그렇게 됐다.
+        """
+        from unittest.mock import patch as _patch
+
+        from v1.label.services.validation_service import (
+            CAUSE_UNREADABLE, check_required_documents,
+        )
+
+        self._slot(self.required)
+        with _patch.object(type(self.label), 'document_slots',
+                           property(lambda self: 1 / 0)):
+            rows = check_required_documents(self.label)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['cause'], CAUSE_UNREADABLE)
+
+    def test_문서가_없어도_확정을_막지_않는다(self):
+        from v1.label.services.validation_service import validate_label
+
+        self._slot(self.required)
+        result = validate_label(self.label)
+        blocking = [i for i in result['issues'] if not i.get('advisory')]
+        self.assertNotIn('required_document', {i['category'] for i in blocking})
+
+
+class NutritionLabelScopeTests(TestCase):
+    """
+    이 제품이 영양표시 대상인가 — 지금까지 묻지 않던 물음.
+
+    나머지 영양성분 검사는 전부 "표를 만들었으면" 본다. 그래서 표를 통째로
+    빠뜨린 제품은 아무 검사에도 안 걸렸다. 반대로, 대상 목록만 보고 제외를
+    안 보면 원료용 제품에 없는 지적을 만든다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='nscope', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='범위', **kwargs)
+
+    def _rows(self, label):
+        from v1.label.services.validation_service import validate_label
+        return [u for u in validate_label(label)['unchecked']
+                if u['category'] == 'nutrition_scope']
+
+    def test_대상인데_표가_없으면_못_봤다고_한다(self):
+        from v1.label.services.validation_service import CAUSE_NO_DATA
+
+        rows = self._rows(self._label(prdlst_dcnm='빵류'))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['cause'], CAUSE_NO_DATA)
+
+    def test_표가_있으면_이_검사는_비킨다(self):
+        """표가 있으면 그때부터는 다른 검사들이 본다."""
+        self.assertEqual(self._rows(self._label(prdlst_dcnm='빵류', calories='300')), [])
+
+    def test_제외_식품에는_아무_말도_안_한다(self):
+        for food_type in ('추잉껌', '침출차', '식염', '포장육', '탁주'):
+            self.assertEqual(self._rows(self._label(prdlst_dcnm=food_type)), [],
+                             '%s 는 영양표시 제외 식품이다' % food_type)
+
+    def test_불명이면_조용하다(self):
+        """목록이 못 덮는 유형마다 '모르겠다' 고 하면 그게 소음이다."""
+        self.assertEqual(self._rows(self._label(prdlst_dcnm='듣도보도못한유형')), [])
+        self.assertEqual(self._rows(self._label(prdlst_dcnm='')), [])
+
+    def test_원료용_문구가_있으면_제외로_본다(self):
+        """
+        빵류이면서 제품제조용 원료인 제품이 실제로 있다. 대상 목록만 보면
+        그것을 놓친다 — 밖에서 본 시스템이 이 자리에서 오판했다.
+        """
+        label = self._label(
+            prdlst_dcnm='빵류',
+            cautions='식품접객업소, 제조업소 등에서 제조가공하는 원료입니다.')
+        self.assertEqual(self._rows(label), [])
+
+    def test_김치는_배추김치만_대상이다(self):
+        self.assertEqual(len(self._rows(self._label(prdlst_dcnm='배추김치'))), 1)
+        self.assertEqual(self._rows(self._label(prdlst_dcnm='갓김치')), [])
+
+    def test_제외가_대상을_이긴다(self):
+        from v1.label.services.nutrition_label import EXEMPT, scope
+
+        label = self._label(prdlst_dcnm='빵류', additional_info='제품제조용')
+        self.assertEqual(scope(label)[0], EXEMPT)
+
+
+class NutritionDisplayValueTests(TestCase):
+    """
+    성분별 표시 단위. 화면(nutrition_calculator_popup.js)에만 있던 규칙을
+    서버로 옮겼으니, 두 쪽이 같은 값을 내야 한다.
+    """
+
+    def test_성분마다_단위가_다르다(self):
+        from v1.label.services.nutrition_calc import display_value as d
+
+        # 나트륨: 120 mg 이하 5 단위, 초과 10 단위
+        self.assertEqual(d('natriums', 118), '120')
+        self.assertEqual(d('natriums', 398.1), '400')
+        self.assertEqual(d('natriums', 3), '0')
+        # 지방: 5 g 이하 0.1 단위, 초과 1 단위
+        self.assertEqual(d('fats', 4.44), '4.4')
+        self.assertEqual(d('fats', 82.7), '83')
+        self.assertEqual(d('fats', 0.3), '0')
+        # 콜레스테롤: 2 미만 0, 5 미만 "5mg 미만"
+        self.assertEqual(d('cholesterols', 1), '0')
+        self.assertEqual(d('cholesterols', 3), '5mg 미만')
+        # 트랜스지방: 0.2 미만 0, 0.5 미만 "0.5g 미만"
+        self.assertEqual(d('trans_fats', 0.1), '0')
+        self.assertEqual(d('trans_fats', 0.3), '0.5g 미만')
+        # 탄수화물·단백질: 1 g 미만은 숫자로 적지 않는다
+        self.assertEqual(d('carbohydrates', 0.4), '1g 미만')
+        self.assertEqual(d('proteins', 9.5), '10')
+        # 당류는 "미만" 표기가 없다
+        self.assertEqual(d('sugars', 0.3), '0')
+        # 열량은 5 kcal 단위
+        self.assertEqual(d('calories', 307), '305')
+
+    def test_반올림은_올린다_그리고_화면과_계산_순서가_같다(self):
+        """
+        파이썬 round() 는 은행가 반올림이라 2.5 가 2 다. 그리고 0.1 단위에서
+        v/0.1 과 v*10 은 부동소수 오차가 달라 값이 갈린다 — 화면과 같은
+        순서여야 같은 값이 나온다.
+        """
+        from v1.label.services.nutrition_calc import display_value as d
+
+        self.assertEqual(d('proteins', 2.5), '3')
+        for value, expected in ((4.55, '4.6'), (1.15, '1.2'), (3.05, '3.1')):
+            self.assertEqual(d('fats', value), expected,
+                             '%s 에서 화면과 값이 갈렸다' % value)
+        # 0.1 단위로 적는 그 밖의 성분도 같은 길을 지난다
+        self.assertEqual(d('vitamin_c', 0.35), '0.4')
+
+    def test_빈_값은_0이다(self):
+        from v1.label.services.nutrition_calc import display_value as d
+
+        for empty in (None, '', 0, '0'):
+            self.assertEqual(d('fats', empty), '0')

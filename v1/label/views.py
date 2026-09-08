@@ -48,7 +48,9 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 from .services import food_type_settings as fts
 from .services.validation_service import validate_label
-from .services.ai_validation_service import check_ingredient_order, run_full_review, group_issues_by_category
+from .services.ai_validation_service import (
+    check_ingredient_order, run_full_review, group_issues_by_category, name_unchecked,
+)
 from v1.common import quota
 from .services import ingredient_paste
 from v1.common.uploads import MAX_UPLOAD_BYTES as _UPLOAD_BYTES, MAX_UPLOAD_MB as _UPLOAD_MB
@@ -3437,6 +3439,8 @@ def validate_label_server(request, label_id):
     log_user_activity(request, 'validation', 'validation_report', label_id)
 
     result = validate_label(label)
+    # 못 본 항목에도 이름을 붙인다 — 화면이 영어 키를 그대로 찍으면 안 된다
+    result['unchecked'] = name_unchecked(result['unchecked'])
     categories = group_issues_by_category(result['issues'])
     checked_count = len(categories)
     problem_count = sum(1 for c in categories if not c['ok'])
@@ -3607,7 +3611,7 @@ def validate_label_ai_review(request, label_id):
                 'reason': REASON_API_ERROR,
                 'message': REASON_MESSAGES[REASON_API_ERROR],
                 'system_failure': True,
-            }],
+            }] + name_unchecked(rule_result['unchecked']),
             'from_cache': False,
             'blocked': False,
             'usage': get_ai_usage(request.user),

@@ -60,6 +60,10 @@ _CATEGORY_LABELS = {
     'thawing_method': '해동방법 표시',
     'exchange_notice': '제품 교환 안내',
     'origin_emphasis': '원산지 강조 표시',
+    # 지적은 안 내고 "못 봤다" 만 내는 검사도 이름이 있어야 한다 —
+    # 화면이 unchecked 를 그릴 때 같은 표를 본다.
+    'required_document': '근거 문서',
+    'nutrition_scope': '영양표시 대상',
 }
 
 # "규정만 검증"(규칙 기반)에는 없고 AI검증에만 있는 항목들 — 사용자에게
@@ -463,6 +467,23 @@ def check_name_ingredient_match_ai(label) -> dict:
     return {'checked': True, 'issues': issues, 'reason': REASON_OK}
 
 
+def name_unchecked(rows: list[dict]) -> list[dict]:
+    """
+    규칙 검사(validation_service)가 낸 "못 봤다" 에 화면용 이름을 붙인다.
+
+    이름표(_CATEGORY_LABELS)는 이 모듈에 있고 validation_service 는 이 모듈을
+    부르지 않는다(반대 방향이다). 그래서 이름은 여기서 붙인다 — 표를 두 벌로
+    두면 어느 날 한쪽만 고쳐진다.
+
+    AI 검증이 내는 unchecked 와 키가 조금 다르다. AI 쪽은 왜 못 봤는지를
+    `reason`(코드) 으로, 규칙 쪽은 `cause`(사람이 읽는 말) 로 말한다. 화면은
+    둘 다 label·message 만 쓰므로 섞여 있어도 그려진다.
+    """
+    return [{**row,
+             'label': _CATEGORY_LABELS.get(row.get('category'), row.get('category') or '')}
+            for row in rows]
+
+
 def group_issues_by_category(issues: list[dict]) -> list[dict]:
     """
     validate_label()/check_ingredient_order()가 내는 flat한 issue 목록을
@@ -684,7 +705,7 @@ def run_full_review(label, user) -> dict:
                 {'category': c, 'label': _CATEGORY_LABELS[c], 'reason': REASON_NO_INPUT,
                  'message': REASON_MESSAGES[REASON_NO_INPUT], 'system_failure': False}
                 for c in ('ingredient_order', 'allergen', 'name_ingredient_match')
-            ],
+            ] + name_unchecked(rule_result['unchecked']),
             'ai_extra_coverage': AI_ONLY_CATEGORIES,
             'from_cache': False,
             'blocked': False,
@@ -768,7 +789,8 @@ def run_full_review(label, user) -> dict:
         # 검증하지 못한 항목과 그 사유. 화면이 "확인하지 못했다" 를 사실대로
         # 말할 수 있게 한다 — 예전에는 원인과 무관하게 "함량(%)이 명시돼 있지
         # 않아서" 라고만 안내해서 API 가 죽어도 사용자 입력 탓으로 보였다.
-        'unchecked': _collect_unchecked(order_result, allergen_ai_result, name_match_result),
+        'unchecked': (_collect_unchecked(order_result, allergen_ai_result, name_match_result)
+                      + name_unchecked(rule_result['unchecked'])),
         'ai_extra_coverage': AI_ONLY_CATEGORIES,  # 규정만 검증에는 없는, AI검증만의 확인 항목
         'from_cache': False,
         'blocked': False,

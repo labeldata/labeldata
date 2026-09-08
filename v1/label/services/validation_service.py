@@ -211,10 +211,57 @@ _ADVISORY_CATEGORIES = frozenset({'exchange_notice', 'origin_emphasis',
                                   'calorie_macros_advice'})
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 왜 그렇게 판정했는가 — 원인 코드
+#
+# 지금까지 검사가 낼 수 있는 말은 "지적" 하나뿐이었다. 그래서 **못 본 것과
+# 통과한 것이 결과에서 구분되지 않았다.** 내용량 글자에서 총량을 못 읽으면
+# check_calorie_consistency 가 조용히 return [] 하고, 화면에는 "열량 표시
+# 정합성" 이 아무 말 없이 남는다. 사용자는 봤는데 괜찮다는 뜻으로 읽는다.
+#
+# 이제 검사는 두 가지를 낼 수 있다.
+#
+#   _issue      규정에 어긋났다 — 지금까지와 같다. 확정을 막는다(advisory 제외)
+#   _unchecked  보지 못했다 — 왜 못 봤는지를 원인으로 말한다. 확정은 막지
+#               않고, 결과의 'unchecked' 에 따로 담긴다
+#
+# **_unchecked 를 issues 에 섞지 않는 이유가 있다.** products/views.py 의 확정
+# 검사가 advisory 아닌 지적 하나로 길을 막는다. 새로 보이기 시작한 것을 지적
+# 으로 내면 지금까지 만든 라벨 상당수가 갑자기 확정 불가가 된다 — 같은 함정을
+# exchange_notice 에서 한 번 봤다(위 _ADVISORY_CATEGORIES 주석).
+#
+# 육안확인(자동으로 볼 수 없어 사람이 봐야 하는 것)은 아직 없다. 시안 파일에서
+# 서식을 읽기 시작하면 그때 는다.
+# ─────────────────────────────────────────────────────────────────────────────
+CAUSE_VIOLATION      = '조건위반'  # 규정에 어긋났다 (_issue 의 기본값)
+CAUSE_NOT_APPLICABLE = '미대상'    # 이 제품에는 적용되지 않는다
+CAUSE_NO_DATA        = '자료없음'  # 판단할 값·문서가 아직 없다
+CAUSE_UNREADABLE     = '값불명'    # 값은 있는데 읽어낼 수 없어 견주지 못했다
+
+
+def _unchecked(category: str, cause: str, message: str, hint: str = '') -> dict:
+    """
+    이 검사를 하지 못했다는 기록. **지적이 아니다.**
+
+    category 는 _issue 와 같은 것을 쓴다 — 화면이 항목 이름을 찾는 표
+    (ai_validation_service._CATEGORY_LABELS)가 한 벌이어야 하기 때문이다.
+    """
+    return {
+        'kind': 'unchecked',
+        'category': category,
+        'cause': cause,
+        'message': message,
+        'suggestion': hint,
+        'advisory': True,
+    }
+
+
 def _issue(category: str, message: str, suggestion: str = '', fields=None) -> dict:
     basis = _LEGAL_BASIS.get(category)
     full_message = f'{message} (근거: {basis})' if basis else message
     return {
+        'kind': 'issue',
+        'cause': CAUSE_VIOLATION,
         'category': category,
         'message': full_message,
         'suggestion': suggestion,
@@ -523,8 +570,18 @@ def check_calorie_consistency(label) -> list[dict]:
     stated = _number(kcal_match.group(1))
     per_100 = _number((label.calories or '').strip())
     amount = _total_amount(text)
-    if stated is None or per_100 is None or amount is None or amount <= 0:
-        return []   # 셋 다 있어야 비교할 수 있다
+    if per_100 is None:
+        return [_unchecked(
+            'calorie_consistency', CAUSE_NO_DATA,
+            '내용량에 열량이 병기돼 있으나 영양성분 탭의 열량이 비어 있어 '
+            '두 값을 견주지 못했습니다.',
+            '영양성분 탭에 100 g(mL) 당 열량을 넣으면 병기한 값과 대조합니다.')]
+    if stated is None or amount is None or amount <= 0:
+        return [_unchecked(
+            'calorie_consistency', CAUSE_UNREADABLE,
+            '내용량 "%s" 에서 총량과 열량을 숫자로 읽어내지 못해 영양성분 탭의 '
+            '값과 견주지 못했습니다.' % (label.content_weight or '').strip(),
+            '내용량을 "500 g (350 kcal)" 처럼 숫자와 단위로 적으면 대조합니다.')]
 
     expected = round_calories(per_100 * amount / 100)
     if abs(stated - expected) <= _CALORIE_TOLERANCE:
@@ -671,12 +728,27 @@ def check_ingredient_order_by_ratio(label) -> list[dict]:
                  for rel in relations
                  if rel.ingredient_ratio is not None and rel.ingredient.prdlst_nm]
     except Exception:
-        return []
+        logger.exception('원재료 순서 검사: BOM 을 읽지 못했다 (label=%s)',
+                         getattr(label, 'pk', None))
+        return [_unchecked(
+            'ingredient_order', CAUSE_UNREADABLE,
+            'BOM 의 배합비를 읽지 못해 원재료 표시 순서를 보지 못했습니다.')]
 
     placed = [(text.find(name), name, ratio)
               for name, ratio in _placeable(known, text)]
     if len(placed) < 2:
-        return []   # 문구에서 짚어낸 원료가 2개 미만이면 순서를 따질 수 없다
+        # 순서를 따지려면 문구에서 자리를 확정한 원료가 둘은 있어야 한다.
+        # 원료 자체가 둘 미만인 것과, 있는데 문구에서 못 찾은 것은 다른 말이다.
+        if len(known) < 2:
+            return [_unchecked(
+                'ingredient_order', CAUSE_NOT_APPLICABLE,
+                'BOM 에 배합비가 적힌 원료가 2개 미만이라 표시 순서를 따질 수 없습니다.')]
+        return [_unchecked(
+            'ingredient_order', CAUSE_UNREADABLE,
+            '원재료명 문구에서 BOM 의 원료 %d개 중 %d개만 자리를 확정할 수 있어 '
+            '표시 순서를 보지 못했습니다.' % (len(known), len(placed)),
+            '표시명이 BOM 의 원료명과 다르게 적혀 있으면 문구에서 찾지 못합니다. '
+            'BOM 에서 원재료명을 다시 생성하면 대조할 수 있습니다.')]
 
     placed.sort()   # 문구에 나온 순서대로
     issues = []
@@ -1260,13 +1332,19 @@ def check_content_weight_basis(label) -> list[dict]:
     걸린다. 표가 인쇄되지 않는데 총량이 어긋난다고 말해 봐야 고칠 것이 없다.
     """
     if not (label.calories or '').strip():
-        return []
+        return [_unchecked(
+            'content_weight_basis', CAUSE_NOT_APPLICABLE,
+            '영양성분 표를 만들지 않은 라벨이라 총 내용량을 견주지 않았습니다.')]
 
     text = normalize_units(label.content_weight or '')
     stated = _total_amount(text)
     nutrition = _nutrition_total(label)
     if stated is None or nutrition is None or stated <= 0:
-        return []
+        return [_unchecked(
+            'content_weight_basis', CAUSE_UNREADABLE,
+            '내용량 또는 영양성분 탭의 단위량·포장개수를 숫자로 읽어내지 못해 '
+            '총 내용량을 견주지 못했습니다.',
+            '내용량은 "500 g" 처럼, 단위량·포장개수는 숫자로 적어 주세요.')]
     if abs(stated - nutrition) <= _AMOUNT_TOLERANCE:
         return []
 
@@ -1424,7 +1502,11 @@ def check_font_size(label) -> list[dict]:
 
     size = _number((getattr(label, 'prv_font_size', '') or '').strip())
     if size is None or size <= 0:
-        return []   # 미리보기 설정을 아직 저장한 적이 없다
+        return [_unchecked(
+            'font_size', CAUSE_NO_DATA,
+            '미리보기 표 설정을 아직 저장한 적이 없어 인쇄될 글자 크기를 '
+            '보지 못했습니다.',
+            '미리보기에서 표 설정을 한 번 저장하면 그 값으로 봅니다.')]
 
     minimum = LABEL_REGULATIONS['font_size']['general']['min']
     if size >= minimum:
@@ -1478,13 +1560,19 @@ def check_calorie_matches_macros(label) -> list[dict]:
     """
     calories = _number((getattr(label, 'calories', '') or '').strip())
     if calories is None or calories <= 0:
-        return []
+        return [_unchecked(
+            'calorie_macros', CAUSE_NOT_APPLICABLE,
+            '영양성분 탭에 열량이 없어 탄단지 계산과 견주지 않았습니다.')]
 
     macros = {}
     for field in _ATWATER:
         value = _number((getattr(label, field, '') or '').strip())
         if value is None:
-            return []       # 하나라도 없으면 계산할 수 없다
+            return [_unchecked(       # 하나라도 없으면 계산할 수 없다
+                'calorie_macros', CAUSE_NO_DATA,
+                '영양성분 탭의 %s 이(가) 비어 있어 열량을 계산해 견주지 '
+                '못했습니다.' % _FIELD_LABELS.get(field, field),
+                '탄수화물·지방·단백질이 모두 있어야 계산할 수 있습니다.')]
         macros[field] = value
 
     # 식이섬유·당알코올이 있으면 계수가 다르다. 규정대로 세는 자리는 한 곳이다
@@ -1496,7 +1584,9 @@ def check_calorie_matches_macros(label) -> list[dict]:
         values['dietary_fiber'] = fiber
     computed = calories_from_macros(values)
     if not computed or computed <= 0:
-        return []
+        return [_unchecked(
+            'calorie_macros', CAUSE_UNREADABLE,
+            '탄수화물·지방·단백질로 계산한 열량이 0 이라 견줄 수 없었습니다.')]
 
     gap = abs(calories - computed)
     if gap <= max(25.0, computed * 0.3):
@@ -1702,6 +1792,97 @@ def check_origin_emphasis(label) -> list[dict]:
     )]
 
 
+def check_nutrition_label_scope(label) -> list[dict]:
+    """
+    영양표시 **대상**인데 표를 만들지 않았는가.
+
+    나머지 영양성분 검사는 전부 "표를 만들었으면" 본다. 그래서 **표를 통째로
+    빠뜨린 제품은 아무 검사에도 안 걸린다** — 미탐이다. 대상 여부를 가리는
+    자(nutrition_label)가 생겼으니 그 구멍만 메운다.
+
+    **지적으로 내지 않는다.** 대상 여부 판정은 식품유형 이름에 기대고 있고,
+    그 목록이 덮지 못하는 유형이 아직 많다. 확신이 그만큼일 때 확정을 막으면
+    고칠 방법이 없는 경고가 된다 — is_required 주석에 적힌 그 일이 다시 난다.
+
+    제외이거나 불명이면 **아무 말도 하지 않는다.** 불명일 때 매 라벨마다
+    "모르겠다" 고 하면 그것이 곧 소음이다.
+    """
+    from v1.label.services import nutrition_label
+
+    if _has_nutrition_display(label):
+        return []       # 표가 있으면 그때부터는 다른 검사들이 본다
+
+    verdict, reason = nutrition_label.scope(label)
+    if verdict != nutrition_label.TARGET:
+        return []
+
+    return [_unchecked(
+        'nutrition_scope', CAUSE_NO_DATA,
+        '영양표시 대상 식품인데 영양성분 표가 없어 표시 적합성을 보지 '
+        '못했습니다 — %s' % reason,
+        '영양성분 탭에서 표를 만들면 성분·기준치·열량 병기까지 함께 봅니다. '
+        '제품제조용 원료처럼 제외 대상이라면 그 문구가 표시사항에 있어야 합니다.')]
+
+
+def check_required_documents(label) -> list[dict]:
+    """
+    판정의 근거가 되는 문서가 문서함에 들어와 있는가.
+
+    지금까지 검증은 **칸이 비었는지**만 봤다. 그런데 표시사항의 값이 맞는지는
+    근거 문서(품목제조보고서·성적서·영업신고증)를 봐야 알 수 있고, 그 문서가
+    없으면 "적합" 이 아니라 **아직 못 봤다** 다. 문서함(DocumentSlot)이 그
+    정보를 이미 갖고 있는데 검증이 한 번도 보지 않았다.
+
+    **지적으로 내지 않는다.** 문서 미제출은 표시사항의 결함이 아니다 — 서류를
+    받아 오면 사라지는 것이고, 지적으로 내면 확정이 막힌다.
+
+    숨긴 슬롯(hidden_yn)은 세지 않는다. 사용자가 이 제품에는 필요 없다고 정한
+    것이고, 문서 준수율도 같은 규칙을 쓴다. 이 규칙이 곧 "점검 범위" 다.
+
+    문서함이 아예 없는 라벨도 아무 말 하지 않는다 — 슬롯은 제품을 만들 때
+    생기므로, 그 전에 만든 라벨은 **필요 없는 것이 아니라 아직 안 만든 것**이다.
+    전부 미제출이라고 하면 옛 라벨마다 거짓 경고가 붙는다.
+    """
+    from v1.products.models import DocumentSlot
+
+    try:
+        slots = list(label.document_slots
+                     .select_related('document_type')
+                     .filter(document_type__required_yn=True,
+                             document_type__active_yn=True,
+                             hidden_yn=False))
+    except Exception:
+        # **삼키지 않는다.** 처음 이 검사를 쓸 때 필드 이름을 틀렸는데
+        # (is_required / required_yn) except 가 그것을 조용히 먹어서, 검사가
+        # 아무 일도 안 하면서 통과한 것처럼 보였다. 못 본 것은 못 봤다고 한다.
+        logger.exception('근거 문서 검사: 문서함을 읽지 못했다 (label=%s)',
+                         getattr(label, 'pk', None))
+        return [_unchecked(
+            'required_document', CAUSE_UNREADABLE,
+            '문서함을 읽지 못해 근거 문서가 갖춰졌는지 보지 못했습니다.')]
+
+    if not slots:
+        return []
+
+    missing = [s.document_type.type_name for s in slots if not s.current_document]
+    expired = [s.document_type.type_name for s in slots
+               if s.current_document and s.status == DocumentSlot.SlotStatus.EXPIRED]
+
+    rows = []
+    if missing:
+        rows.append(_unchecked(
+            'required_document', CAUSE_NO_DATA,
+            '필수 문서 %d건이 문서함에 없습니다 — %s.' % (len(missing), ', '.join(missing)),
+            '이 문서들을 받아 문서함에 올리면 그 값을 근거로 대조할 수 있습니다. '
+            '이 제품에 필요 없는 문서는 문서함에서 숨기면 세지 않습니다.'))
+    if expired:
+        rows.append(_unchecked(
+            'required_document', CAUSE_NO_DATA,
+            '필수 문서 %d건이 만료됐습니다 — %s.' % (len(expired), ', '.join(expired)),
+            '만료된 문서는 근거로 쓸 수 없습니다. 새 문서로 갱신하세요.'))
+    return rows
+
+
 _CHECKS = [
     check_required_fields,
     check_calorie_consistency,
@@ -1724,6 +1905,9 @@ _CHECKS = [
     check_thawing_method,
     check_exchange_notice,
     check_origin_emphasis,
+    # 지적이 아니라 "못 봤다" 만 내는 검사들
+    check_nutrition_label_scope,
+    check_required_documents,
 ]
 
 
@@ -1741,20 +1925,38 @@ _ROOT_CONSEQUENCES = {
 
 
 def validate_label(label) -> dict:
-    """MyLabel 인스턴스에 대해 서버측 검증 전체를 실행하고 결과를 반환한다."""
-    issues = []
+    """
+    MyLabel 인스턴스에 대해 서버측 검증 전체를 실행하고 결과를 반환한다.
+
+    결과는 두 갈래다.
+
+        issues      규정에 어긋난 것. 지금까지와 같고, ok 와 확정 여부를 정한다
+        unchecked   보지 못한 것. 왜 못 봤는지가 cause 에 있다. ok 를 바꾸지 않는다
+
+    **unchecked 가 늘어도 기존 화면과 확정 흐름은 그대로다** — 둘 다 issues 만
+    본다. 새 칸을 보여 줄지는 화면이 정한다.
+    """
+    rows = []
     for check in _CHECKS:
-        issues.extend(check(label))
+        rows.extend(check(label))
+
+    issues = [r for r in rows if r.get('kind') != 'unchecked']
+    unchecked = [r for r in rows if r.get('kind') == 'unchecked']
 
     roots = {i['root_cause'] for i in issues if i.get('root_cause')}
     if roots:
         folded = {c for r in roots for c in _ROOT_CONSEQUENCES.get(r, ())}
         issues = [i for i in issues if i.get('category') not in folded]
+        # 원인을 짚은 지적이 있으면, 그 자식 검사가 "못 봤다" 고 한 것도 접는다.
+        # 기준이 어긋나 있으면 그 검사들은 못 보는 게 당연하고, 고칠 데는 하나다.
+        unchecked = [u for u in unchecked if u.get('category') not in folded]
 
     return {
         'ok': len(issues) == 0,
         'issue_count': len(issues),
         'issues': issues,
+        'unchecked': unchecked,
+        'unchecked_count': len(unchecked),
         # "무엇을 검증했는지"를 통과 여부와 무관하게 명시 (근거 규정 포함)
         'checked_regulations': list(_LEGAL_BASIS.values()),
     }
