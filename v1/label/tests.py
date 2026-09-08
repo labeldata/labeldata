@@ -12058,70 +12058,67 @@ class NoteFieldTests(TestCase):
         self.assertEqual(parse('거래처:')[0], {})
 
 
-class ColumnToggleTests(TestCase):
+class NoteSearchTermTests(TestCase):
     """
-    목록의 열이 회사마다 다르게 쓰인다. 안 보는 열이 자리를 차지하면 정작
-    봐야 할 원료명이 좁아진다.
-
-    **필수 열은 끌 수 없다** — 이름까지 끄면 무엇을 보고 있는지 알 수 없다.
+    사람은 "거래처: 대상" 이라고도 "거래처:대상" 이라고도 친다. 우리가 적어
+    넣는 꼴은 `이름: 값` 하나뿐이라, 띄어쓰기를 안 쓰면 안 찾혔다.
     """
 
-    SPECS = [
-        {'field': 'prdlst_nm', 'label': '원료명'},
-        {'field': 'bssh_nm', 'label': '제조사'},
-        {'field': 'gmo', 'label': 'GMO'},
-        {'field': None, 'label': '작업'},
-    ]
+    def test_띄어쓰기가_달라도_찾는다(self):
+        from v1.label.services.note_fields import search_terms
+
+        got = search_terms('거래처:대상')
+        self.assertIn('거래처: 대상', got)
+        self.assertIn('거래처:대상', got)
+
+    def test_이름만_치면_그_항목을_찾는다(self):
+        from v1.label.services.note_fields import search_terms
+
+        self.assertEqual(search_terms('거래처:'), ['거래처:'])
+
+    def test_콜론이_없으면_그대로_찾는다(self):
+        from v1.label.services.note_fields import search_terms
+
+        self.assertEqual(search_terms('25kg 포대'), ['25kg 포대'])
+
+    def test_전각_콜론도_받는다(self):
+        from v1.label.services.note_fields import search_terms
+
+        self.assertIn('거래처: 대상', search_terms('거래처：대상'))
+
+    def test_빈_말은_찾지_않는다(self):
+        from v1.label.services.note_fields import search_terms
+
+        self.assertEqual(search_terms('  '), [])
+
+
+class NoteFieldSearchWiringTests(TestCase):
+    """비고 항목으로 고르면 그 꼴로 찾는다."""
 
     def setUp(self):
-        self.user = User.objects.create_user(username='cols', password='x')
+        from v1.bom.models import ProductBOM
 
-    def test_끈_열은_빠진다(self):
-        from v1.label.services.list_sort import visible
+        self.user = User.objects.create_user(username='nsw', password='x')
+        self.client.force_login(self.user)
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='완제품')
+        ing = MyIngredient.objects.create(user_id=self.user,
+                                          prdlst_nm='정제소금', delete_YN='N')
+        ProductBOM.objects.create(parent_label=label, source_ingredient=ing,
+                                  ingredient_name='정제소금',
+                                  notes='거래처: 대상㈜ · 규격: 25kg 포대')
 
-        fields = [c['field'] for c in visible(self.SPECS, {'gmo'})]
-        self.assertNotIn('gmo', fields)
-        self.assertIn('bssh_nm', fields)
+    def _search(self, q):
+        response = self.client.get(
+            reverse('label:my_ingredient_list_combined'),
+            {'q': q, 'search_field': 'notes'})
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode('utf-8')
 
-    def test_필수_열은_꺼도_남는다(self):
-        from v1.label.services.list_sort import visible
+    def test_띄어쓰기_없이_쳐도_찾는다(self):
+        self.assertIn('정제소금', self._search('거래처:대상㈜'))
 
-        fields = [c['field'] for c in visible(self.SPECS, {'prdlst_nm', 'gmo'})]
-        self.assertIn('prdlst_nm', fields)
+    def test_띄어쓰기_있게_쳐도_찾는다(self):
+        self.assertIn('정제소금', self._search('거래처: 대상㈜'))
 
-    def test_정렬_불가_열도_남는다(self):
-        """field 가 없는 열(작업 단추 등)은 끄고 켤 대상이 아니다."""
-        from v1.label.services.list_sort import visible
-
-        self.assertEqual(len(visible(self.SPECS, {'gmo'})), 3)
-
-    def test_계정에_남는다(self):
-        """자리를 옮긴다고 달라지지 않는다 — 브라우저가 아니라 계정이다."""
-        from v1.label.services.list_sort import hidden_for, save_hidden
-
-        save_hidden(self.user, 'ingredient', ['gmo', 'bssh_nm'])
-        self.user.refresh_from_db()
-        self.assertEqual(hidden_for(self.user, 'ingredient'), {'gmo', 'bssh_nm'})
-
-    def test_필수_열은_받아도_무시한다(self):
-        from v1.label.services.list_sort import save_hidden
-
-        got = save_hidden(self.user, 'ingredient', ['prdlst_nm', 'gmo'])
-        self.assertEqual(got, {'gmo'})
-
-    def test_화면마다_따로_기억한다(self):
-        from v1.label.services.list_sort import hidden_for, save_hidden
-
-        save_hidden(self.user, 'ingredient', ['gmo'])
-        save_hidden(self.user, 'label', ['bssh_nm'])
-        self.assertEqual(hidden_for(self.user, 'ingredient'), {'gmo'})
-        self.assertEqual(hidden_for(self.user, 'label'), {'bssh_nm'})
-
-    def test_켜고_끄는_목록을_만든다(self):
-        from v1.label.services.list_sort import toggles
-
-        rows = {t['field']: t for t in toggles(self.SPECS, {'gmo'})}
-        self.assertTrue(rows['prdlst_nm']['essential'])
-        self.assertTrue(rows['bssh_nm']['on'])
-        self.assertFalse(rows['gmo']['on'])
-        self.assertNotIn(None, rows)
+    def test_다른_항목은_안_찾힌다(self):
+        self.assertNotIn('정제소금', self._search('거래처: 샘표'))

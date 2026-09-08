@@ -110,3 +110,30 @@ def table(notes) -> dict:
         row['비고'] = leftover
         rows.append(row)
     return {'columns': names, 'rows': rows}
+
+
+def search_terms(query: str) -> list[str]:
+    """
+    비고를 뒤질 때 실제로 찾아볼 문자열들.
+
+    사람은 "거래처: 대상" 이라고도 "거래처:대상" 이라고도 친다. 우리가 적어
+    넣은 꼴은 `이름: 값`(콜론 뒤 한 칸) 하나뿐이라, 띄어쓰기를 안 쓰면 안
+    찾힌다 — **적어 놨는데 못 찾겠다** 가 그렇게 난다.
+
+    항목 이름만 치면(`거래처`) 그 항목이 적힌 줄을 모두 찾는다.
+    """
+    text = str(query or '').strip()
+    if not text:
+        return []
+
+    for mark in (':', '：'):
+        if mark in text:
+            name, _, value = text.partition(mark)
+            name, value = name.strip(), value.strip()
+            if not name:
+                break
+            if not value:
+                return ['%s:' % name]          # 이름만 — 그 항목이 있는 줄
+            # 우리가 적는 꼴이 먼저다
+            return ['%s: %s' % (name, value), '%s:%s' % (name, value)]
+    return [text]

@@ -1284,7 +1284,16 @@ def my_ingredient_list_combined(request):
     # 통합 검색어 처리
     if search_q:
         search_values['q'] = search_q
-        if search_field != 'all' and search_field in _ing_field_map:
+        if search_field == 'notes':
+            # "거래처: 대상" 도 "거래처:대상" 도 찾는다. 우리가 적어 넣는 꼴은
+            # 하나뿐이라, 띄어쓰기를 안 쓰면 안 찾혔다.
+            from v1.label.services.note_fields import search_terms
+
+            note_q = Q()
+            for term in search_terms(search_q) or [search_q]:
+                note_q |= Q(bom_usages__notes__icontains=term)
+            search_conditions &= note_q
+        elif search_field != 'all' and search_field in _ing_field_map:
             search_conditions &= Q(**{f"{_ing_field_map[search_field]}__icontains": search_q})
         else:
             search_conditions &= (
