@@ -27,19 +27,18 @@
 
     창으로 따로 열었을 때는 어느 화면인지 알 길이 없으므로 제목을 남긴다.
   {% endcomment %}
-  <header class="preview-page-header">
+  {% comment %}
+    탭 안에서는 이 줄을 아예 그리지 않는다. 배율은 미리보기 안으로, 내보내기는
+    제품 헤더(저장 옆)로 옮겼고, 규정 검증·설정 저장은 바깥 화면이 부른다 —
+    남는 것이 없는데 줄만 자리를 차지했다.
+  {% endcomment %}
+  <header class="preview-page-header{% if request.GET.in_tab %} d-none{% endif %}">
     {% if not request.GET.in_tab %}
     <div>
       <h1 class="panel-title">라벨 미리보기</h1>
     </div>
     {% endif %}
     <div class="preview-actions" role="toolbar" aria-label="미리보기 도구">
-      <div class="zoom-controls">
-        <button class="btn btn-outline-secondary btn-sm" id="zoomOutBtn" aria-label="축소" title="축소 (Ctrl + 휠)"><i class="fas fa-search-minus"></i></button>
-        <button class="btn btn-link btn-sm zoom-value" id="zoomResetBtn" aria-label="배율 100%로" title="누르면 100% 로 되돌립니다"><span id="zoomDisplay">100%</span></button>
-        <button class="btn btn-outline-secondary btn-sm" id="zoomInBtn" aria-label="확대" title="확대 (Ctrl + 휠)"><i class="fas fa-search-plus"></i></button>
-        <button class="btn btn-outline-secondary btn-sm zoom-fit" id="zoomFitBtn" aria-label="창에 맞추기" title="창 너비에 맞춥니다">맞춤</button>
-      </div>
       {% if not request.GET.readonly %}
       {% comment %}
         규정 검증은 이 화면에서 가장 많이 누르는 단추다. 회색 테두리로 두면
@@ -119,6 +118,19 @@
   </header>
 
   <main class="preview-container">
+    {% comment %}
+      배율 조절은 **보고 있는 것 위에** 있어야 한다. 도구 줄에 두면 줄 하나를
+      통째로 쓰고, 표를 보다가 눈이 화면 꼭대기까지 올라갔다 와야 했다.
+      미리보기 안 왼쪽 위에 띄운다 — 표를 가리지 않게 반투명으로 두고,
+      마우스를 올리면 또렷해진다.
+    {% endcomment %}
+    <div class="zoom-controls zoom-floating" role="toolbar" aria-label="배율">
+      <button class="btn btn-outline-secondary btn-sm" id="zoomOutBtn" aria-label="축소" title="축소 (Ctrl + 휠)"><i class="fas fa-search-minus"></i></button>
+      <button class="btn btn-link btn-sm zoom-value" id="zoomResetBtn" aria-label="배율 100%로" title="누르면 100% 로 되돌립니다"><span id="zoomDisplay">100%</span></button>
+      <button class="btn btn-outline-secondary btn-sm" id="zoomInBtn" aria-label="확대" title="확대 (Ctrl + 휠)"><i class="fas fa-search-plus"></i></button>
+      <button class="btn btn-outline-secondary btn-sm zoom-fit" id="zoomFitBtn" aria-label="창에 맞추기" title="창 너비에 맞춥니다">맞춤</button>
+    </div>
+
     <aside class="settings-panel"{% if request.GET.readonly %} style="display: none;"{% endif %}>
       <!-- 탭 네비게이션 -->
       <div class="preview-tabs">

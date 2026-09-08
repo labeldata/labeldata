@@ -62,7 +62,7 @@
       <div class="lt-verify-row">
         <span class="lt-verify-step">1차</span>
         <strong class="lt-verify-name" title="우리가 만든 표시사항이 규정에 맞는지 봅니다&#10;대상: 이 화면의 표시사항">표시문구 검증</strong>
-        <button type="button" class="btn btn-primary v2-btn-sm" id="ltFirstBtn">
+        <button type="button" class="btn btn-primary v2-btn" id="ltFirstBtn">
           <i class="bi bi-list-check"></i> 1차 검증
         </button>
         <span class="lt-verify-meta" id="ltFirstMeta"></span>
@@ -75,7 +75,7 @@
           <summary>무엇을 올리면 더 정확한가</summary>
           <div class="lt-verify-docs" id="ltSecondDocs"></div>
         </details>
-        <button type="button" class="btn btn-outline-primary v2-btn-sm" id="ltCompareBtn">
+        <button type="button" class="btn btn-outline-primary v2-btn" id="ltCompareBtn">
           <i class="bi bi-upload"></i> 시안 올려 2차 검증
         </button>
         <span class="lt-verify-meta" id="ltSecondMeta"></span>
@@ -368,7 +368,7 @@
    위쪽에 다섯 겹이 쌓여 작업 영역이 뷰포트의 3분의 2였다. 검증은 누르는
    자리이지 읽는 자리다 — 설명은 이름에 붙인 말풍선으로 옮긴다. */
 .lt-verify {
-    padding: 4px 12px 5px;
+    padding: 6px 12px 7px;
     background: var(--ez-gray-50, #f8f9fa);
     border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
     flex-shrink: 0;
@@ -377,18 +377,21 @@
     display: flex;
     flex-wrap: wrap;          /* 좁으면 2차가 아래로 내려간다 */
     align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
+    gap: 8px;
+    /* 12.5px 이었다. 한 줄로 줄이느라 글자까지 줄였더니 정작 **무엇을 누르는
+       자리인지가 안 보였다.** 줄 수를 늘리지 않고 글자만 키운다 — 줄 높이는
+       단추가 정하고, 단추는 어차피 손가락만 하다. */
+    font-size: 14px;
 }
 .lt-verify-gap { flex: 1 1 20px; }   /* 둘을 갈라 놓는다 */
 .lt-verify-step {
     background: var(--ez-info, #1a73e8); color: #fff;
-    border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700;
+    border-radius: 11px; padding: 2px 9px; font-size: 12.5px; font-weight: 700;
     flex-shrink: 0;
 }
 .lt-verify-step.lt-step-2 { background: #7b1fa2; }
-.lt-verify-name { flex-shrink: 0; cursor: help; }
-.lt-verify-more { font-size: 11.5px; flex-shrink: 0; }
+.lt-verify-name { flex-shrink: 0; cursor: help; font-size: 14.5px; }
+.lt-verify-more { font-size: 12.5px; flex-shrink: 0; }
 .lt-verify-more > summary { cursor: pointer; color: var(--ez-info, #1a73e8); }
 .lt-verify-docs {
     position: absolute; z-index: 20; margin-top: 4px;
@@ -400,7 +403,7 @@
 .lt-verify-docs .doc-have { color: #188038; }
 .lt-verify-docs .doc-miss { color: #b06000; }
 .lt-verify-docs .doc-gives { color: #80868b; font-size: 11px; }
-.lt-verify-meta { font-size: 11.5px; color: #5f6368; flex-shrink: 0; }
+.lt-verify-meta { font-size: 12.5px; color: #5f6368; flex-shrink: 0; }
 </style>
 <script>
 /* 검증 전에 무엇이 갖춰졌는지 보여 준다.

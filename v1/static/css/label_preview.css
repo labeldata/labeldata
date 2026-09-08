@@ -1555,3 +1555,37 @@ tbody.layout-vertical tr td {
 }
 .dr-add input { flex: 1 1 160px; }
 .dr-actions { display: flex; gap: 6px; margin-left: auto; }
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   배율 조절 — **보고 있는 것 위에.**
+
+   도구 줄에 있을 때는 줄 하나를 통째로 썼고, 표를 보다가 눈이 화면 꼭대기까지
+   올라갔다 와야 했다. 미리보기 안 왼쪽 위에 띄운다. 표를 가리지 않게 반투명
+   으로 두고 마우스를 올리면 또렷해진다.
+   ───────────────────────────────────────────────────────────────────── */
+.preview-container { position: relative; }
+
+.zoom-controls.zoom-floating {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 4px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .82);
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    box-shadow: 0 1px 4px rgba(60, 64, 67, .18);
+    opacity: .62;
+    transition: opacity .15s ease, background .15s ease;
+}
+.zoom-controls.zoom-floating:hover,
+.zoom-controls.zoom-floating:focus-within {
+    opacity: 1;
+    background: #fff;
+}
+.zoom-controls.zoom-floating .btn { padding: 2px 7px; font-size: 12px; }
+.zoom-controls.zoom-floating .zoom-value { min-width: 44px; text-decoration: none; }

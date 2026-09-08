@@ -64,6 +64,34 @@
             </button>
             {% endif %}
 
+            {% comment %}
+              내보내기는 미리보기 도구 줄에 있었다. 그 줄을 걷어내면서 여기로
+              옮긴다 — 저장·공유와 같은 성격이다(**만든 것을 밖으로 내보내는
+              일**). 메뉴는 여기 있고 실제 일은 미리보기가 한다
+              (runPreviewExport). 코드를 밖으로 옮기면 창으로 따로 열었을 때
+              쓸 수 없어진다.
+            {% endcomment %}
+            <div class="dropdown" id="headerExportWrap" style="display:none;">
+                <button class="btn btn-outline-primary v2-btn dropdown-toggle" type="button"
+                        id="headerExportBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-box-arrow-up"></i>
+                    <span>내보내기</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><button class="dropdown-item" type="button" data-export="copyText">
+                        <i class="bi bi-clipboard me-2 text-success"></i>글자 복사</button></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><button class="dropdown-item" type="button" data-export="pdf">
+                        <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>PDF</button></li>
+                    <li><button class="dropdown-item" type="button" data-export="designRequest">
+                        <i class="bi bi-pencil-square me-2 text-warning"></i>디자인 의뢰서</button></li>
+                    <li><button class="dropdown-item" type="button" data-export="doc">
+                        <i class="bi bi-file-earmark-word me-2 text-primary"></i>워드 (.doc)</button></li>
+                    <li><button class="dropdown-item" type="button" data-export="text">
+                        <i class="bi bi-file-earmark-text me-2 text-secondary"></i>텍스트 (.txt)</button></li>
+                </ul>
+            </div>
+
             <button class="btn btn-primary v2-btn" type="button" onclick="switchToShareTab()">
                 <i class="bi bi-person-plus-fill"></i>
                 <span>공유</span>
@@ -3689,3 +3717,44 @@ function getCookie(name) {
 </div>
 
 {% endblock %}
+
+<script>
+/* 내보내기는 **검증 탭에서만** 뜬다. 미리보기가 그 탭에만 있고, 다른 탭에서
+   누르면 아무 일도 안 나 사용자가 고장인 줄 안다. */
+(function () {
+    var wrap = document.getElementById('headerExportWrap');
+    if (!wrap) return;
+
+    function previewWindow() {
+        var frame = document.getElementById('lt-preview-frame');
+        return frame && frame.contentWindow;
+    }
+
+    function sync() {
+        var active = document.querySelector('#workspaceTab .nav-link.active');
+        var target = active && active.getAttribute('data-bs-target');
+        wrap.style.display = (target === '#tab-label') ? '' : 'none';
+    }
+
+    document.addEventListener('shown.bs.tab', sync);
+    document.addEventListener('DOMContentLoaded', sync);
+    sync();
+
+    wrap.addEventListener('click', function (e) {
+        var item = e.target.closest('[data-export]');
+        if (!item) return;
+        var win = previewWindow();
+        if (!win || typeof win.runPreviewExport !== 'function') {
+            if (typeof showSnackbar === 'function') {
+                showSnackbar('미리보기가 아직 준비되지 않았습니다. 잠시 후 다시 눌러 주세요.', 'warning');
+            }
+            return;
+        }
+        if (!win.runPreviewExport(item.dataset.export)) {
+            if (typeof showSnackbar === 'function') {
+                showSnackbar('이 역할로는 쓸 수 없는 내보내기입니다.', 'info');
+            }
+        }
+    });
+})();
+</script>
