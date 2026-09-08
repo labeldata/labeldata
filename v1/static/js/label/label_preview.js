@@ -3239,6 +3239,35 @@ async function runValidation(useAi, btnId, loadingText) {
 // 제품명 함량 지적이 특히 그렇다. "특정성분 함량에 없다" 는 말만으로는
 // 원재료명에 적어 둔 값이 왜 안 쳐주는지 알 수 없어, 사용자가 세 칸을
 // 번갈아 열어 보며 대조해야 했다.
+/*
+ * 무엇과 무엇을 견줬는가 — 네 열.
+ *
+ * 지적이 문장 하나뿐이면 어느 값이 기준이고 어느 값이 실제인지를 사람이
+ * 문장에서 뽑아내야 한다. 숫자 둘을 나란히 놓으면 한눈에 보인다.
+ * 판정은 줄마다 따로다 — 값을 못 읽어 견주지 못한 줄은 "확정 못 함" 이고,
+ * 지적 전체가 부적합이어도 그 줄은 판정된 적이 없다는 뜻이다.
+ */
+function validationComparisonHtml(rows) {
+    if (!rows || !rows.length) return '';
+    const esc = (str) => String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const tone = { '적합': 'text-success', '어긋남': 'text-danger' };
+    const body = rows.map(function (r) {
+        const cls = tone[r.verdict] || 'text-muted';
+        return '<tr>'
+            + '<td class="text-nowrap text-muted" style="width:30%;">' + esc(r.item) + '</td>'
+            + '<td>' + esc(r.expected) + '</td>'
+            + '<td>' + esc(r.actual) + '</td>'
+            + '<td class="text-nowrap text-end ' + cls + '" style="width:16%;">'
+            + esc(r.verdict) + '</td></tr>';
+    }).join('');
+    return '<div class="mt-2"><table class="table table-sm mb-0" style="font-size:0.82rem;">'
+        + '<thead><tr class="text-muted"><th>대조 항목</th><th>기준값</th>'
+        + '<th>추출값</th><th class="text-end">판정</th></tr></thead>'
+        + '<tbody>' + body + '</tbody></table></div>';
+}
+
 function validationEvidenceHtml(evidence) {
     if (!evidence || !evidence.length) return '';
     const esc = (str) => String(str == null ? '' : str)
@@ -3454,7 +3483,7 @@ function vrProblemsHtml(problems) {
 
         return `<div class="vr-card ${tone}">
                     <div class="vr-card-head">${tag}<span class="vr-card-name">${row.label}</span>${where}</div>
-                    ${errors}${suggestions}${validationEvidenceHtml(row.evidence)}
+                    ${errors}${suggestions}${validationComparisonHtml(row.comparison)}${validationEvidenceHtml(row.evidence)}
                 </div>`;
     }).join('');
 }

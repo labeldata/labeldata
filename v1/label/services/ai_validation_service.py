@@ -501,7 +501,7 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
         # 행에 표시를 얹고, 지적을 누르면 그 행으로 데려간다. 없으면 빈 목록이고
         # 그때는 목록으로만 보여 준다(예: 글자 크기는 표의 한 줄이 아니다).
         return {'label': label, 'ok': True, 'errors': [], 'suggestions': [],
-                'evidence': [], 'fields': [], 'advisory': True}
+                'evidence': [], 'comparison': [], 'fields': [], 'advisory': True}
 
     grouped: dict[str, dict] = {}
     for code, label in _CATEGORY_LABELS.items():
@@ -519,6 +519,10 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
         if issue.get('evidence'):
             row['evidence'].append({'title': issue.get('evidence_title', ''),
                                     'rows': issue['evidence']})
+        # 무엇과 무엇을 견줬는지. 문장에서 숫자를 뽑아내지 않아도 되게 표로 준다.
+        for comp in issue.get('comparison') or ():
+            if comp not in row['comparison']:
+                row['comparison'].append(comp)
         for field in issue.get('fields') or ():
             if field not in row['fields']:
                 row['fields'].append(field)

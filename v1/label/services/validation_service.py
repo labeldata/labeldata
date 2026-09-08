@@ -238,8 +238,35 @@ def _unchecked(category: str, cause: str, message: str, hint: str = '') -> dict:
     }
 
 
+# 지적 하나가 **무엇과 무엇을 견줬는지.**
+#
+# 지금까지 지적은 문장 하나였다. "내용량에 병기한 열량과 영양성분 탭의 값이
+# 서로 다른 총량을 말하고 있습니다 …" 는 맞는 말이지만, 어느 값이 기준이고
+# 어느 값이 실제인지를 사람이 문장에서 뽑아내야 했다. 숫자 둘을 나란히 놓으면
+# 한눈에 보인다.
+#
+#     대조 항목        기준값        추출값        판정
+#     주표시면 열량    390 kcal      300 kcal      어긋남
+#
+# **행마다 판정이 따로 있다.** 값을 못 읽어 견주지 못한 줄은 "확정 못 함" 이다 —
+# 지적 전체가 부적합이어도 그 한 줄은 판정된 적이 없다는 뜻이다.
+VERDICT_OK = '적합'
+VERDICT_BAD = '어긋남'
+VERDICT_UNKNOWN = '확정 못 함'
+
+
+def _row(item: str, expected, actual, verdict: str = VERDICT_BAD) -> dict:
+    """대조 내역 한 줄. 값은 화면에 그대로 찍히므로 문자열로 만들어 넘긴다."""
+    return {
+        'item': item,
+        'expected': '' if expected is None else str(expected),
+        'actual': '' if actual is None else str(actual),
+        'verdict': verdict,
+    }
+
+
 def _issue(category: str, message: str, suggestion: str = '', fields=None,
-           advisory: bool | None = None) -> dict:
+           advisory: bool | None = None, comparison=None) -> dict:
     basis = _LEGAL_BASIS.get(category)
     full_message = f'{message} (근거: {basis})' if basis else message
     return {
@@ -255,6 +282,8 @@ def _issue(category: str, message: str, suggestion: str = '', fields=None,
         # 부당표시 키워드의 조건부(YELLOW)가 그렇다.
         'advisory': (category in _ADVISORY_CATEGORIES) if advisory is None
                     else bool(advisory),
+        # 무엇과 무엇을 견줬는가. 비어 있으면 화면이 표를 그리지 않는다.
+        'comparison': list(comparison or ()),
     }
 
 
@@ -612,6 +641,12 @@ def check_calorie_consistency(label) -> list[dict]:
             f'100 으로 찍혀 내용량 칸과 어긋납니다.',
         )
         root['root_cause'] = 'nutrition_basis'
+        root['comparison'] = [
+            _row('내용량에 병기한 열량', f'{per_total:,.0f} kcal',
+                 f'{stated:,.0f} kcal'),
+            _row('영양성분 탭의 기준', '100 g(mL) 당',
+                 f'{_format_amount(text, amount)} 당으로 보임'),
+        ]
         return [root]
 
     return [_issue(
@@ -624,6 +659,14 @@ def check_calorie_consistency(label) -> list[dict]:
         f'둘 중 하나를 고르세요 — 내용량을 "{_format_amount(text, amount)} '
         f'({per_total:,.0f} kcal)" 로 고치거나, 영양성분 탭의 열량을 '
         f'{round_calories(back):,.0f}(100 {_amount_unit(text)} 당)으로 고치세요.',
+        comparison=[
+            _row('내용량에 병기한 열량', f'{per_total:,.0f} kcal',
+                 f'{stated:,.0f} kcal'),
+            _row('총 내용량', _format_amount(text, amount),
+                 _format_amount(text, amount), VERDICT_OK),
+            _row('영양성분 탭 열량(100 g 당)', f'{round_calories(back):,.0f} kcal',
+                 f'{per_100:,.0f} kcal'),
+        ],
     )]
 
 
@@ -1365,6 +1408,13 @@ def check_content_weight_basis(label) -> list[dict]:
         '내용량 칸에는 포장 전체의 양을 적습니다. 영양성분 탭의 단위량·포장개수를 '
         '그 값에 맞추거나(한 개짜리면 단위량 = 총 내용량, 포장개수 = 1), '
         '내용량 칸을 고치세요.',
+        comparison=[
+            _row('내용량 칸의 총량', _format_amount(text, stated),
+                 f'{nutrition:,.0f} {_amount_unit(text)}'),
+            _row('영양성분 탭 단위량 × 포장개수',
+                 _format_amount(text, stated),
+                 f'{unit_amount:,.0f} × {count:,.0f}'),
+        ],
     )]
 
 
@@ -1633,6 +1683,12 @@ def check_calorie_matches_macros(label) -> list[dict]:
             '환산은 열량과 함량에 같은 배수를 곱하는 일이라 둘의 비율을 바꾸지 '
             '못합니다. 표의 함량이나 열량 중 한쪽이 잘못 적힌 것이니 원본 '
             '자료에서 다시 확인하세요.',
+            comparison=[
+                _row('탄단지로 계산한 열량', f'{computed:,.0f} kcal',
+                     f'{calories:g} kcal'),
+                _row('전부 지방이라 쳤을 때의 최대', f'{ceiling:,.0f} kcal',
+                     f'{calories:g} kcal'),
+            ],
         )]
 
     return [_issue(
@@ -1642,6 +1698,10 @@ def check_calorie_matches_macros(label) -> list[dict]:
         '한쪽만 다른 기준으로 적힌 경우가 많습니다. 영양성분 탭의 값이 모두 '
         '같은 기준(100 g 당)인지 확인하세요. 라벨에 인쇄된 값을 옮겨 적었다면 '
         '계산기의 "아래 값은" 에서 그 기준을 고르고 다시 넣으면 환산해 줍니다.',
+        comparison=[
+            _row('탄단지로 계산한 열량', f'{computed:,.0f} kcal', f'{calories:g} kcal'),
+            _row('계산에 쓴 값', detail, detail, VERDICT_OK),
+        ],
     )]
 
 
@@ -1846,7 +1906,8 @@ def check_food_type_consistency(label) -> list[dict]:
         '둘이 갈리면 규칙을 엉뚱한 유형에서 찾게 됩니다. 한쪽으로 맞춰 주세요 '
         '— 뒤에 괄호로 덧붙인 부기(예: "빵류 [가열하여 섭취하는 냉동식품]")는 '
         '어긋난 것이 아닙니다.',
-        advisory=True)]
+        advisory=True,
+        comparison=[_row('식품유형', sub, printed)])]
 
 
 def check_nutrition_label_scope(label) -> list[dict]:

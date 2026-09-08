@@ -10865,3 +10865,66 @@ class FoodTypeConsistencyTests(TestCase):
         from v1.label.services.validation_service import check_food_type_known
 
         self.assertEqual(check_food_type_known(self._label()), [])
+
+
+class ComparisonRowTests(TestCase):
+    """
+    지적이 문장 하나면 어느 값이 기준이고 어느 값이 실제인지를 사람이
+    문장에서 뽑아내야 한다. 숫자 둘을 나란히 놓으면 한눈에 보인다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='cmp', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='대조', **kwargs)
+
+    def test_열량_정합성_지적에_대조_내역이_실린다(self):
+        from v1.label.services.validation_service import check_calorie_consistency
+
+        issues = check_calorie_consistency(
+            self._label(content_weight='500 g (300 kcal)', calories='155'))
+        rows = issues[0]['comparison']
+        self.assertTrue(rows)
+        self.assertEqual({'item', 'expected', 'actual', 'verdict'}, set(rows[0]))
+        self.assertIn('300', ' '.join(r['actual'] for r in rows))
+
+    def test_식품유형_지적에도_실린다(self):
+        from v1.label.services.validation_service import check_food_type_consistency
+
+        label = MyLabel(user_id=self.user, my_label_name='유형',
+                        food_type='빵류', prdlst_dcnm='과자')
+        rows = check_food_type_consistency(label)[0]['comparison']
+        self.assertEqual(rows[0]['expected'], '빵류')
+        self.assertEqual(rows[0]['actual'], '과자')
+
+    def test_줄마다_판정이_따로다(self):
+        from v1.label.services.validation_service import (
+            VERDICT_BAD, VERDICT_OK, check_content_weight_basis,
+        )
+
+        rows = check_content_weight_basis(
+            self._label(content_weight='500 g', calories='100',
+                        serving_size='65', units_per_package='1'))[0]['comparison']
+        verdicts = {r['verdict'] for r in rows}
+        self.assertIn(VERDICT_BAD, verdicts)
+        self.assertNotIn(VERDICT_OK, verdicts - {VERDICT_BAD})
+
+    def test_묶어도_대조_내역이_남는다(self):
+        from v1.label.services.ai_validation_service import group_issues_by_category
+        from v1.label.services.validation_service import _issue, _row
+
+        rows = group_issues_by_category([
+            _issue('content_weight', '어긋남', comparison=[_row('내용량', 'a', 'b')])])
+        hit = [r for r in rows if r['comparison']]
+        self.assertEqual(len(hit), 1)
+        self.assertEqual(hit[0]['comparison'][0]['item'], '내용량')
+
+    def test_화면이_네_열로_그린다(self):
+        js = open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
+        self.assertIn('function validationComparisonHtml', js)
+        head = js.index('function validationComparisonHtml')
+        block = js[head:head + 1600]
+        for column in ('대조 항목', '기준값', '추출값', '판정'):
+            self.assertIn(column, block)
+        self.assertIn('validationComparisonHtml(row.comparison)', js)
