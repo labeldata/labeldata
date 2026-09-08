@@ -48,6 +48,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 from .services import food_type_settings as fts
 from .services.validation_service import validate_label
+from .services import upload_pages
 from .services.ai_validation_service import (
     check_ingredient_order, run_full_review, group_issues_by_category, name_unchecked,
 )
@@ -2834,17 +2835,50 @@ def ocr_extract(request):
         # 예전에는 여기서 AttributeError 로 500 이 났다.
         content_type = (getattr(image_file, 'content_type', '') or '').lower()
         name = (getattr(image_file, 'name', '') or '').lower()
-        looks_like_image = content_type.startswith('image/') or name.endswith(
-            ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'))
-        if not looks_like_image:
+        if not upload_pages.accepts(image_file):
             return JsonResponse({
                 'success': False,
-                'error': f'이미지 파일만 업로드 가능합니다 (받은 형식: {content_type or "알 수 없음"}).',
+                'error': f'이미지 또는 PDF 만 올릴 수 있습니다 '
+                         f'(받은 형식: {content_type or "알 수 없음"}).',
             }, status=400)
 
     # role 이 비었거나 모자라면 '구분 없음' 으로 채운다 — 옛 화면에서 오는 요청이다
     roles = (roles + ['whole'] * len(image_files))[:len(image_files)]
-    parts = list(zip(image_files, roles))
+
+    # PDF 는 쪽을 그림으로 떠서 지금 판독 경로에 그대로 넣는다.
+    #
+    # **쪽마다 돈이 나간다**(OCR_UPGRADE_PLAN §11). 기본 두 쪽만 보고, 몇 쪽을
+    # 봤는지는 응답에 적어 사용자가 알게 한다. 글자가 든 PDF 면 그 원문도 함께
+    # 받아 둔다 — 판독이 지어낸 값을 잡을 재료다.
+    try:
+        max_pages = max(1, min(int(request.POST.get('pdf_pages') or 0)
+                               or upload_pages.DEFAULT_MAX_PAGES, 5))
+    except (TypeError, ValueError):
+        max_pages = upload_pages.DEFAULT_MAX_PAGES
+
+    expanded, notes, pdf_text = [], [], ''
+    for upload, role in zip(image_files, roles):
+        try:
+            got = upload_pages.to_pages(upload, max_pages)
+        except ValueError as exc:
+            return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+        for page in got['pages']:
+            expanded.append((page, role))
+        line = upload_pages.note(got)
+        if line:
+            notes.append(line)
+        if got.get('text_layer') and not pdf_text:
+            pdf_text = got['text_layer']
+
+    if len(expanded) > OCR_MAX_REGIONS:
+        return JsonResponse({
+            'success': False,
+            'error': f'쪽을 펼치면 영역이 {len(expanded)}개가 됩니다 — '
+                     f'{OCR_MAX_REGIONS}개까지만 읽습니다. 쪽 수를 줄여 주세요.',
+        }, status=400)
+
+    image_files = [page for page, _ in expanded]
+    parts = expanded
 
     # 판독은 부를 때마다 돈이 나간다. 여기서 한도를 본다 — 위의 검사에
     # 걸릴 요청까지 세면, 잘못 올린 파일 하나가 그날 몫을 깎는다.

@@ -11702,3 +11702,94 @@ class PackageFormScreenTests(TestCase):
 
         keys = {key for key, _ in form_choices()}
         self.assertEqual(keys, set(PACKAGE_FORMS))
+
+
+class UploadPagesTests(TestCase):
+    """
+    판독 입구가 이미지만 받았다. 실제로 오가는 것은 PDF 가 많다 — 인쇄용
+    도안도 품목제조보고서도 문서 프로그램에서 뽑은 PDF 라, 사람이 그것을
+    캡처해서 올리고 있었다.
+
+    **쪽마다 돈이 나간다**(비전 모델은 이미지를 토큰으로 환산한다). 기본 두
+    쪽만 보고, 몇 쪽을 봤는지 말해 준다.
+    """
+
+    def _pdf(self, pages):
+        """pages: [글자] — 글자가 빈 문자열이면 그 쪽은 그림만 있는 셈이다."""
+        import pymupdf
+
+        doc = pymupdf.open()
+        for text in pages:
+            page = doc.new_page()
+            if text:
+                page.insert_text((72, 72), text, fontsize=12)
+        data = doc.tobytes()
+        doc.close()
+        return data
+
+    def _upload(self, name, data, content_type='application/pdf'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile(name, data, content_type=content_type)
+
+    def test_이미지는_그대로_지나간다(self):
+        from v1.label.services import upload_pages
+
+        up = self._upload('label.jpg', b'\xff\xd8\xff', 'image/jpeg')
+        got = upload_pages.to_pages(up)
+        self.assertEqual(got['kind'], 'image')
+        self.assertEqual(got['pages'], [up])
+        self.assertEqual(upload_pages.note(got), '')
+
+    def test_pdf_는_쪽마다_그림이_된다(self):
+        from v1.label.services import upload_pages
+
+        got = upload_pages.to_pages(
+            self._upload('proof.pdf', self._pdf(['first page', 'second page'])))
+        self.assertEqual(got['kind'], 'pdf')
+        self.assertEqual(len(got['pages']), 2)
+        self.assertTrue(all(p.read()[:2] == b'\xff\xd8' for p in got['pages']),
+                        'JPEG 가 아니다')
+
+    def test_기본은_두_쪽까지만_본다(self):
+        """쪽마다 판독 비용이 든다. 표시사항은 대개 첫 쪽에 있다."""
+        from v1.label.services import upload_pages
+
+        got = upload_pages.to_pages(
+            self._upload('long.pdf', self._pdf(['a', 'b', 'c', 'd'])))
+        self.assertEqual(len(got['pages']), 2)
+        self.assertEqual(got['total_pages'], 4)
+        self.assertIn('4쪽 중 2쪽', upload_pages.note(got))
+        self.assertIn('비용', upload_pages.note(got))
+
+    def test_글자가_든_pdf_는_원문을_함께_준다(self):
+        """그림으로 되돌려 다시 읽힌 값이 아니라 문서가 원래 갖고 있던 글자다."""
+        from v1.label.services import upload_pages
+
+        # PyMuPDF 기본 글꼴은 한글을 못 그린다. 픽스처 사정이라 라틴 글자로 짠다 —
+        # 보는 것은 "문서에 든 글자가 그대로 나오는가" 다.
+        text = 'PRODUCT NAME 1600 g INGREDIENTS wheat flour water margarine'
+        got = upload_pages.to_pages(self._upload('doc.pdf', self._pdf([text])))
+        self.assertIn('INGREDIENTS', got['text_layer'])
+        self.assertIn('margarine', got['text_layer'])
+        self.assertIn('원문과 대조', upload_pages.note(got))
+
+    def test_글자가_거의_없으면_원문으로_치지_않는다(self):
+        """몇 글자를 원문이라고 넘기면 판독이 그 조각을 믿고 나머지를 지어낸다."""
+        from v1.label.services import upload_pages
+
+        got = upload_pages.to_pages(self._upload('scan.pdf', self._pdf(['A'])))
+        self.assertEqual(got['text_layer'], '')
+
+    def test_모르는_형식은_예외다(self):
+        """조용히 빈 목록을 주면 부르는 쪽이 "글자가 없다" 로 읽는다."""
+        from v1.label.services import upload_pages
+
+        with self.assertRaises(ValueError):
+            upload_pages.to_pages(
+                self._upload('spec.hwp', b'x', 'application/x-hwp'))
+
+    def test_화면이_pdf_를_고를_수_있다(self):
+        for path in ('v1/templates/label/label_creation.html',
+                     'v1/templates/products/_tab_label.html'):
+            html = open(path, encoding='utf-8').read()
+            self.assertIn('accept="image/*,.pdf"', html, path)
