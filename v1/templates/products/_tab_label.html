@@ -47,64 +47,18 @@
     {% endcomment %}
     {% if can_edit %}
     {% comment %}
-      검증 두 갈래를 **나란히** 둔다.
+      검증은 **미리보기 쪽 설정 패널 위**로 옮겼다.
 
-      예전에는 시안 대조가 이 띠에, 규정 검증이 iframe 안 도구 줄에 있었다.
-      두 검증이 다른 레이어에 있어서 나란히 놓인 적이 없고, 이름도 "규정 검증"
-      과 "대조" 로 갈려 같은 종류로 보이지 않았다. 사용자가 무엇을 검증하는
-      중인지 헷갈렸다.
+      여기(iframe 위)에 두면 화면 꼭대기에 겹이 하나 더 쌓이고, 넓은 가로를
+      두 칸으로 나눠 쓰느라 정작 오른쪽 미리보기가 아래로 밀렸다. 설정 패널
+      위는 세로로 긴 자리라 단계를 **탭으로** 접어 둘 수 있다.
 
-      각 칸에 **대상**을 못 박는다 — 1차는 우리가 만든 것, 2차는 받은 것.
-      2차는 시안이 있어야 시작되므로, 무엇을 올리면 무엇까지 보는지를
-      누르기 **전에** 보여 준다(validation_readiness).
+      옮기고 나니 1차는 오히려 가까워졌다 — 판정하는 함수가 바로 그 문서에
+      있다(runRuleOnlyValidation). 2차는 시안 파일을 다뤄야 해서 이쪽에
+      남는다: 자르기 창과 판독 호출이 여기 있고, 그것을 iframe 으로 옮기면
+      두 벌이 된다. 문 하나만 열어 준다 — window.ltStartCompare().
     {% endcomment %}
-    <ol class="lt-verify" id="ltVerify">
-      <li class="lt-step" id="ltStep1">
-        <div class="lt-step-top">
-          <span class="lt-step-no">1</span>
-          <b class="lt-step-name">표시문구 검증</b>
-          <span class="lt-step-for">이 화면의 표시사항</span>
-        </div>
-        <p class="lt-step-what">
-          우리가 적은 표시사항이 규정에 맞는지 봅니다.
-          빠진 항목·글자 크기·원산지 표시를 짚어 <b>아래 표에 표시</b>합니다.
-        </p>
-        <div class="lt-step-act">
-          <button type="button" class="btn btn-primary lt-step-btn" id="ltFirstBtn">
-            <i class="bi bi-list-check"></i> 1차 검증 실행
-          </button>
-          <span class="lt-step-state" id="ltFirstMeta">규정 항목을 불러오는 중…</span>
-        </div>
-      </li>
-
-      <li class="lt-steps-arrow" aria-hidden="true">
-        <i class="bi bi-arrow-right"></i>
-        <span>문구를 확정한 뒤</span>
-      </li>
-
-      <li class="lt-step lt-step-later" id="ltStep2">
-        <div class="lt-step-top">
-          <span class="lt-step-no">2</span>
-          <b class="lt-step-name">디자인시안 검증</b>
-          <span class="lt-step-for">문서함의 포장지 시안</span>
-        </div>
-        <p class="lt-step-what">
-          디자인에서 받은 <b>포장지 시안</b>을 읽어, 위에서 확정한 문구와
-          같은지·인쇄 규정에 맞는지 <b>한 줄씩 대조</b>합니다.
-        </p>
-        <div class="lt-step-act">
-          <button type="button" class="btn btn-outline-primary lt-step-btn" id="ltCompareBtn">
-            <i class="bi bi-upload"></i> 시안 올리고 2차 검증
-          </button>
-          <span class="lt-step-state" id="ltSecondMeta"></span>
-          <details class="lt-verify-more">
-            <summary>무엇을 올리면 더 정확한가요?</summary>
-            <div class="lt-verify-docs" id="ltSecondDocs"></div>
-          </details>
-        </div>
-      </li>
-      <input type="file" id="ltCompareFile" accept="image/*,.pdf" hidden>
-    </ol>
+    <input type="file" id="ltCompareFile" accept="image/*,.pdf" hidden>
     {% endif %}
     <div id="lt-loading">
         <div class="spinner-border text-primary" style="width:1.8rem;height:1.8rem;" role="status"></div>
@@ -318,12 +272,19 @@
     }
 
     /* 시안을 골라 대조로 보낸다. 판독과 대조 창은 basic_info_ocr.js 가 맡는다. */
-    function wireCompare() {
-        var btn = document.getElementById('ltCompareBtn');
-        var input = document.getElementById('ltCompareFile');
-        if (!btn || !input) return;
+    /* 2차 검증 단추는 미리보기(iframe) 안 설정 패널에 있다. 누르면 이걸
+       부른다 — 파일 고르기·자르기·판독은 여기 있어야 한다. */
+    function compareBusy(on) {
+        var frame = getFrame();
+        var win = frame && frame.contentWindow;
+        if (win && typeof win.ltCompareBusy === 'function') win.ltCompareBusy(on);
+    }
 
-        btn.addEventListener('click', function () { input.click(); });
+    function wireCompare() {
+        var input = document.getElementById('ltCompareFile');
+        if (!input) return;
+
+        window.ltStartCompare = function () { input.click(); };
         input.addEventListener('change', function () {
             var file = input.files && input.files[0];
             input.value = '';
@@ -335,9 +296,7 @@
             }
             if (typeof window.basicInfoOcrCompare !== 'function') return;
 
-            btn.disabled = true;
-            var label = btn.innerHTML;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>읽는 중…';
+            compareBusy(true);
 
             /* 영역을 골라 읽으면 훨씬 정확하다. 자르기 창이 있으면 거친다. */
             var pick = (typeof window.cropPhoto === 'function')
@@ -353,8 +312,7 @@
                     window.showSnackbar((err && err.message) || '시안을 읽지 못했습니다.', 'error');
                 }
             }).then(function () {
-                btn.disabled = false;
-                btn.innerHTML = label;
+                compareBusy(false);
             });
         });
     }
@@ -385,190 +343,4 @@
 })();
 </script>
 
-<style>
-/* 검증은 **두 기능이 아니라 한 절차다.**
 
-   한 줄에 늘어놓았더니 어디가 단추인지, 둘이 무슨 관계인지 읽히지 않았다.
-   1차를 하고 문구를 확정한 다음 2차를 하는 순서인데, 나란히 있으니 아무거나
-   눌러도 되는 두 기능으로 보였다.
-
-   번호를 매긴 칸 둘과 그 사이의 화살표로 **순서**를 그린다. 칸마다 세 가지를
-   적는다 — 무엇을 보는가(대상), 무엇을 하는가, 결과가 어디에 나오는가.
-   1차를 마치면 2차가 밝아진다. */
-.lt-verify {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: stretch;
-    gap: 10px;
-    margin: 0;
-    padding: 10px 12px;
-    list-style: none;
-    background: var(--ez-gray-50, #f8f9fa);
-    border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
-    flex-shrink: 0;
-}
-.lt-step {
-    flex: 1 1 320px;
-    min-width: 280px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px 14px 11px;
-    background: #fff;
-    border: 1px solid var(--ez-gray-200, #e8eaed);
-    border-radius: 10px;
-}
-.lt-step-top { display: flex; align-items: center; gap: 8px; }
-.lt-step-no {
-    width: 22px; height: 22px; flex-shrink: 0;
-    display: inline-flex; align-items: center; justify-content: center;
-    border-radius: 50%;
-    background: var(--ez-info, #1a73e8); color: #fff;
-    font-size: 12.5px; font-weight: 700;
-}
-#ltStep2 .lt-step-no { background: #7b1fa2; }
-.lt-step-name { font-size: 15px; }
-/* **무엇을 검증하는 것인지**가 가장 헷갈렸다. 대상을 이름 옆에 붙여 둔다 */
-.lt-step-for {
-    margin-left: auto;
-    padding: 1px 8px;
-    border-radius: 10px;
-    background: var(--ez-gray-100, #f1f3f4);
-    color: #5f6368;
-    font-size: 11.5px;
-    white-space: nowrap;
-}
-.lt-step-what {
-    margin: 0;
-    font-size: 12.5px;
-    line-height: 1.45;
-    color: #3c4043;
-}
-.lt-step-what b { font-weight: 600; color: #202124; }
-.lt-step-act {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-top: auto;
-    padding-top: 2px;
-}
-/* 단추는 단추처럼. 앞서 글자만 한 크기라 눌러도 되는 자리인 줄 몰랐다 */
-.lt-step-btn {
-    font-size: 13.5px;
-    font-weight: 600;
-    padding: 6px 14px;
-    border-radius: 8px;
-    white-space: nowrap;
-}
-.lt-step-state { font-size: 12px; color: #5f6368; }
-
-/* 순서를 눈으로 잇는다 */
-.lt-steps-arrow {
-    flex: 0 0 auto;
-    align-self: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-    color: #9aa0a6;
-    font-size: 10.5px;
-    line-height: 1.1;
-}
-.lt-steps-arrow i { font-size: 16px; }
-
-/* 아직 차례가 아닌 칸은 한 겹 뒤에 둔다 — 1차를 마치면 밝아진다 */
-.lt-step-later { background: #fbfbfc; }
-.lt-step-later .lt-step-what,
-.lt-step-later .lt-step-name { opacity: .78; }
-.lt-verify.lt-first-done .lt-step-later { background: #fff; }
-.lt-verify.lt-first-done .lt-step-later .lt-step-what,
-.lt-verify.lt-first-done .lt-step-later .lt-step-name { opacity: 1; }
-.lt-step.is-done { border-color: #b7dfc3; background: #f6fcf8; }
-.lt-step.is-done .lt-step-no { background: #1e8e3e; }
-
-.lt-verify-more { font-size: 12px; position: relative; }
-.lt-verify-more > summary { cursor: pointer; color: var(--ez-info, #1a73e8); }
-.lt-verify-docs {
-    position: absolute; z-index: 20; margin-top: 4px; min-width: 260px;
-    background: #fff; border: 1px solid var(--ez-gray-200, #e8eaed);
-    border-radius: 6px; padding: 8px 10px;
-    box-shadow: 0 4px 12px rgba(60,64,67,.2);
-}
-.lt-verify-docs .doc { display: flex; gap: 6px; align-items: baseline; padding: 1px 0; }
-.lt-verify-docs .doc-have { color: #188038; }
-.lt-verify-docs .doc-miss { color: #b06000; }
-.lt-verify-docs .doc-gives { color: #80868b; font-size: 11px; }
-
-@media (max-width: 900px) { .lt-steps-arrow { display: none; } }
-</style>
-<script>
-/* 검증 전에 무엇이 갖춰졌는지 보여 준다.
-   올리고 나서야 "값불명" 을 보는 일이 없게 — 그때는 이미 판독 비용을 썼다. */
-(function () {
-    var root = document.getElementById('ltVerify');
-    if (!root) return;
-    var labelId = '{{ product.my_label_id }}';
-    if (!labelId) return;
-
-    function esc(s) {
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function draw(data) {
-        var first = document.getElementById('ltFirstMeta');
-        if (first && data.first) {
-            first.textContent = '규정 ' + data.first.check_count + '가지를 봅니다';
-        }
-        var second = data.second || {};
-        var box = document.getElementById('ltSecondDocs');
-        if (box) {
-            box.innerHTML = (second.documents || []).map(function (d) {
-                if (d.hidden) return '';
-                var mark = d.present ? '✓' : (d.required ? '!' : '·');
-                var cls = d.present ? 'doc-have' : (d.required ? 'doc-miss' : '');
-                var tail = d.present && d.note ? ' — ' + esc(d.note) : '';
-                return '<div class="doc"><span class="' + cls + '">' + mark + '</span>'
-                    + '<span>' + esc(d.name) + '</span>'
-                    + '<span class="doc-gives">' + esc(d.gives) + esc(tail) + '</span></div>';
-            }).join('');
-        }
-        var meta = document.getElementById('ltSecondMeta');
-        if (meta) {
-            meta.textContent = second.ready
-                ? '올려 둔 시안이 있습니다 — 바로 누르면 됩니다'
-                : (second.blocked_reason || '누르면 시안을 고르는 창이 열립니다');
-        }
-    }
-
-    /* 1차 검증 — 미리보기(iframe) 안의 판정을 그대로 부른다.
-       판정 로직을 여기 옮기지 않는다. 두 벌로 두면 어느 날 한쪽만 고쳐진다. */
-    var firstBtn = document.getElementById('ltFirstBtn');
-    if (firstBtn) {
-        firstBtn.addEventListener('click', function () {
-            var frame = document.getElementById('lt-preview-frame');
-            var win = frame && frame.contentWindow;
-            if (!win || typeof win.runRuleOnlyValidation !== 'function') {
-                if (typeof showSnackbar === 'function') {
-                    showSnackbar('미리보기가 아직 준비되지 않았습니다. 잠시 후 다시 눌러 주세요.', 'warning');
-                }
-                return;
-            }
-            win.runRuleOnlyValidation();
-
-            /* 절차라는 것이 눈에 보여야 한다 — 1차를 마치면 그 칸에 표를
-               남기고 2차 칸을 밝힌다. 순서를 글로만 적어 두면 안 읽는다. */
-            document.getElementById('ltStep1').classList.add('is-done');
-            root.classList.add('lt-first-done');
-            var done = document.getElementById('ltFirstMeta');
-            if (done) done.textContent = '검사했습니다 — 결과는 아래 표에';
-        });
-    }
-
-    fetch('/label/' + labelId + '/validation-readiness/', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (data) { if (data && data.success) draw(data); })
-        .catch(function () {});
-})();
-</script>

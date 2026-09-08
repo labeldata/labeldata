@@ -1805,6 +1805,7 @@ class DesignCompareModeTests(TestCase):
         self.ocr = (base / 'static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
         self.modal = (base / 'static/js/products/import_modal.js').read_text(encoding='utf-8')
         self.tab = (base / 'templates/products/_tab_label.html').read_text(encoding='utf-8')
+        self.preview = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
         self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
 
     def test_대조는_표시사항_탭에_있다(self):
@@ -1813,7 +1814,10 @@ class DesignCompareModeTests(TestCase):
         직전에 "채우기" 를 눌러 확정한 값을 시안으로 덮어쓰게 된다.
         """
         self.assertIn('window.basicInfoOcrCompare', self.ocr)
-        self.assertIn('id="ltCompareBtn"', self.tab)
+        # 단추는 미리보기 쪽 설정 패널로 옮겼지만, **판독은 여전히 여기서**
+        # 한다 — 시안 파일 고르기·자르기가 여기 있고 옮기면 두 벌이 된다.
+        self.assertIn('id="ltCompareBtn"', self.preview)
+        self.assertIn('window.ltStartCompare', self.tab)
         self.assertIn('basicInfoOcrCompare', self.tab)
 
     def test_불러오기_창에는_없다(self):

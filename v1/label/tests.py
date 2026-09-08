@@ -11872,22 +11872,24 @@ class ValidationTabTests(TestCase):
         docs = self._readiness()['second']['documents']
         self.assertTrue(all(d['gives'] for d in docs))
 
-    def test_화면에_두_줄이_있다(self):
-        html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
-        self.assertIn('표시문구 검증', html)
-        self.assertIn('디자인시안 검증', html)
-        # 각 줄에 대상이 못 박혀 있다
+    def test_화면에_두_단계가_있다(self):
+        html = open('v1/templates/label/label_preview.html', encoding='utf-8').read()
+        self.assertIn('표시문구', html)
+        self.assertIn('디자인시안', html)
+        # 각 단계에 대상이 못 박혀 있다
         self.assertIn('이 화면의 표시사항', html)
         self.assertIn('문서함의 포장지 시안', html)
 
-    def test_1차_단추가_미리보기_판정을_부른다(self):
+    def test_1차_단추가_판정을_부른다(self):
         """
         단추만 만들고 배선을 안 해서 눌러도 아무 일이 없었다. 판정 로직을
-        여기 옮기지 않는다 — 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+        옮겨 오지 않는다 — 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+
+        단추가 미리보기 문서로 옮겨 오면서 판정 함수와 같은 자리가 됐다.
         """
-        html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
+        html = open('v1/templates/label/label_preview.html', encoding='utf-8').read()
         self.assertIn("getElementById('ltFirstBtn')", html)
-        self.assertIn('win.runRuleOnlyValidation()', html)
+        self.assertIn('window.runRuleOnlyValidation()', html)
 
     def test_안쪽_규정_검증_단추는_감춘다(self):
         """같은 일을 하는 단추가 위아래로 둘이면 어느 것이 무엇인지 모른다."""
@@ -11895,18 +11897,16 @@ class ValidationTabTests(TestCase):
         head = js.index('window.parent !== window')
         self.assertIn("getElementById('ruleValidationBtn')", js[head:head + 700])
 
-    def test_검증_띠가_화면을_적게_먹는다(self):
+    def test_검증이_미리보기_자리를_먹지_않는다(self):
         """
-        누르는 자리이지 읽는 자리가 아니다 — 미리보기가 밀려났다.
-
-        그렇다고 설명을 지우면 무엇을 누르는지 몰라서 안 누른다. 칸 둘을
-        **가로로** 놓아 한 겹에 담고, 긴 목록만 접는다.
+        누르는 자리이지 읽는 자리가 아니다 — 가로 띠로 두면 미리보기가
+        아래로 밀린다. 설명을 지우면 무엇을 누르는지 몰라서 안 누르므로,
+        지우는 대신 **세로로 긴 설정 패널 위로 옮기고 탭으로 접는다.**
         """
-        html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
-        self.assertIn('.lt-verify {', html)
-        self.assertIn('display: flex;', html)
-        self.assertIn('flex-wrap: wrap;', html)
-        self.assertIn('<details class="lt-verify-more">', html)   # 자세한 것은 접는다
+        css = open('v1/static/css/label_preview.css', encoding='utf-8').read()
+        html = open('v1/templates/label/label_preview.html', encoding='utf-8').read()
+        self.assertIn('.lt-vpane { display: none; }', css)        # 한 번에 한 단계
+        self.assertIn('<details class="lt-vmore">', html)         # 긴 목록은 접는다
 
 
 class IngredientNoteSearchTests(TestCase):
@@ -12415,12 +12415,15 @@ class ChromeHeightTests(TestCase):
         # 설명 두 줄은 통째로 걷어냈다
         self.assertNotIn('라벨 디자인을 미리 확인하고 PDF로 다운로드하세요', html)
 
-    def test_검증은_띠_하나에_담긴다(self):
-        """줄을 줄이려고 설명을 지우지는 않는다 — 지웠더니 안 읽혔다."""
-        html = self._read('v1/templates/products/_tab_label.html')
-        self.assertEqual(html.count('class="lt-verify" id="ltVerify"'), 1)
-        self.assertEqual(html.count('class="lt-step"'), 1)      # 1차
-        self.assertIn('class="lt-step lt-step-later"', html)     # 2차
+    def test_검증은_미리보기_위에_겹을_쌓지_않는다(self):
+        """
+        가로 띠로 두면 겹이 하나 더 쌓이고, 넓은 가로를 반씩 나눠 쓰느라
+        오른쪽 미리보기가 아래로 밀렸다. 세로로 긴 설정 패널 위로 옮긴다.
+        """
+        tab = self._read('v1/templates/products/_tab_label.html')
+        self.assertNotIn('id="ltVerify"', tab)
+        preview = self._read('v1/templates/label/label_preview.html')
+        self.assertEqual(preview.count('class="lt-verify" id="ltVerify"'), 1)
 
     def test_제품_상세는_앱_띠를_접고_시작한다(self):
         detail = self._read('v1/templates/products/product_detail.html')
@@ -12547,16 +12550,13 @@ class 워드_내보내기_항목_칸이_절반을_먹는다(TestCase):
 
 class 검증은_두_기능이_아니라_한_절차다(TestCase):
     """
-    한 줄에 나란히 늘어놓았더니 이렇게 보였다.
+    처음에는 카드 둘에 설명을 여러 줄 넣었고, 다음에는 화면 꼭대기 한 줄로
+    줄였다. 한 줄로는 어디가 단추인지 안 읽혀서 칸 둘로 되돌렸는데, 이번에는
+    **넓은 가로를 반씩 나눠 쓰느라 오른쪽 미리보기가 아래로 밀렸다.**
 
-        1차 표시문구 검증 [1차 검증] 검사 26개    2차 디자인시안 검증 [시안 올려…]
-
-    어디가 단추인지, 둘이 무슨 관계인지 읽히지 않았다. 실제로는 **1차로 문구를
-    확정한 다음 2차로 시안을 대조하는 순서**인데, 나란히 있으니 아무거나 눌러도
-    되는 두 기능으로 보였다.
-
-    번호 칸 둘과 그 사이 화살표로 순서를 그리고, 칸마다 세 가지를 적는다 —
-    무엇을 보는가(대상), 무엇을 하는가, 결과가 어디에 나오는가.
+    자리를 바꾼다 — 세로로 긴 설정 패널 맨 위. 거기서는 단계를 **탭으로**
+    접을 수 있어서 한 번에 한 단계만 보이고, 미리보기 칸의 꼭대기가 곧 표의
+    꼭대기가 된다.
     """
 
     def setUp(self):
@@ -12564,51 +12564,78 @@ class 검증은_두_기능이_아니라_한_절차다(TestCase):
 
         from django.conf import settings as dj
 
-        self.html = (Path(dj.BASE_DIR) / 'templates/products/_tab_label.html'
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/label/label_preview.html'
                      ).read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+        self.tab = (base / 'templates/products/_tab_label.html'
+                    ).read_text(encoding='utf-8')
 
-    def test_순서가_있는_목록이다(self):
-        """<ol> 이라야 화면 낭독기도 '2개 중 1번' 이라고 읽는다."""
-        self.assertIn('<ol class="lt-verify" id="ltVerify">', self.html)
+    def test_설정_패널_맨_위에_있다(self):
+        panel = self.html.index('<aside class="settings-panel"')
+        verify = self.html.index('class="lt-verify" id="ltVerify"')
+        tabs = self.html.index('<div class="preview-tabs">')
+        self.assertLess(panel, verify)
+        self.assertLess(verify, tabs)      # 표 설정 탭보다 위
+
+    def test_탭으로_한_단계씩_본다(self):
+        self.assertIn('class="lt-vtabs" role="tablist"', self.html)
+        self.assertIn('id="ltVTab1"', self.html)
+        self.assertIn('id="ltVTab2"', self.html)
+        self.assertIn('.lt-vpane { display: none; }', self.css)
+        self.assertIn('.lt-vpane.is-on { display: block; }', self.css)
 
     def test_번호와_화살표로_순서를_그린다(self):
-        self.assertIn('class="lt-step-no">1<', self.html)
-        self.assertIn('class="lt-step-no">2<', self.html)
-        self.assertIn('lt-steps-arrow', self.html)
-        self.assertIn('문구를 확정한 뒤', self.html)
+        self.assertIn('class="lt-vno">1<', self.html)
+        self.assertIn('class="lt-vno">2<', self.html)
+        self.assertIn('lt-vsep', self.html)
 
-    def test_무엇을_검증하는지_칸마다_적는다(self):
+    def test_무엇을_검증하는지_단계마다_적는다(self):
         """가장 헷갈린 것이 '규정 검증이냐 시안 검증이냐' 였다."""
-        self.assertIn('>이 화면의 표시사항<', self.html)
-        self.assertIn('>문서함의 포장지 시안<', self.html)
-        self.assertEqual(self.html.count('class="lt-step-for"'), 2)
+        self.assertIn('>이 화면의 표시사항</b>', self.html)
+        self.assertIn('>문서함의 포장지 시안</b>', self.html)
+        self.assertEqual(self.html.count('class="lt-vfor"'), 2)
 
     def test_결과가_어디에_나오는지_말한다(self):
-        self.assertIn('아래 표에 표시', self.html)
+        self.assertIn('오른쪽 표에 표시', self.html)
         self.assertIn('한 줄씩 대조', self.html)
 
     def test_단추가_단추로_보인다(self):
-        """글자만 한 크기라 눌러도 되는 자리인 줄 몰랐다."""
-        self.assertIn('class="btn btn-primary lt-step-btn" id="ltFirstBtn"', self.html)
-        self.assertIn('class="btn btn-outline-primary lt-step-btn" id="ltCompareBtn"',
+        self.assertIn('class="btn btn-primary lt-vbtn" id="ltFirstBtn"', self.html)
+        self.assertIn('class="btn btn-outline-primary lt-vbtn" id="ltCompareBtn"',
                       self.html)
         self.assertIn('1차 검증 실행', self.html)
         self.assertIn('시안 올리고 2차 검증', self.html)
 
-    def test_아직_차례가_아닌_칸은_한_겹_뒤에_있다(self):
-        self.assertIn('.lt-step-later { background: #fbfbfc; }', self.html)
+    def test_1차는_바로_옆에서_판정한다(self):
+        """옮기고 나니 오히려 가까워졌다 — 판정 함수가 같은 문서에 있다."""
+        self.assertIn('window.runRuleOnlyValidation()', self.html)
 
-    def test_1차를_마치면_2차가_밝아진다(self):
-        """순서를 글로만 적어 두면 안 읽는다 — 눌렀을 때 눈에 보여야 한다."""
-        self.assertIn("classList.add('is-done')", self.html)
-        self.assertIn("root.classList.add('lt-first-done')", self.html)
-        self.assertIn('.lt-verify.lt-first-done .lt-step-later', self.html)
+    def test_2차는_바깥에_넘긴다(self):
+        """
+        시안 고르기·자르기·판독은 제품 화면에 있다. 이리로 옮기면 두 벌이
+        된다 — 문 하나만 두드린다.
+        """
+        self.assertIn('outer.ltStartCompare()', self.html)
+        self.assertIn('window.ltStartCompare = function ()', self.tab)
+        self.assertIn('window.ltCompareBusy = function (on)', self.html)
+        self.assertIn('win.ltCompareBusy(on)', self.tab)
+
+    def test_1차를_마치면_그_탭에_표가_남는다(self):
+        self.assertIn("tab.classList.add('is-done')", self.html)
+        self.assertIn('#ltVTab1.is-done .lt-vno', self.css)
+
+    def test_탭_안에서만_나온다(self):
+        """창으로 따로 열면 제품 화면이 없어 2차를 시작할 길이 없다."""
+        at = self.html.index('class="lt-verify" id="ltVerify"')
+        self.assertIn('{% if request.GET.in_tab %}', self.html[at - 1200:at])
 
     def test_손댈_이름은_그대로_둔다(self):
-        """모양을 바꾸느라 id 를 갈아 치우면 붙어 있던 동작이 조용히 끊긴다."""
+        """자리를 옮기느라 id 를 갈아 치우면 붙어 있던 동작이 조용히 끊긴다."""
         for name in ('ltVerify', 'ltFirstBtn', 'ltFirstMeta', 'ltCompareBtn',
-                     'ltSecondMeta', 'ltSecondDocs', 'ltCompareFile'):
-            self.assertIn("id=\"%s\"" % name, self.html)
+                     'ltSecondMeta', 'ltSecondDocs'):
+            self.assertIn('id="%s"' % name, self.html)
+        self.assertIn('id="ltCompareFile"', self.tab)   # 파일은 바깥에 남는다
 
 
 class 내보내기는_제품_헤더에_있다(TestCase):
@@ -12721,7 +12748,7 @@ class 배율은_미리보기_패널_왼쪽_위다(TestCase):
                     ).read_text(encoding='utf-8')
 
     def test_설정_패널_너비만큼_밀어_붙인다(self):
-        self.assertIn('--pv-tools-left: 428px;', self.css)
+        self.assertIn('--pv-tools-left: 478px;', self.css)
         self.assertIn('left: var(--pv-tools-left);', self.css)
 
     def test_컨테이너_왼쪽에_그대로_붙이지_않는다(self):
@@ -12734,9 +12761,10 @@ class 배율은_미리보기_패널_왼쪽_위다(TestCase):
         """420px 이 두 곳에 있으면 어느 날 한쪽만 고쳐진다."""
         import re
 
-        widths = re.findall(r'\.settings-panel \{\s*width: (\d+)px', self.css)
-        self.assertEqual(widths[0], '420')          # 428 = 420 + 8
-        self.assertIn('--pv-tools-left: 358px;', self.css)   # 좁으면 350 + 8
+        head = self.css.index('.settings-panel {')
+        widths = re.findall(r'width: (\d+)px', self.css[head:head + 400])
+        self.assertEqual(widths[0], '470')          # 478 = 470 + 8
+        self.assertIn('--pv-tools-left: 398px;', self.css)   # 좁으면 390 + 8
 
     def test_설정_패널이_없을_때는_왼쪽_끝이다(self):
         self.assertIn('.readonly-mode .preview-container { --pv-tools-left: 8px; }',

@@ -192,7 +192,9 @@ body {
 }
 
 .settings-panel {
-  width: 420px;
+  /* 420px 이었다. 검증 두 단계가 이 칸 위로 올라오면서 조금 넓힌다 —
+     "1차 검증 실행" 단추와 상태 글이 한 줄에 들어가야 한다. */
+  width: 470px;
   padding: 20px;
   border-right: 1px solid var(--border-light);
   overflow: hidden;          /* 패널 자체를 클리핑 컨테이너로 사용 */
@@ -215,8 +217,14 @@ body {
   overflow-y: auto;
 }
 
+/* 미리보기는 **자리가 정해진 칸**이다.
+
+   설정 패널은 너비가 고정(flex-shrink:0)이고 여기가 남은 폭을 다 갖는다.
+   위쪽에 아무것도 얹지 않는다 — 검증 두 단계를 설정 패널로 옮긴 뒤로 이
+   칸의 꼭대기가 곧 표의 꼭대기다. 스크롤도 이 칸 안에서만 일어나서
+   설정을 만지는 동안 표가 달아나지 않는다. */
 .preview-panel {
-  flex: 1;
+  flex: 1 1 auto;
   padding: 20px;
   overflow: auto;
   background-color: var(--bg-primary);
@@ -476,7 +484,7 @@ body {
 /* 반응형 처리 */
 @media (max-width: 1200px) {
   .settings-panel {
-    width: 350px;
+    width: 390px;
   }
 }
 
@@ -1575,9 +1583,9 @@ tbody.layout-vertical tr td {
    두고 **설정 패널 너비만큼 밀어** 붙인다. 너비는 한 곳에서만 정한다. */
 .preview-container {
     position: relative;
-    --pv-tools-left: 428px;      /* 설정 패널 420 + 8 */
+    --pv-tools-left: 478px;      /* 설정 패널 470 + 8 */
 }
-@media (max-width: 1200px) { .preview-container { --pv-tools-left: 358px; } }
+@media (max-width: 1200px) { .preview-container { --pv-tools-left: 398px; } }
 
 /* 좁은 화면에서는 설정이 위로 가고 미리보기가 아래다. 왼쪽 위는 설정
    자리이므로 왼쪽 아래로 내린다. */
@@ -1612,3 +1620,83 @@ tbody.layout-vertical tr td {
 }
 .zoom-controls.zoom-floating .btn { padding: 2px 7px; font-size: 12px; }
 .zoom-controls.zoom-floating .zoom-value { min-width: 44px; text-decoration: none; }
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   검증 두 단계 — 설정 패널 맨 위.
+
+   화면 꼭대기 가로 띠에 두었을 때는 겹이 하나 더 쌓였고, 넓은 가로를 반씩
+   나눠 쓰느라 오른쪽 미리보기가 아래로 밀렸다. 세로로 긴 이 자리에서는
+   **탭으로 접을 수 있다** — 한 번에 한 단계만 보이니 지금 무엇을 하는
+   중인지가 분명하다.
+   ───────────────────────────────────────────────────────────────────── */
+.lt-verify {
+    margin: -4px -4px 12px;
+    padding: 10px 12px 11px;
+    background: var(--bg-secondary, #f8f9fa);
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 10px;
+}
+.lt-vtabs { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.lt-vtab {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ez-gray-700, #5f6368);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.lt-vtab:hover { background: rgba(26, 115, 232, .06); }
+.lt-vtab.is-on {
+    background: #fff;
+    border-color: var(--border-light, #e5e7eb);
+    color: var(--ez-gray-900, #202124);
+    box-shadow: 0 1px 2px rgba(60, 64, 67, .12);
+}
+.lt-vno {
+    width: 20px; height: 20px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: #c6c9cc; color: #fff;
+    font-size: 11.5px; font-weight: 700;
+}
+#ltVTab1.is-on .lt-vno { background: var(--secondary-color, #1a73e8); }
+#ltVTab2.is-on .lt-vno { background: #7b1fa2; }
+/* 1차를 마치면 그 탭에 표가 남는다 — 어디까지 왔는지가 보여야 한다 */
+#ltVTab1.is-done .lt-vno { background: var(--ez-success, #1e8e3e); }
+.lt-vsep { color: #c6c9cc; font-size: 10px; }
+
+.lt-vpane { display: none; }
+.lt-vpane.is-on { display: block; }
+.lt-vwhat {
+    margin: 0 0 8px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ez-gray-800, #3c4043);
+}
+.lt-vwhat b { font-weight: 600; color: var(--ez-gray-900, #202124); }
+/* 무엇을 검증하는 것인지가 가장 헷갈렸다 — 대상만 도드라지게 */
+.lt-vfor {
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: var(--bg-muted, #e5e7eb);
+    white-space: nowrap;
+}
+.lt-vact { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lt-vbtn { font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 8px; }
+.lt-vstate { font-size: 11.5px; color: var(--ez-gray-700, #5f6368); }
+.lt-vmore { margin-top: 7px; font-size: 11.5px; }
+.lt-vmore > summary { cursor: pointer; color: var(--secondary-color, #1a73e8); }
+.lt-vdocs {
+    margin-top: 5px; padding: 8px 10px;
+    background: #fff;
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 6px;
+}
+.lt-vdocs .doc { display: flex; gap: 6px; align-items: baseline; padding: 1px 0; }
+.lt-vdocs .doc-have { color: #188038; }
+.lt-vdocs .doc-miss { color: #b06000; }
+.lt-vdocs .doc-gives { color: var(--ez-gray-600, #80868b); font-size: 11px; }

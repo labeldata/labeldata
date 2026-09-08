@@ -132,6 +132,64 @@
     </div>
 
     <aside class="settings-panel"{% if request.GET.readonly %} style="display: none;"{% endif %}>
+      {% if request.GET.in_tab %}
+      {% comment %}
+        검증 두 단계 — **한 절차, 한 자리.**
+
+        전에는 화면 꼭대기 가로 띠에 둘을 나란히 놓았다. 겹이 하나 더
+        쌓이고, 넓은 가로를 반씩 나눠 쓰느라 오른쪽 미리보기가 아래로
+        밀렸다. 세로로 긴 이 자리로 옮기고 **탭으로 접는다** — 한 번에
+        한 단계만 보이니 지금 무엇을 하는 중인지가 분명해진다.
+
+        탭 머리에 화살표를 두어 1 → 2 순서를 그리고, 1차를 마치면 그
+        탭에 표가 남는다.
+      {% endcomment %}
+      <section class="lt-verify" id="ltVerify">
+        <div class="lt-vtabs" role="tablist" aria-label="검증 단계">
+          <button type="button" class="lt-vtab is-on" id="ltVTab1"
+                  role="tab" aria-selected="true" aria-controls="ltPane1" data-step="1">
+            <span class="lt-vno">1</span>표시문구
+          </button>
+          <i class="fas fa-chevron-right lt-vsep" aria-hidden="true"></i>
+          <button type="button" class="lt-vtab" id="ltVTab2"
+                  role="tab" aria-selected="false" aria-controls="ltPane2" data-step="2">
+            <span class="lt-vno">2</span>디자인시안
+          </button>
+        </div>
+
+        <div class="lt-vpane is-on" id="ltPane1" role="tabpanel" aria-labelledby="ltVTab1">
+          <p class="lt-vwhat">
+            <b class="lt-vfor">이 화면의 표시사항</b>이 규정에 맞는지 봅니다.
+            빠진 항목·글자 크기·원산지 표시를 짚어 <b>오른쪽 표에 표시</b>합니다.
+          </p>
+          <div class="lt-vact">
+            <button type="button" class="btn btn-primary lt-vbtn" id="ltFirstBtn">
+              <i class="fas fa-list-check"></i> 1차 검증 실행
+            </button>
+            <span class="lt-vstate" id="ltFirstMeta">규정 항목을 불러오는 중…</span>
+          </div>
+        </div>
+
+        <div class="lt-vpane" id="ltPane2" role="tabpanel" aria-labelledby="ltVTab2">
+          <p class="lt-vwhat">
+            디자인에서 받은 <b class="lt-vfor">문서함의 포장지 시안</b>을 읽어,
+            1단계에서 확정한 문구와 같은지·인쇄 규정에 맞는지
+            <b>한 줄씩 대조</b>합니다.
+          </p>
+          <div class="lt-vact">
+            <button type="button" class="btn btn-outline-primary lt-vbtn" id="ltCompareBtn">
+              <i class="fas fa-upload"></i> 시안 올리고 2차 검증
+            </button>
+            <span class="lt-vstate" id="ltSecondMeta"></span>
+          </div>
+          <details class="lt-vmore">
+            <summary>무엇을 올리면 더 정확한가요?</summary>
+            <div class="lt-vdocs" id="ltSecondDocs"></div>
+          </details>
+        </div>
+      </section>
+      {% endif %}
+
       <!-- 탭 네비게이션 -->
       <div class="preview-tabs">
         <button class="preview-tab active" data-tab="table-settings">
@@ -2530,5 +2588,122 @@
 
     // 프론트엔드 상수들은 constants.js에서 로드됨
   </script>
+
+{% if request.GET.in_tab %}
+<script>
+/* 검증 두 단계 — 탭을 갈아 끼우고, 각 단계의 일을 부른다.
+ *
+ * 1차는 여기서 바로 한다. 판정하는 함수가 이 문서에 있다
+ * (runRuleOnlyValidation) — 밖으로 옮기면 두 벌이 된다.
+ *
+ * 2차는 바깥(제품 화면)이 한다. 시안 파일 고르기·자르기·판독이 거기 있고,
+ * 그것을 이리로 옮기면 역시 두 벌이 된다. 문 하나만 두드린다.
+ */
+(function () {
+    var root = document.getElementById('ltVerify');
+    if (!root) return;
+
+    var LABEL_ID = '{{ label.my_label_id }}';
+
+    function esc(text) {
+        return String(text == null ? '' : text)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /* ── 단계 갈아 끼우기 ─────────────────────────────────────────── */
+    function show(step) {
+        [1, 2].forEach(function (n) {
+            var tab = document.getElementById('ltVTab' + n);
+            var pane = document.getElementById('ltPane' + n);
+            var on = (n === step);
+            if (tab) {
+                tab.classList.toggle('is-on', on);
+                tab.setAttribute('aria-selected', on ? 'true' : 'false');
+            }
+            if (pane) pane.classList.toggle('is-on', on);
+        });
+    }
+    root.querySelectorAll('.lt-vtab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            show(parseInt(tab.getAttribute('data-step'), 10));
+        });
+    });
+
+    /* ── 1차 ──────────────────────────────────────────────────────── */
+    var firstBtn = document.getElementById('ltFirstBtn');
+    if (firstBtn) {
+        firstBtn.addEventListener('click', function () {
+            if (typeof window.runRuleOnlyValidation !== 'function') return;
+            window.runRuleOnlyValidation();
+            var tab = document.getElementById('ltVTab1');
+            if (tab) tab.classList.add('is-done');
+            var meta = document.getElementById('ltFirstMeta');
+            if (meta) meta.textContent = '검사했습니다 — 결과는 오른쪽 표에';
+        });
+    }
+
+    /* ── 2차 ──────────────────────────────────────────────────────── */
+    var compareBtn = document.getElementById('ltCompareBtn');
+    if (compareBtn) {
+        compareBtn.addEventListener('click', function () {
+            var outer = window.parent;
+            if (!outer || typeof outer.ltStartCompare !== 'function') {
+                if (typeof showPreviewToast === 'function') {
+                    showPreviewToast('제품 화면에서 열어야 시안을 올릴 수 있습니다.', 'warning');
+                }
+                return;
+            }
+            outer.ltStartCompare();
+        });
+    }
+
+    /* 판독은 바깥에서 도는데 단추는 여기 있다 — 도는 동안 눌리면 안 된다 */
+    window.ltCompareBusy = function (on) {
+        if (!compareBtn) return;
+        if (on) {
+            compareBtn.dataset.idle = compareBtn.innerHTML;
+            compareBtn.disabled = true;
+            compareBtn.innerHTML =
+                '<span class="spinner-border spinner-border-sm me-1"></span>읽는 중…';
+        } else {
+            compareBtn.disabled = false;
+            if (compareBtn.dataset.idle) compareBtn.innerHTML = compareBtn.dataset.idle;
+        }
+    };
+
+    /* ── 누르기 전에 무엇이 갖춰졌는지 보여 준다 ──────────────────── */
+    if (!LABEL_ID) return;
+    fetch('/label/' + LABEL_ID + '/validation-readiness/', { credentials: 'same-origin' })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+            if (!data || !data.success) return;
+            var meta = document.getElementById('ltFirstMeta');
+            if (meta && data.first) {
+                meta.textContent = '규정 ' + data.first.check_count + '가지를 봅니다';
+            }
+            var second = data.second || {};
+            var box = document.getElementById('ltSecondDocs');
+            if (box) {
+                box.innerHTML = (second.documents || []).map(function (doc) {
+                    if (doc.hidden) return '';
+                    var mark = doc.present ? '✓' : (doc.required ? '!' : '·');
+                    var cls = doc.present ? 'doc-have' : (doc.required ? 'doc-miss' : '');
+                    var tail = doc.present && doc.note ? ' — ' + esc(doc.note) : '';
+                    return '<div class="doc"><span class="' + cls + '">' + mark + '</span>'
+                        + '<span>' + esc(doc.name) + '</span>'
+                        + '<span class="doc-gives">' + esc(doc.gives) + tail + '</span></div>';
+                }).join('');
+            }
+            var state = document.getElementById('ltSecondMeta');
+            if (state) {
+                state.textContent = second.ready
+                    ? '올려 둔 시안이 있습니다'
+                    : (second.blocked_reason || '누르면 시안을 고르는 창이 열립니다');
+            }
+        })
+        .catch(function () {});
+})();
+</script>
+{% endif %}
 </body>
 </html>
