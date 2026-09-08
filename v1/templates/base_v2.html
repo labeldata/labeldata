@@ -37,11 +37,25 @@
     /* 화면 최대화. #v2Wrapper 는 여기서 아직 없으므로 <html> 에 건다 —
        wrapper 에 걸면 펼친 화면이 한 번 그려졌다가 접힌다. */
     (function () {
+        /* 화면마다 **처음 값이 다르다.**
+         *
+         * 제품 상세는 위쪽에 다섯 겹이 쌓여 작업 영역이 뷰포트의 3분의 2였다.
+         * 그 화면에서는 앱 띠(왼쪽 메뉴 + 위 검색줄)를 처음부터 접어 둔다 —
+         * 거기서 제품·원료·문서를 검색하는 일은 거의 없고, 검색하면 지금 보던
+         * 제품을 떠나게 된다.
+         *
+         * **사용자가 한 번이라도 고르면 그 선택이 이긴다.** 떠 있는 나가기
+         * 단추나 Esc 로 펴면 그 값이 남고, 다음부터는 그대로 열린다.
+         * 목록 화면들은 예전처럼 펼친 채로 시작한다.
+         */
+        var MAX_DEFAULT = '{% block max_default %}0{% endblock %}' === '1';
         try {
-            if (localStorage.getItem('v2Maximized') === '1') {
-                document.documentElement.classList.add('v2-max');
-            }
-        } catch (e) { /* 시크릿 창 등 */ }
+            var saved = localStorage.getItem('v2Maximized');
+            var on = saved === null ? MAX_DEFAULT : saved === '1';
+            if (on) document.documentElement.classList.add('v2-max');
+        } catch (e) {           /* 시크릿 창 등 */
+            if (MAX_DEFAULT) document.documentElement.classList.add('v2-max');
+        }
     })();
     (function () {
         var saved = localStorage.getItem('v2SbCollapsed');
@@ -60,7 +74,7 @@
     <div class="v2-overlay" id="v2Overlay"></div>
     {# 최대화하면 위쪽 띠가 사라진다. 되돌릴 자리는 남겨 둔다 #}
     <button class="v2-sidebar-toggle v2-max-exit" id="v2MaxExit"
-            title="화면 되돌리기 (Esc)" aria-label="화면 되돌리기">
+            title="화면 되돌리기 (Esc) · 검색은 Ctrl+K" aria-label="화면 되돌리기">
         <i class="bi bi-fullscreen-exit"></i>
     </button>
     <div class="v2-wrapper" id="v2Wrapper">
@@ -162,7 +176,8 @@
                   접힌 뒤에는 이 단추가 같이 사라지므로 떠 있는 단추로 되돌린다.
                 {% endcomment %}
                 <button class="v2-sidebar-toggle" id="v2MaxToggle"
-                        title="화면 최대화 (Esc 로 되돌리기)" aria-label="화면 최대화">
+                        title="화면 최대화 (Esc 로 되돌리기 · Ctrl+K 로 검색)"
+                        aria-label="화면 최대화">
                     <i class="bi bi-arrows-fullscreen"></i>
                 </button>
                 {% block topbar %}
@@ -284,6 +299,20 @@
         var off = document.getElementById('v2MaxExit');
         if (on)  on.addEventListener('click', function () { apply(true); });
         if (off) off.addEventListener('click', function () { apply(false); });
+
+        /* 접혀 있어도 검색은 닿아야 한다.
+         *
+         * 제품 상세는 앱 띠를 접고 시작하는데, 그러면 위 검색줄도 함께 사라진다.
+         * 자주 쓰지 않는다고 **닿을 수 없게 두면** 그건 없앤 것과 같다.
+         * Ctrl+K 로 띠를 펴고 검색 칸에 바로 커서를 둔다. */
+        document.addEventListener('keydown', function (e) {
+            if (!(e.key === 'k' || e.key === 'K')) return;
+            if (!(e.ctrlKey || e.metaKey)) return;
+            e.preventDefault();
+            if (root.classList.contains('v2-max')) apply(false);
+            var box = document.querySelector('.v2-topbar-search input');
+            if (box) { box.focus(); box.select(); }
+        });
 
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape') return;

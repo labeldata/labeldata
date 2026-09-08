@@ -3,6 +3,13 @@
 
 {% block title %}{{ product.my_label_name|default:product.prdlst_nm }} - 워크스페이스{% endblock %}
 
+{% comment %}
+  이 화면은 앱 띠를 접고 시작한다. 위쪽에 다섯 겹이 쌓여 작업 영역이 뷰포트의
+  3분의 2였고, 여기서 제품·원료·문서를 검색하는 일은 거의 없다 — 검색하면
+  지금 보던 제품을 떠나게 된다. 한 번이라도 펴면 그 선택이 남는다.
+{% endcomment %}
+{% block max_default %}1{% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/products_detail.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% comment %} 구 인라인 스타일 제거됨 → products_detail.css 로 이동 {% endcomment %}
