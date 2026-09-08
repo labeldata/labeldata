@@ -4884,7 +4884,10 @@ function cellHtmlForDoc(cell) {
  */
 function labelDocHtml() {
     const data = labelRowData();
-    const cellStyle = 'border:1px solid #444;padding:4px 8px;font-size:10pt;'
+    /* 낱말 단위로 접으면 원재료명 300자가 스무 줄이 된다 — 워드가 쉼표 뒤에서
+       끊기 때문이다. 가로가 차면 끊고 줄간격을 좁혀 한 장에 담는다. */
+    const cellStyle = 'border:1px solid #444;padding:3px 6px;font-size:10pt;'
+        + 'word-break:break-all;overflow-wrap:anywhere;line-height:1.15;'
         + "font-family:'Malgun Gothic',sans-serif;vertical-align:middle;";
     const headStyle = cellStyle + 'background:#f2f2f2;font-weight:bold;'
         + 'width:110px;white-space:nowrap;';

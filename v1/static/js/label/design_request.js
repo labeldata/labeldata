@@ -186,7 +186,13 @@
   /* ── 워드로 ──────────────────────────────────────────────────────────── */
 
   function docHtml() {
-    var cell = 'border:1px solid #444;padding:5px 8px;font-size:10pt;'
+    /* 워드는 긴 글을 쉼표 뒤에서 접는다. 한 줄에 두세 낱말만 남고 넘어가서
+       원재료명 300자가 스무 줄이 된다 — 종이 한 장에 안 들어간다.
+
+       낱말 단위를 버리고 **가로가 차면 끊는다.** 글이 중간에 끊기지만 의뢰서는
+       읽는 문서가 아니라 옮겨 적는 문서다. 높이가 먼저다. 줄간격도 좁힌다. */
+    var cell = 'border:1px solid #444;padding:3px 6px;font-size:10pt;'
+             + 'word-break:break-all;overflow-wrap:anywhere;line-height:1.15;'
              + "font-family:'Malgun Gothic',sans-serif;vertical-align:top;";
     var head = cell + 'background:#f2f2f2;font-weight:bold;text-align:center;';
     var got = collect();
