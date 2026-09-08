@@ -11900,3 +11900,51 @@ class ValidationTabTests(TestCase):
         html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
         self.assertIn('.lt-verify-row', html)
         self.assertIn('<details class="lt-verify-more">', html)   # 자세한 것은 접는다
+
+
+class IngredientNoteSearchTests(TestCase):
+    """
+    비고에 쌓아 둔 말도 찾는다.
+
+    비고는 원료가 아니라 **그 원료를 쓴 자리**에 붙는다(ProductBOM.notes).
+    사람들이 거기에 거래처·규격·주의사항을 쌓아 두는데 검색이 그걸 못 봐서
+    "적어 놨는데 못 찾겠다" 가 됐다.
+    """
+
+    def setUp(self):
+        from v1.bom.models import ProductBOM
+
+        self.user = User.objects.create_user(username='note', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='완제품')
+        self.ing = MyIngredient.objects.create(user_id=self.user,
+                                               prdlst_nm='정제소금', delete_YN='N')
+        ProductBOM.objects.create(parent_label=self.label,
+                                  source_ingredient=self.ing,
+                                  ingredient_name='정제소금',
+                                  notes='대상㈜ 납품 · 25kg 포대')
+
+    def _search(self, q, field=None):
+        params = {'q': q}
+        if field:
+            params['search_field'] = field
+        response = self.client.get(
+            reverse('label:my_ingredient_list_combined'), params)
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode('utf-8')
+
+    def test_비고_내용으로_찾는다(self):
+        self.assertIn('정제소금', self._search('25kg 포대'))
+
+    def test_거래처도_찾는다(self):
+        self.assertIn('정제소금', self._search('대상'))
+
+    def test_없는_말은_안_찾힌다(self):
+        self.assertNotIn('정제소금', self._search('있을리없는말ZZZ'))
+
+    def test_비고만_골라_찾을_수_있다(self):
+        self.assertIn('정제소금', self._search('포대', field='notes'))
+
+    def test_검색_대상_목록에_비고가_있다(self):
+        views = open('v1/label/views.py', encoding='utf-8').read()
+        self.assertIn("'notes': 'bom_usages__notes'", views)

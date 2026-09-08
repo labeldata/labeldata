@@ -1274,6 +1274,10 @@ def my_ingredient_list_combined(request):
         'ingredient_display_name': 'ingredient_display_name',
         'allergens': 'allergens',
         'gmo': 'gmo',
+        # 비고는 **원료가 아니라 그 원료를 쓴 자리**에 붙는다(ProductBOM.notes).
+        # 사람들이 여기에 거래처·규격·주의사항을 쌓아 두는데, 검색이 그걸 못
+        # 봐서 "적어 놨는데 못 찾겠다" 가 됐다.
+        'notes': 'bom_usages__notes',
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
 
@@ -1289,7 +1293,9 @@ def my_ingredient_list_combined(request):
                 Q(prdlst_dcnm__icontains=search_q) |
                 Q(bssh_nm__icontains=search_q) |
                 Q(ingredient_display_name__icontains=search_q) |
-                Q(allergens__icontains=search_q)
+                Q(allergens__icontains=search_q) |
+                # BOM 비고에 쌓아 둔 말도 찾는다
+                Q(bom_usages__notes__icontains=search_q)
             )
 
     search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
