@@ -12122,3 +12122,202 @@ class NoteFieldSearchWiringTests(TestCase):
 
     def test_다른_항목은_안_찾힌다(self):
         self.assertNotIn('정제소금', self._search('거래처: 샘표'))
+
+
+class NoteColumnListTests(TestCase):
+    """
+    비고에 담긴 항목을 목록의 **열로 세운다.**
+
+    붙여넣기는 우리 표에 자리가 없는 열을 버리지 않고 비고에 이름을 달아
+    모은다 — "ERP 원재료: … · 원료코드: …". 그 회사에서는 그것이 원료를 찾는
+    열쇠인데, 목록에서는 한 칸에 뭉쳐 있어 훑을 수가 없었다.
+    """
+
+    def setUp(self):
+        from v1.bom.models import ProductBOM
+
+        self.user = User.objects.create_user(username='ncol', password='x')
+        self.client.force_login(self.user)
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='완제품')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='정제소금', delete_YN='N')
+        ProductBOM.objects.create(
+            parent_label=label, source_ingredient=self.ing,
+            ingredient_name='정제소금',
+            notes='거래처: 대상㈜ · 원료코드: 250521 · 겨울에는 굳음')
+
+    def _get(self, **params):
+        response = self.client.get(
+            reverse('label:my_ingredient_list_combined'), params)
+        self.assertEqual(response.status_code, 200)
+        return response
+
+    def test_비고_항목이_고를_수_있는_칸으로_나온다(self):
+        choices = {c['field']: c for c in self._get().context['column_choices']}
+        self.assertIn('note:거래처', choices)
+        self.assertIn('note:원료코드', choices)
+        self.assertEqual(choices['note:거래처']['label'], '거래처')
+
+    def test_기본으로는_꺼져_있다(self):
+        """회사마다 이름이 달라, 켜 두면 처음 보는 사람에게 낯선 칸이 줄줄이 선다."""
+        choices = {c['field']: c for c in self._get().context['column_choices']}
+        self.assertFalse(choices['note:거래처']['on'])
+        fields = [c['field'] for c in self._get().context['list_columns']]
+        self.assertNotIn('note:거래처', fields)
+
+    def test_켜면_값이_그_칸에_들어간다(self):
+        from v1.label.services.list_sort import MY_INGREDIENT_DEFAULT_FIELDS
+
+        self.client.post(
+            reverse('label:ingredient_columns_save'),
+            data=json.dumps({'columns': list(MY_INGREDIENT_DEFAULT_FIELDS)
+                             + ['note:거래처']}),
+            content_type='application/json')
+        response = self._get()
+        columns = response.context['list_columns']
+        fields = [c['field'] for c in columns]
+        self.assertIn('note:거래처', fields)
+        row = response.context['rows'][0]
+        self.assertEqual(row['cells'][fields.index('note:거래처')]['text'], '대상㈜')
+
+    def test_양식이_아닌_말은_칸이_되지_않는다(self):
+        """"겨울에는 굳음" 은 이름이 없다 — 비고에 그대로 남는다."""
+        choices = {c['field'] for c in self._get().context['column_choices']}
+        self.assertNotIn('note:겨울에는 굳음', choices)
+
+    def test_비고가_없으면_칸도_없다(self):
+        from v1.bom.models import ProductBOM
+
+        ProductBOM.objects.all().update(notes='')
+        choices = {c['field'] for c in self._get().context['column_choices']}
+        self.assertFalse([f for f in choices if f.startswith('note:')])
+
+    def test_저장이_비고_칸을_받는다(self):
+        """데이터에서 나오는 칸이라 고정 목록에 없다. 이름만 맞으면 받는다."""
+        from v1.label.views import ingredient_column_prefs
+
+        response = self.client.post(
+            reverse('label:ingredient_columns_save'),
+            data=json.dumps({'columns': ['prdlst_nm', 'note:원료코드']}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertIn('note:원료코드', ingredient_column_prefs(self.user))
+
+
+class BomPaletteNoteSearchTests(TestCase):
+    """
+    BOM 탭 원료 보관함도 비고를 본다.
+
+    붙여넣기가 자리 없는 열을 비고에 이름 달아 모아 둔다. 그 회사에서는
+    그것이 원료를 찾는 열쇠인데, 보관함 검색이 이름만 봐서 못 찾았다.
+    """
+
+    def setUp(self):
+        from v1.bom.models import ProductBOM
+
+        self.user = User.objects.create_user(username='palette', password='x')
+        self.client.force_login(self.user)
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='완제품')
+        ing = MyIngredient.objects.create(user_id=self.user,
+                                          prdlst_nm='정제소금', delete_YN='N')
+        ProductBOM.objects.create(parent_label=label, source_ingredient=ing,
+                                  ingredient_name='정제소금',
+                                  notes='원료코드: 250521 · 거래처: 대상㈜')
+
+    def _search(self, q):
+        response = self.client.get(reverse('bom:api_ingredient_search'), {'q': q})
+        self.assertEqual(response.status_code, 200)
+        return [r['name'] for r in response.json()['results']]
+
+    def test_원료명으로_찾는다(self):
+        self.assertIn('정제소금', self._search('정제소금'))
+
+    def test_비고의_값으로도_찾는다(self):
+        self.assertIn('정제소금', self._search('250521'))
+
+    def test_비고의_항목으로도_찾는다(self):
+        self.assertIn('정제소금', self._search('거래처:대상㈜'))
+
+    def test_없는_말은_안_찾힌다(self):
+        self.assertNotIn('정제소금', self._search('있을리없는말ZZZ'))
+
+    def test_한_번만_나온다(self):
+        """같은 원료를 여러 제품에 쓰면 조인이 겹친다 — distinct 가 막는다."""
+        from v1.bom.models import ProductBOM
+
+        label2 = MyLabel.objects.create(user_id=self.user, my_label_name='완제품2')
+        ing = MyIngredient.objects.get(prdlst_nm='정제소금')
+        ProductBOM.objects.create(parent_label=label2, source_ingredient=ing,
+                                  ingredient_name='정제소금',
+                                  notes='원료코드: 250521')
+        self.assertEqual(self._search('250521').count('정제소금'), 1)
+
+
+class BomColumnPickerTests(TestCase):
+    """
+    BOM 표에서 안 보는 칸을 감춘다.
+
+    **지우는 것이 아니라 감추는 것이다** — 값은 그대로 있고 다시 켜면
+    돌아온다. 고른 것은 브라우저가 아니라 계정에 남는다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='bcol', password='x')
+        self.client.force_login(self.user)
+        self.html = open('v1/templates/products/bom_detail.html',
+                         encoding='utf-8').read()
+
+    def test_머리글은_한_곳에서_나온다(self):
+        """감춘 칸을 뺀 목록을 쓰지만 그 목록은 BOM_SHEET_HEADERS 에서 나온다."""
+        self.assertIn('SHOWN_HEADERS = BOM_SHEET_HEADERS.filter(', self.html)
+        self.assertIn('SHOWN_COLUMNS = BOM_ALL_COLUMNS.filter(', self.html)
+        self.assertIn('colHeaders: SHOWN_HEADERS', self.html)
+        self.assertIn('columns: SHOWN_COLUMNS', self.html)
+
+    def test_고를_수_있는_자리가_있다(self):
+        self.assertIn('bom-col-picker', self.html)
+        self.assertIn('function wireColumnPicker', self.html)
+
+    def test_원료명과_배합비는_끌_수_없다(self):
+        """그 둘이 없으면 무엇을 보고 있는지 알 수 없다."""
+        self.assertIn("BOM_FIXED_HEADERS = ['원료명', '배합비(%)']", self.html)
+
+    def test_계정에_남는다(self):
+        from v1.common.views import grid_hidden
+
+        response = self.client.post(
+            reverse('common:grid_order_save'),
+            data=json.dumps({'screen': 'bom_grid', 'hidden': ['GMO', '비고']}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(grid_hidden(self.user, 'bom_grid'), ['GMO', '비고'])
+
+    def test_화면마다_따로_기억한다(self):
+        from v1.common.views import grid_hidden
+
+        for screen, cols in (('bom_grid', ['GMO']), ('contact_grid', ['비고'])):
+            self.client.post(
+                reverse('common:grid_order_save'),
+                data=json.dumps({'screen': screen, 'hidden': cols}),
+                content_type='application/json')
+        self.user.refresh_from_db()
+        self.assertEqual(grid_hidden(self.user, 'bom_grid'), ['GMO'])
+        self.assertEqual(grid_hidden(self.user, 'contact_grid'), ['비고'])
+
+    def test_너비_순서와_같은_자리에_남는다(self):
+        """셋 다 "이 사람이 이 표를 어떻게 보는가" 다."""
+        from v1.common.views import grid_hidden, grid_widths
+
+        self.client.post(
+            reverse('common:grid_order_save'),
+            data=json.dumps({'screen': 'bom_grid', 'widths': {'원료명': 200}}),
+            content_type='application/json')
+        self.client.post(
+            reverse('common:grid_order_save'),
+            data=json.dumps({'screen': 'bom_grid', 'hidden': ['GMO']}),
+            content_type='application/json')
+        self.user.refresh_from_db()
+        self.assertEqual(grid_widths(self.user, 'bom_grid'), {'원료명': 200})
+        self.assertEqual(grid_hidden(self.user, 'bom_grid'), ['GMO'])

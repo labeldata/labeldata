@@ -48,7 +48,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 from .services import food_type_settings as fts
 from .services.validation_service import validate_label
-from .services import upload_pages
+from .services import note_fields, upload_pages
 from .services.ai_validation_service import (
     check_ingredient_order, run_full_review, group_issues_by_category, name_unchecked,
 )
@@ -1363,7 +1363,18 @@ def my_ingredient_list_combined(request):
 
     # 어느 칸을 볼지는 사람이 정하고 계정에 남는다
     chosen = ingredient_column_prefs(request.user)
+
+    # 비고에 담긴 항목을 열로 세운다. 붙여넣기가 자리 없는 열을 이름 달아
+    # 비고에 모아 두는데, 목록에서는 한 칸에 뭉쳐 보여 훑을 수가 없었다.
+    notes_by_ing = _ingredient_notes(page_obj)
+    note_names = note_fields.columns(
+        [note for notes in notes_by_ing.values() for note in notes])
+    note_specs = list_sort.note_columns(note_names)
+
     shown = list_sort.ingredient_columns(chosen)
+    # 고른 것만 세운다. 비고 항목은 기본으로 꺼 둔다 — 회사마다 이름이 달라
+    # 켜 두면 처음 보는 사람에게 낯선 칸이 줄줄이 선다.
+    shown += [c for c in note_specs if c['field'] in set(chosen or ())]
     shown_fields = [c['field'] for c in shown]
 
     context = {
@@ -1387,8 +1398,12 @@ def my_ingredient_list_combined(request):
         "column_choices": [
             dict(c, on=c['field'] in shown_fields, fixed=bool(c.get('min')))
             for c in list_sort.MY_INGREDIENT_ALL_COLUMNS
+        ] + [
+            dict(c, on=c['field'] in shown_fields, fixed=False, from_note=True)
+            for c in note_specs
         ],
-        "rows": [ingredient_row(item, shown) for item in page_obj],
+        "rows": [ingredient_row(item, shown, notes_by_ing.get(item.my_ingredient_id))
+                 for item in page_obj],
         "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
         # 붙여넣기가 "계란 O" 같은 표를 알아보는 데 쓰는 말들
         "allergen_header_names": _ALLERGEN_HEADER_NAMES,
@@ -4990,16 +5005,53 @@ def ingredient_column_prefs(user):
         return []
 
 
-def ingredient_row(item, columns):
+def _ingredient_notes(items):
+    """
+    이 원료들이 BOM 에서 달고 있는 비고. {원료id: [비고 …]}
+
+    비고는 원료가 아니라 **그 원료를 쓴 자리**에 붙는다(ProductBOM.notes).
+    같은 원료를 여러 제품에 쓰면 비고도 여럿이다 — 전부 모아 항목 이름을 뽑고,
+    값은 처음 것을 보여 준다(제품마다 다르면 어느 것을 보일지 정할 수 없다).
+    """
+    ids = [getattr(i, 'my_ingredient_id', None) for i in items]
+    ids = [i for i in ids if i]
+    if not ids:
+        return {}
+    try:
+        from v1.bom.models import ProductBOM
+
+        found = {}
+        rows = (ProductBOM.objects
+                .filter(source_ingredient_id__in=ids)
+                .exclude(notes__isnull=True).exclude(notes='')
+                .values_list('source_ingredient_id', 'notes'))
+        for ing_id, note in rows:
+            found.setdefault(ing_id, []).append(note)
+        return found
+    except Exception:
+        logger.exception('원료 비고를 읽지 못했다')
+        return {}
+
+
+def ingredient_row(item, columns, notes=None):
     """
     한 줄을 고른 칸만큼 만든다.
 
     표시용 문자열을 여기서 만든다 — 템플릿에서 항목마다 if 를 늘어놓으면
     칸을 하나 더할 때마다 템플릿을 고쳐야 하고, 어느 날 한쪽만 고쳐진다.
     """
+    note_values = {}
+    for note in (notes or ()):
+        for name, value in note_fields.parse(note)[0].items():
+            note_values.setdefault(name, value)
+
     cells = []
     for column in columns:
         field = column['field']
+        if list_sort.is_note_column(field):
+            text = full = note_values.get(list_sort.note_name_of(field), '')
+            cells.append({'text': text, 'title': full, 'align': column['align']})
+            continue
         raw = getattr(item, field, '') or ''
         if field == 'food_category':
             text = _CATEGORY_LABELS.get(raw, '미분류')
@@ -5031,7 +5083,9 @@ def ingredient_columns_save(request):
                             status=400)
 
     known = {c['field'] for c in list_sort.MY_INGREDIENT_ALL_COLUMNS}
-    fields = [f for f in fields if f in known]
+    # 비고 항목 칸은 데이터에서 나오므로 목록에 없다. 이름만 맞으면 받는다.
+    fields = [f for f in fields
+              if f in known or list_sort.is_note_column(f)]
     if not fields:
         return JsonResponse({'success': False, 'error': '칸을 하나 이상 고르세요.'},
                             status=400)

@@ -157,3 +157,35 @@ def my_ingredient(sort_param, order_param):
     # 정렬로 들어온 주소가 깨지면 안 된다.
     return resolve(MY_INGREDIENT_ALL_COLUMNS, MY_INGREDIENT_DEFAULT,
                    sort_param, order_param)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 비고에 담긴 항목을 열로 세운다.
+#
+# 붙여넣기(sheet_paste.js)는 우리 표에 자리가 없는 열을 **버리지 않고**
+# 비고에 이름을 달아 모은다 — "ERP 원재료: SPC삼립전용분 · 원료코드: 250521".
+# 그 회사에서는 그것이 원료를 찾는 열쇠인데, 목록에서는 비고 한 칸에 뭉쳐
+# 있어 정렬도 눈으로 훑기도 안 됐다.
+#
+# **칸을 새로 만들지 않는다.** 회사마다 이름이 달라서 칸을 만들면 대부분
+# 빈 칸이 되고 마이그레이션이 따라온다. 저장은 비고 그대로 두고, 화면에서만
+# 가른다(note_fields).
+#
+# 이름 앞에 `note:` 를 붙여 고정 칸과 섞이지 않게 한다.
+# ─────────────────────────────────────────────────────────────────────────
+NOTE_COLUMN_PREFIX = 'note:'
+
+
+def note_columns(names) -> list:
+    """비고 항목 이름들을 목록 칸 규격으로."""
+    return [{'field': NOTE_COLUMN_PREFIX + name, 'label': name,
+             'weight': 10, 'align': 'left', 'note_name': name}
+            for name in names or ()]
+
+
+def is_note_column(field) -> bool:
+    return str(field or '').startswith(NOTE_COLUMN_PREFIX)
+
+
+def note_name_of(field) -> str:
+    return str(field or '')[len(NOTE_COLUMN_PREFIX):]
