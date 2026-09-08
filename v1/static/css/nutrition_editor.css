@@ -40,6 +40,15 @@ body {
 }
 
 /* ── 왼쪽 입력 패널 ───────────────────────────────────────── */
+/*
+  설정(① 제품 규격·② 값의 출처)은 위에 붙여 두고 표만 굴린다.
+  표를 넣는 동안에도 단위량·포장개수가 계속 보여야 한다 — 표의 값은 그 규격을
+  분모로 삼는다.
+
+  패널 자체의 스크롤은 남겨 둔다. 창이 아주 낮으면 설정만으로도 자리가 모자라는데,
+  그때 잠기면 위쪽 칸에 아예 손을 못 댄다. 보통은 표가 남은 자리를 다 먹으므로
+  패널은 넘치지 않고, 설정은 그대로 고정된 것처럼 보인다.
+*/
 #input-panel {
     flex: 1;
     min-width: 0;
@@ -70,22 +79,26 @@ body {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    flex: 0 0 auto;   /* 위에 고정 — 표가 줄어들지 이쪽이 줄어들지는 않는다 */
 }
 
+/* 320px 이던 자리. 두 묶음이 나란히 서지 못하고 늘 위아래로 쌓여, 설정만으로
+   화면의 한 뼘을 먹었다. 260px 이면 보통 폭에서 나란히 서고, 정말 좁아지면
+   그때 접힌다 — 설정이 짧아진 만큼 표가 길어진다. */
 .cfg-group {
-    flex: 1 1 320px;
+    flex: 1 1 260px;
     min-width: 0;
     background: #fff;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 8px 10px 9px;
+    padding: 6px 9px 7px;
 }
 .cfg-legend {
     display: flex;
     align-items: center;
     gap: 5px;
-    margin-bottom: 7px;
+    margin-bottom: 5px;
     font-size: 12px;
     font-weight: 600;
     color: var(--ez-gray-700, #5f6368);
@@ -108,8 +121,10 @@ body {
     gap: 6px;
     flex-wrap: wrap;
 }
-.cfg-row + .cfg-row { margin-top: 6px; }
-.cfg-item { display: inline-flex; align-items: center; gap: 6px; }
+.cfg-row + .cfg-row { margin-top: 5px; }
+/* 접히는 단위. 줄바꿈이 이름과 칸 사이에서 일어나면
+   "포장개수" 만 윗줄에 남고 입력칸이 아랫줄로 떨어진다 */
+.cfg-item { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 .cfg-label {
     font-size: 12.5px;
     font-weight: 500;
@@ -125,13 +140,15 @@ body {
 .cfg-grow { flex: 1 1 200px; min-width: 0; }
 /* 총 내용량은 사람이 곱해 볼 필요가 없다 — 그 자리에서 보여 준다 */
 .cfg-total {
-    margin-left: auto;
+    margin-left: 2px;
     font-size: 12px;
     font-weight: 600;
     color: var(--ez-info-strong, #1558b0);
     white-space: nowrap;
 }
 .cfg-hint { font-size: 11px; color: var(--ez-gray-500, #9aa0a6); }
+/* 한 줄 안에서 묶음을 가른다 — 좁아지면 여기서 접힌다 */
+.cfg-sep { flex: 1 1 0; min-width: 8px; }
 .cfg-check {
     display: inline-flex;
     align-items: center;
@@ -238,25 +255,26 @@ body {
 
 /* ── 그리드 컨테이너 ──────────────────────────────────────── */
 /*
-  표는 줄이지도, 잘라 내지도 않는다.
+  표가 남은 자리를 다 갖고, 넘치는 줄은 표가 스스로 굴린다.
 
-  예전에는 flex: 1 1 auto 라 왼쪽 패널이 모자라면 표가 min-height(300px)까지
-  눌렸고, overflow-y: hidden 이 그 아래를 잘라 버렸다. Handsontable 은
-  height:'auto' 로 25줄을 통째로 그리므로, 잘린 줄은 화면에도 안 보이고
-  스크롤로 닿을 수도 없어 아래쪽 영양성분은 입력 자체가 불가능했다.
+  두 번 틀렸던 자리다.
+  ① flex: 1 1 auto + overflow-y: hidden — 자리가 모자라면 표가 min-height 까지
+     눌린 뒤 아래가 잘렸다. 잘린 줄은 화면에도 없고 스크롤로도 닿을 수 없어
+     아래쪽 영양성분은 입력 자체가 안 됐다.
+  ② 그래서 패널이 통째로 굴러가게 했더니, 이번엔 열 머리글이 같이 밀려 올라갔다.
+     아래쪽에서는 지금 넣는 값이 계산값인지 적용값인지 알 수가 없다.
 
-  이제 표는 제 높이를 그대로 갖고, 넘치는 만큼은 #input-panel 이 스크롤한다.
-  가로는 아래의 ht_master/wtHider/wtHolder 규칙과 #input-panel 의
-  overflow-x: hidden 이 계속 잡아 준다.
+  이제 칸은 남은 높이를 정확히 갖고(flex-basis 0), 표는 height:'100%' 로 그 높이를
+  받아 제 안에서 굴린다. 머리글 고정은 Handsontable 이 해 준다(ht_clone_top).
+  min-height 는 설정이 유난히 길어졌을 때 표가 사라지지 않게 두는 바닥이다.
 */
 #grid-container {
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-height: 160px;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    overflow: visible;
+    overflow: hidden;
     width: 100%;
-    height: auto;
-    min-height: 300px;
     max-width: none;
     margin: 0;
     padding: 0;
@@ -264,7 +282,7 @@ body {
 }
 
 #nutrition-grid {
-    height: auto;
+    height: 100%;
     width: 100%;
 }
 
@@ -274,7 +292,14 @@ body {
 #nutrition-grid .handsontable .wtHolder {
     width: 100% !important;
     max-width: 100% !important;
+}
+#nutrition-grid .handsontable .ht_master,
+#nutrition-grid .handsontable .wtHider {
     overflow: hidden !important;
+}
+/* 세로로 굴러가는 자리는 여기다. 막아 두면 표가 다시 잘린다 */
+#nutrition-grid .handsontable .wtHolder {
+    overflow: auto !important;
 }
 
 /* ── 오른쪽 미리보기 패널 ────────────────────────────────── */

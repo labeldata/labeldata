@@ -52,24 +52,35 @@
                 <div class="cfg-legend">① 제품 규격
                     <span class="cfg-why" title="표의 값은 100 g 당으로 저장되고, 표를 그릴 때 이 규격으로 되돌립니다">?</span>
                 </div>
+                {% comment %}
+                  규격 세 칸을 한 줄에 둔다. 위가 고정이라 여기서 한 줄 늘면 표가
+                  그만큼 줄어든다 — 1회 섭취참고량을 아래로 내리면 늘 두 줄이었다.
+                  좁아지면 flex-wrap 이 알아서 접는다.
+                  긴 안내는 칸 이름에 달아 둔다(마우스를 올리면 나온다).
+                {% endcomment %}
                 <div class="cfg-row">
-                    <label class="cfg-label" for="serving_size">단위량</label>
-                    <input type="text" class="form-control form-control-sm cfg-num" id="serving_size" placeholder="예: 133">
-                    <select class="form-select form-select-sm cfg-unit" id="serving_size_unit">
-                        <option value="g">g</option>
-                        <option value="ml">ml</option>
-                    </select>
-                    <span class="cfg-op">×</span>
-                    <label class="cfg-label" for="units_per_package">포장개수</label>
-                    <input type="text" class="form-control form-control-sm cfg-num" id="units_per_package" placeholder="1">
-                    <span class="cfg-unit-text">개</span>
-                    <span class="cfg-total" id="totalAmountHint"></span>
-                </div>
-                <div class="cfg-row">
-                    <label class="cfg-label" for="serving_reference">1회 섭취참고량</label>
-                    <input type="text" class="form-control form-control-sm cfg-num" id="serving_reference" placeholder="예: 30">
-                    <span class="cfg-unit-text" id="servingReferenceUnit">g</span>
-                    <span class="cfg-hint">식품유형별로 정해진 "한 번에 먹는 양" — 고열량·저영양 판정의 기준</span>
+                    <span class="cfg-item">
+                        <label class="cfg-label" for="serving_size">단위량</label>
+                        <input type="text" class="form-control form-control-sm cfg-num" id="serving_size" placeholder="예: 133">
+                        <select class="form-select form-select-sm cfg-unit" id="serving_size_unit">
+                            <option value="g">g</option>
+                            <option value="ml">ml</option>
+                        </select>
+                    </span>
+                    <span class="cfg-item">
+                        <span class="cfg-op">×</span>
+                        <label class="cfg-label" for="units_per_package">포장개수</label>
+                        <input type="text" class="form-control form-control-sm cfg-num" id="units_per_package" placeholder="1">
+                        <span class="cfg-unit-text">개</span>
+                        <span class="cfg-total" id="totalAmountHint"></span>
+                    </span>
+                    <span class="cfg-sep"></span>
+                    <span class="cfg-item">
+                        <label class="cfg-label" for="serving_reference"
+                               title="식품유형별로 정해진 &quot;한 번에 먹는 양&quot; — 고열량·저영양 판정의 기준">1회 섭취참고량</label>
+                        <input type="text" class="form-control form-control-sm cfg-num" id="serving_reference" placeholder="예: 30">
+                        <span class="cfg-unit-text" id="servingReferenceUnit">g</span>
+                    </span>
                 </div>
                 <div id="servingNote" class="cfg-note is-warn" style="display:none;"></div>
             </div>
@@ -375,7 +386,10 @@ function initGrid() {
         ],
         rowHeaders: false,
         rowHeights: 22,
-        height: 'auto',
+        /* 표가 제 높이를 갖고 스스로 굴린다. height:'auto' 로 25줄을 통째로
+           그리면 열 머리글이 같이 밀려 올라가, 아래쪽에서는 지금 어느 칸에
+           무엇을 넣는지 알 수 없었다. 높이를 주면 머리글 고정은 HOT 이 한다. */
+        height: '100%',
         width: '100%',
         /* 늘린 만큼 표가 넓어질 뿐 다른 칸을 줄이지 않는다. 너비는
            attachSheetWidths 가 정한다(static/js/sheet_widths.js). */
@@ -405,6 +419,23 @@ function initGrid() {
             csrf: (typeof getCookie === 'function' ? getCookie('csrftoken') : '') || '',
             saved: window.GRID_WIDTHS || {}
         });
+    }
+
+    /* 표 높이를 담는 칸에 맞춘다.
+
+       이 편집기는 제품 관리 탭 안의 iframe 으로 뜨는데, 탭이 열리기 전에는
+       iframe 이 display:none 이라 칸 높이가 0 이다. 그때 만들어진 표는
+       height:'100%' 를 0 으로 읽는다. 보이게 된 순간과 창 크기가 바뀔 때
+       다시 재도록 붙여 둔다. (칸 너비 쪽은 sheet_widths.js 가 따로 본다) */
+    if (window.ResizeObserver) {
+        const box = document.getElementById('grid-container');
+        if (box) {
+            let t = null;
+            new ResizeObserver(() => {
+                clearTimeout(t);
+                t = setTimeout(() => { try { hot.refreshDimensions(); } catch (e) {} }, 60);
+            }).observe(box);
+        }
     }
 }
 
