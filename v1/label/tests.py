@@ -10060,8 +10060,13 @@ class 의뢰서가_종이_안에_들어간다(TestCase):
     칸 너비를 픽셀로 적었더니 **오른쪽 비고 칸이 잘려 나갔다.** A4 세로에
     여백을 빼면 쓸 수 있는 폭이 16 cm 남짓인데 픽셀 합이 그보다 컸다.
 
-    백분율로 적으면 종이 폭이 얼마든 안에 들어간다. 균등 분할로 돌아가면
-    안 된다 — 원재료명 300자가 스무 줄로 접히고 오른쪽은 텅 빈다.
+    그래서 백분율로 바꿨더니 이번에는 **표가 20 cm 를 넘어 나갔다.** 워드는
+    HTML 을 열 때 쪽 크기를 스스로 정하고, 100% 는 그 폭을 따라간다 — 우리가
+    A4 라고 말한 적이 없으니 워드가 넓게 잡은 것이다.
+
+    쪽을 A4 로 못 박고 칸을 **cm** 로 적는다. 물리 단위는 워드가 다시 계산하지
+    않는다. 균등 분할로 돌아가면 안 된다 — 원재료명 300자가 스무 줄로 접히고
+    오른쪽은 텅 빈다.
     """
 
     def setUp(self):
@@ -10072,15 +10077,29 @@ class 의뢰서가_종이_안에_들어간다(TestCase):
         self.js = (Path(dj.BASE_DIR) / 'static/js/label/design_request.js'
                    ).read_text(encoding='utf-8')
 
-    def test_너비를_픽셀로_적지_않는다(self):
+    def test_너비를_픽셀로도_백분율로도_적지_않는다(self):
         head = self.js.index('var cols =')
         block = self.js[head:head + 300]
         self.assertNotIn('px;', block)
-        for share in ('12%', '13%', '56%', '19%'):
-            self.assertIn(share, block, share)
+        self.assertNotIn('%;', block)
 
-    def test_표는_종이_폭을_따른다(self):
-        self.assertIn('table-layout:fixed;width:100%', self.js)
+    def test_네_칸이_인쇄_폭에_들어간다(self):
+        import re
+
+        head = self.js.index('var cols =')
+        widths = [float(m) for m in
+                  re.findall(r'width:([\d.]+)cm;', self.js[head:head + 300])]
+        self.assertEqual(len(widths), 4)
+        self.assertLessEqual(sum(widths), 16.0)
+        # 균등 분할로 돌아가지 않았는가 — 원재료명 칸이 가장 넓어야 한다
+        self.assertEqual(max(widths), widths[2])
+
+    def test_쪽_크기를_못_박는다(self):
+        self.assertIn('@page', self.js)
+        self.assertIn('21cm 29.7cm', self.js)
+
+    def test_표는_인쇄_폭을_따른다(self):
+        self.assertIn('table-layout:fixed;width:16cm', self.js)
         self.assertNotIn('width:724px', self.js)
 
 
@@ -11448,3 +11467,71 @@ class OriginFalseFriendTests(TestCase):
         friends = _origin_false_friends()
         for name in ('초산', '젖산', '구연산'):
             self.assertIn(name, friends)
+
+
+class DesignRequestExportTests(TestCase):
+    """
+    디자인 의뢰서 워드 내보내기의 지면.
+
+    백분율(width:100%)로 냈더니 워드가 쪽 크기를 스스로 정해 **표가 20 cm 를
+    넘어 종이 밖으로 나갔다.** 쪽을 A4 로 못 박고 칸을 cm 로 적는다.
+    """
+
+    def setUp(self):
+        self.js = open('v1/static/js/label/design_request.js',
+                       encoding='utf-8').read()
+
+    def test_쪽_크기를_못_박는다(self):
+        self.assertIn('@page', self.js)
+        self.assertIn('21cm 29.7cm', self.js)
+        self.assertIn('margin:2.5cm', self.js)
+
+    def test_칸_너비는_물리_단위다(self):
+        """백분율은 워드가 다시 계산한다 — 그 계산이 종이를 넘겼다."""
+        self.assertNotIn('width:56%', self.js)
+        self.assertIn('width:8.7cm', self.js)
+        self.assertIn('width:16cm', self.js)
+
+    def test_네_칸의_합이_인쇄_폭에_들어간다(self):
+        import re
+
+        widths = [float(m) for m in
+                  re.findall(r'<col style="width:([\d.]+)cm;"', self.js)]
+        self.assertEqual(len(widths), 4)
+        self.assertLessEqual(sum(widths), 16.0)
+
+    def test_규정_메모는_잔글씨다(self):
+        """표시장소 칸에 딸린 부연이다 — 이름과 같은 크기면 둘이 겹쳐 보인다."""
+        self.assertIn('font-size:7pt;', self.js)
+        self.assertNotIn('font-size:8.5pt;', self.js)
+
+
+class BomPickerAffordanceTests(TestCase):
+    """
+    알레르기·GMO 는 칸을 누르면 고르는 자리가 펴진다. **칸만 봐서는 그걸
+    알 수 없었다** — 사람들이 손으로 치다가 목록이 있는 줄 몰랐다.
+    """
+
+    def setUp(self):
+        self.html = open('v1/templates/products/bom_detail.html',
+                         encoding='utf-8').read()
+        self.css = open('v1/static/css/bom.css', encoding='utf-8').read()
+
+    def test_두_칸에_표시가_붙는다(self):
+        self.assertIn("{ data: 'allergens', editor: 'text', className: 'bom-picker-cell' }",
+                      self.html)
+        self.assertIn("{ data: 'gmo', editor: 'text', className: 'bom-picker-cell' }",
+                      self.html)
+
+    def test_손_모양_커서와_삼각형을_준다(self):
+        head = self.css.index('.bom-picker-cell')
+        block = self.css[head:head + 700]
+        self.assertIn('cursor: pointer', block)
+        self.assertIn('border-top: 4px solid', block)   # 여는 표시
+        self.assertIn(':hover', block)
+
+    def test_상세_창이_표를_통째로_덮지_않는다(self):
+        head = self.css.index('.bom-rowdetail {')
+        block = self.css[head:head + 500]
+        self.assertIn('width: min(620px, 100%)', block)
+        self.assertNotIn('right: 0;', block)

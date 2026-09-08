@@ -207,7 +207,7 @@
       if (!mine.length) return;
       var name = panel === 'main' ? '주표시면' : '정보표시면';
       var notes = (got.notes[panel] || []).filter(Boolean)
-          .map(function (line) { return '<div style="font-size:8.5pt;">' + line + '</div>'; })
+          .map(function (line) { return '<div style="font-size:7pt;">' + line + '</div>'; })
           .join('');
       mine.forEach(function (row, i) {
         body += '<tr>'
@@ -224,20 +224,32 @@
        300자가 들어가고 표시장소는 이름 한 줄이라, 균등하면 원재료명이 스무 줄로
        접히고 오른쪽은 텅 빈다.
 
-       **픽셀로 적으면 안 된다.** A4 세로에 여백을 빼면 쓸 수 있는 폭이 16 cm
-       남짓인데 픽셀 합이 그보다 크면 오른쪽 비고 칸이 종이 밖으로 잘려 나간다.
-       실제로 그렇게 났다. 백분율로 적어 폭이 얼마든 안에 들어가게 한다. */
-    var cols = '<colgroup><col style="width:12%;"><col style="width:13%;">'
-             + '<col style="width:56%;"><col style="width:19%;"></colgroup>';
+       **픽셀로 적으면 안 된다.** 픽셀 합이 인쇄 가능 폭보다 크면 오른쪽 비고
+       칸이 종이 밖으로 잘려 나간다. 실제로 그렇게 났다.
+
+       그래서 백분율로 바꿨는데 이번에는 **표가 20 cm 를 넘어 나갔다.** 워드가
+       HTML 을 열 때 쪽 크기를 스스로 정하고, 100% 는 그 폭을 따라간다 — 우리가
+       A4 라고 말한 적이 없으니 워드가 넓게 잡은 것이다.
+
+       쪽을 A4 로 못 박고 칸 너비를 **cm 로 적는다.** 물리 단위라 워드가 다시
+       계산하지 않는다. A4 세로(21 cm)에 좌우 여백 2.5 cm 씩을 빼면 16 cm 가
+       남고, 그 안에서 원재료명 칸이 8.7 cm 다. */
+    var cols = '<colgroup><col style="width:1.9cm;"><col style="width:2.1cm;">'
+             + '<col style="width:8.7cm;"><col style="width:3.3cm;"></colgroup>';
+
+    /* 쪽 크기를 못 박는다. 이 말이 없으면 워드가 스스로 정한다 */
+    var page = '<style>@page{size:21cm 29.7cm;margin:2.5cm;}'
+             + 'body{margin:0;}table{width:16cm;}</style>';
 
     return '<html xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
-         + '<meta charset="utf-8"><title>표시 디자인 의뢰서</title></head><body>'
+         + '<meta charset="utf-8"><title>표시 디자인 의뢰서</title>'
+         + page + '</head><body>'
          + '<h3 style="margin:0 0 4px;">표시 디자인 의뢰서</h3>'
          + '<p style="margin:0 0 10px;font-size:9pt;color:#555;">'
          + (title ? title + ' · ' : '')
          + new Date().toISOString().slice(0, 10) + '</p>'
          + '<table cellspacing="0" cellpadding="0" '
-         + 'style="border-collapse:collapse;table-layout:fixed;width:100%;">'
+         + 'style="border-collapse:collapse;table-layout:fixed;width:16cm;">'
          + cols
          + '<tr><td style="' + head + '">표시장소</td><td style="' + head + '">표시사항</td>'
          + '<td style="' + head + '">표시사항 내용</td><td style="' + head + '">비고</td></tr>'
