@@ -1,4 +1,4 @@
-"""
+﻿"""
 테스트 전용 설정.
 
     python manage.py test --settings=v1.config.settings_test
@@ -43,7 +43,12 @@ DATABASES = {
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-    }
+    },
+    # 속도 제한이 세는 자리. 운영은 파일 캐시지만 시험에서는 메모리로 둔다 —
+    # 이 별칭이 없으면 @ratelimit 이 붙은 뷰가 시험에서 전부 터진다.
+    'ratelimit': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    },
 }
 
 # 비밀번호 해싱은 테스트 속도에만 영향을 준다.

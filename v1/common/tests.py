@@ -432,3 +432,69 @@ class 압축은_배포본에만_적용된다(SimpleTestCase):
         js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
               ).read_text(encoding='utf-8-sig')
         self.assertIn('두 벌로 두면', js)
+
+
+class 긁는_속도를_끊는다(TestCase):
+    """
+    막을 수 없는 것이 있다 — 공개 데모가 부르는 엔드포인트는 로그인을 걸 수
+    없다. 그런 문은 **속도로** 끊는다. 사람이 화면에서 식품유형을 고르는
+    속도와 훑어 가는 속도는 자릿수가 다르다.
+
+    AI 판독은 다른 이유다. 호출마다 돈이 나가므로, 실수로 몰아쳐도 그대로
+    청구서가 된다.
+
+    파일 캐시라 증가가 원자적이지 않아 몇 번은 흘린다. 정확한 회계가 목적이
+    아니라 무제한을 없애는 것이 목적이다.
+    """
+
+    def _src(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8-sig')
+
+    def test_공개로_남는_문에는_제한이_붙어_있다(self):
+        label = self._src('label/views.py')
+        for name in ('get_additive_field_settings', 'verify_report_no'):
+            at = label.index('def %s(request)' % name)
+            head = label[max(0, at - 400):at]
+            self.assertIn('@ratelimit', head, '%s 에 제한이 없다' % name)
+
+    def test_돈이_나가는_판독에_제한이_붙어_있다(self):
+        at = self._src('label/views.py').index('def ocr_extract(request)')
+        self.assertIn('@ratelimit', self._src('label/views.py')[at - 400:at])
+        products = self._src('products/views.py')
+        at2 = products.index('def document_ai_extract_api(request')
+        self.assertIn('@ratelimit', products[at2 - 300:at2])
+
+    def test_로그인_무차별_대입도_끊는다(self):
+        users = self._src('user_management/views.py')
+        at = users.index('def login_view(request)')
+        self.assertIn('@ratelimit', users[at - 400:at])
+
+    def test_세는_자리를_따로_둔다(self):
+        """
+        default 캐시는 MAX_ENTRIES 가 500 이라 자리가 차면 버린다. 세는 값이
+        버려지면 제한이 조용히 풀린다 — 있다고 믿는데 없는 것이 제일 나쁘다.
+        """
+        from django.conf import settings as dj
+
+        # 시험 설정은 캐시를 메모리로 갈아 끼우므로 운영 설정 파일을 직접 본다
+        self.assertEqual(getattr(dj, 'RATELIMIT_USE_CACHE', None), 'ratelimit')
+        src = self._src('config/settings.py')
+        self.assertIn("RATELIMIT_USE_CACHE = 'ratelimit'", src)
+        self.assertIn("'ratelimit': {", src)
+        self.assertIn("'MAX_ENTRIES': 20000", src)
+
+    def test_제한에_걸리면_막는다(self):
+        """block=True — 세기만 하고 통과시키면 제한이 아니다."""
+        for rel in ('label/views.py', 'products/views.py',
+                    'user_management/views.py'):
+            src = self._src(rel)
+            for at in range(len(src)):
+                at = src.find('@ratelimit(', at)
+                if at < 0:
+                    break
+                self.assertIn('block=True', src[at:at + 120], rel)
+                at += 1

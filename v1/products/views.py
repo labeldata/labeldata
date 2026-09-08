@@ -1,7 +1,8 @@
-# ==================== 제품 관리 Views (V2) ====================
+﻿# ==================== 제품 관리 Views (V2) ====================
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib import messages
@@ -5783,6 +5784,8 @@ def document_ai_create_from_submission(request):
         logger.exception(f"Error: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 @require_POST
+# 문서 판독도 호출마다 돈이 나간다
+@ratelimit(key='user_or_ip', rate='30/h', method='POST', block=True)
 def document_ai_extract_api(request, document_id):
     """
     AI 문서 분석 실행 API (비동기)

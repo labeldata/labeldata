@@ -15,6 +15,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from django.conf import settings  # Django settings import 추가
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
@@ -2862,6 +2863,9 @@ OCR_MAX_REGIONS = 6
 
 @require_POST
 @login_required
+# 판독은 한 번에 돈이 나간다. 계정 하나가 실수로든 일부러든 몰아치면
+# 그대로 청구서가 된다 — 사람이 손으로 쓰는 속도를 넉넉히 넘는 선에서 끊는다.
+@ratelimit(key='user', rate='30/h', method='POST', block=True)
 def ocr_extract(request):
     """
     표시사항 이미지에서 GPT-4o mini로 필드를 추출합니다.
@@ -3364,6 +3368,9 @@ def linked_ingredient_count(request, label_id):
 
 @csrf_exempt
 @require_POST
+# 공개 데모가 부르고 csrf_exempt 다. 품목보고번호를 훑는 데 쓰이지 않게
+# 속도로 끊는다.
+@ratelimit(key='ip', rate='60/m', method='POST', block=True)
 def verify_report_no(request):
     data = json.loads(request.body)
     label_id = data.get('label_id')
@@ -4880,6 +4887,9 @@ def request_additive_correction(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+# 공개 데모가 부르므로 로그인을 걸 수 없다. 대신 속도로 끊는다 —
+# 사람이 화면에서 식품유형을 고르는 속도와 긁는 속도는 자릿수가 다르다.
+@ratelimit(key='ip', rate='60/m', block=True)
 def get_additive_field_settings(request):
     """
     식품첨가물/혼합제제/농수축산물 선택 시 필드 표시 규칙을 반환하는 API.

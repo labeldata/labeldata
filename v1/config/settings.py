@@ -183,8 +183,24 @@ CACHES = {
         'LOCATION': str(BASE_DIR.parent / 'django_cache'),
         'TIMEOUT': 60 * 60 * 6,  # 기본 TTL 6시간 (스케줄러 미실행 시 안전망)
         'OPTIONS': {'MAX_ENTRIES': 500},
-    }
+    },
+    # 속도 제한은 **따로 둔다.**
+    #
+    # default 는 MAX_ENTRIES 가 500 이라 자리가 차면 오래된 것을 버린다.
+    # 세는 값이 그렇게 버려지면 제한이 조용히 풀린다 — 제한이 있다고 믿는데
+    # 없는 것이 제일 나쁘다.
+    #
+    # 파일 캐시라 증가가 원자적이지 않다. 여러 일꾼이 같은 순간에 세면
+    # 몇 번은 흘린다. 그래도 무제한으로 두드리는 것은 확실히 막는다 —
+    # 정확한 회계가 목적이 아니라 대량 수집을 성가시게 만드는 것이 목적이다.
+    'ratelimit': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': str(BASE_DIR.parent / 'django_cache_ratelimit'),
+        'TIMEOUT': 60 * 60,
+        'OPTIONS': {'MAX_ENTRIES': 20000},
+    },
 }
+RATELIMIT_USE_CACHE = 'ratelimit'
 
 # Django 기본 데이터베이스 세션 사용 (권한 문제로 현재 작동하지 않음)
 # SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # 기본값

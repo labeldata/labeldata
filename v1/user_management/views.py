@@ -1,9 +1,10 @@
-from django.shortcuts import render, redirect
+﻿from django.shortcuts import render, redirect
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
 from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import UserProfile, CompanyDocument
 from . import bulk_email_store
@@ -350,6 +351,9 @@ def verify_email(request):
     
     return render(request, 'user_management/verify_result.html', context)
 
+# 비밀번호를 무차별로 넣어 보는 것을 끊는다. 사람이 오타를 내는 횟수와는
+# 자릿수가 다르다. 성공한 로그인은 세지 않는다(method='POST' 만 센다).
+@ratelimit(key='ip', rate='20/m', method='POST', block=True)
 def login_view(request):
     """로그인 (이메일 인증된 계정만 허용, Guest 로그인 지원)"""
     if request.method == 'POST':
