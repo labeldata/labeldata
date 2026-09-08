@@ -65,7 +65,7 @@ def bom_workspace(request, label_id):
         delete_YN='N'
     ).order_by('-update_datetime')
 
-    from v1.common.views import grid_order, grid_widths
+    from v1.common.views import grid_hidden, grid_order, grid_widths
     from v1.label.services.allergen_names import HEADER_NAMES
 
     context = {
@@ -79,6 +79,7 @@ def bom_workspace(request, label_id):
         'grid_order': grid_order(request.user, 'bom_grid'),
         # 끌어서 조절해 둔 칸 너비. 자리가 아니라 이름에 붙는다.
         'grid_widths': grid_widths(request.user, 'bom_grid'),
+        'grid_hidden': grid_hidden(request.user, 'bom_grid'),
         # 표에서 열 이름으로 쓰는 알레르기 말들. "계란 O" 를 알아보는 데 쓴다.
         'allergen_header_names': HEADER_NAMES,
     }
@@ -102,13 +103,25 @@ def api_ingredient_search(request):
 
     results = []
 
+    # 비고에 쌓아 둔 말로도 찾는다.
+    #
+    # 붙여넣기가 자리 없는 열을 비고에 이름 달아 모아 둔다 — "원료코드: 250521".
+    # 그 회사에서는 그것이 원료를 찾는 열쇠인데, 보관함 검색이 이름만 봐서
+    # "적어 놨는데 못 찾겠다" 가 됐다. 목록 검색은 이미 본다(my_ingredient_list).
+    from v1.label.services.note_fields import search_terms
+
+    note_q = Q()
+    for term in search_terms(query) or [query]:
+        note_q |= Q(bom_usages__notes__icontains=term)
+
     my_ingredients = MyIngredient.objects.filter(
         user_id=request.user,
         delete_YN='N'
     ).filter(
         Q(ingredient_display_name__icontains=query) |
-        Q(prdlst_nm__icontains=query)
-    ).order_by('-update_datetime')[:10]
+        Q(prdlst_nm__icontains=query) |
+        note_q
+    ).distinct().order_by('-update_datetime')[:10]
 
     for ingredient in my_ingredients:
         prdlst_nm = ingredient.prdlst_nm or ''

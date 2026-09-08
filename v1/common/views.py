@@ -901,11 +901,15 @@ def grid_order_save(request):
         screen = str(payload.get('screen') or '').strip()
         order = [str(name) for name in (payload.get('order') or [])]
         widths = payload.get('widths')
+        # 어느 칸을 감출지. 순서·너비와 같은 자리에 둔다 — 셋 다 "이 사람이
+        # 이 표를 어떻게 보는가" 이고, 화면마다 따로 기억한다.
+        hidden = payload.get('hidden')
     except (ValueError, TypeError):
         return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
                             status=400)
 
-    if not screen or not (order or isinstance(widths, dict)):
+    if not screen or not (order or isinstance(widths, dict)
+                          or isinstance(hidden, list)):
         return JsonResponse({'success': False, 'error': '화면과 순서가 필요합니다.'},
                             status=400)
     if len(order) > 40 or any(len(name) > 40 for name in order):
@@ -934,11 +938,16 @@ def grid_order_save(request):
             if len(str(name)) <= 40 and 20 <= px <= 1200:
                 clean[str(name)] = px
         saved['widths'] = clean
+    # 감춘 칸. 이름 목록이고, 화면이 그것을 빼고 표를 짠다.
+    if isinstance(hidden, list):
+        saved['hidden'] = [str(name) for name in hidden[:40]
+                           if str(name) and len(str(name)) <= 40]
     prefs[screen] = saved
     profile.list_prefs = prefs
     profile.save(update_fields=['list_prefs'])
     return JsonResponse({'success': True, 'order': saved.get('order', []),
-                         'widths': saved.get('widths', {})})
+                         'widths': saved.get('widths', {}),
+                         'hidden': saved.get('hidden', [])})
 
 
 def grid_order(user, screen):
@@ -949,6 +958,21 @@ def grid_order(user, screen):
         return [str(name) for name in order] if isinstance(order, list) else []
     except Exception:
         # 프로필이 없거나 값이 깨졌다. 기본 순서로 여는 것이 맞다.
+        return []
+
+
+def grid_hidden(user, screen):
+    """
+    이 사용자가 이 화면에서 감춰 둔 칸 이름들. 없으면 빈 목록.
+
+    안 보는 칸이 자리를 차지하면 정작 봐야 할 칸이 좁아진다. 다만 **지우는
+    것이 아니다** — 값은 그대로 있고 언제든 다시 켠다.
+    """
+    try:
+        prefs = (getattr(user, 'profile', None).list_prefs or {})
+        hidden = (prefs.get(screen) or {}).get('hidden')
+        return [str(name) for name in hidden] if isinstance(hidden, list) else []
+    except Exception:
         return []
 
 

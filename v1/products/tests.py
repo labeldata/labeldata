@@ -2831,7 +2831,10 @@ class SheetPasteIsOneRuleTests(TestCase):
         from v1.common import sheet_template
         bom = self._read('templates/products/bom_detail.html')
         self.assertIn('const BOM_SHEET_HEADERS', bom)
-        self.assertIn('colHeaders: BOM_SHEET_HEADERS', bom)
+        # 감춘 칸을 뺀 목록을 쓰지만, 그 목록은 BOM_SHEET_HEADERS 에서 나온다.
+        # 머리글을 정하는 곳은 여전히 하나다.
+        self.assertIn('colHeaders: SHOWN_HEADERS', bom)
+        self.assertIn('SHOWN_HEADERS = BOM_SHEET_HEADERS.filter(', bom)
         for name in sheet_template.BOM_HEADERS:
             self.assertIn("'%s'" % name, bom)
 
