@@ -237,12 +237,23 @@ body {
 }
 
 /* ── 그리드 컨테이너 ──────────────────────────────────────── */
+/*
+  표는 줄이지도, 잘라 내지도 않는다.
+
+  예전에는 flex: 1 1 auto 라 왼쪽 패널이 모자라면 표가 min-height(300px)까지
+  눌렸고, overflow-y: hidden 이 그 아래를 잘라 버렸다. Handsontable 은
+  height:'auto' 로 25줄을 통째로 그리므로, 잘린 줄은 화면에도 안 보이고
+  스크롤로 닿을 수도 없어 아래쪽 영양성분은 입력 자체가 불가능했다.
+
+  이제 표는 제 높이를 그대로 갖고, 넘치는 만큼은 #input-panel 이 스크롤한다.
+  가로는 아래의 ht_master/wtHider/wtHolder 규칙과 #input-panel 의
+  overflow-x: hidden 이 계속 잡아 준다.
+*/
 #grid-container {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    overflow-x: hidden;
-    overflow-y: hidden;
+    overflow: visible;
     width: 100%;
     height: auto;
     min-height: 300px;
