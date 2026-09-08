@@ -11081,3 +11081,117 @@ class DesignFontSizeCheckTests(TestCase):
         from v1.label.services.validation_service import _CHECKS
 
         self.assertIn('check_design_font_size', {c.__name__ for c in _CHECKS})
+
+
+class OriginScopeTests(TestCase):
+    """
+    원산지를 **어느 원료에** 표시해야 하는가.
+
+    배합비 3순위까지, 한 원료가 98% 이상이면 그것만, 상위 둘의 합이 98%
+    이상이면 둘만. 물·식품첨가물·주정·당류는 뺀다.
+
+    **제외 목록이 결과를 뒤집는다.** 밖에서 본 시스템의 판정 하나를 손으로
+    따라가 보니, 정제수(물)와 설탕(당류)을 빼야 3순위가 밀가루·마가린·전란액이
+    되고 셋 다 표시돼 있어 적합이 됐다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='origin', password='x')
+
+    def _label(self, ingredients, **kwargs):
+        """ingredients: [(원료명, 배합비, food_category)]"""
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='원산지', **kwargs)
+        for seq, (name, ratio, category) in enumerate(ingredients, start=1):
+            ing = MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm=name, food_category=category)
+            LabelIngredientRelation.objects.create(
+                label=label, ingredient=ing, ingredient_ratio=ratio,
+                relation_sequence=seq)
+        return label
+
+    def _scope(self, label):
+        from v1.label.services.origin_scope import required_origins
+        return required_origins(label)
+
+    # ── 순위 산정 ──────────────────────────────────────────────────────────
+
+    def test_물과_당류를_빼고_3순위를_고른다(self):
+        label = self._label([
+            ('밀가루', 44.46, 'processed'), ('정제수', 25.33, 'processed'),
+            ('마가린', 20, 'processed'), ('설탕', 4.44, 'processed'),
+            ('전란액', 2.22, 'processed'),
+        ])
+        scope = self._scope(label)
+        self.assertEqual([i['name'] for i in scope['items']],
+                         ['밀가루', '마가린', '전란액'])
+        self.assertIn('정제수(물)', scope['basis'])
+        self.assertIn('설탕(당류)', scope['basis'])
+
+    def test_한_원료가_98퍼센트_이상이면_그것만(self):
+        label = self._label([('마늘', 99, 'processed'), ('소금', 1, 'processed')])
+        scope = self._scope(label)
+        self.assertEqual([i['name'] for i in scope['items']], ['마늘'])
+        self.assertIn('98%', scope['basis'])
+
+    def test_상위_둘의_합이_98퍼센트_이상이면_둘만(self):
+        label = self._label([('감자', 70, 'processed'), ('고구마', 29, 'processed'),
+                             ('소금', 1, 'processed')])
+        self.assertEqual([i['name'] for i in self._scope(label)['items']],
+                         ['감자', '고구마'])
+
+    def test_식품첨가물은_대상이_아니다(self):
+        label = self._label([('밀가루', 60, 'processed'), ('구연산', 40, 'additive')])
+        scope = self._scope(label)
+        self.assertEqual([i['name'] for i in scope['items']], ['밀가루'])
+        self.assertIn('구연산(식품첨가물)', scope['basis'])
+
+    def test_배합비가_없으면_산정하지_않는다(self):
+        label = self._label([('밀가루', None, 'processed')])
+        self.assertEqual(self._scope(label)['reason'], 'no_ratio')
+
+    # ── 표시 여부 판정 ────────────────────────────────────────────────────
+
+    def _rows(self, label):
+        from v1.label.services.validation_service import check_origin_scope
+        return check_origin_scope(label)
+
+    def test_원산지가_적혀_있으면_조용하다(self):
+        label = self._label(
+            [('밀가루', 60, 'processed'), ('정제수', 39, 'processed'),
+             ('전란액', 1, 'processed')],
+            rawmtrl_nm_display='밀가루(밀/미국산), 정제수, 전란액(계란/국산)')
+        self.assertEqual(self._rows(label), [])
+
+    def test_빠진_원산지를_짚되_확정은_막지_않는다(self):
+        label = self._label(
+            [('밀가루', 60, 'processed'), ('마가린', 39, 'processed')],
+            rawmtrl_nm_display='밀가루(밀/미국산), 마가린')
+        rows = [r for r in self._rows(label) if r['kind'] == 'issue']
+        self.assertEqual(len(rows), 1)
+        self.assertIn('마가린', rows[0]['message'])
+        self.assertTrue(rows[0]['advisory'])
+        self.assertTrue(rows[0]['comparison'])
+
+    def test_문구에서_못_찾으면_못_봤다고_한다(self):
+        """표시명이 원료명과 다르게 적혀 있으면 찾지 못한다 — 위반이 아니다."""
+        from v1.label.services.validation_service import CAUSE_UNREADABLE
+
+        label = self._label(
+            [('밀가루', 60, 'processed'), ('마가린', 39, 'processed')],
+            rawmtrl_nm_display='밀 가공품(밀/미국산), 가공유지/말레이시아산')
+        rows = self._rows(label)
+        self.assertEqual([r['cause'] for r in rows if r['kind'] == 'unchecked'],
+                         [CAUSE_UNREADABLE])
+
+    def test_배합비가_없으면_자료없음이다(self):
+        from v1.label.services.validation_service import CAUSE_NO_DATA
+
+        label = self._label([('밀가루', None, 'processed')],
+                            rawmtrl_nm_display='밀가루')
+        rows = self._rows(label)
+        self.assertEqual([r['cause'] for r in rows], [CAUSE_NO_DATA])
+
+    def test_전체_검증에_들어_있다(self):
+        from v1.label.services.validation_service import _CHECKS
+
+        self.assertIn('check_origin_scope', {c.__name__ for c in _CHECKS})

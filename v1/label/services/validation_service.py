@@ -1291,6 +1291,85 @@ def _ordered_relations(label):
         return []
 
 
+def _origin_shown(segment: str) -> bool:
+    """이 조각에 원산지가 적혀 있는가. "밀/캐나다산", "계란/국산" 꼴을 본다."""
+    if '국산' in segment or '국내산' in segment:
+        return True
+    known = _country_names()
+    for m in _ORIGIN_RE.finditer(segment):
+        word = m.group(1)
+        if word in ('수입', '외국') or (known and word in known):
+            return True
+    # 국가 목록을 못 읽었을 때는 "○○산" 이 있으면 적힌 것으로 본다.
+    # 목록 조회가 어긋난 것을 두고 사용자를 탓하지 않는다.
+    return bool(not known and _ORIGIN_RE.search(segment))
+
+
+def check_origin_scope(label) -> list[dict]:
+    """
+    **원산지를 표시해야 하는 원료**에 원산지가 적혀 있는가.
+
+    지금까지 원산지 검사는 우리 편집기가 넣는 `(원산지 미표시)` 자리표시자가
+    남았는지만 봤다. 순위 산정도 제외 목록도 없었으니, 손으로 쓴 문구에는
+    아무 말도 못 했다.
+
+    범위는 `origin_scope` 가 정한다 — 배합비 3순위, 98% 예외, 물·첨가물·
+    주정·당류 제외. **제외 목록이 결과를 뒤집는다**(그 모듈 주석 참고).
+
+    **확정을 막지 않는다.** 표시 여부는 문구에서 이름을 찾아 그 조각에
+    원산지가 있는지로 보는데, 표시명이 원료명과 다르게 적혀 있으면 못 찾는다.
+    모르는 것과 위반은 다르다.
+    """
+    from v1.label.services.origin_scope import required_origins
+
+    text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip()
+    if not text:
+        return []       # 원재료명이 비었다 — 필수 입력 검사가 할 말이다
+
+    scope = required_origins(label)
+    if scope['reason'] == 'no_ratio':
+        return [_unchecked(
+            'origin_missing', CAUSE_NO_DATA,
+            'BOM 에 배합비가 없어 원산지를 표시해야 할 원료를 가리지 못했습니다.',
+            'BOM 탭에서 원료마다 배합비(%)를 넣으면 3순위까지 자동으로 산정합니다.')]
+    if scope['reason'] != 'ok' or not scope['items']:
+        return []       # 대상이 하나도 없다 (전부 물·첨가물·당류 등)
+
+    segments = _split_top_level(text)
+    missing, unseen = [], []
+    for item in scope['items']:
+        found = [seg for seg in segments if _is_same_item_in(seg, item['name'])]
+        if not found:
+            unseen.append(item['name'])
+        elif not any(_origin_shown(seg) for seg in found):
+            missing.append(item)
+
+    rows = []
+    if missing:
+        names = ', '.join('%s(%g%%)' % (m['name'], m['ratio']) for m in missing)
+        rows.append(_issue(
+            'origin_missing',
+            '원산지를 표시해야 하는 원료에 원산지가 보이지 않습니다: %s. %s'
+            % (names, scope['basis']),
+            '원재료명에 "밀가루(밀/미국산)" 처럼 원료 뒤에 원산지를 적어 주세요. '
+            'BOM 에서 원재료명을 다시 생성하면 등록된 원산지가 함께 들어갑니다.',
+            advisory=True,
+            comparison=[_row('원산지 표시', '%s — 원산지 필요' % m['name'], '없음')
+                        for m in missing]))
+    if unseen:
+        rows.append(_unchecked(
+            'origin_missing', CAUSE_UNREADABLE,
+            '원재료명 문구에서 %s 을(를) 찾지 못해 원산지 표시 여부를 보지 '
+            '못했습니다.' % ', '.join(unseen),
+            '표시명이 BOM 의 원료명과 다르게 적혀 있으면 찾지 못합니다.'))
+    return rows
+
+
+def _is_same_item_in(segment: str, name: str) -> bool:
+    """조각이 그 원료를 가리키는가. 이름이 통째로 들어 있으면 그 원료로 본다."""
+    return _squeeze(name) in _squeeze(segment)
+
+
 def check_additive_display_name(label) -> list[dict]:
     """
     표시명이 비어 있는 식품첨가물이 연결돼 있는지 확인.
@@ -2087,6 +2166,7 @@ _CHECKS = [
     check_allergens,
     check_recycling_mark,
     check_origin_missing,
+    check_origin_scope,
     check_additive_display_name,
     # 판독이 값을 넣기 전에 하던 검사. 손으로 채운 라벨에도 같은 잣대를 댄다.
     check_content_weight_basis,
