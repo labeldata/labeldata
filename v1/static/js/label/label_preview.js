@@ -2069,18 +2069,23 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(res => res.json())
         .then(res => {
             if (res.success) {
-                // 성공 메시지 표시
+                /* 성공 표시는 **단추가 있을 때만.**
+                   탭 안에 끼워져 있으면 이 단추를 빼 두었다(바깥 "저장" 이
+                   이 함수를 부른다). 그때 여기서 textContent 를 읽어 터졌다 —
+                   저장은 됐는데 화면에는 오류만 떴다. */
                 const saveBtn = document.getElementById('saveSettingsBtn');
-                const originalText = saveBtn.textContent;
-                saveBtn.textContent = '저장완료';
-                saveBtn.classList.remove('btn-outline-success');
-                saveBtn.classList.add('btn-success');
-                
-                setTimeout(() => {
-                    saveBtn.textContent = originalText;
-                    saveBtn.classList.remove('btn-success');
-                    saveBtn.classList.add('btn-outline-success');
-                }, 2000);
+                if (saveBtn) {
+                    const originalText = saveBtn.textContent;
+                    saveBtn.textContent = '저장완료';
+                    saveBtn.classList.remove('btn-outline-success');
+                    saveBtn.classList.add('btn-success');
+
+                    setTimeout(() => {
+                        saveBtn.textContent = originalText;
+                        saveBtn.classList.remove('btn-success');
+                        saveBtn.classList.add('btn-outline-success');
+                    }, 2000);
+                }
             } else {
                 alert('미리보기 설정 저장 실패: ' + (res.error || ''));
             }
