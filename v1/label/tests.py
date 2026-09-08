@@ -12610,4 +12610,96 @@ class 내보내기는_제품_헤더에_있다(TestCase):
 
     def test_배율은_미리보기_안에_뜬다(self):
         self.assertIn('.zoom-controls.zoom-floating', self.css)
-        self.assertIn('.preview-container { position: relative; }', self.css)
+        # 자리는 배율은_미리보기_패널_왼쪽_위다 가 지킨다
+        self.assertIn('left: var(--pv-tools-left);', self.css)
+
+
+class 블록_밖에_적은_것은_그려지지_않는다(TestCase):
+    """
+    내보내기 단추가 화면에서 사라졌다.
+
+    다리 노릇 하는 <script> 를 product_detail.html 맨 끝에 붙였는데, 그 파일은
+    base_v2.html 을 extends 하는 **자식 템플릿**이다. 자식 템플릿에서 블록
+    밖에 적은 것은 장고가 **그냥 버린다** — 오류도 안 난다. 그래서 단추는
+    display:none 인 채로 영영 남았다.
+
+    조용히 사라지는 종류의 실수라 파일마다 지킨다.
+    """
+
+    def _children(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        for path in sorted((Path(dj.BASE_DIR) / 'templates').rglob('*.html')):
+            text = path.read_text(encoding='utf-8')
+            if '{% extends' in text:
+                yield path, text
+
+    def test_자식_템플릿은_마지막_endblock_뒤가_비어_있다(self):
+        import re
+
+        for path, text in self._children():
+            at = text.rfind('{% endblock')
+            if at < 0:
+                continue
+            tail = text[text.index('%}', at) + 2:]
+            tail = re.sub(r'{#.*?#}', '', tail, flags=re.S).strip()
+            self.assertEqual(tail, '', '%s: 블록 밖에 남은 것이 그려지지 않는다' % path.name)
+
+    def test_내보내기_다리는_블록_안에_있다(self):
+        for path, text in self._children():
+            if path.name != 'product_detail.html':
+                continue
+            bridge = text.index("getElementById('headerExportWrap')")
+            self.assertLess(bridge, text.rfind('{% endblock'))
+            break
+        else:
+            self.fail('product_detail.html 을 못 찾았다')
+
+
+class 배율은_미리보기_패널_왼쪽_위다(TestCase):
+    """
+    .preview-container 는 왼쪽 설정 패널과 오른쪽 미리보기 패널을 함께 담는
+    <main> 이다. 거기에 left:8px 로 붙였더니 설정 패널의 탭 줄 위에 얹혔다 —
+    미리보기가 아니라 설정 위였다.
+
+    미리보기 패널 안에 넣으면 자리는 맞지만 그 패널이 스크롤 컨테이너라
+    표를 내리면 같이 밀려 사라진다. 컨테이너에 두고 설정 패널 너비만큼 민다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.css = (Path(dj.BASE_DIR) / 'static/css/label_preview.css'
+                    ).read_text(encoding='utf-8')
+
+    def test_설정_패널_너비만큼_밀어_붙인다(self):
+        self.assertIn('--pv-tools-left: 428px;', self.css)
+        self.assertIn('left: var(--pv-tools-left);', self.css)
+
+    def test_컨테이너_왼쪽에_그대로_붙이지_않는다(self):
+        """left:8px 이면 설정 패널의 탭 줄 위다."""
+        head = self.css.index('.zoom-controls.zoom-floating {')
+        block = self.css[head:self.css.index('}', head)]
+        self.assertNotIn('left: 8px', block)
+
+    def test_설정_패널_너비를_따라간다(self):
+        """420px 이 두 곳에 있으면 어느 날 한쪽만 고쳐진다."""
+        import re
+
+        widths = re.findall(r'\.settings-panel \{\s*width: (\d+)px', self.css)
+        self.assertEqual(widths[0], '420')          # 428 = 420 + 8
+        self.assertIn('--pv-tools-left: 358px;', self.css)   # 좁으면 350 + 8
+
+    def test_설정_패널이_없을_때는_왼쪽_끝이다(self):
+        self.assertIn('.readonly-mode .preview-container { --pv-tools-left: 8px; }',
+                      self.css)
+
+    def test_스크롤하는_패널_안에_넣지_않는다(self):
+        """.preview-panel 은 overflow:auto 다 — 안에 두면 표를 내릴 때 사라진다."""
+        html = open('v1/templates/label/label_preview.html', encoding='utf-8').read()
+        zoom = html.index('zoom-controls zoom-floating')
+        self.assertLess(zoom, html.index('<section class="preview-panel">'))
