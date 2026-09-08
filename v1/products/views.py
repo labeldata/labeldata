@@ -615,6 +615,8 @@ def version_stacks(documents):
 @login_required
 def product_detail(request, product_id):
     """제품 상세 보기 - V2 스타일 (BOM, 문서 등록 등)"""
+    from v1.label.services import display_panel
+
     # V2에서는 label_id를 product_id로 받음
     # 먼저 직접 MyLabel 조회 시도 (오너)
     shared_share = None
@@ -1064,6 +1066,13 @@ def product_detail(request, product_id):
         'workflow_steps': _build_workflow_steps(label),
         'preservation_choices': PRESERVATION_CHOICES,
         'processing_choices': PROCESSING_CHOICES,
+        # 포장 **형태** — 재질과 다른 것이다. 주표시면이 어디인지를 정한다.
+        # 목록도 표시면 표도 display_panel 한 곳에서 온다.
+        'package_form_choices': display_panel.form_choices(),
+        'package_form_panels': json.dumps(
+            {key: {'main': form['main'], 'info': form['info']}
+             for key, form in display_panel.PACKAGE_FORMS.items()},
+            ensure_ascii=False),
     }
 
     return render(request, 'products/product_detail.html', context)
@@ -1380,6 +1389,7 @@ def product_update(request, product_id):
         label.country_of_origin = request.POST.get('country_of_origin', label.country_of_origin)
         label.storage_method = request.POST.get('storage_method', label.storage_method)
         label.frmlc_mtrqlt = request.POST.get('frmlc_mtrqlt', label.frmlc_mtrqlt)
+        label.package_form = request.POST.get('package_form', label.package_form)
         label.bssh_nm = request.POST.get('bssh_nm', label.bssh_nm)
         label.pog_daycnt = request.POST.get('pog_daycnt', label.pog_daycnt)
         label.rawmtrl_nm_display = request.POST.get(

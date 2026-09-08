@@ -11654,3 +11654,51 @@ class EmbeddedSaveButtonTests(TestCase):
         self.assertIn('id="saveSettingsBtn"',
                       open('v1/templates/label/label_preview.html',
                            encoding='utf-8').read())
+
+
+class PackageFormScreenTests(TestCase):
+    """
+    포장 형태를 고르는 자리. 칸과 판정은 있었는데 고를 데가 없었다.
+
+    포장 **재질**과 **형태**는 다른 것이다 — 재질은 인쇄되는 값이고, 형태는
+    주표시면이 어디인지를 정한다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='pfs', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user,
+                                            my_label_name='포장', prdlst_nm='제품')
+        self.client.force_login(self.user)
+
+    def test_화면에_고르는_자리가_있다(self):
+        response = self.client.get(
+            reverse('products:product_detail', args=[self.label.my_label_id]))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode('utf-8')
+        self.assertIn('id="field-package-form"', html)
+        self.assertIn('name="package_form"', html)
+        # 다섯 형태가 목록에 있다
+        for name in ('봉지', '용기·병', '상자', '스티커'):
+            self.assertIn(name, html)
+
+    def test_고른_값이_남는다(self):
+        response = self.client.post(
+            reverse('products:product_update', args=[self.label.my_label_id]),
+            {'package_form': 'box'})
+        self.assertIn(response.status_code, (200, 302))
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.package_form, 'box')
+
+    def test_표시면_표가_화면으로_간다(self):
+        """고르면 어느 면인지 그 자리에 적는다 — 왜 고르는지 모르면 아무 값이나 고른다."""
+        response = self.client.get(
+            reverse('products:product_detail', args=[self.label.my_label_id]))
+        html = response.content.decode('utf-8')
+        self.assertIn('package-form-hint', html)
+        self.assertIn('앞면·윗면·뒷면', html)     # 상자의 주표시면
+
+    def test_목록은_한_곳에서_온다(self):
+        from v1.label.services.display_panel import PACKAGE_FORMS, form_choices
+
+        keys = {key for key, _ in form_choices()}
+        self.assertEqual(keys, set(PACKAGE_FORMS))

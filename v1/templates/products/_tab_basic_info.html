@@ -324,6 +324,30 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                            style="flex:1; min-width:80px;">
                 </div>
             </div>
+            <!-- 포장 형태 -->
+            <div class="col-md-6">
+                {% comment %}
+                  포장 **재질**과 **형태**는 다른 것이다. 재질은 인쇄되는 값이고,
+                  형태는 **주표시면이 어디인지**를 정한다 — 봉지는 앞/뒤, 상자는
+                  앞·윗·뒤/양측면. 표시기준의 활자·표시 규정이 거의 전부 그
+                  전제 위에 서 있어서, 이것이 비면 표시면을 따지는 검사가 설
+                  자리가 없다.
+
+                  고르면 그 아래에 어느 면인지 바로 적는다 — 왜 고르는지 모르면
+                  아무 값이나 고른다.
+                {% endcomment %}
+                <label class="form-label v2-field-label" for="field-package-form">포장 형태</label>
+                <select id="field-package-form" name="package_form"
+                        class="form-select bg-light border-0 v2-field-input">
+                    <option value="">선택 안 함</option>
+                    {% for key, name in package_form_choices %}
+                    <option value="{{ key }}"
+                            {% if product.package_form == key %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <div id="package-form-hint" class="form-text text-muted"
+                     style="font-size:11.5px;"></div>
+            </div>
             <!-- 용기포장재질 -->
             <div class="col-md-6">
                 <label class="form-label v2-field-label">용기·포장재질</label>
@@ -1892,4 +1916,23 @@ $(function() {
         autoResizeTextarea(el); // 초기값이 있을 경우 반영
     });
 });
+</script>
+
+<script>
+/* 포장 형태를 고르면 어느 면이 주표시면인지 그 자리에 적는다.
+   왜 고르는지 모르면 아무 값이나 고른다. 표는 서버가 내려준다. */
+(function () {
+    var PANELS = {{ package_form_panels|safe }};
+    var select = document.getElementById('field-package-form');
+    var hint = document.getElementById('package-form-hint');
+    if (!select || !hint) return;
+    function draw() {
+        var found = PANELS[select.value];
+        hint.textContent = found
+            ? '주표시면 ' + found.main + ' / 정보표시면 ' + found.info
+            : '고르면 주표시면·정보표시면이 어디인지 알려 드립니다.';
+    }
+    select.addEventListener('change', draw);
+    draw();
+})();
 </script>
