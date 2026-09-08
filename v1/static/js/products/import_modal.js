@@ -4,9 +4,15 @@
  * 예전에는 입구가 두 탭에 흩어져 있었다. 기본 정보 탭에는 표시사항 사진,
  * 문서함에는 원료 사진. 무엇을 어디서 하는지 보이지 않았다.
  *
- *   상단        품목보고번호로 조회 (OCR 을 거치지 않아 가장 정확하다)
- *   좌측        제품으로 등록 — 기본 정보 탭을 채우고 원재료를 BOM 으로 쪼갠다
- *   우측        원료로 등록   — 사진은 문서함에 남기고 BOM 원료 1건을 만든다
+ * **두 갈래 중 하나를 고르는 창이다.** 예전에는 번호 칸이 위에 붙어 있기만
+ * 해서 사진 올리는 창의 곁다리로 보였고, 번호를 아는 사람도 사진을 올렸다.
+ *
+ *   ① 품목보고번호로   식약처 등록 정보를 그대로 가져온다.
+ *                      **OCR 을 거치지 않아 틀릴 이유가 없고 비용도 없다**
+ *   ② 사진·PDF 로      번호를 모를 때. 좌측은 제품으로, 우측은 원료로 등록
+ *
+ * 수입식품에는 품목제조보고번호가 없다(수입신고번호를 대신 적는다). 그때는
+ * ①이 막다른 길이라 창이 그렇게 말해 준다.
  *
  * 디자인 시안 대조는 여기 없다. 그것은 값을 채우는 일이 아니라 **확정한 값이
  * 시안과 같은지 보는 일**이라, 표시사항 탭에 있다(_tab_label.html). 한 창에
@@ -22,6 +28,19 @@
  */
 (function () {
   'use strict';
+
+  /* 두 갈래를 번호로 가른다. 곁다리로 보이면 번호를 아는 사람도 사진을 올린다. */
+  (function style() {
+    if (document.getElementById('import-way-style')) return;
+    var el = document.createElement('style');
+    el.id = 'import-way-style';
+    el.textContent =
+      '.import-step{display:inline-flex;align-items:center;justify-content:center;'
+      + 'width:20px;height:20px;border-radius:50%;background:#1a73e8;color:#fff;'
+      + 'font-size:11px;font-weight:700;flex-shrink:0;}'
+      + '.import-way-first{background:#f6fbf7;border-color:#c8e6c9 !important;}';
+    document.head.appendChild(el);
+  })();
 
   var lookupFields = null;   // 품목보고번호로 조회한 결과
 
@@ -60,9 +79,9 @@
       + '    <div class="text-muted mb-3" style="font-size:12px; line-height:1.5;">' + desc + '</div>'
       + '    <div class="import-drop border rounded py-4 px-2 mb-2">'
       + '      <i class="bi bi-cloud-arrow-up d-block mb-1" style="font-size:22px; opacity:.5;"></i>'
-      + '      <div class="text-muted" style="font-size:12px;">사진을 끌어다 놓거나 누르세요</div>'
+      + '      <div class="text-muted" style="font-size:12px;">사진·PDF 를 끌어다 놓거나 누르세요</div>'
       + '      <div class="text-primary mt-1" style="font-size:11px;">표시사항 부분만 골라내면 더 정확합니다</div>'
-      + '      <input type="file" accept="image/*" hidden>'
+      + '      <input type="file" accept="image/*,.pdf" hidden>'
       + '    </div>'
       + '    <button type="button" class="btn btn-outline-secondary v2-btn-sm w-100 import-use-lookup" disabled>'
       + '      조회한 품목보고번호로 등록'
@@ -88,17 +107,32 @@
       + '        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>'
       + '      </div>'
       + '      <div class="modal-body">'
-      + '        <div class="border rounded p-3 mb-3">'
-      + '          <label class="form-label fw-semibold" style="font-size:13px;">품목보고번호</label>'
+      + '        <div class="border rounded p-3 mb-3 import-way import-way-first">'
+      + '          <div class="d-flex align-items-center gap-2 mb-2">'
+      + '            <span class="import-step">1</span>'
+      + '            <span class="fw-semibold" style="font-size:13px;">품목보고번호로</span>'
+      + '            <span class="badge bg-success-subtle text-success-emphasis"'
+      + '                  style="font-size:10.5px;">권장 · 정확하고 비용 없음</span>'
+      + '          </div>'
       + '          <div class="d-flex gap-2">'
       + '            <input type="text" class="form-control form-control-sm" id="importReportNo"'
       + '                   placeholder="예: 20220460436160" inputmode="numeric">'
       + '            <button type="button" class="btn btn-primary v2-btn-sm" id="importLookupBtn">조회</button>'
       + '          </div>'
       + '          <div class="text-muted mt-1" style="font-size:11px;">'
-      + '            식약처에 등록된 정보를 그대로 가져옵니다. 사진을 읽는 것보다 정확합니다.'
+      + '            식약처에 등록된 정보를 그대로 가져옵니다. 판독을 거치지 않아'
+      + '            틀릴 이유가 없고, 사진 판독과 달리 비용이 들지 않습니다.'
+      + '          </div>'
+      + '          <div class="text-muted mt-1" style="font-size:11px;">'
+      + '            <i class="bi bi-info-circle me-1"></i>'
+      + '            수입식품에는 품목제조보고번호가 없습니다 — 아래 <b>2</b>로 진행하세요.'
       + '          </div>'
       + '          <div id="importLookupResult" class="mt-2" style="display:none;"></div>'
+      + '        </div>'
+      + '        <div class="d-flex align-items-center gap-2 mb-2">'
+      + '          <span class="import-step">2</span>'
+      + '          <span class="fw-semibold" style="font-size:13px;">사진·PDF 로</span>'
+      + '          <span class="text-muted" style="font-size:11px;">번호를 모를 때</span>'
       + '        </div>'
       + '        <div class="row g-3">'
       + dropZone('product', '제품으로 등록',

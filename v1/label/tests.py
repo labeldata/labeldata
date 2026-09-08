@@ -11948,3 +11948,180 @@ class IngredientNoteSearchTests(TestCase):
     def test_검색_대상_목록에_비고가_있다(self):
         views = open('v1/label/views.py', encoding='utf-8').read()
         self.assertIn("'notes': 'bom_usages__notes'", views)
+
+
+class ImportWayTests(TestCase):
+    """
+    불러오기는 **두 갈래 중 하나를 고르는 창**이다.
+
+    번호 칸이 위에 붙어 있기만 해서 사진 올리는 창의 곁다리로 보였고, 번호를
+    아는 사람도 사진을 올렸다. 번호 조회는 판독을 거치지 않아 틀릴 이유가
+    없고 비용도 없다 — 사진 판독은 한 건에 20~26원이다.
+    """
+
+    def setUp(self):
+        self.js = open('v1/static/js/products/import_modal.js',
+                       encoding='utf-8').read()
+
+    def test_두_갈래에_번호가_붙는다(self):
+        self.assertIn('import-step', self.js)
+        self.assertIn('품목보고번호로', self.js)
+        self.assertIn('사진·PDF 로', self.js)
+
+    def test_번호가_권장으로_보인다(self):
+        self.assertIn('권장 · 정확하고 비용 없음', self.js)
+        self.assertIn('비용이 들지 않습니다', self.js)
+
+    def test_수입식품_안내가_있다(self):
+        """수입식품에는 품목제조보고번호가 없다 — 번호 칸이 막다른 길이 된다."""
+        self.assertIn('수입식품에는 품목제조보고번호가 없습니다', self.js)
+
+    def test_드롭_존이_pdf_도_받는다(self):
+        self.assertIn("accept=\"image/*,.pdf\"", self.js)
+        self.assertNotIn("accept=\"image/*\" hidden", self.js)
+
+
+class NoteFieldTests(TestCase):
+    """
+    비고 한 칸에 여러 값을 넣고도 표로 본다.
+
+    원료마다 챙길 것이 회사마다 달라서, 칸을 만들면 대부분 빈 칸이 되고 안
+    만들면 비고에 몰아 적는다. **저장은 그대로 두고 보여 줄 때만 가른다** —
+    형식을 강요하면 그 형식에 안 맞는 것을 적을 데가 없어진다.
+    """
+
+    def test_이름과_값을_가른다(self):
+        from v1.label.services.note_fields import parse
+
+        fields, left = parse('거래처: 대상㈜ · 규격: 25kg 포대 · 로트: L2409')
+        self.assertEqual(fields, {'거래처': '대상㈜', '규격': '25kg 포대',
+                                  '로트': 'L2409'})
+        self.assertEqual(left, '')
+
+    def test_가르지_못한_말은_버리지_않는다(self):
+        """사람이 적은 것을 우리가 이해 못 했다고 지울 수는 없다."""
+        from v1.label.services.note_fields import parse
+
+        fields, left = parse('거래처: 대상㈜ · 겨울에는 굳음')
+        self.assertEqual(fields, {'거래처': '대상㈜'})
+        self.assertEqual(left, '겨울에는 굳음')
+
+    def test_양식이_아니면_통째로_남는다(self):
+        from v1.label.services.note_fields import parse
+
+        fields, left = parse('그냥 메모입니다')
+        self.assertEqual(fields, {})
+        self.assertEqual(left, '그냥 메모입니다')
+
+    def test_여러_구분자를_받는다(self):
+        from v1.label.services.note_fields import parse
+
+        for text in ('거래처: 대상 | 규격: 25kg',
+                     '거래처: 대상 ; 규격: 25kg',
+                     '거래처: 대상\n규격: 25kg'):
+            self.assertEqual(parse(text)[0], {'거래처': '대상', '규격': '25kg'})
+
+    def test_전각_콜론도_받는다(self):
+        from v1.label.services.note_fields import parse
+
+        self.assertEqual(parse('거래처： 대상')[0], {'거래처': '대상'})
+
+    def test_되돌려_적을_수_있다(self):
+        """엑셀에서 읽어 들일 때 쓴다 — 열이 비고로 갔다가 다시 열로 온다."""
+        from v1.label.services.note_fields import format, parse
+
+        text = format({'거래처': '대상㈜', '규격': '25kg'}, '겨울에는 굳음')
+        fields, left = parse(text)
+        self.assertEqual(fields, {'거래처': '대상㈜', '규격': '25kg'})
+        self.assertEqual(left, '겨울에는 굳음')
+
+    def test_열은_적은_순서를_따른다(self):
+        """가나다순으로 세우지 않는다 — 적은 순서가 그 사람이 보는 순서다."""
+        from v1.label.services.note_fields import columns
+
+        self.assertEqual(
+            columns(['규격: 25kg · 거래처: 대상', '거래처: 샘표 · 로트: L1']),
+            ['규격', '거래처', '로트'])
+
+    def test_표로_그릴_재료를_만든다(self):
+        from v1.label.services.note_fields import table
+
+        got = table(['거래처: 대상 · 남는 말', '규격: 25kg'])
+        self.assertEqual(got['columns'], ['거래처', '규격'])
+        self.assertEqual(got['rows'][0]['거래처'], '대상')
+        self.assertEqual(got['rows'][0]['비고'], '남는 말')
+        self.assertEqual(got['rows'][1]['거래처'], '')
+
+    def test_빈_값은_항목이_아니다(self):
+        from v1.label.services.note_fields import parse
+
+        self.assertEqual(parse('거래처:')[0], {})
+
+
+class ColumnToggleTests(TestCase):
+    """
+    목록의 열이 회사마다 다르게 쓰인다. 안 보는 열이 자리를 차지하면 정작
+    봐야 할 원료명이 좁아진다.
+
+    **필수 열은 끌 수 없다** — 이름까지 끄면 무엇을 보고 있는지 알 수 없다.
+    """
+
+    SPECS = [
+        {'field': 'prdlst_nm', 'label': '원료명'},
+        {'field': 'bssh_nm', 'label': '제조사'},
+        {'field': 'gmo', 'label': 'GMO'},
+        {'field': None, 'label': '작업'},
+    ]
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='cols', password='x')
+
+    def test_끈_열은_빠진다(self):
+        from v1.label.services.list_sort import visible
+
+        fields = [c['field'] for c in visible(self.SPECS, {'gmo'})]
+        self.assertNotIn('gmo', fields)
+        self.assertIn('bssh_nm', fields)
+
+    def test_필수_열은_꺼도_남는다(self):
+        from v1.label.services.list_sort import visible
+
+        fields = [c['field'] for c in visible(self.SPECS, {'prdlst_nm', 'gmo'})]
+        self.assertIn('prdlst_nm', fields)
+
+    def test_정렬_불가_열도_남는다(self):
+        """field 가 없는 열(작업 단추 등)은 끄고 켤 대상이 아니다."""
+        from v1.label.services.list_sort import visible
+
+        self.assertEqual(len(visible(self.SPECS, {'gmo'})), 3)
+
+    def test_계정에_남는다(self):
+        """자리를 옮긴다고 달라지지 않는다 — 브라우저가 아니라 계정이다."""
+        from v1.label.services.list_sort import hidden_for, save_hidden
+
+        save_hidden(self.user, 'ingredient', ['gmo', 'bssh_nm'])
+        self.user.refresh_from_db()
+        self.assertEqual(hidden_for(self.user, 'ingredient'), {'gmo', 'bssh_nm'})
+
+    def test_필수_열은_받아도_무시한다(self):
+        from v1.label.services.list_sort import save_hidden
+
+        got = save_hidden(self.user, 'ingredient', ['prdlst_nm', 'gmo'])
+        self.assertEqual(got, {'gmo'})
+
+    def test_화면마다_따로_기억한다(self):
+        from v1.label.services.list_sort import hidden_for, save_hidden
+
+        save_hidden(self.user, 'ingredient', ['gmo'])
+        save_hidden(self.user, 'label', ['bssh_nm'])
+        self.assertEqual(hidden_for(self.user, 'ingredient'), {'gmo'})
+        self.assertEqual(hidden_for(self.user, 'label'), {'bssh_nm'})
+
+    def test_켜고_끄는_목록을_만든다(self):
+        from v1.label.services.list_sort import toggles
+
+        rows = {t['field']: t for t in toggles(self.SPECS, {'gmo'})}
+        self.assertTrue(rows['prdlst_nm']['essential'])
+        self.assertTrue(rows['bssh_nm']['on'])
+        self.assertFalse(rows['gmo']['on'])
+        self.assertNotIn(None, rows)
