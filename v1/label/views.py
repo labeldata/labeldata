@@ -1172,6 +1172,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
 
 
 
+@login_required
 def ingredient_popup(request):
     label_id = request.GET.get('label_id')
     ingredients_data = []
@@ -1216,6 +1217,7 @@ def ingredient_popup(request):
     return render(request, 'label/ingredient_popup.html', context)
 
 
+@login_required
 def fetch_food_item(request, prdlst_report_no):
     try:
         food_item = FoodItem.objects.get(prdlst_report_no=prdlst_report_no)
@@ -2079,8 +2081,21 @@ def nutrition_calculator_popup(request):
     }
     return render(request, 'label/nutrition_calculator_popup.html', context)
 
+@login_required
 def duplicate_label(request, label_id):
-    original = get_object_or_404(MyLabel, my_label_id=label_id)  
+    """
+    표시사항 복사.
+
+    **로그인도 소유자 확인도 없었다.** 누구나 /label/duplicate/1/, /2/ … 를
+    두드려 남의 표시사항 복사본을 무한히 만들 수 있었다. 복사본은 원본 주인
+    소유로 저장되니 읽어 가지는 못하지만, id 가 있는지 없는지가 새고(있으면
+    돌려보내고 없으면 404) 남의 목록에 쓰레기가 쌓인다.
+
+    내 것만 복사한다. get_object_or_404 에 user 를 함께 걸면 남의 id 는
+    "없다" 와 구분되지 않아서, 있는지 없는지도 새지 않는다.
+    """
+    original = get_object_or_404(MyLabel, my_label_id=label_id,
+                                 user_id=request.user)
     original.pk = None  
     original.my_label_name += " (복사본)"
     original.save()
@@ -2091,13 +2106,30 @@ def duplicate_label(request, label_id):
     
     return redirect('label:label_creation', label_id=original.my_label_id)
 
+@login_required
+@require_POST
 def delete_label(request, label_id):
+    """
+    표시사항 삭제.
+
+    **로그인도 소유자 확인도 없었다.** /label/delete/1/, /2/ … 를 두드리면
+    누구든, 로그인하지 않은 사람까지, 남의 표시사항을 지울 수 있었다.
+    게스트 차단은 request.user.username 을 보는데 익명 사용자는 username 이
+    빈 문자열이라 그 검사도 그냥 지나갔다.
+
+    GET 으로 지우는 것도 그대로 두면 안 된다 — <img src="/label/delete/1/">
+    한 줄이 박힌 페이지를 로그인한 사람이 열기만 해도 지워진다. 지우는 일은
+    POST 로만 받는다.
+    """
     # 게스트 사용자는 삭제 불가
     if request.user.username == 'guest@labeasylabel.com':
         messages.error(request, '게스트 계정은 삭제 기능을 사용할 수 없습니다.')
         return redirect('label:my_label_list')
-        
-    label = get_object_or_404(MyLabel, my_label_id=label_id)
+
+    # 내 것만 지운다. user 를 함께 걸면 남의 id 는 "없다" 와 구분되지 않아서
+    # 있는지 없는지도 새지 않는다.
+    label = get_object_or_404(MyLabel, my_label_id=label_id,
+                              user_id=request.user)
     
     # 표시사항 삭제 로깅
     log_user_activity(request, 'label', 'label_delete', label_id)
@@ -4497,8 +4529,15 @@ def _food_item_list_with_default(request, default_category):
     return food_item_list(request)
 
 
+@login_required
 def food_item_list_domestic(request):
-    """제품 조회 (국내 탭으로 시작)"""
+    """
+    제품 조회 (국내 탭으로 시작).
+
+    안쪽 food_item_list 가 @login_required 라 실제로는 막혀 있었지만,
+    수입 탭(food_item_list_imported)에는 있고 여기에는 없었다. 나란한 둘이
+    다르면 어느 쪽이 맞는지 읽는 사람이 알 수 없다.
+    """
     return _food_item_list_with_default(request, 'domestic')
 
 

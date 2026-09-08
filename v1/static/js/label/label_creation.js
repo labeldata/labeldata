@@ -1,4 +1,4 @@
-// 전역 데이터 초기화
+﻿// 전역 데이터 초기화
 
 // ------------------ OCR 자동 입력 ------------------
 const OCR_FIELD_LABELS = {
@@ -771,7 +771,18 @@ document.addEventListener('DOMContentLoaded', function () {
   window.deleteLabel = function (labelId) {
     if (!labelId) return alert('삭제할 라벨이 없습니다.');
     if (confirm('정말로 이 라벨을 삭제하시겠습니까? 복구할 수 없습니다.')) {
-      window.location.href = `/label/delete/${labelId}/`;
+      /* 지우는 일은 POST 로 보낸다. GET 이면 <img src="/label/delete/1/">
+         한 줄이 박힌 페이지를 열기만 해도 지워진다. */
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `/label/delete/${labelId}/`;
+      const token = document.createElement('input');
+      token.type = 'hidden';
+      token.name = 'csrfmiddlewaretoken';
+      token.value = (typeof getCookie === 'function' ? getCookie('csrftoken') : '') || '';
+      form.appendChild(token);
+      document.body.appendChild(form);
+      form.submit();
     }
   };
 

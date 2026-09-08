@@ -1,4 +1,4 @@
-"""
+﻿"""
 Django settings for config project.
 """
 from pathlib import Path
@@ -398,7 +398,10 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000').split(',')
-CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=True, cast=bool)
+# 기본값이 True 였다. **없으면 열린다**는 뜻이라, 환경변수를 안 넣은 서버는
+# 모든 출처에 API 를 열어 준 채로 돈다. 기본값은 닫힌 쪽이어야 한다 —
+# 열어야 하는 곳에서 명시적으로 켠다.
+CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
 
 # 비회원 키워드 최대 수
 MOBILE_GUEST_MAX_RULES = 5

@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import requests
 import xml.etree.ElementTree as ET
 import time
@@ -304,7 +304,13 @@ def build_defaults(field_mapping, item):
         defaults[model_field_name] = value
     return defaults
 
+@staff_member_required
 def call_api_endpoint(request, pk):
+    """관리자 전용.
+
+    외부 API 를 실제로 호출해 우리 DB 에 적재한다. 아무나 두드리면 남의
+    API 할당량과 우리 DB 를 대신 쓴다 — 인증이 없었다.
+    """
     """API 데이터를 호출하여 저장 (서비스별 매핑 정보를 SERVICE_MAPPING으로 관리)"""
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
     # 플래그가 'Y'일 때만 start_position을 1로 초기화
