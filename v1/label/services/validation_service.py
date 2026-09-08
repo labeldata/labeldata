@@ -1942,6 +1942,82 @@ def check_nutrition_label_scope(label) -> list[dict]:
         '제품제조용 원료처럼 제외 대상이라면 그 문구가 표시사항에 있어야 합니다.')]
 
 
+def _latest_design_document(label):
+    """문서함에 들어온 가장 최근 시안. 없으면 None."""
+    from v1.products.models import ProductDocument
+
+    return (ProductDocument.objects
+            .filter(label=label, active_yn=True,
+                    document_type__type_code__in=('DESIGN_PROOF', 'LABEL_DESIGN'))
+            .select_related('document_type')
+            .order_by('-uploaded_datetime')
+            .first())
+
+
+def check_design_font_size(label) -> list[dict]:
+    """
+    **받은 시안**에 표시기준 하한보다 작은 글자가 있는가.
+
+    `check_font_size` 는 우리 미리보기 표의 설정값(`prv_font_size`) 하나를 본다.
+    우리가 만드는 표에만 걸리고 받은 시안에는 못 건다. 그런데 규정은 인쇄물에
+    대한 것이고, 인쇄되는 것은 시안이다.
+
+    시안 파일이 PDF·PPTX 면 글자마다 크기가 적혀 있다(`design_format`). 밖에서
+    본 시스템은 PPTX 에서 텍스트만 뽑아 이 정보를 버렸고, 그래서 활자·굵기·
+    바탕색을 봐야 하는 항목이 전부 판정 불가가 됐다.
+
+    **확정을 막지 않는다.** 시안에는 인쇄되지 않는 글자(결재란·개정 이력·
+    디자이너 요청사항)가 섞여 들어온다 — 실제 추출 결과에서 그런 것을 봤다.
+    작은 글자 하나로 길을 막으면 그 소음이 곧 벽이 된다.
+    """
+    from v1.label.constants import LABEL_REGULATIONS
+    from v1.label.services import design_format
+
+    document = _latest_design_document(label)
+    if not document:
+        return []       # 시안이 아직 없다. 그건 required_document 가 할 말이다
+
+    name = document.original_filename or ''
+    if not design_format.is_supported(name):
+        return [_unchecked(
+            'font_size', CAUSE_UNREADABLE,
+            '시안 "%s" 은(는) 글자 크기가 적혀 있지 않은 형식이라 인쇄될 활자를 '
+            '보지 못했습니다.' % name,
+            'PDF 나 PPTX 로 받으면 글자마다 크기를 읽어 하한을 검사합니다.')]
+
+    try:
+        runs = design_format.read_runs(document.file.path)
+    except Exception:
+        logger.exception('시안 서식 판독 실패 (document=%s)', document.pk)
+        return [_unchecked(
+            'font_size', CAUSE_UNREADABLE,
+            '시안 "%s" 을(를) 열지 못해 인쇄될 활자 크기를 보지 못했습니다.' % name)]
+
+    tiniest = design_format.smallest(runs)
+    if tiniest is None:
+        return [_unchecked(
+            'font_size', CAUSE_UNREADABLE,
+            '시안 "%s" 에서 글자 크기를 읽어내지 못했습니다.' % name,
+            '글자가 이미지로 들어 있으면 크기를 알 수 없습니다.')]
+
+    minimum = LABEL_REGULATIONS['font_size']['general']['min']
+    if tiniest['size_pt'] >= minimum:
+        return []
+
+    where = '%s쪽' % tiniest['page'] if tiniest.get('page') else ''
+    snippet = (tiniest['text'] or '').strip()[:20]
+    return [_issue(
+        'font_size',
+        '시안에 표시기준 하한(%g 포인트)보다 작은 글자가 있습니다 — '
+        '%g 포인트 "%s"%s.' % (minimum, tiniest['size_pt'], snippet,
+                               (' (' + where + ')') if where else ''),
+        '인쇄되지 않는 글자(결재란·개정 이력·요청사항)라면 시안에서 빼고 다시 '
+        '올려 주세요. 인쇄되는 글자라면 %g 포인트 이상으로 키워야 합니다.' % minimum,
+        advisory=True,
+        comparison=[_row('시안의 가장 작은 글자', '%g pt 이상' % minimum,
+                         '%g pt' % tiniest['size_pt'])])]
+
+
 def check_required_documents(label) -> list[dict]:
     """
     판정의 근거가 되는 문서가 문서함에 들어와 있는가.
@@ -2024,6 +2100,8 @@ _CHECKS = [
     check_thawing_method,
     check_exchange_notice,
     check_origin_emphasis,
+    # 받은 시안을 직접 읽는 검사
+    check_design_font_size,
     # 지적이 아니라 "못 봤다" 만 내는 검사들
     check_nutrition_label_scope,
     check_required_documents,

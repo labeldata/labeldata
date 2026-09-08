@@ -10928,3 +10928,156 @@ class ComparisonRowTests(TestCase):
         for column in ('대조 항목', '기준값', '추출값', '판정'):
             self.assertIn(column, block)
         self.assertIn('validationComparisonHtml(row.comparison)', js)
+
+
+class DesignFormatReaderTests(TestCase):
+    """
+    시안 파일에서 글자 크기를 읽는다. **새 의존성 없이** 읽는다 —
+    PDF 는 PyMuPDF(이미 쓰고 있다), PPTX 는 표준 라이브러리로 zip 안의 XML 을 연다.
+    """
+
+    def _pptx(self, runs):
+        """가장 작은 PPTX 한 장. runs 는 (글자, sz 1/100pt, 굵기)."""
+        import io as _io
+        import zipfile
+
+        body = ''.join(
+            '<a:p><a:r><a:rPr lang="ko-KR" sz="%d"%s/><a:t>%s</a:t></a:r></a:p>'
+            % (sz, ' b="1"' if bold else '', text)
+            for text, sz, bold in runs)
+        slide = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+            ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            '<p:cSld><p:spTree><p:sp><p:txBody>%s</p:txBody></p:sp></p:spTree></p:cSld>'
+            '</p:sld>' % body)
+        buf = _io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as z:
+            z.writestr('ppt/slides/slide1.xml', slide)
+        return buf.getvalue()
+
+    def test_pptx_에서_크기와_굵기를_읽는다(self):
+        import tempfile
+
+        from v1.label.services import design_format
+
+        with tempfile.NamedTemporaryFile(suffix='.pptx', delete=False) as fp:
+            fp.write(self._pptx([('프랑스 붕어빵', 2200, True), ('원재료명', 700, False)]))
+            path = fp.name
+        runs = design_format.read_runs(path)
+        self.assertEqual([r['size_pt'] for r in runs], [22.0, 7.0])
+        # b 속성이 없으면 문단·마스터에서 물려받은 것이다. 모르는 것을
+        # False 로 적으면 "굵지 않다" 고 단정하게 된다.
+        self.assertEqual([r['bold'] for r in runs], [True, None])
+        self.assertEqual(design_format.smallest(runs)['size_pt'], 7.0)
+
+    def test_pdf_에서도_읽는다(self):
+        import tempfile
+
+        import pymupdf
+
+        from v1.label.services import design_format
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), 'PRODUCT', fontsize=22)
+        page.insert_text((72, 120), 'ingredients', fontsize=7)
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as fp:
+            path = fp.name
+        doc.save(path)
+        doc.close()
+
+        runs = design_format.read_runs(path)
+        self.assertTrue(runs)
+        self.assertEqual(round(design_format.smallest(runs)['size_pt']), 7)
+
+    def test_모르는_형식은_예외다(self):
+        """못 읽은 것과 글자가 없는 것은 다르다. 조용히 빈 목록을 주지 않는다."""
+        from v1.label.services import design_format
+
+        self.assertFalse(design_format.is_supported('시안.jpg'))
+        with self.assertRaises(ValueError):
+            design_format.read_runs('시안.jpg')
+
+    def test_크기를_모르는_조각은_세지_않는다(self):
+        """마스터에서 물려받은 크기를 0 으로 적으면 없는 위반을 만든다."""
+        from v1.label.services.design_format import smallest
+
+        self.assertIsNone(smallest([{'text': 'a', 'size_pt': None}]))
+        self.assertEqual(
+            smallest([{'text': 'a', 'size_pt': 0.2}, {'text': 'b', 'size_pt': 9}])['size_pt'],
+            9)
+
+
+class DesignFontSizeCheckTests(TestCase):
+    """
+    받은 시안의 활자를 직접 본다. 지금까지 활자 검사는 우리 미리보기 표
+    설정값만 봤다 — 우리가 만든 표에만 걸리고 시안에는 못 걸었다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(username='dfs', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='시안')
+        self.doc_type, _ = DocumentType.objects.get_or_create(
+            type_code='DESIGN_PROOF', defaults={'type_name': '포장지 시안'})
+
+    def _attach(self, filename, content=b'x'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from v1.products.models import ProductDocument
+
+        return ProductDocument.objects.create(
+            label=self.label, document_type=self.doc_type,
+            file=SimpleUploadedFile(filename, content),
+            original_filename=filename)
+
+    def _rows(self):
+        from v1.label.services.validation_service import check_design_font_size
+        return check_design_font_size(self.label)
+
+    def test_시안이_없으면_아무_말도_안_한다(self):
+        self.assertEqual(self._rows(), [])
+
+    def test_읽을_수_없는_형식이면_못_봤다고_한다(self):
+        from v1.label.services.validation_service import CAUSE_UNREADABLE
+
+        self._attach('시안.jpg')
+        rows = self._rows()
+        self.assertEqual([r['cause'] for r in rows], [CAUSE_UNREADABLE])
+
+    def test_작은_글자를_짚되_확정은_막지_않는다(self):
+        """시안에는 인쇄되지 않는 글자(결재란·요청사항)가 섞여 들어온다."""
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), 'tiny notice', fontsize=6)
+        content = doc.tobytes()
+        doc.close()
+
+        self._attach('시안.pdf', content)
+        rows = self._rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['kind'], 'issue')
+        self.assertTrue(rows[0]['advisory'])
+        self.assertIn('10 포인트', rows[0]['message'])
+        self.assertTrue(rows[0]['comparison'])
+
+    def test_하한_이상이면_조용하다(self):
+        import pymupdf
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), 'big enough', fontsize=12)
+        content = doc.tobytes()
+        doc.close()
+
+        self._attach('시안.pdf', content)
+        self.assertEqual(self._rows(), [])
+
+    def test_전체_검증에_들어_있다(self):
+        from v1.label.services.validation_service import _CHECKS
+
+        self.assertIn('check_design_font_size', {c.__name__ for c in _CHECKS})
