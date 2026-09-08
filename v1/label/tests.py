@@ -11195,3 +11195,71 @@ class OriginScopeTests(TestCase):
         from v1.label.services.validation_service import _CHECKS
 
         self.assertIn('check_origin_scope', {c.__name__ for c in _CHECKS})
+
+
+class OriginRuleParityTests(TestCase):
+    """
+    **미리보기가 굵게 칠하는 규칙과 검사가 원산지로 알아보는 규칙은 하나여야 한다.**
+
+    미리보기(boldCountryNames)는 `국가명(\s*산)?` 을 칠한다 — "산" 이 붙어도
+    되고 안 붙어도 된다. 처음 원산지 범위 검사를 쓸 때는 "○○산" 형태만 봐서,
+    "밀가루(밀/캐나다, 미국)" 이 화면에서는 굵게 칠해지는데 검사는 "원산지가
+    없다" 고 짚었다. 한 화면 안에서 두 규칙이 서로 다른 말을 한 것이다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        from v1.label.models import CountryList
+
+        for index, name in enumerate(['미국', '캐나다', '네덜란드', '영국']):
+            CountryList.objects.create(country_name_ko=name,
+                                       country_code2='X%d' % index)
+        cache.clear()
+
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_산이_붙어도_안_붙어도_원산지다(self):
+        from v1.label.services.validation_service import _origin_shown
+
+        for segment in ('밀가루(밀/캐나다산, 미국산)',
+                        '밀가루(밀/캐나다, 미국)',
+                        '혼합분유(네덜란드)',
+                        '전란액(계란/국산)'):
+            self.assertTrue(_origin_shown(segment), segment)
+
+    def test_원산지가_없으면_없다고_한다(self):
+        from v1.label.services.validation_service import _origin_shown
+
+        self.assertFalse(_origin_shown('정제소금'))
+        self.assertFalse(_origin_shown('마가린'))
+
+    def test_긴_이름을_먼저_본다(self):
+        """"영국" 이 "국" 에 먹히면 안 된다 — 미리보기도 길이순으로 본다."""
+        from v1.label.services.validation_service import _origin_shown
+
+        self.assertTrue(_origin_shown('소고기/영국산'))
+
+    def test_화면_규칙이_그대로인지_본다(self):
+        """
+        미리보기 쪽 정규식이 바뀌면 이 시험이 깨진다. 그때 서버 쪽도 함께
+        고쳐야 한다 — 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+        """
+        html = open('v1/templates/label/label_preview.html', encoding='utf-8').read()
+        self.assertIn('(?<![가-힣])', html)   # 앞에 한글이 오면 안 된다
+        self.assertIn('s*산)?', html)         # "산" 은 붙어도 안 붙어도 된다
+        self.assertIn('(?![가-힣])', html)    # 뒤에 한글이 오면 안 된다
+
+    def test_미리보기_함수가_두_벌이다(self):
+        """
+        `boldCountryNames` 가 템플릿과 home_demo.js 에 각각 있다. 지금은 규칙이
+        같지만 한쪽만 고쳐질 수 있다 — 그때 이 시험이 알려 준다.
+        """
+        html = open('v1/templates/label/label_preview.html', encoding='utf-8').read()
+        demo = open('v1/static/js/home_demo.js', encoding='utf-8').read()
+        for source, where in ((html, '미리보기 템플릿'), (demo, 'home_demo.js')):
+            self.assertIn('${escapedCountry}(', source, where)
+            self.assertIn('s*산)?', source, where + ' 의 규칙이 갈렸다')
+            self.assertIn('(?<![가-힣])', source, where)

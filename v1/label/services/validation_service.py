@@ -32,6 +32,7 @@ check_ingredient_order_by_ratio 가 DB 의 배합비와 대조해 본다(운영�
 import logging
 import math
 import re
+from functools import lru_cache
 
 from django.core.cache import cache
 
@@ -1291,18 +1292,49 @@ def _ordered_relations(label):
         return []
 
 
+# 원산지를 알아보는 자.
+#
+# **미리보기가 굵게 칠하는 규칙과 같아야 한다.** 미리보기(boldCountryNames)는
+# 국가명을 찾아 굵게 칠하는데, "산" 은 **붙어도 되고 안 붙어도 된다** —
+# `(?<![가-힣])(국가명(\s*산)?)(?![가-힣])`. 그래서 "밀가루(밀/캐나다, 미국)"
+# 도 칠해진다.
+#
+# 처음 이 검사를 쓸 때 "○○산" 형태만 봤다. 그러면 미리보기는 원산지로 알아보고
+# 칠하는데 검사는 "원산지가 없다" 고 짚는다 — **한 화면 안에서 두 규칙이 서로
+# 다른 말을 한다.** 굵게 칠해진 글자를 보면서 "원산지를 적으세요" 를 읽게 된다.
+#
+# 규칙을 하나로 맞춘다. 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+_ORIGIN_BARE = ('국산', '국내산', '수입산', '외국산')
+
+
+@lru_cache(maxsize=4)
+def _country_pattern(names: frozenset):
+    """국가명 하나짜리 정규식. 긴 이름부터 봐야 "영국" 이 "국" 에 먹히지 않는다."""
+    ordered = sorted((n for n in names if n), key=len, reverse=True)
+    if not ordered:
+        return None
+    return re.compile(r'(?<![가-힣])(?:%s)(?:\s*산)?(?![가-힣])'
+                      % '|'.join(re.escape(n) for n in ordered))
+
+
 def _origin_shown(segment: str) -> bool:
-    """이 조각에 원산지가 적혀 있는가. "밀/캐나다산", "계란/국산" 꼴을 본다."""
-    if '국산' in segment or '국내산' in segment:
+    """
+    이 조각에 원산지가 적혀 있는가.
+
+    "밀/캐나다산" 도 "밀/캐나다" 도 원산지다 — 미리보기가 둘 다 칠한다.
+    """
+    if any(word in segment for word in _ORIGIN_BARE):
         return True
+
     known = _country_names()
-    for m in _ORIGIN_RE.finditer(segment):
-        word = m.group(1)
-        if word in ('수입', '외국') or (known and word in known):
-            return True
+    if known:
+        pattern = _country_pattern(frozenset(known))
+        return bool(pattern and pattern.search(segment))
+
     # 국가 목록을 못 읽었을 때는 "○○산" 이 있으면 적힌 것으로 본다.
     # 목록 조회가 어긋난 것을 두고 사용자를 탓하지 않는다.
-    return bool(not known and _ORIGIN_RE.search(segment))
+    m = _ORIGIN_RE.search(segment)
+    return bool(m and m.group(1) not in _NOT_A_COUNTRY)
 
 
 def check_origin_scope(label) -> list[dict]:
