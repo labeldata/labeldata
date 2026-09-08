@@ -356,6 +356,8 @@ def api_load_from_label(request, label_id):
 @login_required
 def bom_data_api(request, label_id):
     """BOM Data API for Handsontable (오너 + 공유 사용자 접근 가능)"""
+    from v1.label.services import note_fields
+
     label, is_owner, can_edit = _resolve_label_and_permission(request, label_id)
     if label is None:
         return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
@@ -415,6 +417,11 @@ def bom_data_api(request, label_id):
             'manufacturer': bom.manufacturer or '',
             'source_label_id': bom.source_ingredient_id,
             'notes': bom.notes or '',
+            # 비고에 담긴 항목을 갈라서 함께 준다. 붙여넣기가 자리 없는 열을
+            # 이름 달아 비고에 모으는데(sheet_paste.js), 표에서는 한 칸에
+            # 뭉쳐 있어 훑을 수가 없었다. **가르는 규칙은 서버에 하나뿐이다** —
+            # 화면이 따로 가르면 어느 날 한쪽만 고쳐진다.
+            'note_fields': note_fields.parse(bom.notes or '')[0],
             'summary_type': bom.summary_type or '\uc2dd\ud488\uc720\ud615',
             'level': bom.level,
             'sort_order': bom.sort_order,
@@ -424,9 +431,13 @@ def bom_data_api(request, label_id):
             'usage_unit': bom.usage_unit or 'g',
         })
     
+    # 이 표에 나온 비고 항목 이름들. 화면이 이것으로 칸을 세운다.
+    note_columns = note_fields.columns([row['notes'] for row in data])
+
     return JsonResponse({
         'success': True,
         'data': data,
+        'note_columns': note_columns,
         'label_id': label_id,
         'product_name': label.my_label_name or label.prdlst_nm,
         'can_edit': can_edit,

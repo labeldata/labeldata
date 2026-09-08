@@ -12321,3 +12321,68 @@ class BomColumnPickerTests(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(grid_widths(self.user, 'bom_grid'), {'원료명': 200})
         self.assertEqual(grid_hidden(self.user, 'bom_grid'), ['GMO'])
+
+
+class BomNoteColumnTests(TestCase):
+    """
+    BOM 표가 비고에 담긴 항목을 칸으로 세운다.
+
+    붙여넣기가 자리 없는 열을 이름 달아 비고에 모으는데(sheet_paste.js),
+    표에서는 한 칸에 뭉쳐 있어 훑을 수가 없었다.
+
+        "품목제조보고서 원재료 기타설명: HS 백앙금 · ERP 원재료: … · 원료코드: …"
+    """
+
+    NOTE = ('품목제조보고서 원재료 기타설명: HS 백앙금 · '
+            'ERP 원재료: HS백앙금,살균,가열,앙금,중국 · '
+            '원료코드: 411208 · 품보비율 (%): 41.958')
+
+    def setUp(self):
+        from v1.bom.models import ProductBOM
+
+        self.user = User.objects.create_user(username='bnote', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='완제품')
+        ProductBOM.objects.create(parent_label=self.label,
+                                  ingredient_name='백앙금',
+                                  usage_ratio=41.958, notes=self.NOTE)
+
+    def _data(self):
+        response = self.client.get(
+            reverse('bom:bom_data_api', args=[self.label.my_label_id]))
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_서버가_비고를_갈라_준다(self):
+        row = self._data()['data'][0]
+        fields = row['note_fields']
+        self.assertEqual(fields['ERP 원재료'], 'HS백앙금,살균,가열,앙금,중국')
+        self.assertEqual(fields['원료코드'], '411208')
+        self.assertEqual(fields['품보비율 (%)'], '41.958')
+
+    def test_칸_이름을_함께_준다(self):
+        """화면이 이것으로 칸을 세운다. 가르는 규칙은 서버에 하나뿐이다."""
+        names = self._data()['note_columns']
+        self.assertIn('ERP 원재료', names)
+        self.assertIn('원료코드', names)
+        # 적힌 순서를 따른다
+        self.assertLess(names.index('ERP 원재료'), names.index('원료코드'))
+
+    def test_비고_원문도_그대로_준다(self):
+        """고칠 때는 비고에서 고친다 — 갈라 놓은 칸은 읽기 전용이다."""
+        self.assertEqual(self._data()['data'][0]['notes'], self.NOTE)
+
+    def test_비고가_없으면_칸도_없다(self):
+        from v1.bom.models import ProductBOM
+
+        ProductBOM.objects.all().update(notes='')
+        self.assertEqual(self._data()['note_columns'], [])
+
+    def test_화면이_그_칸을_세운다(self):
+        html = open('v1/templates/products/bom_detail.html', encoding='utf-8').read()
+        self.assertIn('function applyNoteColumns', html)
+        self.assertIn('applyNoteColumns(result.note_columns', html)
+        # 읽기 전용 — 값은 비고 한 칸에 저장된다
+        self.assertIn('readOnly: true', html)
+        # 고르는 자리에도 나온다
+        self.assertIn('NOTE_COLUMN_NAMES', html)

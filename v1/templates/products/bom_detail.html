@@ -548,13 +548,34 @@ body.in-iframe .bom-page-header { display: none !important; }
         function (name) { return BOM_FIXED_HEADERS.indexOf(name) < 0; });
     const SHOWN_HEADERS = BOM_SHEET_HEADERS.filter(
         function (name) { return BOM_HIDDEN.indexOf(name) < 0; });
+    /* 비고에서 나온 칸을 표에 세운다.
+       고정 칸 뒤에 붙이고, 감춰 둔 것은 뺀다. 이름은 서버가 준다 —
+       가르는 규칙이 서버에 하나뿐이라야 어느 날 한쪽만 고쳐지지 않는다. */
+    let NOTE_COLUMNS = [];
+    function applyNoteColumns(names) {
+        window.NOTE_COLUMN_NAMES = names || [];
+        NOTE_COLUMNS = (names || []).filter(function (name) {
+            return BOM_HIDDEN.indexOf(name) < 0;
+        });
+        if (!NOTE_COLUMNS.length) return;
+        hot.updateSettings({
+            colHeaders: SHOWN_HEADERS.concat(NOTE_COLUMNS),
+            columns: SHOWN_COLUMNS.concat(NOTE_COLUMNS.map(function (name) {
+                return { data: 'note:' + name, editor: false, readOnly: true,
+                         className: 'bom-note-cell' };
+            }))
+        });
+        wireColumnPicker();          // 새로 생긴 칸도 고를 수 있게
+    }
+
     /* 칸 고르기. 켜고 끄면 계정에 남기고 화면을 다시 그린다(새로고침).
        Handsontable 은 칸 구성을 바꾸면 편집 상태가 얽히므로, 저장하고 다시
        여는 편이 안전하다 — 자주 하는 일이 아니다. */
     function wireColumnPicker() {
         const box = document.getElementById('bom-col-picker');
         if (!box) return;
-        box.innerHTML = BOM_SHEET_HEADERS.map(function (name) {
+        box.innerHTML = BOM_SHEET_HEADERS.concat(
+                (window.NOTE_COLUMN_NAMES || [])).map(function (name) {
             const fixed = BOM_FIXED_HEADERS.indexOf(name) >= 0;
             const on = BOM_HIDDEN.indexOf(name) < 0;
             return '<label class="dropdown-item d-flex gap-2 align-items-center'
@@ -1510,6 +1531,11 @@ body.in-iframe .bom-page-header { display: none !important; }
                     report_no: item.report_no || '',
                     notes: item.notes || ''
                 };
+                /* 비고를 갈라 놓은 값(서버가 준다). 칸 이름 앞에 note: 를
+                   붙여 고정 칸과 섞이지 않게 한다. */
+                Object.keys(item.note_fields || {}).forEach(function (name) {
+                    rowData['note:' + name] = item.note_fields[name];
+                });
                 
                 // 메타데이터를 rowMetadata Map에 저장
                 rowMetadata.set(idx, {
@@ -1542,6 +1568,10 @@ body.in-iframe .bom-page-header { display: none !important; }
             } else {
                 hot.loadData(data);
             }
+            /* 비고에 담긴 항목을 칸으로 세운다.
+               **읽기 전용이다** — 값은 비고 한 칸에 저장되므로, 여기서 고치면
+               되돌려 적는 규칙이 하나 더 생긴다. 고칠 때는 비고에서 고친다. */
+            applyNoteColumns(result.note_columns || []);
             hot.render();
             syncSheetSummaryType();
             calculateTotal();  // 내부에서 generateBomSummary 호출
