@@ -3480,16 +3480,33 @@ function vrUncheckedHtml(unchecked) {
     const esc = (str) => String(str == null ? '' : str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const systemFailure = unchecked.some(u => u.system_failure);
+
+    /* 손댈 것이 있는 줄만 펼친다.
+       "미대상" 은 이 제품에 그 검사가 해당하지 않는다는 말이라 **정상**이고,
+       사용자가 할 일이 없다. 표를 안 그린 라벨이면 그런 줄이 매번 셋씩 뜨는데
+       그것이 곧 소음이다 — 진짜 봐야 할 "자료없음" 이 그 안에 묻힌다.
+       건수는 남긴다. 무엇이 안 돌았는지는 알아야 하니까. */
+    const actionable = unchecked.filter(u => u.cause !== '미대상');
+    const skipped = unchecked.length - actionable.length;
+    if (!actionable.length && !systemFailure) {
+        return `<div class="alert alert-secondary py-2 px-3 mb-3 vr-unchecked">
+                    <span class="text-muted">이 제품에 해당하지 않아 보지 않은 항목 ${skipped}건</span>
+                </div>`;
+    }
+
     /* 왜 못 봤는지를 이름 옆에 둔다. "자료없음" 과 "값불명" 은 할 일이 다르다 —
        하나는 서류를 받아 오는 것이고 하나는 적은 값을 고치는 것이다. */
-    const rows = unchecked.map(function (u) {
+    const rows = actionable.map(function (u) {
         const cause = u.cause ? ` <span class="badge bg-secondary">${esc(u.cause)}</span>` : '';
         return `<li><strong>${esc(u.label)}</strong>${cause} — ${esc(u.message)}</li>`;
     }).join('');
+    const tail = skipped
+        ? `<div class="small text-muted mt-1">이 제품에 해당하지 않아 보지 않은 항목 ${skipped}건은 접었습니다.</div>`
+        : '';
     return `<div class="alert ${systemFailure ? 'alert-warning' : 'alert-secondary'} py-2 px-3 mb-3 vr-unchecked">
-                <div class="mb-1"><strong>확인하지 못한 항목 ${unchecked.length}건</strong>
+                <div class="mb-1"><strong>확인하지 못한 항목 ${actionable.length}건</strong>
                 ${systemFailure ? '<span class="badge bg-warning text-dark ms-1">사용 횟수는 차감되지 않았습니다</span>' : ''}
-                </div><ul class="mb-0 ps-3">${rows}</ul>
+                </div><ul class="mb-0 ps-3">${rows}</ul>${tail}
             </div>`;
 }
 

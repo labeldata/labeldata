@@ -8036,7 +8036,8 @@ class ValidationResultLayoutTests(TestCase):
         """규정 도구에서 "확인 안 됨" 이 "적합" 처럼 보이는 건 가장 나쁜 실패다."""
         self.assertIn('function vrUncheckedHtml', self.js)
         head = self.js.index('function vrUncheckedHtml')
-        self.assertIn('확인하지 못한 항목', self.js[head:head + 800])
+        # 창이 좁으면 함수가 길어질 때마다 시험이 깨진다 — 보는 것은 그 함수다
+        self.assertIn('확인하지 못한 항목', self.js[head:head + 2400])
 
 class AiValidationHiddenTests(TestCase):
     """
@@ -10744,3 +10745,33 @@ class AdKeywordTests(TestCase):
             lengths = [max((len(w) for w in row['match']), default=0)
                        for row in graded[grade]]
             self.assertEqual(lengths, sorted(lengths, reverse=True))
+
+
+class UncheckedNoiseTests(TestCase):
+    """
+    "미대상" 은 정상이지 할 일이 아니다.
+
+    표를 안 그린 라벨이면 미대상 줄이 매번 셋씩 뜬다. 그것이 곧 소음이고,
+    진짜 봐야 할 "자료없음" 이 그 안에 묻힌다. 데이터는 그대로 두고 화면에서
+    접는다 — 무엇이 안 돌았는지는 건수로 남긴다.
+    """
+
+    def setUp(self):
+        self.js = open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
+
+    def test_미대상은_펼치지_않는다(self):
+        head = self.js.index('function vrUncheckedHtml')
+        block = self.js[head:head + 2200]
+        self.assertIn("u.cause !== '미대상'", block)
+        self.assertIn('해당하지 않아 보지 않은 항목', block)
+
+    def test_서버는_미대상도_그대로_준다(self):
+        """화면이 접는 것과 서버가 안 내는 것은 다르다 — 기록은 남아야 한다."""
+        from v1.label.services.validation_service import validate_label
+
+        user = User.objects.create_user(username='noise', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='소음',
+                                       content_weight='300 g')
+        causes = {u['cause'] for u in validate_label(label)['unchecked']}
+        self.assertIn('미대상', causes)
+
