@@ -2129,6 +2129,83 @@ def check_design_font_size(label) -> list[dict]:
                          '%g pt' % tiniest['size_pt'])])]
 
 
+def check_design_name_font(label) -> list[dict]:
+    """
+    제품명의 일부로 쓴 원재료명·함량이 **제품명 크기에 맞는 활자**인가.
+
+    표시기준은 이 하한을 제품명 크기로 가른다 — 제품명이 22pt 이상이면 14pt,
+    미만이면 7pt. **조건부 규칙이라 우리 LABEL_REGULATIONS 에 없었고**, 밖에서
+    본 시스템도 "주표시면 판독에서 활자를 잡지 못했다 — 육안 확인 대상" 으로
+    넘겼다.
+
+    시안을 읽을 수 있으면(`design_format`) 두 크기를 다 알 수 있다. 제품명
+    글자를 찾아 그 크기를 재고, 특정성분 문구의 글자와 견준다.
+
+    **확정을 막지 않는다.** 시안에서 어느 글자가 제품명인지는 글자 대조로
+    짚는 것이라 확신이 그만큼이다.
+    """
+    from v1.label.services import design_format, display_panel
+
+    named = (getattr(label, 'ingredient_info', '') or '').strip()
+    product = (label.prdlst_nm or '').strip()
+    if not named or not product:
+        return []       # 제품명에 원재료를 쓰지 않았다 — 이 규칙의 대상이 아니다
+
+    document = _latest_design_document(label)
+    if not document or not design_format.is_supported(
+            document.original_filename or ''):
+        return []       # 시안이 없거나 못 읽는 형식 — check_design_font_size 가 말한다
+
+    try:
+        runs = design_format.read_runs(document.file.path)
+    except Exception:
+        logger.exception('시안 활자 대조 실패 (document=%s)', document.pk)
+        return []       # 같은 사유를 두 번 말하지 않는다
+
+    def _sized(needle):
+        key = _squeeze(needle)
+        return [r for r in runs
+                if r.get('size_pt') and key and key in _squeeze(r.get('text') or '')]
+
+    name_runs = _sized(product)
+    named_runs = _sized(named)
+    if not name_runs:
+        return [_unchecked(
+            'font_size', CAUSE_UNREADABLE,
+            '시안에서 제품명 "%s" 을(를) 찾지 못해 원재료명 활자 하한을 '
+            '정하지 못했습니다.' % product,
+            '제품명이 이미지로 들어 있거나 글자가 나뉘어 있으면 찾지 못합니다.')]
+    if not named_runs:
+        return [_unchecked(
+            'font_size', CAUSE_UNREADABLE,
+            '시안에서 특정성분 문구 "%s" 을(를) 찾지 못해 활자 크기를 보지 '
+            '못했습니다.' % named[:20])]
+
+    name_pt = max(r['size_pt'] for r in name_runs)
+    minimum = display_panel.named_ingredient_min(name_pt)
+    worst = min(named_runs, key=lambda r: r['size_pt'])
+    if worst['size_pt'] >= minimum:
+        return []
+
+    return [_issue(
+        'font_size',
+        '제품명에 쓴 원재료명·함량의 활자가 작습니다 — 제품명이 %g pt 라 '
+        '%g pt 이상이어야 하는데 %g pt 입니다.'
+        % (name_pt, minimum, worst['size_pt']),
+        '표시기준은 이 하한을 제품명 크기로 가릅니다 — 제품명이 %g pt 이상이면 '
+        '%g pt, 미만이면 %g pt 입니다.'
+        % (display_panel.NAME_FONT_PIVOT,
+           display_panel.NAMED_INGREDIENT_MIN_LARGE,
+           display_panel.NAMED_INGREDIENT_MIN_SMALL),
+        advisory=True,
+        comparison=[
+            _row('제품명 활자', '기준점 %g pt' % display_panel.NAME_FONT_PIVOT,
+                 '%g pt' % name_pt, VERDICT_OK),
+            _row('원재료명·함량 활자', '%g pt 이상' % minimum,
+                 '%g pt' % worst['size_pt']),
+        ])]
+
+
 def check_required_documents(label) -> list[dict]:
     """
     판정의 근거가 되는 문서가 문서함에 들어와 있는가.
@@ -2214,6 +2291,7 @@ _CHECKS = [
     check_origin_emphasis,
     # 받은 시안을 직접 읽는 검사
     check_design_font_size,
+    check_design_name_font,
     # 지적이 아니라 "못 봤다" 만 내는 검사들
     check_nutrition_label_scope,
     check_required_documents,

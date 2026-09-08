@@ -11198,7 +11198,7 @@ class OriginScopeTests(TestCase):
 
 
 class OriginRuleParityTests(TestCase):
-    """
+    r"""
     **미리보기가 굵게 칠하는 규칙과 검사가 원산지로 알아보는 규칙은 하나여야 한다.**
 
     미리보기(boldCountryNames)는 `국가명(\s*산)?` 을 칠한다 — "산" 이 붙어도
@@ -11263,3 +11263,130 @@ class OriginRuleParityTests(TestCase):
             self.assertIn('${escapedCountry}(', source, where)
             self.assertIn('s*산)?', source, where + ' 의 규칙이 갈렸다')
             self.assertIn('(?<![가-힣])', source, where)
+
+
+class DisplayPanelTests(TestCase):
+    """
+    주표시면과 정보표시면이 각각 어디인가. 표시기준의 활자·표시 규정은 거의
+    전부 이 전제 위에 서 있는데, 그 전제가 우리 코드 어디에도 없었다.
+    """
+
+    def test_포장_형태마다_표시면이_다르다(self):
+        from v1.label.services.display_panel import PACKAGE_FORMS, describe
+
+        self.assertEqual(PACKAGE_FORMS['pouch']['main'], '앞면')
+        self.assertEqual(PACKAGE_FORMS['box']['info'], '양측면')
+        self.assertIn('2/3', PACKAGE_FORMS['tray']['main'])
+        self.assertIn('주표시면 앞면', describe('pouch'))
+        self.assertEqual(describe('없는형태'), '')
+
+    def test_어느_면에_가는지는_한_곳에만_있다(self):
+        """두 벌로 두면 어느 날 한쪽만 고쳐진다."""
+        from v1.label.services import design_request, display_panel
+
+        self.assertIs(design_request.MAIN_PANEL_FIELDS,
+                      display_panel.MAIN_PANEL_FIELDS)
+
+    def test_의뢰서가_표시_위치를_알려_준다(self):
+        """
+        빠져 있으면 디자이너가 "앞면" 을 짐작으로 정한다 — 상자 포장은
+        앞면·윗면·뒷면이 다 주표시면이다.
+        """
+        from v1.label.services.design_request import default_notes
+
+        plain = default_notes(package_form=None)
+        self.assertFalse(any('표시 위치' in line for line in plain['main']))
+
+        box = default_notes(package_form='box')
+        self.assertIn('표시 위치: 앞면·윗면·뒷면', box['main'])
+        self.assertIn('표시 위치: 양측면', box['info'])
+        # 나머지 줄은 그대로다
+        self.assertTrue(any('이상' in line for line in box['main']))
+
+    def test_제품명_크기가_원재료명_하한을_가른다(self):
+        from v1.label.services.display_panel import named_ingredient_min
+
+        self.assertEqual(named_ingredient_min(22), 14.0)
+        self.assertEqual(named_ingredient_min(24), 14.0)
+        self.assertEqual(named_ingredient_min(21.9), 7.0)
+        # 모르면 작은 쪽. 큰 쪽을 대면 모르는 것을 두고 위반이라 말하게 된다
+        self.assertEqual(named_ingredient_min(None), 7.0)
+
+
+class DesignNameFontTests(TestCase):
+    """
+    제품명에 쓴 원재료명·함량의 활자 하한은 **제품명 크기로 갈린다.**
+    조건부 규칙이라 우리 규정표에 없었고, 밖에서 본 시스템도 "육안 확인 대상"
+    으로 넘긴 자리다. 시안을 읽으면 두 크기를 다 알 수 있다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(username='dnf', password='x')
+        self.doc_type, _ = DocumentType.objects.get_or_create(
+            type_code='DESIGN_PROOF', defaults={'type_name': '포장지 시안'})
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='활자', **kwargs)
+
+    def _attach(self, label, runs):
+        """runs: [(글자, pt)] 로 PDF 하나를 만들어 문서함에 붙인다."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        import pymupdf
+
+        from v1.products.models import ProductDocument
+
+        doc = pymupdf.open()
+        page = doc.new_page()
+        y = 72
+        for text, size in runs:
+            page.insert_text((72, y), text, fontsize=size)
+            y += size + 20
+        content = doc.tobytes()
+        doc.close()
+        return ProductDocument.objects.create(
+            label=label, document_type=self.doc_type,
+            file=SimpleUploadedFile('proof.pdf', content),
+            original_filename='proof.pdf')
+
+    def _rows(self, label):
+        from v1.label.services.validation_service import check_design_name_font
+        return check_design_name_font(label)
+
+    def test_제품명이_크면_14pt_를_요구한다(self):
+        label = self._label(prdlst_nm='STRAWBERRY', ingredient_info='berry 30%')
+        self._attach(label, [('STRAWBERRY', 24), ('berry 30%', 9)])
+        rows = [r for r in self._rows(label) if r['kind'] == 'issue']
+        self.assertEqual(len(rows), 1)
+        self.assertIn('14 pt 이상', rows[0]['message'])
+        self.assertTrue(rows[0]['advisory'])
+
+    def test_제품명이_작으면_7pt_만_요구한다(self):
+        label = self._label(prdlst_nm='STRAWBERRY', ingredient_info='berry 30%')
+        self._attach(label, [('STRAWBERRY', 18), ('berry 30%', 9)])
+        self.assertEqual(self._rows(label), [])
+
+    def test_특정성분이_없으면_대상이_아니다(self):
+        label = self._label(prdlst_nm='STRAWBERRY')
+        self._attach(label, [('STRAWBERRY', 24)])
+        self.assertEqual(self._rows(label), [])
+
+    def test_시안에서_못_찾으면_못_봤다고_한다(self):
+        from v1.label.services.validation_service import CAUSE_UNREADABLE
+
+        label = self._label(prdlst_nm='STRAWBERRY', ingredient_info='berry 30%')
+        self._attach(label, [('SOMETHING ELSE', 24)])
+        rows = self._rows(label)
+        self.assertEqual([r['cause'] for r in rows], [CAUSE_UNREADABLE])
+
+    def test_시안이_없으면_조용하다(self):
+        """같은 사유를 두 번 말하지 않는다 — check_design_font_size 가 말한다."""
+        label = self._label(prdlst_nm='STRAWBERRY', ingredient_info='berry 30%')
+        self.assertEqual(self._rows(label), [])
+
+    def test_전체_검증에_들어_있다(self):
+        from v1.label.services.validation_service import _CHECKS
+
+        self.assertIn('check_design_name_font', {c.__name__ for c in _CHECKS})

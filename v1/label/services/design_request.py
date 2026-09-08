@@ -37,8 +37,10 @@ from v1.label.constants import LABEL_REGULATIONS
 # 앞면에 인쇄되는 것은 셋뿐이다 — 제품명, 내용량(과 그 열량), 그리고 제품명에
 # 쓴 원재료의 함량(특정성분). 표시사항 표에도 제품명 줄이 있지만 그건 같은 말을
 # 두 번 적은 것이라 의뢰서에서는 앞면 쪽에만 둔다.
-MAIN_PANEL_FIELDS = ('prdlst_nm', 'content_weight', 'weight_calorie',
-                     'ingredient_info')
+#
+# **목록은 display_panel 이 갖고 있다.** "어느 면에" 를 말하는 곳이 하나여야
+# 한다 — 포장 형태별 표시면 정의도 거기 있다.
+from v1.label.services.display_panel import MAIN_PANEL_FIELDS      # noqa: F401
 
 
 def _font(kind, small_area):
@@ -46,7 +48,7 @@ def _font(kind, small_area):
     return rule['small_area_min'] if small_area else rule['min']
 
 
-def default_notes(small_area=True):
+def default_notes(small_area=True, package_form=None):
     """
     표시장소마다 디자이너가 지켜야 하는 것.
 
@@ -54,17 +56,24 @@ def default_notes(small_area=True):
     그 기준이었고, 이 앱으로 만드는 라벨도 대개 그 크기다. 큰 포장이면 화면에서
     고치면 되고, 고친 값은 계정에 남는다.
 
+    `package_form` 을 주면 **어느 면이 주표시면인지**를 맨 앞에 적는다. 그게
+    빠져 있으면 디자이너는 "앞면" 을 짐작으로 정한다 — 상자 포장은 앞면·윗면·
+    뒷면이 다 주표시면인데 뒷면에 표시사항을 몰아 놓는 식이다.
+
     Returns: {'main': [줄 …], 'info': [줄 …]}
     """
+    from v1.label.services import display_panel
+
     spacing = LABEL_REGULATIONS['spacing']
+    form = display_panel.PACKAGE_FORMS.get(package_form or '')
     return {
-        'main': [
+        'main': ([('표시 위치: %s' % form['main'])] if form else []) + [
             '제품명·내용량: %dp 이상' % _font('product_name', small_area),
             # 특정성분(제품명에 쓴 원재료의 함량)은 소면적이어도 줄지 않는다.
             # 받은 의뢰서도 14p 로 적혀 있었다.
             '특정성분: %dp 이상' % _font('origin', False),
         ],
-        'info': [
+        'info': ([('표시 위치: %s' % form['info'])] if form else []) + [
             '%dp 이상' % _font('general', small_area),
             '자간: %d%% 이상' % spacing['letter']['default'],
             '장평: %d%% 이상' % spacing['word']['min'],
@@ -72,9 +81,9 @@ def default_notes(small_area=True):
     }
 
 
-def notes_for(user, small_area=True):
+def notes_for(user, small_area=True, package_form=None):
     """이 사용자가 쓰는 규정 메모. 고쳐 둔 것이 없으면 기본값."""
-    base = default_notes(small_area)
+    base = default_notes(small_area, package_form)
     try:
         prefs = (getattr(user, 'profile', None).list_prefs or {})
         saved = (prefs.get('design_request') or {}).get('notes')
