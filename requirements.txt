@@ -31,3 +31,9 @@ djangorestframework-simplejwt==5.5.1
 django-cors-headers==4.9.0
 PyJWT==2.13.0
 google-auth==2.38.0
+
+# 배포본에서 주석·공백만 걷어낸다 (v1/common/staticfiles.py)
+# 이름을 바꾸지 않는 보수적 압축기 — 문자열·정규식 안의 슬래시를 주석으로
+# 착각하지 않는다. 파이썬만 쓰므로 서버에 node 가 필요 없다.
+rjsmin==1.2.5
+rcssmin==1.2.2

@@ -129,6 +129,21 @@ USE_TZ = True
 # Static files 설정 개선
 STATIC_URL = '/static/'
 
+# 배포본에서만 주석을 걷어낸다 (v1.common.staticfiles).
+#
+# 우리 JS·CSS 주석은 "왜 그렇게 했는지" 를 적어 둔 팀의 자산인데, /static/ 은
+# 로그인 없이 누구나 받는다. 소스에는 그대로 두고 collectstatic 이 옮길 때만
+# 지운다. 무언가 깨지면 STATIC_MINIFY=0 으로 원본이 그대로 나간다.
+STATIC_MINIFY = config('STATIC_MINIFY', default=not DEBUG, cast=bool)
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'v1.common.staticfiles.CommentStrippingStaticFilesStorage',
+    },
+}
+
 # DEBUG 상태와 관계없이 정적 파일 경로 설정
 STATICFILES_DIRS = [
     BASE_DIR / 'static'

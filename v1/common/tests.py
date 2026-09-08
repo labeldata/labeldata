@@ -5,6 +5,7 @@ DB 커넥션 한도를 넘겨 500 이 났는데, 그 500 페이지가 컨텍스�
 세션을 또 DB 에서 읽다가 같은 이유로 죽었다. 사용자는 오류 페이지 대신 서버
 원시 오류("Error running WSGI application")를 봤다. 그 조합을 막는다.
 """
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -302,3 +303,132 @@ class 남의_표시사항은_지워지지_않는다(TestCase):
         self.assertNotIn('window.location.href = `/label/delete/', js)
         self.assertIn("form.method = 'POST'", js)
         self.assertIn('csrfmiddlewaretoken', js)
+
+
+class 배포본에서만_주석을_걷어낸다(SimpleTestCase):
+    """
+    우리 JS·CSS 주석은 **왜 그렇게 했는지**를 적어 둔 팀의 자산이다. 그런데
+    /static/ 은 로그인 없이 누구나 받는다 — 재 보니 JS 2.6 MB 에 주석이
+    156 KB(13%)였고, 압축도 안 된 원본이 그대로 나가고 있었다.
+
+    주석을 지우자는 것이 아니다. **소스에는 그대로 두고 배포본에서만** 지운다.
+
+    직접 정규식으로 지우면 반드시 틀린다 — 문자열 안의 "http://", 정규식
+    리터럴 안의 "/*", 템플릿 리터럴 안의 "//" 를 주석으로 착각한다.
+    여기서 지키는 것이 그것이다.
+    """
+
+    def _js(self, source):
+        from rjsmin import jsmin
+
+        return jsmin(source)
+
+    def test_주석은_사라진다(self):
+        out = self._js("""/* 왜 이렇게 했는가 */
+var a = 1;  // 꼬리 주석
+""")
+        self.assertNotIn('왜 이렇게', out)
+        self.assertNotIn('꼬리 주석', out)
+        self.assertIn('a=1', out.replace(' ', ''))
+
+    def test_문자열_안의_슬래시는_주석이_아니다(self):
+        out = self._js('var u = "http://example.com/a";')
+        self.assertIn('http://example.com/a', out)
+
+    def test_정규식_안의_별표는_주석이_아니다(self):
+        out = self._js(r'var re = /\/\* keep \*\//;' + chr(10) + 'var b = 2;')
+        self.assertIn('keep', out)
+        self.assertIn('b=2', out.replace(' ', ''))
+
+    def test_템플릿_리터럴_안은_건드리지_않는다(self):
+        out = self._js('var t = `줄 // 안쪽`;')
+        self.assertIn('줄 // 안쪽', out)
+
+    def test_한글_문자열은_그대로다(self):
+        """화면에 나가는 말이라 한 글자만 달라져도 사용자가 본다."""
+        out = self._js('showSnackbar("표시사항을 저장했습니다.");')
+        self.assertIn('표시사항을 저장했습니다.', out)
+
+    def test_return_뒤_줄바꿈은_지킨다(self):
+        """
+        여기를 틀리면 조용히 undefined 를 돌려준다. 줄바꿈을 지워
+        `return` 과 `1` 을 한 줄로 붙이면 **동작이 바뀐다.**
+        """
+        out = self._js("""function f() {
+  return
+  1;
+}""")
+        self.assertNotIn('return 1', out)
+
+    def test_CSS_주석도_사라지고_값은_남는다(self):
+        from rcssmin import cssmin
+
+        out = cssmin('/* 왜 470px 인가 */ .settings-panel { width: 470px; }')
+        self.assertNotIn('왜 470px', out)
+        self.assertIn('470px', out)
+
+    def test_진짜_우리_파일로_한_번_돌려_본다(self):
+        """만든 예제만 통과하고 정작 우리 파일에서 깨지면 소용없다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+              ).read_text(encoding='utf-8-sig')
+        out = self._js(js)
+        self.assertLess(len(out), len(js))
+        self.assertNotIn('두 벌로 두면', out)              # 주석은 갔다
+        self.assertIn('runRuleOnlyValidation', out)         # 코드는 남았다
+        self.assertIn('previewCheckedFields', out)
+        self.assertIn('표시사항', out)                       # 화면 글도 남았다
+
+
+class 압축은_배포본에만_적용된다(SimpleTestCase):
+    """
+    소스는 손대지 않는다. 무언가 깨지면 STATIC_MINIFY=0 한 줄로 원본이
+    그대로 나가고, 되돌릴 것이 없다.
+    """
+
+    def _mod(self):
+        from v1.common import staticfiles
+
+        return staticfiles
+
+    def test_이미_압축된_것과_남의_코드는_건드리지_않는다(self):
+        skip = self._mod()._should_skip
+        for path in ('js/vendor/x.js', 'css/bootstrap.min.css',
+                     'js/lib/a.js', 'js/label/x.min.js'):
+            self.assertTrue(skip(path), path)
+        for path in ('js/label/label_preview.js', 'css/label_preview.css'):
+            self.assertFalse(skip(path), path)
+
+    def test_끄는_길이_있다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'config' / 'settings.py'
+               ).read_text(encoding='utf-8-sig')
+        self.assertIn("config('STATIC_MINIFY', default=not DEBUG, cast=bool)", src)
+        self.assertIn('v1.common.staticfiles.CommentStrippingStaticFilesStorage', src)
+
+    def test_압축기가_없어도_배포는_멈추지_않는다(self):
+        """주석이 남을 뿐 화면은 돈다 — 배포를 세우는 쪽이 더 나쁘다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'common' / 'staticfiles.py'
+               ).read_text(encoding='utf-8')
+        self.assertIn('except ImportError:', src)
+        self.assertIn('logger.warning', src)
+
+    def test_소스는_주석을_그대로_지킨다(self):
+        """배포본에서만 지운다 — 소스에서 지우면 우리가 손해다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+              ).read_text(encoding='utf-8-sig')
+        self.assertIn('두 벌로 두면', js)
