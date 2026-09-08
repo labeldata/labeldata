@@ -10642,3 +10642,105 @@ class NutritionDisplayValueTests(TestCase):
 
         for empty in (None, '', 0, '0'):
             self.assertEqual(d('fats', empty), '0')
+
+
+class AdKeywordTests(TestCase):
+    """
+    부당표시 키워드는 등급마다 판정이 다르다.
+
+    예전에는 네 단어를 찾아 전부 같은 무게로 막았다. "이 제품에 '천연' 을 써도
+    되는가" 는 법적 평가라 AI 에 맡길 수 없어서 보수적으로 전부 플래그한
+    것이었는데, 그 막다른 골목은 AI 가 아니라 **표**로 풀린다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='adkw', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel(user_id=self.user, my_label_name='키워드', **kwargs)
+
+    def _issues(self, label):
+        from v1.label.services.validation_service import check_forbidden_phrases
+        return check_forbidden_phrases(label)
+
+    # ── 법정 금지어는 코드에 있다 ──────────────────────────────────────────
+
+    def test_표가_비어_있어도_법정_금지어는_돈다(self):
+        """
+        데이터로만 두면 행이 지워졌을 때 검사가 조용히 죽는다. 시험도
+        마이그레이션을 끄고 돌아서 씨앗이 없다.
+        """
+        from v1.label.models import AdKeyword
+
+        self.assertEqual(AdKeyword.objects.count(), 0)
+        self.assertTrue(self._issues(self._label(prdlst_nm='천연 사과주스')))
+
+    def test_고시된_용어는_세지_않는다(self):
+        """GREEN 이 예외 사전이다 — '천연향료' 안의 '천연' 을 세지 않는다."""
+        self.assertEqual(self._issues(
+            self._label(rawmtrl_nm_display='정제수, 천연향료')), [])
+        self.assertEqual(self._issues(
+            self._label(rawmtrl_nm_display='자연치즈 25%, 정제수')), [])
+
+    def test_법정_금지어는_확정을_막는다(self):
+        issues = self._issues(self._label(prdlst_nm='천연 사과주스'))
+        self.assertTrue(issues)
+        self.assertFalse(issues[0]['advisory'])
+
+    # ── 사내 기준은 테이블에 얹는다 ────────────────────────────────────────
+
+    def _add(self, grade, keyword, match='', note='', owner=None):
+        from v1.label.models import AdKeyword
+
+        return AdKeyword.objects.create(
+            owner=owner, grade=grade, keyword=keyword,
+            match_strings=match, note=note)
+
+    def test_조건부는_막지_않고_조건을_보여_준다(self):
+        self._add('YELLOW', '가득', note='영양성분 기준을 지켰는지 확인하세요.',
+                  owner=self.user)
+        issues = [i for i in self._issues(self._label(prdlst_nm='딸기 가득 케이크'))
+                  if '가득' in i['message']]
+        self.assertEqual(len(issues), 1)
+        self.assertTrue(issues[0]['advisory'], '조건부는 확정을 막지 않는다')
+        self.assertIn('영양성분 기준', issues[0]['suggestion'])
+
+    def test_남의_사내_기준은_보지_않는다(self):
+        other = User.objects.create_user(username='adkw2', password='x')
+        self._add('RED', '수제', owner=other)
+        self.assertEqual(self._issues(self._label(prdlst_nm='수제 쿠키')), [])
+
+    def test_공용_행은_모두에게_적용된다(self):
+        self._add('RED', '수제', owner=None)
+        self.assertTrue(self._issues(self._label(prdlst_nm='수제 쿠키')))
+
+    def test_사내_GREEN_이_법정_금지어를_덮지_않는다(self):
+        """
+        GREEN 은 **그 말 자체**를 지운다. '천연' 을 통째로 GREEN 에 넣으면
+        법정 금지어가 무력해지므로, 지우는 것은 적어 넣은 말에 한한다.
+        """
+        self._add('GREEN', '자연산 대구', owner=self.user)
+        self.assertEqual(self._issues(
+            self._label(rawmtrl_nm_display='자연산 대구')), [])
+        # 다른 문구의 '자연' 은 그대로 걸린다
+        self.assertTrue(self._issues(self._label(rawmtrl_nm_display='자연 그대로')))
+
+    def test_매칭_문자열은_가운뎃점으로_여럿을_적는다(self):
+        self._add('RED', '다이어트', match='다이어트·스키니', owner=self.user)
+        self.assertTrue(self._issues(self._label(prdlst_nm='스키니 바')))
+
+    def test_끈_행은_보지_않는다(self):
+        row = self._add('RED', '수제', owner=self.user)
+        row.active_yn = False
+        row.save()
+        self.assertEqual(self._issues(self._label(prdlst_nm='수제 쿠키')), [])
+
+    def test_긴_말을_먼저_본다(self):
+        """'천연향료' 를 지우기 전에 '천연' 이 걸리면 예외가 무의미해진다."""
+        from v1.label.services.ad_keywords import keywords_for
+
+        graded = keywords_for(self._label())
+        for grade in ('RED', 'YELLOW', 'GREEN'):
+            lengths = [max((len(w) for w in row['match']), default=0)
+                       for row in graded[grade]]
+            self.assertEqual(lengths, sorted(lengths, reverse=True))

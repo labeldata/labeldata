@@ -680,6 +680,77 @@ class ExpiryRecommendation(models.Model):
         return f"{self.food_type}: {self.shelf_life}"
 
 
+class AdKeyword(models.Model):
+    """
+    부당한 표시·광고 키워드. **등급마다 판정이 다르다.**
+
+    지금까지 이 검사는 `constants.FORBIDDEN_PHRASES` 네 단어였고, 걸리면 전부
+    같은 무게로 막았다. 그렇게 둔 이유가 ai_validation_service 주석에 적혀
+    있다 — 예외 조건 판단("이 제품에 '천연' 을 써도 되는가")은 사실 추출이
+    아니라 법적 평가 그 자체라 AI 에 맡길 수 없고, 그래서 보수적으로 전부
+    플래그했다.
+
+    그 막다른 골목은 **AI 없이** 풀린다. 판정이 아니라 표 조회로 바꾸면 된다.
+
+        RED     어떤 경우에도 쓸 수 없다            -> 지적. 확정을 막는다
+        YELLOW  근거가 있으면 쓸 수 있다            -> 지적이되 막지 않고, 조건을 보여 준다
+        GREEN   써도 되는 말                        -> 세지 않는다. **예외 사전이다**
+
+    GREEN 이 예외 사전인 것이 중요하다. 예전 `_FORBIDDEN_EXCEPTIONS`
+    ('자연치즈' · '천연향료')가 하던 일이 그것이다 — 문구에서 먼저 지우고
+    나머지에서 RED·YELLOW 를 찾는다. '천연향료' 안의 '천연' 을 세지 않는다.
+
+    **owner 가 비면 공용 기본이고, 채워져 있으면 그 사람의 사내 기준이다.**
+    회사마다 기준이 다르다 — 어떤 회사는 법에 없는 말도 위험하다고 막는다
+    (예: "NON-GMO 는 법적으로 가능해도 Risk 가 있어 불가"). 그런 목록을 공용
+    기본으로 깔면 다른 회사에 **틀린 규칙**이 된다. 그래서 공용 기본에는
+    법정 금지어만 둔다.
+    """
+
+    RED = 'RED'
+    YELLOW = 'YELLOW'
+    GREEN = 'GREEN'
+    GRADE_CHOICES = [
+        (RED, '위험 — 사용 불가'),
+        (YELLOW, '조건부 — 근거 확보 시 가능'),
+        (GREEN, '사용 가능'),
+    ]
+
+    id = models.AutoField(primary_key=True)
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='ad_keywords', verbose_name='사내 기준 소유자',
+        help_text='비워 두면 모든 사용자에게 적용되는 공용 기본입니다.')
+    grade = models.CharField(max_length=6, choices=GRADE_CHOICES, default=RED,
+                             verbose_name='등급', db_index=True)
+    keyword = models.CharField(max_length=100, verbose_name='키워드',
+                               help_text='사람이 읽는 이름. 화면에 이 이름이 나옵니다.')
+    match_strings = models.CharField(
+        max_length=500, verbose_name='매칭 문자열',
+        help_text='문구에서 실제로 찾을 말. 여러 개면 · 로 구분합니다. '
+                  '비워 두면 키워드를 그대로 찾습니다.')
+    note = models.TextField(blank=True, default='', verbose_name='비고',
+                            help_text='조건부(YELLOW)일 때 무엇을 갖춰야 하는지. '
+                                      '화면에 그대로 보여 줍니다.')
+    active_yn = models.BooleanField(default=True, verbose_name='사용', db_index=True)
+    created_datetime = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
+
+    class Meta:
+        db_table = 'label_ad_keyword'
+        ordering = ['grade', 'keyword']
+        indexes = [models.Index(fields=['owner', 'active_yn'])]
+        verbose_name = '부당표시 키워드'
+        verbose_name_plural = '부당표시 키워드'
+
+    def __str__(self):
+        return f'[{self.grade}] {self.keyword}'
+
+    def strings(self):
+        """실제로 찾을 말들. 매칭 문자열이 비면 키워드를 쓴다."""
+        raw = (self.match_strings or '').strip() or (self.keyword or '')
+        return [s.strip() for s in raw.split('·') if s.strip()]
+
+
 
 
 @receiver(pre_save, sender=MyLabel)

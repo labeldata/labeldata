@@ -39,7 +39,6 @@ logger = logging.getLogger(__name__)
 
 from v1.label.constants import (
     FARM_SEAFOOD_ITEMS,
-    FORBIDDEN_PHRASES,
     ALLERGEN_KEYWORDS,
     RECYCLING_MARK_MATERIAL_KEYWORDS,
 )
@@ -115,25 +114,6 @@ _FIELD_LABELS = {
     'additional_info': '기타표시사항',
 }
 
-_NATURAL_CONDITIONS_KO = (
-    '사용 조건: '
-    '① 원료 중에 합성향료·합성착색료·방부제 등 어떠한 인공 화학 성분도 전혀 포함되어 있지 않아야 함 '
-    '② 최소한의 물리적 가공(세척·절단·동결·건조 등)만 거친 상태여야 함 '
-    '③ "천연"과 유사한 의미로 오인될 수 있는 "자연산(naturel)" 등의 외국어 사용도 동일 기준 적용 '
-    '④ 식품유형별로 별도 금지 사항(「식품등의 표시기준」의 개별 고시 규정)이 있는 경우, 그 규정에 따라 추가 제한이 있음 '
-    '⑤ 예: 설탕에는 "천연설탕"이라는 표현이 불가 '
-    '⑥ 영업소 명칭 또는 등록상표에 포함된 경우는 허용 '
-    '⑦ "천연향료" 등 고시된 허용 목록 내 용어만 예외적으로 허용'
-)
-_NATURE_CONDITIONS_KO = (
-    '사용 조건: '
-    '① "자연"이라는 용어는 가공되지 않은 농산물·임산물·수산물·축산물에 대해서만 허용 '
-    '② 수확하여 세척·포장만 거친 원물(raw agricultural/seafood/livestock products)에만 허용 '
-    '③ 이미 "가공식품"으로 분류된 상태라면 "자연" 표기가 불가능 '
-    '④ 유전자변형식품, 나노식품 등은 "자연" 표기가 금지됨 '
-    '⑤ 영업소 명칭 또는 등록상표에 포함된 경우는 허용 '
-    '⑥ 단, 제품명(product name) 자체에 "천연"·"자연"을 붙일 수는 없음'
-)
 
 
 # 검증 항목별 법적 근거. 정확성이 확인된 조항 번호(제4조/제6조/제8조)는 이 파일이
@@ -256,7 +236,8 @@ def _unchecked(category: str, cause: str, message: str, hint: str = '') -> dict:
     }
 
 
-def _issue(category: str, message: str, suggestion: str = '', fields=None) -> dict:
+def _issue(category: str, message: str, suggestion: str = '', fields=None,
+           advisory: bool | None = None) -> dict:
     basis = _LEGAL_BASIS.get(category)
     full_message = f'{message} (근거: {basis})' if basis else message
     return {
@@ -267,8 +248,11 @@ def _issue(category: str, message: str, suggestion: str = '', fields=None) -> di
         'suggestion': suggestion,
         'legal_basis': basis,
         'fields': list(fields if fields is not None else _ISSUE_FIELDS.get(category, ())),
-        # True 면 확정을 막지 않는다 (product_update_status 가 본다)
-        'advisory': category in _ADVISORY_CATEGORIES,
+        # True 면 확정을 막지 않는다 (product_update_status 가 본다).
+        # 대개는 검사 종류로 정해지지만, 같은 검사 안에서 갈리는 것도 있다 —
+        # 부당표시 키워드의 조건부(YELLOW)가 그렇다.
+        'advisory': (category in _ADVISORY_CATEGORIES) if advisory is None
+                    else bool(advisory),
     }
 
 
@@ -1043,35 +1027,56 @@ def check_farm_seafood_content(label) -> list[dict]:
 #
 # **여기 없는 말은 예전처럼 지적한다.** 확실한 것만 넣는다 — "자연산" 처럼
 # 규정이 명시적으로 막은 말을 여기 넣으면 잡아야 할 것을 놓친다.
-_FORBIDDEN_EXCEPTIONS = ('자연치즈', '천연향료')
-
-
-def _without_exceptions(text: str) -> str:
-    """고시된 표준 용어를 지운 문구. 그 안의 금지 글자는 세지 않는다."""
-    out = text or ''
-    for word in _FORBIDDEN_EXCEPTIONS:
-        out = out.replace(word, ' ')
-    return out
-
-
 def check_forbidden_phrases(label) -> list[dict]:
-    """제품명/원재료명 등 5개 필드에서 사용 금지 문구('천연', '자연' 등) 검출."""
+    """
+    부당한 표시·광고에 해당하는 표현이 있는가.
+
+    예전에는 금지어 네 단어를 찾아 **전부 같은 무게로** 막았다. 그렇게 둔
+    이유는 "이 제품에 '천연' 을 써도 되는가" 가 사실 추출이 아니라 법적 평가
+    라서 AI 에 맡길 수 없다는 것이었다(ai_validation_service 주석).
+
+    그 막다른 골목은 AI 가 아니라 **표**로 푼다.
+
+        GREEN   먼저 문구에서 지운다 — '천연향료' 안의 '천연' 은 세지 않는다
+        RED     지적한다. 확정을 막는다
+        YELLOW  지적하되 막지 않고, 무엇을 갖춰야 하는지(비고)를 보여 준다
+
+    목록은 법정 금지어(코드)와 사내 기준(AdKeyword 테이블)을 합친 것이다.
+    """
+    from v1.label.services.ad_keywords import keywords_for
+
+    graded = keywords_for(label)
     issues = []
     for field, field_label in _FIELD_LABELS.items():
         value = getattr(label, field, '') or ''
-        scanned = _without_exceptions(value)
-        for phrase in FORBIDDEN_PHRASES:
-            if not re.search(re.escape(phrase), scanned, re.IGNORECASE):
-                continue
 
-            message = f'"{field_label}" 항목에 사용 금지 문구 "{phrase}"가 표시되어 있습니다.'
-            if field == 'rawmtrl_nm_display' and phrase == '천연':
-                suggestion = f'"{field_label}" 항목에 "{phrase}" 문구를 표시하려면 반드시 사용 조건에 맞게 표시하세요. {_NATURAL_CONDITIONS_KO}'
-            elif field == 'rawmtrl_nm_display' and phrase == '자연':
-                suggestion = f'"{field_label}" 항목에 "{phrase}" 문구를 표시하려면 반드시 사용 조건에 맞게 표시하세요. {_NATURE_CONDITIONS_KO}'
-            else:
-                suggestion = f'"{field_label}"에서 "{phrase}" 문구를 삭제하세요.'
-            issues.append(_issue('forbidden_phrase', message, suggestion, fields=(field,)))
+        # 써도 되는 말을 먼저 지운다. 그 안의 금지 글자는 세지 않는다.
+        scanned = value
+        for row in graded['GREEN']:
+            for word in row['match']:
+                scanned = scanned.replace(word, ' ')
+
+        for grade in ('RED', 'YELLOW'):
+            for row in graded[grade]:
+                hit = next((w for w in row['match']
+                            if re.search(re.escape(w), scanned, re.IGNORECASE)), None)
+                if not hit:
+                    continue
+                if grade == 'RED':
+                    message = (f'"{field_label}" 항목에 사용 금지 문구 "{hit}"가 '
+                               f'표시되어 있습니다.')
+                    fallback = f'"{field_label}"에서 "{hit}" 문구를 삭제하세요.'
+                else:
+                    message = (f'"{field_label}" 항목의 "{hit}" 는 근거가 있어야 '
+                               f'쓸 수 있는 표현입니다.')
+                    fallback = ('실증 자료를 갖추었는지 확인하세요. 갖추지 못했다면 '
+                                '문구를 빼야 합니다.')
+                issues.append(_issue(
+                    'forbidden_phrase', message, row['note'] or fallback,
+                    fields=(field,),
+                    # 조건부는 확정을 막지 않는다 — 근거가 있으면 쓸 수 있는
+                    # 말이고, 그 근거는 우리가 볼 수 없는 곳에 있다.
+                    advisory=(grade == 'YELLOW')))
     return issues
 
 
