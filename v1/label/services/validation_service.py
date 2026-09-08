@@ -216,10 +216,12 @@ _ADVISORY_CATEGORIES = frozenset({'exchange_notice', 'origin_emphasis',
 # 육안확인(자동으로 볼 수 없어 사람이 봐야 하는 것)은 아직 없다. 시안 파일에서
 # 서식을 읽기 시작하면 그때 는다.
 # ─────────────────────────────────────────────────────────────────────────────
-CAUSE_VIOLATION      = '조건위반'  # 규정에 어긋났다 (_issue 의 기본값)
-CAUSE_NOT_APPLICABLE = '미대상'    # 이 제품에는 적용되지 않는다
-CAUSE_NO_DATA        = '자료없음'  # 판단할 값·문서가 아직 없다
-CAUSE_UNREADABLE     = '값불명'    # 값은 있는데 읽어낼 수 없어 견주지 못했다
+# 화면에 그대로 찍히는 말이다. **우리끼리 쓰는 줄임말을 두면 안 된다** —
+# "값불명" 을 받은 사람은 무엇을 해야 하는지 알 수 없다.
+CAUSE_VIOLATION      = '부적합'      # 규정에 어긋났다 (_issue 의 기본값)
+CAUSE_NOT_APPLICABLE = '해당 없음'   # 이 제품에는 적용되지 않는다
+CAUSE_NO_DATA        = '자료 없음'   # 판단할 값·문서가 아직 없다
+CAUSE_UNREADABLE     = '확인 불가'   # 값은 있는데 읽어내지 못해 견주지 못했다
 
 
 def _unchecked(category: str, cause: str, message: str, hint: str = '') -> dict:

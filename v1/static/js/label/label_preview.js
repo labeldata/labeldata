@@ -3093,6 +3093,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (window.parent !== window) {
         const embeddedSave = document.getElementById('saveSettingsBtn');
         if (embeddedSave) embeddedSave.remove();
+        /* 규정 검증도 마찬가지다. 검증 탭이 위에 "1차 검증" 을 두고 여기
+           runRuleOnlyValidation() 을 부른다 — 같은 일을 하는 단추가 위아래로
+           둘이면 어느 것이 무엇인지 알 수 없다. */
+        const embeddedValidate = document.getElementById('ruleValidationBtn');
+        if (embeddedValidate) embeddedValidate.remove();
     }
     // 부모 프레임(탭에 끼워 넣은 미리보기)이 부를 수 있게 노출한다
     window.savePreviewSettings = savePreviewSettings;
@@ -3529,7 +3534,7 @@ function vrUncheckedHtml(unchecked) {
        사용자가 할 일이 없다. 표를 안 그린 라벨이면 그런 줄이 매번 셋씩 뜨는데
        그것이 곧 소음이다 — 진짜 봐야 할 "자료없음" 이 그 안에 묻힌다.
        건수는 남긴다. 무엇이 안 돌았는지는 알아야 하니까. */
-    const actionable = unchecked.filter(u => u.cause !== '미대상');
+    const actionable = unchecked.filter(u => u.cause !== '해당 없음');
     const skipped = unchecked.length - actionable.length;
     if (!actionable.length && !systemFailure) {
         return `<div class="alert alert-secondary py-2 px-3 mb-3 vr-unchecked">

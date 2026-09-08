@@ -10781,7 +10781,7 @@ class UncheckedNoiseTests(TestCase):
     def test_미대상은_펼치지_않는다(self):
         head = self.js.index('function vrUncheckedHtml')
         block = self.js[head:head + 2200]
-        self.assertIn("u.cause !== '미대상'", block)
+        self.assertIn("u.cause !== '해당 없음'", block)
         self.assertIn('해당하지 않아 보지 않은 항목', block)
 
     def test_서버는_미대상도_그대로_준다(self):
@@ -10792,7 +10792,7 @@ class UncheckedNoiseTests(TestCase):
         label = MyLabel.objects.create(user_id=user, my_label_name='소음',
                                        content_weight='300 g')
         causes = {u['cause'] for u in validate_label(label)['unchecked']}
-        self.assertIn('미대상', causes)
+        self.assertIn('해당 없음', causes)
 
 class ValueMatchTests(TestCase):
     """
@@ -11872,12 +11872,31 @@ class ValidationTabTests(TestCase):
         docs = self._readiness()['second']['documents']
         self.assertTrue(all(d['gives'] for d in docs))
 
-    def test_화면에_두_칸이_있다(self):
+    def test_화면에_두_줄이_있다(self):
         html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
-        self.assertIn('1차', html)
         self.assertIn('표시문구 검증', html)
-        self.assertIn('2차', html)
         self.assertIn('디자인시안 검증', html)
-        # 각 칸에 대상이 못 박혀 있다
+        # 각 줄에 대상이 못 박혀 있다
         self.assertIn('이 화면의 표시사항', html)
         self.assertIn('문서함의 포장지 시안', html)
+
+    def test_1차_단추가_미리보기_판정을_부른다(self):
+        """
+        단추만 만들고 배선을 안 해서 눌러도 아무 일이 없었다. 판정 로직을
+        여기 옮기지 않는다 — 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+        """
+        html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
+        self.assertIn("getElementById('ltFirstBtn')", html)
+        self.assertIn('win.runRuleOnlyValidation()', html)
+
+    def test_안쪽_규정_검증_단추는_감춘다(self):
+        """같은 일을 하는 단추가 위아래로 둘이면 어느 것이 무엇인지 모른다."""
+        js = open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
+        head = js.index('window.parent !== window')
+        self.assertIn("getElementById('ruleValidationBtn')", js[head:head + 700])
+
+    def test_검증_줄이_화면을_적게_먹는다(self):
+        """검증은 누르는 자리이지 읽는 자리가 아니다 — 미리보기가 밀려났다."""
+        html = open('v1/templates/products/_tab_label.html', encoding='utf-8').read()
+        self.assertIn('.lt-verify-row', html)
+        self.assertIn('<details class="lt-verify-more">', html)   # 자세한 것은 접는다
