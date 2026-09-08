@@ -133,6 +133,7 @@ _LEGAL_BASIS = {
     'content_weight_basis': '「식품등의 표시기준」 내용량 표시 규정 및 영양성분 표시 규정(총 내용량 기준)',
     'rawmtrl_bracket': '「식품등의 표시기준」 원재료명 표시 규정(복합원재료의 하위 원료 표시)',
     'food_type_unknown': '「식품등의 표시기준」 식품유형별 표시사항 규정',
+    'food_type_mismatch': '「식품등의 표시기준」 식품유형별 표시사항 규정',
     'allergen_vocabulary': '「식품등의 표시기준」 알레르기 유발물질 표시 규정(표시 명칭)',
     'font_size': '「식품등의 표시기준」 표시사항의 활자 크기 규정(10포인트 이상)',
     'calorie_macros': '「식품등의 표시기준」 영양성분 표시 규정(열량 산출 방법 — 탄수화물·단백질 4 kcal/g, 지방 9 kcal/g)',
@@ -164,6 +165,7 @@ _ISSUE_FIELDS = {
     'content_weight_basis':  ('content_weight',),
     'rawmtrl_bracket':       ('rawmtrl_nm_display',),
     'food_type_unknown':     ('prdlst_dcnm',),
+    'food_type_mismatch':    ('prdlst_dcnm',),
     'allergen_vocabulary':   ('rawmtrl_nm_display',),
     'font_size':             (),
     'calorie_macros':        ('content_weight',),
@@ -1411,6 +1413,14 @@ def check_food_type_known(label) -> list[dict]:
     """
     food_type = (label.food_type or '').strip()
     if not food_type:
+        # 인쇄되는 유형은 적혀 있는데 소분류만 비었다면, 그 유형의 의무
+        # 표시사항이 **검사에서 통째로 빠진다.** 조용히 넘어갈 자리가 아니다.
+        if (label.prdlst_dcnm or '').strip():
+            return [_unchecked(
+                'food_type_unknown', CAUSE_NO_DATA,
+                '식품유형 소분류가 비어 있어 그 유형의 의무 표시사항을 '
+                '검사하지 못했습니다.',
+                '기본정보에서 소분류를 목록에서 고르면 유형별 항목까지 함께 봅니다.')]
         return []
     try:
         from v1.label.services.ocr_snap import food_type_vocabulary, snap_one
@@ -1797,6 +1807,48 @@ def check_origin_emphasis(label) -> list[dict]:
     )]
 
 
+def check_food_type_consistency(label) -> list[dict]:
+    """
+    식품유형이 **두 칸에 있는데 서로 다른 말을 하는가.**
+
+    `food_type`(소분류)은 유형별 규칙을 찾는 키이고, `prdlst_dcnm`(식품유형)은
+    인쇄되는 값이다. 그런데 코드 곳곳이 둘을 같은 것으로 쓴다 — BOM 은
+    `label.prdlst_dcnm` 을 food_type 으로 넘기고, 영양표시 대상 판정
+    (nutrition_label)도 `prdlst_dcnm` 을 본다. 반면
+    `check_food_type_known` 은 `food_type` 을 본다. **한 개념을 두 칸에 담아
+    놓고 아무도 견주지 않았다.**
+
+    완전일치로 보면 안 된다. 표시기준은 유형명 뒤에 살균 여부·섭취 방법을
+    괄호로 덧붙이라고 하는 자리가 여럿이라, 인쇄되는 값에는 부기가 붙는다.
+
+        빵류  ↔  빵류 [가열하여 섭취하는 냉동식품]     같은 말이다
+        빵류  ↔  과자                                   다른 말이다
+
+    **확정을 막지 않는다.** 새로 보이기 시작한 지적이고, 두 칸이 갈린 라벨이
+    이미 쌓여 있을 수 있다. 어느 쪽이 맞는지는 사람이 봐야 안다.
+    """
+    from v1.label.services.value_match import compare
+
+    sub = (label.food_type or '').strip()
+    printed = (label.prdlst_dcnm or '').strip()
+    if not sub or not printed:
+        return []       # 한쪽이 비어 있으면 견줄 것이 없다
+
+    _, verdict = compare(sub, printed, 'prefix')
+    if verdict != 'conflict':
+        return []
+
+    return [_issue(
+        'food_type_mismatch',
+        f'식품유형이 두 곳에 서로 다르게 적혀 있습니다 — 소분류 "{sub}", '
+        f'표시사항 "{printed}".',
+        '인쇄되는 값은 표시사항 쪽이고, 유형별 의무 표시사항은 소분류로 찾습니다. '
+        '둘이 갈리면 규칙을 엉뚱한 유형에서 찾게 됩니다. 한쪽으로 맞춰 주세요 '
+        '— 뒤에 괄호로 덧붙인 부기(예: "빵류 [가열하여 섭취하는 냉동식품]")는 '
+        '어긋난 것이 아닙니다.',
+        advisory=True)]
+
+
 def check_nutrition_label_scope(label) -> list[dict]:
     """
     영양표시 **대상**인데 표를 만들지 않았는가.
@@ -1903,6 +1955,7 @@ _CHECKS = [
     check_content_weight_basis,
     check_rawmtrl_brackets,
     check_food_type_known,
+    check_food_type_consistency,
     check_allergen_vocabulary,
     check_font_size,
     # 사람이 검수하며 짚어 낸 것들

@@ -64,6 +64,7 @@ _CATEGORY_LABELS = {
     # 화면이 unchecked 를 그릴 때 같은 표를 본다.
     'required_document': '근거 문서',
     'nutrition_scope': '영양표시 대상',
+    'food_type_mismatch': '식품유형 일치',
 }
 
 # "규정만 검증"(규칙 기반)에는 없고 AI검증에만 있는 항목들 — 사용자에게

@@ -10775,3 +10775,93 @@ class UncheckedNoiseTests(TestCase):
         causes = {u['cause'] for u in validate_label(label)['unchecked']}
         self.assertIn('미대상', causes)
 
+class ValueMatchTests(TestCase):
+    """
+    항목마다 견주는 법이 다르다. 이 자는 판독과 검증이 함께 쓴다.
+    """
+
+    def test_부기는_어긋난_것이_아니다(self):
+        from v1.label.services.value_match import compare
+
+        self.assertEqual(compare('빵류', '빵류 [가열하여 섭취하는 냉동식품]', 'prefix')[1],
+                         'agree')
+        self.assertEqual(compare('즉석조리식품', '즉석조리식품 (가열하지 않고 섭취하는 냉동식품)',
+                                 'prefix')[1], 'agree')
+        self.assertEqual(compare('빵류', '빵류', 'prefix')[1], 'agree')
+
+    def test_붙여_쓴_다른_말은_부기가_아니다(self):
+        """'빵류과자' 는 '빵류' 로 시작하지만 괄호가 없다 — 다른 유형이다."""
+        from v1.label.services.value_match import is_annotated
+
+        self.assertFalse(is_annotated('빵류', '빵류과자'))
+        self.assertTrue(is_annotated('빵류', '빵류(발효)'))
+
+    def test_아주_다르면_어긋났다고_한다(self):
+        from v1.label.services.value_match import compare
+
+        self.assertEqual(compare('빵류', '과자', 'prefix')[1], 'conflict')
+
+    def test_판독도_같은_자를_쓴다(self):
+        """두 벌로 두면 어느 날 한쪽만 고쳐진다."""
+        from v1.label.services import ocr_reconcile, value_match
+
+        self.assertIs(ocr_reconcile._compare, value_match.compare)
+        self.assertIs(ocr_reconcile._squeeze, value_match.squeeze)
+        self.assertEqual(ocr_reconcile.AGREE_SCORE, value_match.AGREE_SCORE)
+
+
+class FoodTypeConsistencyTests(TestCase):
+    """
+    식품유형이 두 칸에 있는데 아무도 견주지 않았다.
+
+    `food_type`(소분류)은 유형별 규칙을 찾는 키이고 `prdlst_dcnm`(식품유형)은
+    인쇄되는 값인데, 코드 곳곳이 둘을 같은 것으로 쓴다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='ftc', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel(user_id=self.user, my_label_name='유형', **kwargs)
+
+    def _issues(self, label):
+        from v1.label.services.validation_service import check_food_type_consistency
+        return check_food_type_consistency(label)
+
+    def test_두_칸이_갈리면_짚는다(self):
+        issues = self._issues(self._label(food_type='빵류', prdlst_dcnm='과자'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('빵류', issues[0]['message'])
+        self.assertIn('과자', issues[0]['message'])
+
+    def test_확정을_막지_않는다(self):
+        """새로 보이기 시작한 지적이다 — 갈린 라벨이 이미 쌓여 있을 수 있다."""
+        issues = self._issues(self._label(food_type='빵류', prdlst_dcnm='과자'))
+        self.assertTrue(issues[0]['advisory'])
+
+    def test_부기는_짚지_않는다(self):
+        self.assertEqual(
+            self._issues(self._label(food_type='빵류',
+                                     prdlst_dcnm='빵류 [가열하여 섭취하는 냉동식품]')), [])
+
+    def test_한쪽이_비면_견주지_않는다(self):
+        self.assertEqual(self._issues(self._label(prdlst_dcnm='빵류')), [])
+        self.assertEqual(self._issues(self._label(food_type='빵류')), [])
+
+    def test_소분류만_비면_검사가_빠졌다고_말한다(self):
+        """
+        유형별 의무 표시사항은 소분류로 찾는다. 비어 있으면 그 항목들이
+        검사에서 통째로 빠지는데, 지금까지 조용히 넘어갔다.
+        """
+        from v1.label.services.validation_service import (
+            CAUSE_NO_DATA, check_food_type_known,
+        )
+
+        rows = check_food_type_known(self._label(prdlst_dcnm='빵류'))
+        self.assertEqual([r for r in rows if r['kind'] == 'issue'], [])
+        self.assertEqual([r['cause'] for r in rows], [CAUSE_NO_DATA])
+
+    def test_둘_다_비면_아무_말도_안_한다(self):
+        from v1.label.services.validation_service import check_food_type_known
+
+        self.assertEqual(check_food_type_known(self._label()), [])
