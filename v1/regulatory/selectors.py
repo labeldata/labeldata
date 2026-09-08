@@ -155,34 +155,58 @@ def user_match_context(user) -> dict:
         .values_list('news_id', flat=True)
     )
 
-    # 최신 조치 상태 (monitoring / resolved)
+    # 최신 조치 상태 (monitoring / resolved) — 조치 시각까지 남긴다.
+    # 제품·원료 양쪽에 조치가 있으면 목록의 조치상태 필터가 더 나중 것을 따라야 하는데,
+    # 여기서 시각을 버리면 뷰가 같은 조인을 한 번 더 돌려야 한다.
     def _latest_action(qs, news_field):
         latest = {}
         for nid, action, created in qs.values_list(news_field, 'action_type', 'created_at'):
             cur = latest.get(nid)
             if cur is None or created > cur[1]:
                 latest[nid] = (action, created)
-        return {nid: a for nid, (a, _) in latest.items()}
+        return latest
 
-    prod_action = _latest_action(
+    prod_action_at = _latest_action(
         RegulatoryMatchAction.objects.filter(
             product_match__product__user_id=user,
             product_match__false_positive_yn=False,
             action_type__in=ACTION_STATUSES),
         'product_match__news_id')
-    ing_action = _latest_action(
+    ing_action_at = _latest_action(
         RegulatoryMatchAction.objects.filter(
             ingredient_match__user=user,
             ingredient_match__dismissed_yn=False,
             action_type__in=ACTION_STATUSES),
         'ingredient_match__news_id')
 
+    latest_action = {}
+    for src in (prod_action_at, ing_action_at):
+        for nid, (action, created) in src.items():
+            cur = latest_action.get(nid)
+            if cur is None or created > cur[1]:
+                latest_action[nid] = (action, created)
+
+    actionable = prod_matched | ing_matched
+    actioned   = set(prod_action_at) | set(ing_action_at)
+
     return {
         'prod_matched': prod_matched, 'prod_unread': prod_unread, 'prod_risk': prod_risk,
         'ing_matched': ing_matched,   'ing_unread': ing_unread,   'ing_risk': ing_risk,
         'kw_matched': kw_matched,
-        'prod_action': prod_action,   'ing_action': ing_action,
+        'prod_action': {nid: a for nid, (a, _) in prod_action_at.items()},
+        'ing_action':  {nid: a for nid, (a, _) in ing_action_at.items()},
         'all_matched': prod_matched | ing_matched | kw_matched,
+        # ── 집계 ────────────────────────────────────────────────────────────
+        # 위에서 이미 읽어 온 행으로 계산한다. 같은 값을 구하는 함수들
+        # (unread_news_ids / actionable_news_ids / actioned_news_ids /
+        #  no_action_news_ids) 을 목록 뷰에서 다시 부르면 매칭 테이블을
+        #  세 번, 조치 조인을 두 번 더 돌게 된다 — 규칙은 같으니 여기서 낸다.
+        'actionable':    actionable,
+        'unread':        prod_unread | ing_unread,
+        'actioned':      actioned,
+        'no_action':     actionable - actioned,
+        # 제품·원료를 합친 뉴스별 최신 조치 (목록의 조치상태 필터용)
+        'latest_action': {nid: a for nid, (a, _) in latest_action.items()},
     }
 
 

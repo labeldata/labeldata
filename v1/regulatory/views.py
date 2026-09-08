@@ -14,7 +14,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Case, CharField, Count, Exists, F, IntegerField, Max, OuterRef, Q, Subquery, Value, When
+from django.db.models import Case, Count, F, IntegerField, Max, Q, Value, When
 from django.db.models.functions import Coalesce, Greatest
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -57,6 +57,24 @@ _REGULAR_CAT_KEYS = [c['key'] for c in API_CATEGORIES if c['group'] != 'insp46']
 # 다섯 건이면 "새로 온 것이 있나" 를 확인하기에 충분하고, 목록의 나머지는
 # 일반 알림에 남는다.
 PINNED_MATCH_LIMIT = 5
+
+
+class _CountedPaginator(Paginator):
+    """
+    총 건수를 이미 아는 목록용 Paginator.
+
+    Paginator 는 페이지를 만들 때 COUNT(*) 를 스스로 한 번 더 돌린다.
+    이 화면은 같은 조건의 건수를 탭 배지·목록 헤더용으로 이미 세어 두므로,
+    그 값을 넘겨 같은 COUNT 를 두 번 돌지 않게 한다.
+    """
+
+    def __init__(self, object_list, per_page, count, **kwargs):
+        self._known_count = count
+        super().__init__(object_list, per_page, **kwargs)
+
+    @property
+    def count(self):
+        return self._known_count
 
 
 def _scope_qs(request, scope):
@@ -233,11 +251,12 @@ def news_list(request):
     if conditions:
         qs = qs.filter(news_search.conditions_q(conditions))
 
-    # 미확인 집합 — 집계 규칙은 selectors 한 곳에서 관리한다 (탭 미확인 dot 표시용)
-    my_unread_news_ids = selectors.unread_news_ids(request.user)
-
-    # 목록 렌더에 쓰는 매칭 정보를 한 번에 모아 온다 (행별 서브쿼리 제거)
+    # 목록 렌더·배지·건수에 쓰는 매칭 정보를 한 번에 모아 온다 (행별 서브쿼리 제거).
+    # 미확인·조치대상·미조치 집계도 여기서 함께 나오므로, 같은 행을 다시 읽지 않는다.
     match_ctx = selectors.user_match_context(request.user)
+
+    # 미확인 집합 — 집계 규칙은 selectors 한 곳에서 관리한다 (탭 미확인 dot 표시용)
+    my_unread_news_ids = match_ctx['unread']
 
     # ── risk / status 필터 (부적합·행정처분 탭) ──────────────────────────────
     # 반드시 Paginator 생성 전에 적용해야 한다.
@@ -258,45 +277,13 @@ def news_list(request):
         )
         qs = qs.filter(Q(id__in=risk_from_product) | Q(id__in=risk_from_ingredient))
 
-    if status in selectors.ACTION_STATUSES or status == 'no_action':
-        prod_act_qs = (
-            RegulatoryMatchAction.objects
-            .filter(
-                product_match__product__user_id=request.user,
-                product_match__false_positive_yn=False,
-                action_type__in=selectors.ACTION_STATUSES,
-            )
-            .values('product_match__news_id', 'action_type')
-            .annotate(max_dt=Max('created_at'))
-        )
-        ing_act_qs = (
-            RegulatoryMatchAction.objects
-            .filter(
-                ingredient_match__user=request.user,
-                ingredient_match__dismissed_yn=False,
-                action_type__in=selectors.ACTION_STATUSES,
-            )
-            .values('ingredient_match__news_id', 'action_type')
-            .annotate(max_dt=Max('created_at'))
-        )
-        news_latest_action: dict = {}
-        for row in prod_act_qs:
-            nid, at, dt = row['product_match__news_id'], row['action_type'], row['max_dt']
-            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
-                news_latest_action[nid] = (at, dt)
-        for row in ing_act_qs:
-            nid, at, dt = row['ingredient_match__news_id'], row['action_type'], row['max_dt']
-            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
-                news_latest_action[nid] = (at, dt)
-
-        if status in selectors.ACTION_STATUSES:
-            filtered_ids = [nid for nid, (at, _) in news_latest_action.items() if at == status]
-            qs = qs.filter(id__in=filtered_ids)
-        else:  # no_action — 조치 가능한 매칭 중 조치 이력이 없는 건
-            qs = qs.filter(
-                id__in=(selectors.actionable_news_ids(request.user)
-                        - set(news_latest_action.keys()))
-            )
+    # 뉴스별 최신 조치(제품·원료 합산)와 미조치 집합은 match_ctx 가 이미 들고 있다.
+    # 여기서 다시 조회하면 같은 조인을 두 번 돌게 된다.
+    if status in selectors.ACTION_STATUSES:
+        qs = qs.filter(id__in=[nid for nid, at in match_ctx['latest_action'].items()
+                               if at == status])
+    elif status == 'no_action':   # 조치 가능한 매칭 중 조치 이력이 없는 건
+        qs = qs.filter(id__in=match_ctx['no_action'])
 
     # 탭 배지 건수용 스냅샷 — 어노테이션(Exists/Subquery) 이 붙기 전 queryset 을 쓴다.
     # 어노테이션된 qs 로 COUNT 하면 불필요한 서브쿼리가 함께 실행될 수 있다.
@@ -364,24 +351,35 @@ def news_list(request):
     # 일반 알림으로 둔다. 내 알림 전체는 'scope=mine' 으로 따로 본다.
     # 정렬·페이지네이션이 어긋나지 않도록 서버에서 가른다.
     mine_total = qs.filter(id__in=matched_ids).count() if matched_ids else 0
-    scope_all_total = qs.count()
+    # 활성 탭 목록의 총 건수는 방금 센 탭 배지 숫자와 같다. 바로 위에서 qs 에
+    # 건 것이 탭 범위 제한뿐이고, 그 제한이 count_qs 를 두 덩이로 정확히 가른다.
+    if tab == 'admin':
+        scope_all_total = tab_admin_total
+    elif tab in ('insp-news', ''):
+        scope_all_total = tab_insp_total
+    else:                       # tab == 'insp' — qs 를 좁히지 않았다
+        scope_all_total = tab_admin_total + tab_insp_total
     other_total = scope_all_total - mine_total
 
     pinned_news = []
+    list_total = scope_all_total   # 아래에서 qs 를 가르면 그쪽 건수로 바뀐다
     if scope == 'mine':
         qs = qs.filter(id__in=matched_ids) if matched_ids else qs.none()
+        list_total = mine_total
     elif matched_ids:
         if scope == '' and mine_total > PINNED_MATCH_LIMIT:
             # 다섯 건 이하면 굳이 가르지 않는다 — 목록이 두 덩이로 쪼개지기만 한다
             pinned_news = list(qs.filter(id__in=matched_ids)[:PINNED_MATCH_LIMIT])
             qs = qs.exclude(id__in=matched_ids)
+            list_total = other_total
         elif scope == 'others':
             qs = qs.exclude(id__in=matched_ids)
+            list_total = other_total
 
-    # 페이지네이션
+    # 페이지네이션 — 건수는 위에서 이미 셌으므로 같은 COUNT 를 다시 돌리지 않는다
     page_num = request.GET.get('page', 1)
     per_page = news_search.safe_per_page(request.GET.get('per_page'))
-    paginator = Paginator(qs, per_page)
+    paginator = _CountedPaginator(qs, per_page, list_total)
     page_obj  = paginator.get_page(page_num)
 
     # 페이지 이동용 쿼리스트링 (page·선택 파라미터 제거, tab 파라미터는 유지)
@@ -420,7 +418,7 @@ def news_list(request):
             news_item.saol_location = ''
 
     # 미조치 건수 — 전 기간 기준 (사이드바·홈 배지와 동일한 selectors 규칙)
-    no_action_count = len(selectors.no_action_news_ids(request.user))
+    no_action_count = len(match_ctx['no_action'])
 
     # 카테고리별 건수 (api_source 기반, 전체 DB 기준 — 필터 드로어 표시용)
     # 전체 테이블 GROUP BY 라 매 요청마다 돌리면 비싸다(로컬 4,750건에서 16ms).
@@ -447,15 +445,21 @@ def news_list(request):
         .select_related('inspection', 'label')
         .order_by('-inspection__tkawydtm', '-alert_phase')
     )
-    # 내 매칭 보유 여부 — 공개 목록(대체 화면) 노출 판단용. 필터와 무관하다.
-    inspection_has_matches = ins_qs_base.exists()
-    # 미확인 dot·"전체 읽음" 버튼은 필터와 무관한 전 기간 기준
-    inspection_unread = ins_qs_base.filter(read_yn=False).count()
+    # 내 매칭 보유 여부(공개 목록 대체 화면 노출 판단)와 미확인 건수(dot·"전체 읽음")는
+    # 둘 다 필터와 무관한 전 기간 기준이라, exists()+count() 두 번 대신 한 번에 센다.
+    _ins_stat = (
+        InspectionMatch.objects
+        .filter(user=request.user)
+        .aggregate(total=Count('id'), unread=Count('id', filter=Q(read_yn=False)))
+    )
+    inspection_has_matches = bool(_ins_stat['total'])
+    inspection_unread      = _ins_stat['unread']
 
     # 공용 필터(검색어·기간)는 활성 탭과 무관하게 적용한다.
     # 부적합·행정처분 배지도 같은 필터를 반영하므로, 여기만 예외로 두면
     # 수거검사 탭을 누르는 순간 배지 숫자가 바뀌어 보인다.
     ins_qs = ins_qs_base
+    ins_filtered = bool(q or date_from or date_to or (days != 'all') or insp_status)
     if q:
         ins_qs = ins_qs.filter(
             Q(inspection__prdtnm__icontains=q) |
@@ -484,10 +488,11 @@ def news_list(request):
         ins_qs = (ins_qs.filter(_pending_q) if insp_status == 'pending'
                   else ins_qs.exclude(_pending_q))
 
-    # 탭 배지 = 목록 헤더 = 현재 필터가 적용된 총 건수 (부적합·행정처분 탭과 같은 규칙)
-    inspection_total  = ins_qs.count()
+    # 탭 배지 = 목록 헤더 = 현재 필터가 적용된 총 건수 (부적합·행정처분 탭과 같은 규칙).
+    # 필터가 하나도 안 걸렸으면 위에서 이미 센 전 기간 건수와 같은 값이다.
+    inspection_total  = ins_qs.count() if ins_filtered else _ins_stat['total']
     insp_page_num     = request.GET.get('insp_page', 1)
-    insp_paginator    = Paginator(ins_qs, 20)
+    insp_paginator    = _CountedPaginator(ins_qs, 20, inspection_total)
     insp_page_obj     = insp_paginator.get_page(insp_page_num)
     inspection_list   = insp_page_obj   # 하위 호환 — 템플릿 변수명 유지
 
@@ -499,52 +504,52 @@ def news_list(request):
     recent_insp_total = 0
     # 필터 결과가 0건인 것과 매칭 자체가 없는 것은 다르다 — 후자일 때만 공개 목록으로 대체
     if not inspection_has_matches:
+        # 예전에는 이 목록 전체(.values() 결과)를 파일 캐시에 통째로 넣고, 매 요청마다
+        # 통째로 되읽어 Python 에서 거르고 잘랐다. 수거검사 원본은 전국 자료라 행이
+        # 많아 캐시 적중 시에도 수만 건을 언피클해야 했고 — 매칭이 없는 사용자에게는
+        # 이 화면이 다른 화면보다 몇 배 느린 주된 이유였다.
+        # 지금은 필터·정렬·자르기를 모두 SQL 에 맡겨 한 페이지(20건)만 읽는다.
         pub_page_num = request.GET.get('pub_page', 1)
         _PUB_FIELDS = (
             'id', 'prdtnm', 'bssh_nm', 'tkawydtm', 'jdgmnt_cd_nm',
             'exc_instt_nm', 'plan_titl', 'tkawyprno',
         )
 
-        # 날짜 범위 지정 시 캐시 우회 (사용자별 동적 조건)
+        pub_qs = InspectionResult.objects.order_by('-tkawydtm')
         if date_from or date_to:
-            pub_qs = InspectionResult.objects.order_by('-tkawydtm')
             if date_from:
                 pub_qs = pub_qs.filter(tkawydtm__gte=date_from.replace('-', ''))
             if date_to:
                 pub_qs = pub_qs.filter(tkawydtm__lte=date_to.replace('-', ''))
-            cached = list(pub_qs.values(*_PUB_FIELDS))
-        else:
-            # days 파라미터 기준 캐시 — 스케줄러 실행 시 무효화
-            cache_key = f'public_insp_list_{days}'
-            cached = cache.get(cache_key)
-            if cached is None:
-                pub_qs = InspectionResult.objects.order_by('-tkawydtm')
-                if days != 'all':
-                    cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
-                    pub_qs = pub_qs.filter(tkawydtm__gte=cutoff_str)
-                cached = list(pub_qs.values(*_PUB_FIELDS))
-                cache.set(cache_key, cached, timeout=60 * 60 * 6)
+        elif days != 'all':
+            try:
+                cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
+                pub_qs = pub_qs.filter(tkawydtm__gte=cutoff_str)
+            except (ValueError, TypeError):
+                pass
 
-        # 검색어 필터 (캐시 데이터를 Python에서 필터링)
         if q:
-            q_lower = q.lower()
-            cached = [
-                r for r in cached
-                if q_lower in (r['prdtnm'] or '').lower()
-                or q_lower in (r['bssh_nm'] or '').lower()
-            ]
+            pub_qs = pub_qs.filter(Q(prdtnm__icontains=q) | Q(bssh_nm__icontains=q))
 
         # 진행 중 / 완료 필터 — 내 목록과 같은 판정 기준을 적용
         if insp_status:
-            want_pending = (insp_status == 'pending')
-            cached = [
-                r for r in cached
-                if ((r['jdgmnt_cd_nm'] or '').strip()
-                    in InspectionResult.PENDING_JUDGMENTS) == want_pending
-            ]
+            _pub_pending_q = Q(jdgmnt_cd_nm__in=InspectionResult.PENDING_JUDGMENTS)
+            pub_qs = (pub_qs.filter(_pub_pending_q) if insp_status == 'pending'
+                      else pub_qs.exclude(_pub_pending_q))
 
-        recent_insp_total = len(cached)
-        recent_insp_paginator = Paginator(cached, 20)
+        # 건수만 캐시한다 — 목록과 달리 값 하나라 캐시가 커지지 않는다.
+        # 검색어·판정·날짜 범위가 걸리면 사용자별 조건이라 그때만 직접 센다.
+        if q or insp_status or date_from or date_to:
+            recent_insp_total = pub_qs.count()
+        else:
+            _pub_count_key = f'public_insp_count_{days}'
+            recent_insp_total = cache.get(_pub_count_key)
+            if recent_insp_total is None:
+                recent_insp_total = pub_qs.count()
+                cache.set(_pub_count_key, recent_insp_total, timeout=60 * 60 * 6)
+
+        recent_insp_paginator = _CountedPaginator(
+            pub_qs.values(*_PUB_FIELDS), 20, recent_insp_total)
         recent_insp_page_obj = recent_insp_paginator.get_page(pub_page_num)
         # 목록 배지는 모델 프로퍼티와 같은 규칙으로 계산해 넣는다 (.values() 라 프로퍼티 사용 불가)
         recent_insp_list = [

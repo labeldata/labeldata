@@ -188,10 +188,12 @@ class Command(BaseCommand):
                 f'     수거검사 완료: 신규 {counts["created"]}건 / '
                 f'업데이트 {counts["updated"]}건 / 스킵 {counts["skipped"]}건'
             ))
-            # 수집 완료 후 공개 목록 캐시 무효화 (다음 요청에서 최신 데이터로 재생성)
+            # 수집 완료 후 공개 목록 건수 캐시 무효화 (다음 요청에서 최신 값으로 재생성).
+            # 목록 자체는 더 이상 캐시하지 않는다 — 요청마다 SQL 로 한 페이지만 읽는다.
             from django.core.cache import cache
             for days_key in ('3', '7', '30', '90', 'all'):
-                cache.delete(f'public_insp_list_{days_key}')
+                cache.delete(f'public_insp_count_{days_key}')
+                cache.delete(f'public_insp_list_{days_key}')   # 예전 키 정리
             self.stdout.write('     공개 수거검사 캐시 초기화 완료')
         except Exception as exc:
             logger.error(f'[수거검사 수집] 오류: {exc}')
