@@ -65,6 +65,7 @@ _CATEGORY_LABELS = {
     'required_document': '근거 문서',
     'nutrition_scope': '영양표시 대상',
     'food_type_mismatch': '식품유형 일치',
+    'package_form': '포장 형태',
 }
 
 # "규정만 검증"(규칙 기반)에는 없고 AI검증에만 있는 항목들 — 사용자에게

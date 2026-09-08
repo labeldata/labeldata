@@ -2245,6 +2245,35 @@ def check_design_name_font(label) -> list[dict]:
         ])]
 
 
+def check_package_form(label) -> list[dict]:
+    """
+    포장 형태가 정해져 있는가 — **표시면 판정의 전제다.**
+
+    표시기준의 활자·표시 규정은 거의 전부 "주표시면에" 또는 "정보표시면에" 를
+    전제로 한다. 그 면이 어디인지는 포장 형태가 정한다(`display_panel`).
+    형태를 모르면 표시면을 따지는 검사가 통째로 설 자리가 없다.
+
+    **지적으로 내지 않는다.** 지금까지 없던 칸이라 기존 라벨은 전부 비어 있다.
+    확정을 막으면 그 순간 모든 라벨이 멈춘다.
+    """
+    from v1.label.services import display_panel
+
+    form = (getattr(label, 'package_form', '') or '').strip()
+    if form and form in display_panel.PACKAGE_FORMS:
+        return []
+    if form:
+        return [_unchecked(
+            'package_form', CAUSE_UNREADABLE,
+            '포장 형태 "%s" 은(는) 목록에 없는 값이라 표시면을 정하지 '
+            '못했습니다.' % form)]
+    return [_unchecked(
+        'package_form', CAUSE_NO_DATA,
+        '포장 형태가 정해지지 않아 주표시면·정보표시면이 어디인지 '
+        '알 수 없습니다.',
+        '기본 정보에서 포장 형태를 고르면 의뢰서에 표시 위치가 적히고, '
+        '표시면을 따지는 검사가 함께 돕니다.')]
+
+
 def check_required_documents(label) -> list[dict]:
     """
     판정의 근거가 되는 문서가 문서함에 들어와 있는가.
@@ -2332,6 +2361,7 @@ _CHECKS = [
     check_design_font_size,
     check_design_name_font,
     # 지적이 아니라 "못 봤다" 만 내는 검사들
+    check_package_form,
     check_nutrition_label_scope,
     check_required_documents,
 ]

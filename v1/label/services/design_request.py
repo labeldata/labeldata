@@ -81,8 +81,15 @@ def default_notes(small_area=True, package_form=None):
     }
 
 
-def notes_for(user, small_area=True, package_form=None):
-    """이 사용자가 쓰는 규정 메모. 고쳐 둔 것이 없으면 기본값."""
+def notes_for(user, small_area=True, package_form=None, label=None):
+    """
+    이 사용자가 쓰는 규정 메모. 고쳐 둔 것이 없으면 기본값.
+
+    `label` 을 주면 그 제품의 포장 형태를 쓴다 — 표시 위치는 사람이 정하는
+    사내 기준이 아니라 **그 제품의 사실**이라 계정에 저장하지 않는다.
+    """
+    if label is not None and not package_form:
+        package_form = (getattr(label, 'package_form', '') or '').strip() or None
     base = default_notes(small_area, package_form)
     try:
         prefs = (getattr(user, 'profile', None).list_prefs or {})

@@ -11535,3 +11535,90 @@ class BomPickerAffordanceTests(TestCase):
         block = self.css[head:head + 500]
         self.assertIn('width: min(620px, 100%)', block)
         self.assertNotIn('right: 0;', block)
+
+
+class DocWrapTests(TestCase):
+    """
+    워드로 낸 표가 종이 한 장을 넘겼다.
+
+    워드는 긴 글을 **쉼표 뒤에서** 접는다. 한 줄에 두세 낱말만 남고 넘어가서
+    원재료명 300자가 스무 줄이 됐다. 낱말 단위를 버리고 가로가 차면 끊는다 —
+    의뢰서는 읽는 문서가 아니라 옮겨 적는 문서라 높이가 먼저다.
+    """
+
+    def _js(self, name):
+        return open('v1/static/js/label/%s' % name, encoding='utf-8').read()
+
+    def test_의뢰서가_가로로_끊는다(self):
+        js = self._js('design_request.js')
+        head = js.index('var cell =')
+        block = js[head:head + 400]
+        self.assertIn('word-break:break-all', block)
+        self.assertIn('line-height:1.15', block)
+
+    def test_표시사항_내보내기도_같다(self):
+        js = self._js('label_preview.js')
+        head = js.index('const cellStyle =')
+        block = js[head:head + 400]
+        self.assertIn('word-break:break-all', block)
+        self.assertIn('line-height:1.15', block)
+
+    def test_여백을_줄였다(self):
+        """줄마다 위아래 여백이 4px 이면 스무 줄에서 160px 이 쌓인다."""
+        for name, needle in (('design_request.js', 'var cell ='),
+                             ('label_preview.js', 'const cellStyle =')):
+            js = self._js(name)
+            head = js.index(needle)
+            self.assertIn('padding:3px 6px', js[head:head + 400], name)
+
+
+class PackageFormTests(TestCase):
+    """
+    포장 형태는 **표시면 판정의 전제다.** 표시기준의 활자·표시 규정은 거의
+    전부 "어느 면에" 를 전제로 하는데, 그 면은 포장 형태가 정한다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='pform', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='형태', **kwargs)
+
+    def _rows(self, label):
+        from v1.label.services.validation_service import check_package_form
+        return check_package_form(label)
+
+    def test_비어_있으면_자료없음이다(self):
+        from v1.label.services.validation_service import CAUSE_NO_DATA
+
+        rows = self._rows(self._label())
+        self.assertEqual([r['cause'] for r in rows], [CAUSE_NO_DATA])
+
+    def test_고르면_조용하다(self):
+        self.assertEqual(self._rows(self._label(package_form='pouch')), [])
+
+    def test_목록에_없는_값은_값불명이다(self):
+        from v1.label.services.validation_service import CAUSE_UNREADABLE
+
+        rows = self._rows(self._label(package_form='알수없음'))
+        self.assertEqual([r['cause'] for r in rows], [CAUSE_UNREADABLE])
+
+    def test_확정을_막지_않는다(self):
+        """지금까지 없던 칸이라 기존 라벨은 전부 비어 있다."""
+        from v1.label.services.validation_service import validate_label
+
+        result = validate_label(self._label())
+        self.assertNotIn('package_form',
+                         {i['category'] for i in result['issues']})
+
+    def test_의뢰서가_라벨의_포장_형태를_쓴다(self):
+        from v1.label.services.design_request import notes_for
+
+        label = self._label(package_form='box')
+        notes = notes_for(self.user, label=label)
+        self.assertIn('표시 위치: 앞면·윗면·뒷면', notes['main'])
+
+    def test_전체_검증에_들어_있다(self):
+        from v1.label.services.validation_service import _CHECKS
+
+        self.assertIn('check_package_form', {c.__name__ for c in _CHECKS})

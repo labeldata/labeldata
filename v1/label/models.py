@@ -187,6 +187,12 @@ class MyLabel(models.Model):
     serving_size = models.CharField(max_length=10, verbose_name="단위 내용량", null=True, blank=True)
     serving_size_unit = models.CharField(max_length=10, verbose_name="단위 내용량 단위", null=True, blank=True)
 
+    # 포장 **재질**이 아니라 **형태**다. 표시기준의 활자·표시 규정은 거의 전부
+    # "어느 면에" 를 전제로 하는데, 그 면은 포장 형태가 정한다 — 봉지는 앞/뒤,
+    # 상자는 앞·윗·뒤/양측면. 목록은 label.services.display_panel 에 있다.
+    package_form = models.CharField(max_length=20, verbose_name="포장 형태",
+                                    null=True, blank=True,
+                                    help_text="주표시면·정보표시면이 어디인지를 정한다")
     units_per_package = models.CharField(max_length=10, verbose_name="포장 당 갯수", null=True, blank=True)
 
     # 1회 섭취참고량. 단위내용량과 다른 값이다 — 단위내용량은 한 개의 양이고
