@@ -779,14 +779,32 @@ class RegulatoryLayoutTests(TestCase):
     def test_통계_카드_줄이_있다(self):
         """이 화면에 들어와 제일 먼저 묻는 것이 "지금 볼 게 몇 건인가" 다."""
         self.assertIn('class="reg-stats"', self.html)
-        self.assertEqual(self.html.count('class="reg-stat-icon'), 4)
-        for label in ('전체 알림', '내 알림', '미조치', '수거검사 미확인'):
+        self.assertEqual(self.html.count('class="reg-stat-icon'), 5)
+        for label in ('전체 알림', '내 알림', '일반', '미조치', '수거검사 미확인'):
             self.assertIn(label, self.html)
 
     def test_카드가_눌러서_거르는_지름길이다(self):
         """숫자만 보여 주면 그 숫자를 만든 목록으로 갈 방법이 없다."""
         self.assertIn('href="?scope=mine"', self.html)
         self.assertIn('href="?tab=insp"', self.html)
+
+    def test_같은_것을_두_번_묻지_않는다(self):
+        """
+        예전에는 카드 줄이 '지표', 툴바의 칩 줄이 '스위치' 라고 갈라 놓았다.
+        그런데 둘이 같은 곳으로 가는 같은 링크여서, 한 화면에서 같은 것을 두 번
+        묻는 꼴이었고 어느 쪽을 눌러야 하는지가 오히려 헷갈렸다.
+        범위와 미조치는 카드 한 벌로 합쳤다.
+        """
+        self.assertNotIn('rs-scope-chip', self.html)
+        self.assertNotIn('미조치만', self.html)
+        # 카드가 스위치를 겸하므로 켜짐 상태를 카드가 들고 있어야 한다
+        r = self.client.get('/regulatory/?scope=others')
+        self.assertIn('reg-stat--on', r.content.decode('utf-8'))
+
+    def test_범위_셋이_모두_카드에_있다(self):
+        """칩을 걷어내면서 '일반만 보기' 로 갈 길이 사라지면 안 된다."""
+        for qs in ('scope=mine', 'scope=others'):
+            self.assertIn(f'href="?{qs}"', self.html)
 
     # ── 본문: 원료 관리와 같은 좌 목록 / 우 상세 ─────────────────────────
     def test_목록이_표다(self):
@@ -897,6 +915,28 @@ class RegulatoryLayoutTests(TestCase):
         self.assertNotIn('🇰🇷', panel)
         self.assertNotIn('🇰🇷', self.item)
 
+    def test_비어_있던_두_칸을_한_칸으로_합쳤다(self):
+        """
+        '등급' 과 '조치' 는 둘 다 내 매칭이 있을 때만 값이 있는데, 목록의
+        압도적 다수는 일반 알림이라 74px 짜리 두 칸이 나란히 '—' 로 차 있었다.
+        수거검사의 '판정'·'변동' 도 마찬가지였다(변동은 2차 알림에만 값이 있다).
+        """
+        self.assertIn('rs-mine-cell', self.item)
+        self.assertIn('rs-mine-cell', self.html)
+        # 표 머리도 한 칸씩 줄었다 — 줄과 머리의 칸 수가 어긋나면 표가 밀린다
+        for thead in ('reg-thead--news', 'reg-thead--insp'):
+            head = self.html[self.html.index(thead):]
+            head = head[:head.index('</thead>')]
+            self.assertEqual(head.count('<th'), 6, thead)
+
+    def test_채울_것이_없으면_비워_둔다(self):
+        """'—' 를 두 개 그리는 것보다 빈 칸이 조용하고, 값이 있는 줄이 눈에 띈다."""
+        r = self.client.get('/regulatory/?scope=others')
+        html = r.content.decode('utf-8')
+        row_start = html.index('rs-mine-cell')
+        cell = html[row_start:html.index('</td>', row_start)]
+        self.assertNotIn('—', cell)
+
     def test_조치_칸을_통째로_다시_쓴다(self):
         """
         미조치 상태에는 배지가 없다(칸이 '—' 다). 예전 스크립트는 배지 요소를
@@ -912,6 +952,81 @@ class RegulatoryLayoutTests(TestCase):
         for source in (self.tpl, panel):
             self.assertIn(".querySelector('.rs-status-cell')", source)
             self.assertNotIn('.badge-status-no', source)
+
+
+class 탭_상태는_서버가_그린다(TestCase):
+    """
+    탭 전환은 곧 페이지 이동이다. 그런데 예전에는 템플릿이 data-view 를 늘
+    'insp-news' 로 박아 놓고, 브라우저에서 스크립트가 주소의 tab 파라미터를
+    읽어 뒤늦게 고쳐 주는 구조였다.
+
+    그래서 스크립트가 한 번이라도 멈추면(오래된 캐시, 앞쪽 구문 오류, 정적 파일
+    실패 어느 것이든) 주소는 ?tab=admin 인데 화면은 부적합 탭 그대로였다.
+    하필 기본 탭인 부적합만 멀쩡해서, "행정처분·수거검사 탭은 클릭이 안 된다"
+    로 나타났다. 본서버에서 실제로 나온 신고다.
+    """
+
+    def setUp(self):
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        cache.clear()
+        self.user = User.objects.create_user(username='tabstate', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                            prdlst_nm='내 제품')
+        RegulatoryNews.objects.create(
+            external_id='ts-insp', api_source='I2620', source='domestic',
+            product_name='부적합 건', collected_date='2026-08-01')
+        RegulatoryNews.objects.create(
+            external_id='ts-admin', api_source='I0470', source='domestic',
+            product_name='행정처분 건', collected_date='2026-08-01')
+        insp = InspectionResult.objects.create(
+            tkawyprno='3', bssh_nm='업소', prdtnm='검사 제품',
+            prdlst_report_no='20250103', tkawydtm='20260801')
+        self.insp_match = InspectionMatch.objects.create(
+            inspection=insp, user=self.user, label=self.label,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_LABEL)
+
+    def _view(self, url):
+        html = self.client.get(url).content.decode('utf-8')
+        marker = 'id="regSidebar" data-view="'
+        start = html.index(marker) + len(marker)
+        return html[start:html.index('"', start)], html
+
+    def test_주소의_탭이_곧_화면의_탭이다(self):
+        for url, expected in (('/regulatory/', 'insp-news'),
+                              ('/regulatory/?tab=admin', 'admin'),
+                              ('/regulatory/?tab=insp', 'insp')):
+            view, _ = self._view(url)
+            self.assertEqual(view, expected, url)
+
+    def test_수거검사_상세를_열면_수거검사_탭이다(self):
+        """탭 파라미터 없이 상세 주소만으로 들어오는 길이 있다."""
+        view, _ = self._view(f'/regulatory/?insp_id={self.insp_match.id}')
+        self.assertEqual(view, 'insp')
+
+    def test_눌린_탭_단추도_서버가_표시한다(self):
+        _, html = self._view('/regulatory/?tab=admin')
+        admin_btn = html[html.index('id="vtabAdmin"') - 200:html.index('id="vtabAdmin"')]
+        self.assertIn('rs-vtab--active', admin_btn)
+        # 기본 탭이 함께 켜져 있으면 안 된다
+        news_btn = html[html.index('id="vtabInspNews"') - 200:html.index('id="vtabInspNews"')]
+        self.assertNotIn('rs-vtab--active', news_btn)
+
+    def test_툴바_줄도_서버가_고른다(self):
+        """수거검사 탭은 툴바 2행이 다르다 — 이것도 스크립트에 맡기지 않는다."""
+        _, html = self._view('/regulatory/?tab=insp')
+        page = html[html.index('id="regPage"') - 200:html.index('id="regPage"')]
+        self.assertIn('reg-page--insp', page)
+
+    def test_스크립트가_주소를_다시_읽지_않는다(self):
+        """
+        서버가 그린 값이 있는데 스크립트가 주소에서 다시 뽑아 쓰면, 두 곳이
+        어긋날 여지가 남는다. 초기화는 서버가 그린 data-view 를 그대로 쓴다.
+        """
+        _, html = self._view('/regulatory/')
+        self.assertIn("var initialTab = (sidebar && sidebar.dataset.view)", html)
 
 
 class 등록했는데_안_걸렸을_때(TestCase):

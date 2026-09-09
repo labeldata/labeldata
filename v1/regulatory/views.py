@@ -721,7 +721,27 @@ def news_list(request):
         except InspectionResult.DoesNotExist:
             pass
 
+    # ── 지금 어느 탭인가 — **서버가 정한다** ────────────────────────────────
+    # 예전에는 이 값을 화면이 몰랐다. 템플릿이 data-view 를 늘 'insp-news' 로
+    # 박아 놓고, 브라우저에서 스크립트가 주소의 tab 파라미터를 읽어 뒤늦게
+    # 고쳐 주는 구조였다. 탭 전환이 곧 페이지 이동인데도 그랬다.
+    #
+    # 그래서 스크립트가 한 번이라도 멈추면(오래된 캐시, 앞쪽 구문 오류, 정적
+    # 파일 실패 어느 것이든) 주소는 ?tab=admin 인데 화면은 부적합 탭 그대로였다.
+    # 눌러도 아무 일이 없는 것처럼 보이고, 하필 기본 탭인 부적합만 멀쩡해
+    # "행정처분·수거검사 탭은 클릭이 안 된다" 로 나타났다.
+    #
+    # 서버가 이미 아는 값이므로 서버가 그린다. 이제 스크립트가 죽어도 탭은
+    # 그냥 링크처럼 동작한다.
+    if tab == TAB_ADMIN:
+        active_tab = TAB_ADMIN
+    elif tab == TAB_INSPECTION or selected_insp or selected_pub_insp:
+        active_tab = TAB_INSPECTION
+    else:
+        active_tab = TAB_INSP_NEWS
+
     return render(request, 'regulatory/news_list.html', {
+        'active_tab':         active_tab,
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,
         'paginator':          paginator,

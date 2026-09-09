@@ -18,13 +18,21 @@
 {% endblock %}
 
 {% block content %}
-<div class="reg-page" id="regPage">
+<div class="reg-page{% if active_tab == 'insp' %} reg-page--insp{% elif active_tab == 'admin' %} reg-page--admin{% endif %}" id="regPage">
 
   {% comment %}
- ─── 1. 통계 카드 줄 ──────────────────────────────────────────────────
+ ─── 1. 통계 카드 줄 = 지표이자 **범위 스위치** ────────────────────────
     제품 관리 첫 화면과 같은 자리·같은 규격이다. 이 화면에 들어와서 제일 먼저
     묻는 것이 "지금 내가 봐야 할 게 몇 건인가" 인데, 예전에는 그 답이 탭 배지
     안의 작은 숫자 하나뿐이라 눈에 걸리지 않았다.
+
+    예전에는 이 줄이 '지표', 아래 툴바의 칩 줄이 '스위치' 라고 갈라 놓았다.
+    그런데 둘이 같은 곳(전체·내 알림)으로 가는 같은 링크였고, 한 화면 안에서
+    같은 것을 두 번 물으니 어느 쪽을 눌러야 하는지가 오히려 헷갈렸다.
+    카드가 스위치를 겸한다 — 눌린 카드가 지금 보고 있는 범위다.
+
+    앞 세 장(전체·내 알림·일반)은 **서로 배타적인 범위**고, 구분선 뒤 두 장
+    (미조치·수거검사)은 **겹쳐 켜는 지름길**이다. 성격이 달라 선으로 가른다.
 {% endcomment %}
   <div class="reg-stats">
     <a class="reg-stat{% if not scope and not no_action_on %} reg-stat--on{% endif %}"
@@ -43,6 +51,17 @@
         <span class="reg-stat-lbl">내 알림</span>
       </span>
     </a>
+    <a class="reg-stat{% if scope == 'others' %} reg-stat--on{% endif %}"
+       href="?{{ scope_qs_others }}" title="내 알림을 빼고 나머지만 봅니다">
+      <span class="reg-stat-icon reg-stat-icon--gray"><i class="bi bi-dash-circle"></i></span>
+      <span>
+        <span class="reg-stat-n">{{ other_total|intcomma }}</span>
+        <span class="reg-stat-lbl">일반</span>
+      </span>
+    </a>
+
+    <span class="reg-stats-divider"></span>
+
     <a class="reg-stat{% if no_action_on %} reg-stat--on{% endif %}"
        href="?{{ no_action_qs }}" title="아직 조치하지 않은 건만 봅니다">
       <span class="reg-stat-icon reg-stat-icon--warn"><i class="bi bi-hourglass-split"></i></span>
@@ -93,21 +112,21 @@
       <div class="reg-tb-row">
         <div class="reg-tabs">
           {# 배지 숫자 = 그 탭 목록의 총 건수(현재 필터 적용), 빨간 점 = 미확인 존재 #}
-          <button type="button" class="rs-vtab{% if not selected_insp and not selected_pub_insp %} rs-vtab--active{% endif %}"
+          <button type="button" class="rs-vtab{% if active_tab == 'insp-news' %} rs-vtab--active{% endif %}"
                   id="vtabInspNews" onclick="switchView('insp-news')"
                   {% if tab_insp_unread %}title="미확인 {{ tab_insp_unread }}건"{% endif %}>
             <i class="bi bi-shield-exclamation"></i>부적합
             <span class="rs-vtab-count" id="vtabInspNewsCnt">{{ tab_insp_total|intcomma }}</span>
             {% if tab_insp_unread %}<span class="rs-vtab-unread-dot" id="vtabInspNewsUnreadDot"></span>{% endif %}
           </button>
-          <button type="button" class="rs-vtab"
+          <button type="button" class="rs-vtab{% if active_tab == 'admin' %} rs-vtab--active{% endif %}"
                   id="vtabAdmin" onclick="switchView('admin')"
                   {% if tab_admin_unread %}title="미확인 {{ tab_admin_unread }}건"{% endif %}>
             <i class="bi bi-gavel"></i>행정처분
             <span class="rs-vtab-count" id="vtabAdminCnt">{{ tab_admin_total|intcomma }}</span>
             {% if tab_admin_unread %}<span class="rs-vtab-unread-dot" id="vtabAdminUnreadDot"></span>{% endif %}
           </button>
-          <button type="button" class="rs-vtab{% if selected_insp or selected_pub_insp %} rs-vtab--active{% endif %}"
+          <button type="button" class="rs-vtab{% if active_tab == 'insp' %} rs-vtab--active{% endif %}"
                   id="vtabInsp" onclick="switchView('insp')"
                   {% if inspection_unread %}title="미확인 {{ inspection_unread }}건"{% endif %}>
             <i class="bi bi-search"></i>수거검사
@@ -144,30 +163,14 @@
       </div>
 
       {% comment %}
- ── 2행(부적합·행정처분): 범위 · 기간 · 상세 조건 ─────────────────
-        위 통계 카드와 겹쳐 보이지만 성격이 다르다. 카드는 **지금 몇 건인지**를
-        말하는 지표이자 지름길이고, 여기 칩은 셋 중 하나를 고르는 **스위치**다.
-        카드만 두면 '일반 알림만' 으로 갈 길이 없고, 지금 어느 상태인지도 칩
-        줄에서만 한눈에 보인다. (제품 관리도 통계 카드와 필터를 함께 둔다)
+ ── 2행(부적합·행정처분): 기간 · 모두 읽음 · 상세 조건 ────────────
+        범위(전체·내 알림·일반)와 미조치는 위 통계 카드로 옮겼다.
+        예전에는 카드가 '지표', 여기 칩이 '스위치' 라고 갈라 놓았지만 둘이
+        같은 곳으로 가는 같은 링크여서, 한 화면 안에서 같은 것을 두 번 묻는
+        꼴이었다. 이 줄에는 카드에 없는 것만 남긴다.
 {% endcomment %}
       <div class="reg-tb-row reg-tb-row--news">
         <div class="rf-risk-chips">
-          <span class="rf-listctl-label">범위</span>
-          <a class="rs-scope-chip{% if not scope %} rs-scope-chip--on{% endif %}"
-             href="?{{ scope_qs_all }}" title="내 알림을 위에 몇 건만 고정하고, 목록은 일반 알림으로 채웁니다">
-            전체<span class="rs-scope-n">{{ scope_all_total|intcomma }}</span>
-          </a>
-          <a class="rs-scope-chip{% if scope == 'mine' %} rs-scope-chip--on{% endif %}"
-             href="?{{ scope_qs_mine }}" title="내 제품·원료·키워드에 걸린 알림만 봅니다">
-            내 알림<span class="rs-scope-n">{{ mine_total|intcomma }}</span>
-          </a>
-          <a class="rs-scope-chip{% if scope == 'others' %} rs-scope-chip--on{% endif %}"
-             href="?{{ scope_qs_others }}" title="내 알림을 빼고 나머지만 봅니다">
-            일반<span class="rs-scope-n">{{ other_total|intcomma }}</span>
-          </a>
-
-          <span class="rs-chip-divider"></span>
-
           <span class="rf-listctl-label">기간</span>
           <div class="rs-days-group">
             <button type="button" class="rs-day-btn {% if days == '3'  and not date_from and not date_to %}active{% endif %}" onclick="setDays('3')" title="최근 3일 이내에 등록된 정보만">3일</button>
@@ -195,14 +198,6 @@
             <span class="rs-quick-chip-n" id="newsMarkAllReadN"></span>
           </button>
 
-          {# 미조치만 — 가장 자주 쓰는 조작이라 지름길을 둔다 (위 카드와 같은 곳) #}
-          <a class="rs-quick-chip{% if no_action_on %} rs-quick-chip--on{% endif %}"
-             href="{% if no_action_on %}?{{ scope_qs_all }}{% else %}?{{ no_action_qs }}{% endif %}"
-             title="{% if no_action_on %}미조치 조건을 끕니다{% else %}아직 조치하지 않은 건만 봅니다{% endif %}">
-            <i class="bi bi-hourglass-split"></i>미조치만
-            {% if no_action_count %}<span class="rs-quick-chip-n">{{ no_action_count|intcomma }}</span>{% endif %}
-          </a>
-
           {% comment %}
  상세 조건은 접어 둔다 — 늘 펼쳐 두면 목록이 그만큼 아래로 밀린다.
             id 가 condToggle 이 아닌 이유: 그 id 는 _condition_panel.html 이
@@ -210,7 +205,8 @@
             전체를 여닫아야 해서, 패널은 늘 펼친 채로 두고 서랍을 접는다.
 {% endcomment %}
           <button type="button" class="reg-cond-toggle{% if conditions %} reg-cond-toggle--on{% endif %}"
-                  id="regCondToggle" title="여러 조건을 겹쳐 좁혀 봅니다">
+                  id="regCondToggle"{% if active_tab == 'insp' %} disabled{% endif %}
+                  title="{% if active_tab == 'insp' %}수거검사 탭에서는 상세 조건을 사용할 수 없습니다{% else %}여러 조건을 겹쳐 좁혀 봅니다{% endif %}">
             <i class="bi bi-sliders2"></i>상세 조건
             <span class="rs-quick-chip-n" id="condCount" {% if not conditions %}hidden{% endif %}>{{ conditions|length }}</span>
           </button>
@@ -475,7 +471,8 @@
   <div class="reg-wrap{% if selected_news or selected_insp or selected_pub_insp %} has-detail{% endif %}">
 
     {# ── 왼쪽: 목록 ── #}
-    <section class="reg-sidebar" id="regSidebar" data-view="{% if selected_insp or selected_pub_insp %}insp{% else %}insp-news{% endif %}">
+    {# data-view 가 이 화면의 탭 상태다 — regulatory.css 의 표시 규칙이 전부 이 값을 본다 #}
+    <section class="reg-sidebar" id="regSidebar" data-view="{{ active_tab }}">
 
       {# 목록 머리 — 왼쪽은 건수, 오른쪽은 보는 방식(정렬·개수) #}
       <div class="rs-list-header">
@@ -513,14 +510,21 @@
             숨겨도 자리를 세므로, 좁은 화면에서 업체·위반내용을 접으면 남은 칸에
             엉뚱한 너비가 붙는다.
 {% endcomment %}
+          {% comment %}
+            칸 다섯 번째는 **한 칸**이다. 예전에는 둘이었다 —
+              부적합·행정처분: 등급 | 조치      수거검사: 판정 | 변동
+            그런데 오른쪽 칸은 대부분 비어 있었다. 등급·조치는 내 매칭이 있을
+            때만 값이 있는데 목록의 압도적 다수가 일반 알림이고, '변동' 은
+            판정변동(2차) 알림에만 값이 있다. 화면 폭 74px 을 '—' 로 채우고
+            있었던 셈이라, 둘을 합치고 그 폭을 위반내용에 넘겼다.
+          {% endcomment %}
           <thead class="reg-thead--news">
             <tr>
               <th style="width:92px">구분</th>
               <th>제품명</th>
               <th class="reg-col--company" style="width:150px">업체</th>
-              <th class="reg-col--reason" style="width:160px">위반내용</th>
-              <th class="tc" style="width:74px">등급</th>
-              <th class="tc" style="width:74px">조치</th>
+              <th class="reg-col--reason" style="width:196px">위반내용</th>
+              <th class="tc" style="width:106px">내 알림</th>
               <th class="tc" style="width:56px">날짜</th>
             </tr>
           </thead>
@@ -529,9 +533,8 @@
               <th style="width:92px">구분</th>
               <th>제품명</th>
               <th class="reg-col--company" style="width:150px">업소</th>
-              <th class="reg-col--reason" style="width:160px">수거계획·수행기관</th>
-              <th class="tc" style="width:74px">판정</th>
-              <th class="tc" style="width:74px">변동</th>
+              <th class="reg-col--reason" style="width:196px">수거계획·수행기관</th>
+              <th class="tc" style="width:106px">판정</th>
               <th class="tc" style="width:56px">수거일</th>
             </tr>
           </thead>
@@ -571,11 +574,11 @@
               <span class="rs-insp-plan-titl">{{ m.inspection.plan_titl|default:"—" }}</span>
               {% if m.inspection.exc_instt_nm %}<span class="rs-insp-excinstt"> · {{ m.inspection.exc_instt_nm }}</span>{% endif %}
             </td>
-            <td class="tc">{% include "regulatory/_insp_status_badge.html" with status=m.inspection.judgment_status %}</td>
-            <td class="tc">
+            <td class="tc rs-mine-cell">
+              {% include "regulatory/_insp_status_badge.html" with status=m.inspection.judgment_status %}
               {% if m.alert_phase == 2 and m.prev_judgment %}
-              <span class="rs-insp-prev" title="이전: {{ m.prev_judgment }} → {{ m.inspection.jdgmnt_cd_nm }}">{{ m.prev_judgment }}→</span>
-              {% else %}<span class="rs-item-sub">—</span>{% endif %}
+              <span class="rs-insp-prev" title="이전 판정: {{ m.prev_judgment }} → 지금 {{ m.inspection.jdgmnt_cd_nm }}">{{ m.prev_judgment }}→</span>
+              {% endif %}
             </td>
             <td class="tc"><span class="rs-item-date">{{ m.inspection.tkawydtm|slice:"4:6" }}/{{ m.inspection.tkawydtm|slice:"6:8" }}</span></td>
           </tr>
@@ -595,8 +598,7 @@
               <span class="rs-insp-plan-titl">{{ r.plan_titl|default:"—" }}</span>
               {% if r.exc_instt_nm %}<span class="rs-insp-excinstt"> · {{ r.exc_instt_nm }}</span>{% endif %}
             </td>
-            <td class="tc">{% include "regulatory/_insp_status_badge.html" with status=r.judgment_status %}</td>
-            <td class="tc"><span class="rs-item-sub">—</span></td>
+            <td class="tc rs-mine-cell">{% include "regulatory/_insp_status_badge.html" with status=r.judgment_status %}</td>
             <td class="tc"><span class="rs-item-date">{{ r.tkawydtm|slice:"4:6" }}/{{ r.tkawydtm|slice:"6:8" }}</span></td>
           </tr>
           {% empty %}
@@ -820,7 +822,12 @@
                   <i class="bi bi-arrow-left-right rd-why-arrow"></i>
                   <span class="rd-why-mine" title="내 정보의 인허가번호">인허가번호</span>
                 {% else %}
-                  <span class="rd-why-kw" title="수거검사 업소명">{{ selected_insp.inspection.bssh_nm|default:"업소명" }}</span>
+                  <span class="rd-why-kw" title="수거검사 업소명">{{ selected_insp.inspection.bssh_nm|default:"업소명" }}{% if selected_insp.inspection.bssh_nm %}
+                    <button type="button" class="rd-why-mute-x"
+                            onclick="muteAlert('company', '{{ selected_insp.inspection.bssh_nm|escapejs }}')"
+                            title="업소 '{{ selected_insp.inspection.bssh_nm }}' 로 걸리는 수거검사 알림을 앞으로 받지 않습니다"
+                            aria-label="이 업소 알림 끄기"><i class="bi bi-bell-slash"></i></button>
+                  {% endif %}</span>
                   <i class="bi bi-arrow-left-right rd-why-arrow"></i>
                   <span class="rd-why-mine" title="내 정보의 회사명">회사명</span>
                 {% endif %}
@@ -831,18 +838,12 @@
                 <code class="rd-insp-matched-code">{{ selected_insp.matched_value }}</code>
               </div>
               {% endif %}
-              {% if selected_insp.match_reason != 'label_no' and selected_insp.inspection.bssh_nm %}
-              <div class="rd-why-mute">
-                <span class="rd-why-mute-lead"><i class="bi bi-bell-slash"></i>이 업소가 내 업체가 아니라면</span>
-                <button type="button" class="rd-mute-btn"
-                        onclick="muteAlert('company', '{{ selected_insp.inspection.bssh_nm|escapejs }}')"
-                        title="이 업소명으로 걸리는 수거검사 알림을 앞으로 받지 않습니다">
-                  업소 &lsquo;{{ selected_insp.inspection.bssh_nm|truncatechars:16 }}&rsquo; 끄기
-                </button>
-                <button type="button" class="rd-mute-btn" onclick="openAlertSettings('insp')"
-                        title="회사명·인허가번호를 더 정확하게 고칩니다">
-                  내 정보 고치기
-                </button>
+              {% if selected_insp.match_reason != 'label_no' %}
+              <div class="rd-why-hint">
+                <i class="bi bi-info-circle"></i>
+                이 업소가 내 업체가 아니라면 배지의 종 단추로 끄거나,
+                <button type="button" class="rd-why-link" onclick="openAlertSettings('insp')">내 정보를 고쳐</button>
+                더 정확히 맞추세요.
               </div>
               {% endif %}
             </div>
@@ -1691,22 +1692,16 @@ function _applySwitchViewCSS(v) {
 })();
 
 // 페이지 로드 시 초기 탭 활성화
-// 탭 건수(vtabInspNewsCnt, vtabAdminCnt, sidebarInspNewsCnt, sidebarAdminCnt)는
-// 서버에서 필터 적용 후 계산한 값으로 HTML에 이미 렌더링되어 있음
+//
+// 탭 상태는 **서버가 이미 그려 놨다** (#regSidebar[data-view], #regPage 클래스,
+// .rs-vtab--active). 여기서 하는 일은 그것을 다시 확인해 맞추는 것뿐이라,
+// 이 스크립트가 통째로 안 돌아도 탭은 링크처럼 동작한다.
+// 예전에는 반대였다 — 서버가 늘 'insp-news' 를 박고 여기서 고쳐 줬기 때문에,
+// 스크립트가 한 번 멈추면 주소는 ?tab=admin 인데 화면은 부적합 탭이었다.
 (function() {
 
-  // 초기 탭 결정: URL tab 파라미터 > 수거검사 상세 열림 > 기본(insp-news)
   var sidebar = document.getElementById('regSidebar');
-  var urlTab  = new URL(window.location.href).searchParams.get('tab');
-  var validTabs = {'insp-news': true, 'admin': true, 'insp': true};
-  var initialTab;
-  if (urlTab && validTabs[urlTab]) {
-    initialTab = urlTab;
-  } else if (sidebar && sidebar.dataset.view === 'insp') {
-    initialTab = 'insp';
-  } else {
-    initialTab = 'insp-news';
-  }
+  var initialTab = (sidebar && sidebar.dataset.view) || 'insp-news';
   // false: 초기 로드 시 URL을 replaceState로 덮어쓰지 않음
   switchView(initialTab, false);
 

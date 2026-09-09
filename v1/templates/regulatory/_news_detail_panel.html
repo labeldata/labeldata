@@ -255,6 +255,7 @@
     <div class="rd-sec-hdr">
       <i class="bi bi-exclamation-triangle-fill text-danger"></i>
       영향받는 내 제품 <span class="rd-sec-cnt">{{ matches|length }}건</span>
+      <span class="rd-sec-note"><i class="bi bi-bell-slash"></i>배지의 종 단추로 그 원인의 알림을 끕니다</span>
     </div>
     <div class="rd-sec-body">
     {% for m in matches %}
@@ -284,39 +285,41 @@
         X 를 끌어왔는지는 화면에 없었다. 알림이 많다고 느낀 사람이 할 수 있는
         일이 "제품을 지운다" 밖에 없었던 이유다. 좌변(뉴스 쪽 키워드)과 우변
         (내 원료명)을 나란히 보여 주고, 그 자리에서 양쪽 다 끌 수 있게 한다.
+
+        끄는 단추는 **배지 안**에 붙인다. 처음에는 아래에 설명 한 줄과 알약
+        단추 두 개를 따로 뒀는데, 매칭이 다섯 건이면 그것만 열 줄이라 패널이
+        그만큼 길어졌다. 끄려는 대상이 곧 그 배지이므로, 배지에 붙는 편이
+        짧기도 하고 무엇을 끄는지도 더 분명하다.
+        (설명은 섹션 제목 옆에 한 번만 둔다 — 매칭마다 되풀이할 말이 아니다)
       {% endcomment %}
       <div class="rd-why">
         <span class="rd-why-label">알림 사유</span>
         {% if news.is_admin_source %}
-          <span class="rd-why-kw" title="처분 대상 업체명">{{ m.matched_keyword|default:"—" }}</span>
+          <span class="rd-why-kw" title="처분 대상 업체명">{{ m.matched_keyword|default:"—" }}{% if m.matched_keyword %}
+            <button type="button" class="rd-why-mute-x"
+                    onclick="muteAlert('company', '{{ m.matched_keyword|escapejs }}')"
+                    title="업체 '{{ m.matched_keyword }}' 로 걸리는 알림을 앞으로 받지 않습니다"
+                    aria-label="이 업체 알림 끄기"><i class="bi bi-bell-slash"></i></button>
+          {% endif %}</span>
           <i class="bi bi-arrow-left-right rd-why-arrow"></i>
           <span class="rd-why-mine" title="내 정보에 등록된 제조사">{{ m.matched_ingredient|default:"—" }}</span>
         {% else %}
-          <span class="rd-why-kw" title="부적합 정보에서 뽑힌 말">{{ m.matched_keyword|default:"—" }}</span>
+          <span class="rd-why-kw" title="부적합 정보에서 뽑힌 말">{{ m.matched_keyword|default:"—" }}{% if m.matched_keyword %}
+            <button type="button" class="rd-why-mute-x"
+                    onclick="muteAlert('keyword', '{{ m.matched_keyword|escapejs }}')"
+                    title="키워드 '{{ m.matched_keyword }}' 로 걸리는 알림을 앞으로 받지 않습니다"
+                    aria-label="이 키워드 알림 끄기"><i class="bi bi-bell-slash"></i></button>
+          {% endif %}</span>
           <i class="bi bi-arrow-left-right rd-why-arrow"></i>
-          <span class="rd-why-mine" title="내 원료명">{{ m.matched_ingredient|default:"—" }}</span>
+          <span class="rd-why-mine" title="내 원료명">{{ m.matched_ingredient|default:"—" }}{% if m.matched_ingredient %}
+            <button type="button" class="rd-why-mute-x"
+                    onclick="muteAlert('ingredient', '{{ m.matched_ingredient|escapejs }}')"
+                    title="내 원료 '{{ m.matched_ingredient }}' 로 걸리는 알림을 앞으로 받지 않습니다"
+                    aria-label="이 원료 알림 끄기"><i class="bi bi-bell-slash"></i></button>
+          {% endif %}</span>
         {% endif %}
         <span class="rd-why-score">위해도 {{ m.risk_score }}pt · 유사도 {{ m.match_score|floatformat:0 }}</span>
       </div>
-      {% if m.matched_keyword or m.matched_ingredient %}
-      <div class="rd-why-mute">
-        <span class="rd-why-mute-lead"><i class="bi bi-bell-slash"></i>이것 때문에 알림이 잦다면</span>
-        {% if m.matched_keyword %}
-        <button type="button" class="rd-mute-btn"
-                onclick="muteAlert('{% if news.is_admin_source %}company{% else %}keyword{% endif %}', '{{ m.matched_keyword|escapejs }}')"
-                title="이 말로 걸리는 알림을 앞으로 받지 않습니다">
-          {% if news.is_admin_source %}업체{% else %}키워드{% endif %} &lsquo;{{ m.matched_keyword|truncatechars:14 }}&rsquo; 끄기
-        </button>
-        {% endif %}
-        {% if m.matched_ingredient and not news.is_admin_source %}
-        <button type="button" class="rd-mute-btn"
-                onclick="muteAlert('ingredient', '{{ m.matched_ingredient|escapejs }}')"
-                title="내 원료 쪽을 기준으로 앞으로 받지 않습니다">
-          내 원료 &lsquo;{{ m.matched_ingredient|truncatechars:14 }}&rsquo; 끄기
-        </button>
-        {% endif %}
-      </div>
-      {% endif %}
       {% with acts=m.actions.all %}{% if acts %}
       <div class="rd-hist-line">
         {% with la=acts|first %}<span class="rd-ah-badge {{ la.action_type }}">{{ la.get_action_type_display }}</span>
@@ -350,7 +353,8 @@
     <div class="rd-sec-hdr">
       <i class="bi bi-box-seam" style="color:#f9a825;"></i>
       원료 보관함 연관 원료 <span class="rd-sec-cnt">{{ ing_matches|length }}건</span>
-      <span style="font-size:11px;font-weight:400;color:#9aa0a6;margin-left:2px;">BOM 미연결</span>
+      <span class="rd-sec-sub">BOM 미연결</span>
+      <span class="rd-sec-note"><i class="bi bi-bell-slash"></i>배지의 종 단추로 그 원인의 알림을 끕니다</span>
     </div>
     <div class="rd-sec-body">
     {% for im in ing_matches %}
@@ -362,29 +366,22 @@
       </div>
       <div class="rd-why">
         <span class="rd-why-label">알림 사유</span>
-        <span class="rd-why-kw" title="부적합 정보에서 뽑힌 말">{{ im.matched_keyword|default:"—" }}</span>
+        <span class="rd-why-kw" title="부적합 정보에서 뽑힌 말">{{ im.matched_keyword|default:"—" }}{% if im.matched_keyword %}
+          <button type="button" class="rd-why-mute-x"
+                  onclick="muteAlert('keyword', '{{ im.matched_keyword|escapejs }}')"
+                  title="키워드 '{{ im.matched_keyword }}' 로 걸리는 알림을 앞으로 받지 않습니다"
+                  aria-label="이 키워드 알림 끄기"><i class="bi bi-bell-slash"></i></button>
+        {% endif %}</span>
         <i class="bi bi-arrow-left-right rd-why-arrow"></i>
-        <span class="rd-why-mine" title="내 원료명">{{ im.ingredient.prdlst_nm|default:im.ingredient.ingredient_display_name }}</span>
-        <span class="rd-why-score">유사도 {{ im.match_score|floatformat:0 }}</span>
-      </div>
-      <div class="rd-why-mute">
-        <span class="rd-why-mute-lead"><i class="bi bi-bell-slash"></i>이것 때문에 알림이 잦다면</span>
-        {% if im.matched_keyword %}
-        <button type="button" class="rd-mute-btn"
-                onclick="muteAlert('keyword', '{{ im.matched_keyword|escapejs }}')"
-                title="이 말로 걸리는 알림을 앞으로 받지 않습니다">
-          키워드 &lsquo;{{ im.matched_keyword|truncatechars:14 }}&rsquo; 끄기
-        </button>
-        {% endif %}
         {% with ing_name=im.ingredient.prdlst_nm|default:im.ingredient.ingredient_display_name %}
-        {% if ing_name %}
-        <button type="button" class="rd-mute-btn"
-                onclick="muteAlert('ingredient', '{{ ing_name|escapejs }}')"
-                title="내 원료 쪽을 기준으로 앞으로 받지 않습니다">
-          내 원료 &lsquo;{{ ing_name|truncatechars:14 }}&rsquo; 끄기
-        </button>
-        {% endif %}
+        <span class="rd-why-mine" title="내 원료명">{{ ing_name }}{% if ing_name %}
+          <button type="button" class="rd-why-mute-x"
+                  onclick="muteAlert('ingredient', '{{ ing_name|escapejs }}')"
+                  title="내 원료 '{{ ing_name }}' 로 걸리는 알림을 앞으로 받지 않습니다"
+                  aria-label="이 원료 알림 끄기"><i class="bi bi-bell-slash"></i></button>
+        {% endif %}</span>
         {% endwith %}
+        <span class="rd-why-score">유사도 {{ im.match_score|floatformat:0 }}</span>
       </div>
       {% with bom_list=im.ingredient.bom_usages.all %}
       {% if bom_list %}

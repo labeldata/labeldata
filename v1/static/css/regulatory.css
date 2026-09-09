@@ -78,6 +78,11 @@
   border-bottom: 1px solid var(--ez-gray-300, #dadce0);
   overflow-x: auto; overflow-y: hidden;
 }
+/* 앞 세 장(전체·내 알림·일반)은 서로 배타적인 **범위**, 뒤 두 장(미조치·수거검사)은
+   겹쳐 켜는 **지름길**이다. 성격이 다른 것을 한 줄에 두므로 선으로 가른다. */
+.reg-stats-divider { width: 1px; align-self: stretch; margin: 4px 2px;
+                     background: var(--c-border); flex-shrink: 0; }
+
 .reg-stat {
   display: flex; align-items: center; gap: 12px;
   min-width: 172px; flex-shrink: 0;
@@ -185,40 +190,13 @@
                    flex-shrink: 0; margin: 0 3px; }
 
 /* 칩 공통 — 제품 조회의 .pv-chip 과 같은 알약 */
-.rs-day-btn, .rs-risk-chip, .rs-scope-chip, .rs-quick-chip, .reg-cond-toggle {
-  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
-  height: 30px; padding: 0 13px;
-  border: 1px solid var(--c-border-line); border-radius: var(--ez-radius-pill);
-  background: #fff; color: var(--c-text-body);
-  font-size: 12.5px; line-height: 1; white-space: nowrap;
-  cursor: pointer; text-decoration: none;
-  transition: background var(--ez-transition-fast), border-color var(--ez-transition-fast),
-              color var(--ez-transition-fast);
-}
-.rs-day-btn:hover, .rs-risk-chip:hover, .rs-scope-chip:hover,
-.rs-quick-chip:hover, .reg-cond-toggle:hover {
-  background: var(--c-primary-bg); border-color: var(--c-primary);
-  color: var(--c-primary); text-decoration: none;
-}
-.rs-day-btn.active, .rs-scope-chip--on,
-.rs-risk-chip.active-L, .rs-risk-chip.active-no, .rs-risk-chip.active-res,
-.reg-cond-toggle--on {
-  background: var(--c-primary-bg); border-color: var(--c-primary);
-  color: var(--c-primary); font-weight: 700;
-}
-.rs-quick-chip--on {
+.rs-day-btn, .rs-risk-chip, .rs-day-btn:hover, .rs-risk-chip:hover, .rs-day-btn.active, .rs-quick-chip--on {
   background: var(--c-warn-bg); border-color: var(--c-warning, #f9ab00);
   border-color: #f9ab00; color: #7a5b06; font-weight: 700;
 }
 .rs-quick-chip--on:hover { background: #feefc3; border-color: #f9ab00; color: #7a5b06; }
 
 /* 칩 안의 건수 — 탭 배지와 같은 모양 */
-.rs-scope-n, .rs-quick-chip-n, .rs-vtab-count {
-  background: var(--c-border); color: var(--c-text-secondary);
-  font-size: 10px; font-weight: 700; border-radius: 9px; padding: 1px 6px;
-}
-.rs-scope-chip--on .rs-scope-n,
-.rs-vtab--active .rs-vtab-count { background: #fff; color: var(--c-primary); }
 .rs-quick-chip--on .rs-quick-chip-n { background: #fce8b2; color: #7a5b06; }
 
 /* 조건 초기화 */
@@ -542,6 +520,15 @@ details[open] .rd-ai-sum::after { content: "⌄"; font-size: 12px; }
 /* 카드 안쪽 내용 — 제목 아래 여백은 여기서 준다 */
 .rd-sec-body { padding: 12px 16px; }
 
+/* 등급과 조치를 한 칸에 담는다(_news_item.html 주석 참고).
+   배지가 둘 다 있으면 좁은 칸에서 줄바꿈되므로 가운데로 모아 감싼다.
+   채울 것이 없으면 빈 칸으로 둔다 — '—' 두 개보다 조용하고, 값이 있는 줄이
+   그만큼 눈에 띈다. */
+.rs-mine-cell            { white-space: normal; line-height: 1.5; }
+.rs-mine-cell > *        { display: inline-block; vertical-align: middle; }
+.rs-mine-cell .rs-status-cell:empty { display: none; }
+.rs-mine-cell .rs-status-cell > *   { margin-left: 3px; }
+
 /* ── 18. 매칭 아이템 ───────────────────────────────────────── */
 .rd-item             { border: 1px solid var(--c-border); border-radius: var(--r-sm);
                        margin-bottom: 6px; overflow: hidden; background: #fff; }
@@ -583,16 +570,25 @@ details[open] .rd-ai-sum::after { content: "⌄"; font-size: 12px; }
                   background: var(--c-primary-bg); border-radius: var(--r-xs); padding: 1px 6px; }
 .rd-why-score   { font-size: 10px; color: var(--c-text-hint); margin-left: auto; }
 
-.rd-why-mute      { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
-                    padding: 0 10px 7px; }
-.rd-why-mute-lead { display: inline-flex; align-items: center; gap: 3px;
-                    font-size: 10px; color: var(--c-text-hint); }
-.rd-mute-btn      { display: inline-flex; align-items: center; gap: 3px;
-                    border: 1px solid var(--c-border); background: #fff;
-                    border-radius: 12px; padding: 2px 9px;
-                    font-size: 10.5px; color: var(--c-text-secondary); cursor: pointer; }
-.rd-mute-btn:hover { border-color: var(--c-danger); color: var(--c-danger);
-                     background: var(--c-danger-bg); }
+/* 끄는 단추는 배지 안에 붙는다.
+   처음에는 배지 아래에 설명 한 줄과 알약 단추 두 개를 따로 뒀는데, 매칭이
+   다섯 건이면 그것만 열 줄이라 패널이 그만큼 길어졌다. 끄려는 대상이 곧 그
+   배지이므로 배지에 붙는 편이 짧기도 하고 무엇을 끄는지도 분명하다.
+   (설명은 섹션 제목 옆 .rd-sec-note 에 한 번만 둔다) */
+.rd-why-mute-x        { border: none; background: none; cursor: pointer;
+                        padding: 0 0 0 4px; margin: 0 -2px 0 0;
+                        font-size: 10px; line-height: 1;
+                        color: currentColor; opacity: 0.45; }
+.rd-why-mute-x:hover,
+.rd-why-mute-x:focus-visible { opacity: 1; color: var(--c-danger); }
+.rd-why-kw, .rd-why-mine { display: inline-flex; align-items: center; }
+
+/* 수거검사 상세의 한 줄 안내 — 끄는 길과 고치는 길을 함께 알려 준다 */
+.rd-why-hint   { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap;
+                 margin-top: 6px; font-size: 11px; color: var(--c-text-hint); }
+.rd-why-link   { border: none; background: none; padding: 0; cursor: pointer;
+                 font-size: 11px; color: var(--c-primary); text-decoration: underline; }
+.rd-sec-sub    { font-size: 11px; font-weight: 400; color: var(--c-text-hint); margin-left: 2px; }
 
 /* ── 19. 조치 이력 ─────────────────────────────────────────── */
 .rd-hist-line { display: flex; align-items: center; gap: 5px; padding: 4px 10px;
@@ -1192,24 +1188,8 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
    닿을 수가 없었다. 위쪽 칩으로 범위를 고르고, 기본 화면에서는
    내 알림을 다섯 건만 고정해 보여 준다.
    ================================================================ */
-.rs-scope-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 10px; border-radius: 999px;
-  border: 1px solid var(--c-border); background: #fff;
-  font-size: 12px; font-weight: 600; color: var(--c-text-muted);
-  text-decoration: none; white-space: nowrap;
-}
-.rs-scope-chip:hover     { border-color: #aecbfa; color: #1a56db; }
-.rs-scope-chip--on       { border-color: #1a56db; background: var(--ez-info-bg, #e8f0fe); color: #1a56db; }
-.rs-scope-n {
-  font-size: 11px; font-weight: 700; color: var(--c-text-hint);
-  background: var(--c-bg-page); border-radius: 999px; padding: 0 5px;
-}
-.rs-scope-chip--on .rs-scope-n { background: #fff; color: #1a56db; }
 /* 수거검사 탭에는 '내 알림/일반' 구분이 없다 */
-#regPage.reg-page--insp .rs-scope-bar { display: none !important; }
-
-/* 고정 블록 머리 */
+#regPage.reg-page--insp /* 고정 블록 머리 */
 
 /* ── 되풀이되던 인라인 style 을 여기로 ──────────────────────────
    등급 앞의 점은 글자가 아니라 표시다. 열여덟 군데에 7px 로 적혀 있었다. */
