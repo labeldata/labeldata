@@ -205,6 +205,56 @@ def _save_product_ingredient_logs(news) -> int:
     return saved
 
 
+def cancel_pending_logs(user=None, news_ids=None, rule=None, device=None) -> dict:
+    """
+    아직 안 나간 푸시를 거두고, 이미 나간 것은 읽음으로 내린다.
+
+    FCM 은 수집 즉시 나가지 않는다 — 로그만 먼저 쌓고 일 3회(10·14·17시)
+    배치로 내보낸다(send_regulatory_batch_alerts). 그래서 03시에 걸린 알림을
+    사용자가 09시에 끄면, 웹 목록에서는 사라졌는데 10시에 **푸시는 그대로**
+    울린다. "껐는데 또 온다" 가 여기서 나온다.
+
+    그래서 웹에서 끄거나 키워드를 지울 때 이 함수를 함께 부른다.
+      • 아직 안 나간 로그(sent_at IS NULL) → 삭제. 보낸 적이 없으니 이력도 아니다.
+      • 이미 나간 로그 → 읽음 처리. 앱 알림 탭에 남기되 배지는 내린다.
+        (지우면 "어제 받은 그 알림" 을 다시 찾을 수 없다)
+
+    news_ids: 이 뉴스들로 생긴 제품·원료 매칭 푸시를 거둔다 (알림 끄기)
+    rule:     이 키워드 규칙으로 생긴 푸시를 거둔다 (키워드 삭제)
+    user / device: 누구 것을 거둘지. 로그인 사용자는 user(기기 여러 대를 함께),
+                   비회원은 device 하나. 앱의 키워드 삭제가 비회원에도 있어서
+                   두 갈래를 다 받는다.
+
+    Returns: {'cancelled': int, 'read': int}
+    """
+    from v1.mobile.models import PushNotificationLog
+
+    if user is not None:
+        qs = PushNotificationLog.objects.filter(device__user=user)
+        owner = 'user=%s' % user.pk
+    elif device is not None:
+        qs = PushNotificationLog.objects.filter(device=device)
+        owner = 'device=%s' % device.pk
+    else:
+        return {'cancelled': 0, 'read': 0}
+
+    if rule is not None:
+        qs = qs.filter(rule_triggered=rule)
+    elif news_ids is not None:
+        if not news_ids:
+            return {'cancelled': 0, 'read': 0}
+        qs = qs.filter(news_id__in=list(news_ids),
+                       trigger_type__in=('product', 'ingredient'))
+    else:
+        return {'cancelled': 0, 'read': 0}
+
+    cancelled, _ = qs.filter(sent_at__isnull=True).delete()
+    read = qs.filter(sent_at__isnull=False, is_read=False).update(is_read=True)
+    if cancelled or read:
+        logger.info('[푸시 거두기] %s 예약취소=%s 읽음=%s', owner, cancelled, read)
+    return {'cancelled': cancelled, 'read': read}
+
+
 def backfill_alerts_for_rule(rule) -> dict:
     """
     새로 등록된 AlertRule에 대해 기존 수집 데이터 전체를 소급 매칭.

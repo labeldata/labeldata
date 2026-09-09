@@ -320,11 +320,30 @@ def rule_detail(request, device_id, rule_id):
         serializer = AlertRuleSerializer(rule, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            # 규칙을 껐으면(is_active=False) 그 키워드로 예약돼 있던 푸시도 거둔다.
+            # 끄고 나서도 낮 배치에 그대로 울리면, 껐다는 사실을 못 믿게 된다.
+            if not serializer.instance.is_active:
+                _cancel_rule_pushes(owner_user, device, rule)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # 지우기 전에 예약된 푸시를 거둔다.
+    # PushNotificationLog.rule_triggered 는 SET_NULL 이라, 먼저 지우면 로그가
+    # "누가 부른 알림인지" 만 잃은 채 발송 대기에 남는다 — 웹의 키워드 삭제와
+    # 같은 처리다(regulatory.views.alert_rule_delete_api).
+    _cancel_rule_pushes(owner_user, device, rule)
     rule.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _cancel_rule_pushes(owner_user, device, rule) -> None:
+    """로그인 사용자는 기기 여러 대를 함께, 비회원은 그 기기 하나만 거둔다."""
+    from v1.mobile.services.push_service import cancel_pending_logs
+
+    if owner_user:
+        cancel_pending_logs(user=owner_user, rule=rule)
+    else:
+        cancel_pending_logs(device=device, rule=rule)
 
 
 # ── 보관함 ───────────────────────────────────────────────────────────────────

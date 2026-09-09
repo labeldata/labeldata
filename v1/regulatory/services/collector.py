@@ -785,6 +785,9 @@ def backfill_inspection_matches(user, days: int = INSPECTION_BACKFILL_DAYS,
 
     labels = MyLabel.objects.filter(user_id=user, delete_YN='N').exclude(prdlst_report_no='')
     norm_company = _normalize_corp_name(company_name) if company_name else ''
+    # 사용자가 '이 업소 알림은 그만' 이라고 끈 업소명 — 회사명이 짧아 남의 업체까지
+    # 걸리는 경우(예: '삼립' ↔ '○○삼립식품')를 사용자가 직접 끊을 수 있게 한다.
+    muted_bssh = _muted_company_norms(user)
 
     # 조건에 해당하는 InspectionResult 추출 (사용자 정보 기반만, AlertRule 키워드 제외)
     q = Q()
@@ -832,6 +835,8 @@ def backfill_inspection_matches(user, days: int = INSPECTION_BACKFILL_DAYS,
                 matched_value = company_name
 
         if not match_reason:
+            continue
+        if muted_bssh and _mute_norm(ins.bssh_nm) in muted_bssh:
             continue
 
         # 이미 매칭된 건 스킵
@@ -1089,6 +1094,40 @@ def _normalize_corp_name(name: str) -> str:
     return name
 
 
+# ── 알림 제외(뮤트) 조회 ─────────────────────────────────────────────────────
+# 수거검사 매칭은 업소명·인허가번호·품목보고번호로만 생긴다. 그중 사용자가
+# 화면에서 끌 수 있는 것은 업소명 하나뿐이라 여기만 본다. 정규화 규칙은
+# AlertMute 모델의 것을 그대로 쓴다 — 두 벌이면 껐는데 계속 오는 일이 생긴다.
+
+def _mute_norm(value: str) -> str:
+    from v1.regulatory.models import normalize_mute_value
+    return normalize_mute_value(value)
+
+
+def _muted_company_norms(user) -> set:
+    """사용자가 끈 업소명(정규화)의 집합."""
+    from v1.regulatory.models import AlertMute
+    return set(
+        AlertMute.objects
+        .filter(user=user, scope=AlertMute.SCOPE_COMPANY)
+        .values_list('value_norm', flat=True)
+    )
+
+
+def _users_muting_company(user_ids, company_name: str) -> set:
+    """주어진 사용자들 중 이 업소명 알림을 끈 사람의 id 집합."""
+    from v1.regulatory.models import AlertMute
+    norm = _mute_norm(company_name)
+    if not norm or not user_ids:
+        return set()
+    return set(
+        AlertMute.objects
+        .filter(user_id__in=list(user_ids), scope=AlertMute.SCOPE_COMPANY,
+                value_norm=norm)
+        .values_list('user_id', flat=True)
+    )
+
+
 def _revalidate_company_matches(inspection) -> None:
     """
     InspectionResult.bssh_nm이 변경됐을 때 REASON_COMPANY 기반 InspectionMatch를 재검증.
@@ -1222,6 +1261,12 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
                 'matched_value': company_name,
             }
 
+    if not matched:
+        return
+
+    # 이 업소명 알림을 끈 사용자는 제외한다 (수거검사 매칭은 업소명·번호로만 생긴다)
+    for uid in _users_muting_company(matched.keys(), bssh_nm):
+        matched.pop(uid, None)
     if not matched:
         return
 

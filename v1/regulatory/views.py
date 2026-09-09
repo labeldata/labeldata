@@ -25,8 +25,9 @@ from v1.regulatory import selectors
 from v1.regulatory.services import news_search
 from v1.regulatory.services.collector import INSPECTION_BACKFILL_DAYS
 from v1.regulatory.models import (
-    NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
-    InspectionResult, InspectionMatch, judgment_status_of,
+    AlertMute, NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction,
+    RegulatoryNews, InspectionResult, InspectionMatch, judgment_status_of,
+    normalize_mute_value,
 )
 from v1.mobile.models import AlertRule, PushNotificationLog
 from v1.user_management.models import UserProfile
@@ -52,6 +53,17 @@ API_CATEGORIES = [
 ]
 _ALL_CAT_KEYS     = [c['key'] for c in API_CATEGORIES]
 _REGULAR_CAT_KEYS = [c['key'] for c in API_CATEGORIES if c['group'] != 'insp46']
+
+# 어떤 출처가 '행정처분' 탭에 속하는가 — 탭 배지·목록 범위·탭별 읽음 처리가
+# 모두 이 한 줄을 본다. 예전에는 목록 뷰 안에만 있어서, 탭 단위 처리를 새로
+# 붙일 때마다 같은 목록을 손으로 다시 적어야 했다.
+ADMIN_API_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
+
+# 화면의 탭 키 — 목록·읽음 처리·배지가 같은 이름을 쓴다
+TAB_INSP_NEWS = 'insp-news'   # 부적합
+TAB_ADMIN     = 'admin'       # 행정처분
+TAB_INSPECTION = 'insp'       # 수거검사
+NEWS_TABS = (TAB_INSP_NEWS, TAB_ADMIN)
 
 # 기본 화면에서 목록 위에 고정해 보여 줄 '내 알림' 건수.
 # 다섯 건이면 "새로 온 것이 있나" 를 확인하기에 충분하고, 목록의 나머지는
@@ -352,7 +364,7 @@ def news_list(request):
     # 규칙(3개 탭 공통): 배지 숫자 = 그 탭에서 실제로 보게 될 목록의 총 건수
     #                    (현재 검색·기간·분야·등급·상태 필터가 모두 적용된 값)
     #                    미확인 여부는 숫자가 아니라 빨간 점으로만 표시한다.
-    _ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
+    _ADMIN_SOURCES = ADMIN_API_SOURCES
     tab_admin_total = count_qs.filter(api_source__in=_ADMIN_SOURCES).count()
     tab_insp_total  = count_qs.exclude(api_source__in=_ADMIN_SOURCES).count()
 
@@ -599,6 +611,13 @@ def news_list(request):
     if selected_id:
         try:
             selected_news = RegulatoryNews.objects.get(pk=selected_id)
+            # 알림이 '왜' 왔는지를 상세 패널의 표준 항목으로 보여 준다.
+            # 행정처분·지자체처분은 업체명 하나로 걸리고(원료 키워드를 보지 않는다),
+            # 나머지 부적합은 뉴스 쪽 키워드 ↔ 내 원료명의 짝으로 걸린다.
+            # 알림을 끄는 단추의 문구와 대상(scope)이 여기서 갈린다.
+            selected_news.is_admin_source = (
+                selected_news.api_source in ADMIN_API_SOURCES
+            )
 
             # ━━ 온디맨드 재매칭 (제품 + 원료 보관함) ━━
             try:
@@ -664,6 +683,10 @@ def news_list(request):
         .filter(user=request.user, is_active=True)
         .order_by('category', 'keyword')
     )
+    # 알림 제외(뮤트) 규칙 — 설정 모달의 '받지 않기' 목록에 쓴다.
+    # 상세 패널에는 넘기지 않는다: 끈 규칙에 걸리는 매칭은 그 자리에서 함께
+    # 치워지므로, 목록에 남아 있는 매칭은 정의상 꺼져 있지 않다.
+    alert_mutes = list(AlertMute.objects.filter(user=request.user))
 
     # saol_admin 원본 사이트 URL 추출 (external_id: 'saol-{site_code}-{dup_key}')
     saol_site_url = ''
@@ -761,6 +784,7 @@ def news_list(request):
         'today':              date.today(),
         'saol_site_url':      saol_site_url,
         'alert_rules':        unique_alert_rules,
+        'alert_mutes':        alert_mutes,
         'show_inspection':    show_inspection,
         'inspection_list':    inspection_list,
         'insp_page_obj':      insp_page_obj,
@@ -1125,10 +1149,17 @@ def mark_all_news_resolved(request):
 @login_required
 @require_POST
 def inspection_mark_all_read(request):
-    """수거검사 전체 읽음 처리"""
+    """
+    수거검사 전체 읽음 — 옛 주소.
+
+    지금은 세 탭이 mark_tab_read 하나를 쓴다. 이 주소는 밖에서 부르고 있을
+    수 있어 남기되, 처리는 같은 함수에 맡긴다. 두 벌로 두면 한쪽만 고쳐져
+    "수거검사 탭에서만 배지가 안 지워진다" 같은 어긋남이 다시 생긴다.
+    """
     updated = InspectionMatch.objects.filter(
         user=request.user, read_yn=False
     ).update(read_yn=True, read_at=timezone.now())
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
     return JsonResponse({'success': True, 'updated': updated})
 
 
@@ -1153,6 +1184,159 @@ def inspection_dismiss(request):
 
     remaining = InspectionMatch.objects.filter(user=request.user, read_yn=False).count()
     return JsonResponse({'success': True, 'remaining_unread': remaining})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 탭 단위 모두 읽음 (부적합 / 행정처분 / 수거검사 / 전체)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _mark_news_tab_read(user, tab: str) -> int:
+    """
+    부적합·행정처분 탭의 미확인 매칭을 읽음으로 바꾼다.
+
+    '읽음' 과 '조치 완료' 는 다른 일이다. 읽음은 "봤다", 조치는 "처리했다".
+    이 함수는 앞의 것만 한다 — 조치 이력(RegulatoryMatchAction)은 남기지 않는다.
+    예전에는 화면에 '전체 알림 일괄 처리'(=조치 완료) 하나뿐이라, 그냥 배지를
+    지우고 싶은 사람도 되돌릴 수 없는 조치 기록을 남겨야 했다.
+    """
+    now = timezone.now()
+    news_ids = None
+    if tab in NEWS_TABS:
+        src_q = (Q(api_source__in=ADMIN_API_SOURCES) if tab == TAB_ADMIN
+                 else ~Q(api_source__in=ADMIN_API_SOURCES))
+        news_ids = list(RegulatoryNews.objects.filter(src_q).values_list('id', flat=True))
+
+    prod_qs = NewsProductMatch.objects.filter(
+        product__user_id=user, false_positive_yn=False, read_yn=False)
+    ing_qs = NewsIngredientMatch.objects.filter(
+        user=user, dismissed_yn=False, read_yn=False)
+    if news_ids is not None:
+        prod_qs = prod_qs.filter(news_id__in=news_ids)
+        ing_qs  = ing_qs.filter(news_id__in=news_ids)
+
+    updated  = prod_qs.update(read_yn=True, read_at=now)
+    updated += ing_qs.update(read_yn=True)
+    return updated
+
+
+@login_required
+@require_POST
+def mark_tab_read(request):
+    """
+    탭 하나(또는 전체)의 알림을 모두 읽음 처리 (JSON POST).
+    Body: {"tab": "insp-news" | "admin" | "insp" | "all"}
+
+    세 탭이 한 화면 안의 같은 '알림' 이므로 처리 방법도 하나로 둔다.
+    (예전에는 수거검사에만 '전체 읽음' 이 있었고, 부적합·행정처분은 되돌릴 수
+     없는 '조치 완료' 로만 배지를 지울 수 있었다)
+    """
+    try:
+        tab = (json.loads(request.body or '{}').get('tab') or 'all').strip()
+    except (ValueError, AttributeError):
+        tab = 'all'
+    if tab not in (TAB_INSP_NEWS, TAB_ADMIN, TAB_INSPECTION, 'all'):
+        return JsonResponse({'success': False, 'error': '알 수 없는 탭'}, status=400)
+
+    news_updated = insp_updated = 0
+    if tab in NEWS_TABS or tab == 'all':
+        news_updated = _mark_news_tab_read(request.user, tab)
+    if tab in (TAB_INSPECTION, 'all'):
+        insp_updated = InspectionMatch.objects.filter(
+            user=request.user, read_yn=False,
+        ).update(read_yn=True, read_at=timezone.now())
+
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
+    return JsonResponse({
+        'success':         True,
+        'tab':             tab,
+        'news_updated':    news_updated,
+        'inspection_read': insp_updated,
+        'updated':         news_updated + insp_updated,
+        'unread':          selectors.unread_news_count(request.user),
+        'inspection_unread': InspectionMatch.objects.filter(
+            user=request.user, read_yn=False).count(),
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 알림 제외(뮤트) 관리 — "이 키워드 때문에 오는 알림은 그만"
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required
+def alert_mutes_api(request):
+    """
+    GET  /regulatory/api/alert-mutes/  — 내 제외 규칙 목록
+    POST /regulatory/api/alert-mutes/  — 제외 규칙 등록 + 기존 매칭 정리
+    Body(POST): {"scope": "keyword|ingredient|company", "value": "...", "memo": ""}
+    """
+    from v1.regulatory.services import mute as mute_service
+
+    if request.method == 'GET':
+        return JsonResponse({'mutes': [
+            mute_service.mute_payload(m)
+            for m in AlertMute.objects.filter(user=request.user)
+        ]})
+
+    try:
+        body  = json.loads(request.body)
+        scope = (body.get('scope') or '').strip()
+        value = (body.get('value') or '').strip()
+        memo  = (body.get('memo')  or '').strip()[:200]
+    except (ValueError, AttributeError):
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    if scope not in mute_service.VALID_SCOPES:
+        return JsonResponse({'success': False, 'error': '유효하지 않은 제외 기준'}, status=400)
+    if not value:
+        return JsonResponse({'success': False, 'error': '끌 값이 비어 있습니다'}, status=400)
+    if len(value) > 200:
+        return JsonResponse({'success': False, 'error': '200자 이내로 입력해주세요'}, status=400)
+
+    # 직접 등록한 알림 키워드와 정면으로 부딪히면, 어느 쪽이 이겼는지 화면에서
+    # 설명할 수 없다. 끄는 것이 아니라 그 키워드를 지우도록 되돌려 보낸다.
+    conflict = [
+        r for r in AlertRule.objects.filter(user=request.user, is_active=True)
+        if normalize_mute_value(r.keyword) == normalize_mute_value(value)
+    ]
+    if conflict:
+        return JsonResponse({
+            'success': False,
+            'error': f'"{value}" 은(는) 직접 등록한 알림 키워드입니다. '
+                     f'알림 설정에서 키워드를 삭제해 주세요.',
+            'conflict_rule_ids': [r.id for r in conflict],
+        }, status=409)
+
+    try:
+        result = mute_service.apply_mute(request.user, scope, value, memo)
+    except ValueError as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
+    log_activity(request, 'regulatory', 'regulatory_mute')
+    return JsonResponse({
+        'success': True,
+        'created': result['created'],
+        'hidden':  result['hidden'],
+        # 앱(식품 안심 알리미)에 예약돼 있다가 함께 거둬진 푸시 건수
+        'push_cancelled': result['push_cancelled'],
+        'mute':    mute_service.mute_payload(result['mute']),
+        'unread':  selectors.unread_news_count(request.user),
+    }, status=201 if result['created'] else 200)
+
+
+@login_required
+@require_POST
+def alert_mute_delete_api(request, mute_id):
+    """
+    제외 규칙 해제 — 앞으로는 다시 받는다.
+    이미 치워 둔 기존 알림은 되살리지 않는다(오탐지 처리와 같은 성질).
+    """
+    try:
+        mute = AlertMute.objects.get(pk=mute_id, user=request.user)
+    except AlertMute.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '규칙을 찾을 수 없습니다.'}, status=404)
+    mute.delete()
+    return JsonResponse({'success': True})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1264,16 +1448,26 @@ def alert_rule_delete_api(request, rule_id):
     """
     DELETE(POST) /regulatory/api/alert-rules/<id>/delete/
     로그인 사용자 소유 AlertRule 삭제 (user 기반 단건 삭제).
+
+    지우기 전에 그 키워드로 **예약돼 있던 푸시를 거둔다**.
+    FCM 은 수집 즉시 나가지 않고 일 3회 배치로 나가므로(push_service), 새벽에
+    걸린 알림을 아침에 지워도 낮에 푸시가 그대로 울린다. 게다가
+    PushNotificationLog.rule_triggered 는 SET_NULL 이라, 규칙을 지우면 로그는
+    "누가 부른 알림인지" 만 잃은 채 그대로 발송 대기에 남는다.
+    "지웠는데 또 온다" 가 여기서 나왔다.
     """
     from v1.mobile.models import AlertRule
+    from v1.mobile.services.push_service import cancel_pending_logs
 
     try:
         rule = AlertRule.objects.get(pk=rule_id, user=request.user)
     except AlertRule.DoesNotExist:
         return JsonResponse({'success': False, 'error': '규칙을 찾을 수 없습니다.'}, status=404)
 
+    push = cancel_pending_logs(request.user, rule=rule)
     rule.delete()
-    return JsonResponse({'success': True})
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
+    return JsonResponse({'success': True, 'push_cancelled': push['cancelled']})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

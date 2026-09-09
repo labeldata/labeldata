@@ -276,6 +276,459 @@ class MarkAllNewsResolvedTests(TestCase):
             InspectionMatch.objects.filter(user=other, read_yn=False).count(), 1)
 
 
+class 탭마다_모두_읽음(TestCase):
+    """
+    세 탭이 한 화면 안의 같은 '알림' 이므로, 터는 방법도 하나여야 한다.
+
+    예전에는 '전체 읽음' 이 수거검사 탭에만 있었다. 부적합·행정처분 탭에서
+    배지를 지우려면 상세 하단의 '전체 알림 일괄 처리' 를 눌러야 했는데, 그것은
+    **되돌릴 수 없는 조치 완료 기록**을 남긴다. 그냥 훑고 넘기려던 사람이
+    조치 이력을 남기게 되는 것이 문제였다.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='tabread', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                            prdlst_nm='내 제품')
+        self.insp_news = self._news('t-insp', 'I2620')
+        self.admin_news = self._news('t-admin', 'I0470')
+
+    def _news(self, ext, src):
+        news = RegulatoryNews.objects.create(
+            external_id=ext, api_source=src, source='domestic',
+            product_name=ext, collected_date='2026-08-01')
+        NewsProductMatch.objects.create(news=news, product=self.label,
+                                        match_score=90, risk_score=50)
+        return news
+
+    def _post(self, tab):
+        import json
+        return self.client.post('/regulatory/api/mark-tab-read/',
+                                data=json.dumps({'tab': tab}),
+                                content_type='application/json')
+
+    def test_부적합_탭만_턴다(self):
+        r = self._post('insp-news')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['news_updated'], 1)
+        self.assertTrue(NewsProductMatch.objects.get(news=self.insp_news).read_yn)
+        self.assertFalse(NewsProductMatch.objects.get(news=self.admin_news).read_yn)
+
+    def test_행정처분_탭만_턴다(self):
+        self._post('admin')
+        self.assertFalse(NewsProductMatch.objects.get(news=self.insp_news).read_yn)
+        self.assertTrue(NewsProductMatch.objects.get(news=self.admin_news).read_yn)
+
+    def test_조치_이력을_남기지_않는다(self):
+        """읽음(봤다)과 조치 완료(처리했다)는 다른 일이다."""
+        from v1.regulatory.models import RegulatoryMatchAction
+
+        self._post('all')
+        self.assertEqual(RegulatoryMatchAction.objects.filter(user=self.user).count(), 0)
+        # 미조치 건수는 그대로 — 아직 아무것도 처리하지 않았으므로
+        r = self.client.get('/regulatory/')
+        self.assertEqual(r.context['no_action_count'], 2)
+
+    def test_수거검사_탭도_같은_주소를_쓴다(self):
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        insp = InspectionResult.objects.create(
+            tkawyprno='9', bssh_nm='업소', prdtnm='제품',
+            prdlst_report_no='20250109', tkawydtm='20260801')
+        InspectionMatch.objects.create(
+            inspection=insp, user=self.user, label=self.label,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_LABEL)
+
+        body = self._post('insp').json()
+        self.assertEqual(body['inspection_read'], 1)
+        self.assertEqual(body['news_updated'], 0)      # 뉴스 쪽은 건드리지 않는다
+
+    def test_모르는_탭_이름은_거절한다(self):
+        self.assertEqual(self._post('없는탭').status_code, 400)
+
+    def test_남의_알림은_건드리지_않는다(self):
+        other = User.objects.create_user(username='tabread2', password='x')
+        other_label = MyLabel.objects.create(user_id=other, my_label_name='남 제품',
+                                             prdlst_nm='남 제품')
+        NewsProductMatch.objects.create(news=self.insp_news, product=other_label,
+                                        match_score=90, risk_score=50)
+        self._post('all')
+        self.assertFalse(
+            NewsProductMatch.objects.get(news=self.insp_news, product=other_label).read_yn)
+
+
+class 알림_사유를_그_자리에서_끈다(TestCase):
+    """
+    알림이 많다고 느낀 사람이 원인을 끌 자리가 없었다.
+
+    할 수 있는 일이 건건이 '해당 없음' 을 누르거나 원료 보관함에서 그 원료를
+    지우는 것뿐이었는데, 둘 다 원하는 일이 아니다 — 원료는 실제로 쓰고 있고,
+    다만 그 원료로 오는 부적합 소식이 필요 없을 뿐이다.
+    """
+
+    def setUp(self):
+        import json
+        cache.clear()
+        self._json = json
+        self.user = User.objects.create_user(username='mute', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                            prdlst_nm='내 제품')
+        self.news = RegulatoryNews.objects.create(
+            external_id='mute-1', api_source='I2620', source='domestic',
+            product_name='정제수 부적합', company_name='(주)어떤식품',
+            ai_keywords=['대장균'], ai_parsed=True, collected_date='2026-08-01')
+        self.match = NewsProductMatch.objects.create(
+            news=self.news, product=self.label, matched_keyword='대장균',
+            matched_ingredient='정제수', match_score=90, risk_score=50)
+
+    def _mute(self, scope, value):
+        return self.client.post(
+            '/regulatory/api/alert-mutes/',
+            data=self._json.dumps({'scope': scope, 'value': value}),
+            content_type='application/json')
+
+    def test_키워드를_끄면_기존_알림도_함께_치운다(self):
+        r = self._mute('keyword', '대장균')
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.json()['hidden'], 1)
+        self.match.refresh_from_db()
+        self.assertTrue(self.match.false_positive_yn)
+        self.assertTrue(self.match.read_yn)
+
+    def test_내_원료로도_끌_수_있다(self):
+        self.assertEqual(self._mute('ingredient', '정제수').json()['hidden'], 1)
+        self.match.refresh_from_db()
+        self.assertTrue(self.match.false_positive_yn)
+
+    def test_띄어쓰기가_달라도_같은_것으로_본다(self):
+        self.assertEqual(self._mute('keyword', '대장 균').json()['hidden'], 1)
+
+    def test_끈_뒤에는_다시_매칭되지_않는다(self):
+        from v1.bom.models import ProductBOM
+        from v1.regulatory.services import matcher
+
+        self._mute('keyword', '대장균')
+        ProductBOM.objects.create(parent_label=self.label, ingredient_name='정제수')
+        self.assertEqual(matcher.find_affected_products(self.news, self.user), [])
+
+    def test_직접_등록한_키워드는_끄지_않고_지우게_한다(self):
+        """
+        AlertRule(받겠다) 과 AlertMute(안 받겠다) 가 같은 말을 하면 어느 쪽이
+        이겼는지 화면에서 설명할 수 없다. 되돌려 보내 키워드를 지우게 한다.
+        """
+        from v1.mobile.models import AlertRule
+
+        rule = AlertRule.objects.create(user=self.user, category='INGREDIENT',
+                                        keyword='대장균', match_type='CONTAINS')
+        r = self._mute('keyword', '대장균')
+        self.assertEqual(r.status_code, 409)
+        self.assertIn(rule.id, r.json()['conflict_rule_ids'])
+
+    def test_해제해도_치운_알림은_되살리지_않는다(self):
+        mute_id = self._mute('keyword', '대장균').json()['mute']['id']
+        self.client.post('/regulatory/api/alert-mutes/%d/delete/' % mute_id)
+        self.match.refresh_from_db()
+        self.assertTrue(self.match.false_positive_yn)
+
+    def test_남의_규칙은_지울_수_없다(self):
+        mute_id = self._mute('keyword', '대장균').json()['mute']['id']
+        other = User.objects.create_user(username='mute2', password='x')
+        self.client.force_login(other)
+        r = self.client.post('/regulatory/api/alert-mutes/%d/delete/' % mute_id)
+        self.assertEqual(r.status_code, 404)
+
+    def test_알_수_없는_기준은_거절한다(self):
+        self.assertEqual(self._mute('없는기준', '값').status_code, 400)
+
+    def test_수거검사도_업체명으로_끈다(self):
+        """수거검사 매칭은 업소명·번호로만 생긴다 — 끌 수 있는 것은 업소명이다."""
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        insp = InspectionResult.objects.create(
+            tkawyprno='7', bssh_nm='(주)어떤식품', prdtnm='제품',
+            prdlst_report_no='20250107', tkawydtm='20260801')
+        InspectionMatch.objects.create(
+            inspection=insp, user=self.user, label=self.label,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_LABEL)
+
+        self.assertGreaterEqual(self._mute('company', '(주)어떤식품').json()['hidden'], 1)
+        self.assertEqual(InspectionMatch.objects.filter(user=self.user).count(), 0)
+
+
+class 끄면_예약된_푸시도_거둔다(TestCase):
+    """
+    식품 안심 알리미(앱) 푸시는 수집 즉시 나가지 않는다.
+
+    로그만 먼저 쌓고 일 3회(10·14·17시) 배치로 내보낸다. 그래서 03시에 걸린
+    알림을 09시에 껐는데 10시에 푸시가 그대로 울리면, 웹에서 껐다는 사실
+    자체를 못 믿게 된다 — "껐는데 또 온다".
+    """
+
+    def setUp(self):
+        import json
+        from v1.mobile.models import AppDevice, PushNotificationLog
+
+        cache.clear()
+        self._json = json
+        self.user = User.objects.create_user(username='push', password='x')
+        self.client.force_login(self.user)
+        self.device = AppDevice.objects.create(device_id='dev-1', user=self.user,
+                                               fcm_token='tok')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                            prdlst_nm='내 제품')
+        self.news = RegulatoryNews.objects.create(
+            external_id='push-1', api_source='I2620', source='domestic',
+            product_name='정제수 부적합', ai_parsed=True, collected_date='2026-08-01')
+        NewsProductMatch.objects.create(
+            news=self.news, product=self.label, matched_keyword='대장균',
+            matched_ingredient='정제수', match_score=90, risk_score=50)
+        # 아직 안 나간 푸시 (배치 대기 중)
+        self.pending = PushNotificationLog.objects.create(
+            device=self.device, news=self.news, trigger_type='product',
+            trigger_label='내 제품', sent_at=None)
+
+    def _mute(self, scope, value):
+        return self.client.post(
+            '/regulatory/api/alert-mutes/',
+            data=self._json.dumps({'scope': scope, 'value': value}),
+            content_type='application/json')
+
+    def test_안_나간_푸시는_취소된다(self):
+        from v1.mobile.models import PushNotificationLog
+
+        body = self._mute('ingredient', '정제수').json()
+        self.assertEqual(body['push_cancelled'], 1)
+        self.assertFalse(PushNotificationLog.objects.filter(pk=self.pending.pk).exists())
+
+    def test_이미_나간_푸시는_지우지_않고_읽음으로_내린다(self):
+        """앱 알림 탭에서 '어제 받은 그 알림' 을 다시 찾을 수 있어야 한다."""
+        from django.utils import timezone
+        from v1.mobile.models import PushNotificationLog
+
+        self.pending.sent_at = timezone.now()
+        self.pending.save(update_fields=['sent_at'])
+
+        self._mute('ingredient', '정제수')
+        log = PushNotificationLog.objects.get(pk=self.pending.pk)
+        self.assertTrue(log.is_read)
+
+    def test_남의_기기_푸시는_건드리지_않는다(self):
+        from v1.mobile.models import AppDevice, PushNotificationLog
+
+        other = User.objects.create_user(username='push2', password='x')
+        other_dev = AppDevice.objects.create(device_id='dev-2', user=other)
+        other_log = PushNotificationLog.objects.create(
+            device=other_dev, news=self.news, trigger_type='product', sent_at=None)
+
+        self._mute('ingredient', '정제수')
+        self.assertTrue(PushNotificationLog.objects.filter(pk=other_log.pk).exists())
+
+    def test_키워드를_지우면_그_키워드_푸시가_취소된다(self):
+        from v1.mobile.models import AlertRule, PushNotificationLog
+
+        rule = AlertRule.objects.create(user=self.user, category='INGREDIENT',
+                                        keyword='대장균', match_type='CONTAINS')
+        log = PushNotificationLog.objects.create(
+            device=self.device, news=self.news, rule_triggered=rule,
+            trigger_type='keyword', trigger_label='대장균', sent_at=None)
+
+        r = self.client.post('/regulatory/api/alert-rules/%d/delete/' % rule.id)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['push_cancelled'], 1)
+        self.assertFalse(PushNotificationLog.objects.filter(pk=log.pk).exists())
+
+    def test_키워드_삭제가_다른_알림까지_거두지는_않는다(self):
+        from v1.mobile.models import AlertRule, PushNotificationLog
+
+        rule = AlertRule.objects.create(user=self.user, category='INGREDIENT',
+                                        keyword='대장균', match_type='CONTAINS')
+        self.client.post('/regulatory/api/alert-rules/%d/delete/' % rule.id)
+        # 제품 매칭으로 걸린 대기 푸시는 그대로 남는다
+        self.assertTrue(PushNotificationLog.objects.filter(pk=self.pending.pk).exists())
+
+
+class 끄기가_오탐_학습을_오염시키지_않는다(TestCase):
+    """
+    '이 키워드 알림 끄기' 는 한 번에 수백 건을 오탐으로 표시한다.
+
+    그것을 그대로 오탐 학습(Approach C)에 태우면 그 키워드의 FP 누적이
+    폭증해, **다른 원료**에 걸린 정상 매칭까지 등급이 깎인다.
+    정제수 알림을 껐다고 대장균 소식 전체가 '일반' 이 되면 안 된다.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='fp', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                            prdlst_nm='내 제품')
+
+    def _fp_rows(self, keyword, ingredient, n):
+        """오탐으로 표시된 매칭 n 건을 만든다."""
+        for i in range(n):
+            news = RegulatoryNews.objects.create(
+                external_id='fp%s%d' % (ingredient, i), api_source='I2620',
+                source='domestic', product_name='뉴스', collected_date='2026-08-01')
+            NewsProductMatch.objects.create(
+                news=news, product=self.label, matched_keyword=keyword,
+                matched_ingredient=ingredient, match_score=90, risk_score=50,
+                false_positive_yn=True)
+
+    def test_뮤트로_치운_건은_학습에서_뺀다(self):
+        from v1.regulatory.models import AlertMute
+        from v1.regulatory.services import matcher
+
+        self._fp_rows('대장균', '정제수', 10)
+        AlertMute.objects.create(user=self.user, scope=AlertMute.SCOPE_INGREDIENT,
+                                 value='정제수')
+
+        fp = matcher._load_fp_patterns_for_user(self.user)
+        self.assertEqual(fp.keyword_fp_count('대장균'), 0)
+
+    def test_손으로_누른_오탐은_그대로_학습한다(self):
+        """뮤트가 아니라 건건이 '오탐지' 를 누른 이력은 예전처럼 쓴다."""
+        from v1.regulatory.services import matcher
+
+        self._fp_rows('대장균', '정제수', 10)
+        fp = matcher._load_fp_patterns_for_user(self.user)
+        self.assertEqual(fp.keyword_fp_count('대장균'), 10)
+        self.assertTrue(fp.is_fp('대장균', '정제수'))
+
+
+class 수거검사_상세도_같은_흐름이다(TestCase):
+    """
+    세 탭이 "왜 나한테 왔는가 → 그 이유를 끈다" 라는 같은 흐름을 갖는다.
+
+    수거검사는 업소명이 오탐의 주범이다 — 회사명이 짧으면('삼립') 남의
+    업체('○○삼립식품')까지 걸린다. 예전에는 '해당 없음(삭제)' 뿐이라, 같은
+    업소가 다음 주에 또 올라오면 또 지워야 했다.
+    """
+
+    def setUp(self):
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        cache.clear()
+        self.user = User.objects.create_user(username='inspwhy', password='x')
+        self.client.force_login(self.user)
+        insp = InspectionResult.objects.create(
+            tkawyprno='5', bssh_nm='(주)남의삼립식품', prdtnm='제품',
+            prdlst_report_no='20250105', tkawydtm='20260801')
+        self.match = InspectionMatch.objects.create(
+            inspection=insp, user=self.user,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_COMPANY,
+            matched_value='삼립')
+
+    def _html(self):
+        return self.client.get(
+            '/regulatory/?tab=insp&insp_id=%d' % self.match.id).content.decode()
+
+    def test_알림_사유라는_같은_이름을_쓴다(self):
+        self.assertIn('알림 사유', self._html())
+
+    def test_업소를_끌_수_있다(self):
+        html = self._html()
+        self.assertIn("muteAlert('company'", html)
+        self.assertIn('남의삼립식품', html)
+
+    def test_해당_없음은_이_건만_지운다고_말한다(self):
+        """다음 건은 계속 온다는 사실을 문구가 밝혀야 '왜 또 오지' 가 없다."""
+        self.assertIn('이 건만 삭제', self._html())
+
+    def test_내_제품_번호로_걸린_건은_끄지_않는다(self):
+        """내 제품이 맞는데 '이 업소 알림 끄기' 를 권하면 말이 안 맞는다."""
+        from v1.regulatory.models import InspectionMatch
+
+        self.match.match_reason = InspectionMatch.REASON_LABEL
+        self.match.save(update_fields=['match_reason'])
+        self.assertNotIn("muteAlert('company'", self._html())
+
+
+class 끄는_단추는_한_벌만_둔다(TestCase):
+    """
+    같은 단추가 세 곳에 나온다 — 목록의 뉴스 상세, 목록의 수거검사 상세,
+    상세 독립 페이지. 인라인 스크립트로 두면 뉴스가 선택됐을 때만 정의돼
+    수거검사 패널에서는 죽은 단추가 된다. 그래서 정적 파일 하나로 둔다.
+    """
+
+    def test_상세_패널이_제_사본을_들고_있지_않다(self):
+        from pathlib import Path
+        from django.conf import settings
+
+        for root in settings.TEMPLATES[0]['DIRS']:
+            path = Path(root) / 'regulatory' / '_news_detail_panel.html'
+            if path.exists():
+                body = path.read_text(encoding='utf-8')
+                self.assertNotIn('window.muteAlert', body)
+                self.assertNotIn('window.deleteKeywordFromDetail', body)
+                return
+        self.fail('_news_detail_panel.html 을 찾지 못했다')
+
+    def test_두_화면이_같은_파일을_부른다(self):
+        from pathlib import Path
+        from django.conf import settings
+
+        for root in settings.TEMPLATES[0]['DIRS']:
+            base = Path(root) / 'regulatory'
+            if not base.exists():
+                continue
+            for name in ('news_list.html', 'news_detail.html'):
+                self.assertIn('regulatory_alert_mute.js',
+                              (base / name).read_text(encoding='utf-8'), name)
+            return
+        self.fail('regulatory 템플릿 폴더를 찾지 못했다')
+
+
+class 상세가_왜_왔는지_말한다(TestCase):
+    """
+    '포함 원료: X' 한 줄로는, 부적합 정보의 **어떤 말**이 내 원료 X 를 끌어왔는지
+    알 수 없었다. 알림이 많다고 느낀 사람이 손댈 곳을 못 찾은 이유다.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='why', password='x')
+        self.client.force_login(self.user)
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                       prdlst_nm='내 제품')
+        self.news = RegulatoryNews.objects.create(
+            external_id='why-1', api_source='I2620', source='domestic',
+            product_name='어떤 부적합', ai_parsed=True, collected_date='2026-08-01')
+        NewsProductMatch.objects.create(
+            news=self.news, product=label, matched_keyword='대장균',
+            matched_ingredient='정제수', match_score=90, risk_score=50)
+
+    def test_좌변과_우변을_나란히_보여_준다(self):
+        html = self.client.get('/regulatory/?id=%d' % self.news.id).content.decode()
+        self.assertIn('알림 사유', html)
+        self.assertIn('대장균', html)      # 부적합 정보에서 뽑힌 말
+        self.assertIn('정제수', html)      # 내 원료
+
+    def test_그_자리에서_끌_수_있다(self):
+        html = self.client.get('/regulatory/?id=%d' % self.news.id).content.decode()
+        self.assertIn("muteAlert('keyword'", html)
+        self.assertIn("muteAlert('ingredient'", html)
+
+    def test_행정처분은_업체를_끄게_한다(self):
+        """행정처분은 업체명 하나로 걸린다 — 원료를 끄라고 하면 말이 안 맞는다."""
+        news = RegulatoryNews.objects.create(
+            external_id='why-2', api_source='I0470', source='domestic',
+            product_name='행정처분', company_name='(주)어떤식품',
+            ai_parsed=True, collected_date='2026-08-01')
+        label = MyLabel.objects.get(user_id=self.user)
+        NewsProductMatch.objects.create(
+            news=news, product=label, matched_keyword='(주)어떤식품',
+            matched_ingredient='어떤식품', match_score=90, risk_score=50)
+
+        html = self.client.get('/regulatory/?id=%d' % news.id).content.decode()
+        self.assertIn("muteAlert('company'", html)
+        self.assertNotIn("muteAlert('ingredient'", html)
+
+
 class RegulatoryLayoutTests(TestCase):
     """
     부적합·처분 알림 화면의 뼈대 — 제품 관리 상단 + 원료 관리 본문.

@@ -54,7 +54,7 @@
     <a class="reg-stat" href="?tab=insp" title="수거검사 탭으로 이동합니다">
       <span class="reg-stat-icon reg-stat-icon--danger"><i class="bi bi-search"></i></span>
       <span>
-        <span class="reg-stat-n{% if inspection_unread %} reg-stat-n--danger{% endif %}">{{ inspection_unread|intcomma }}</span>
+        <span class="reg-stat-n{% if inspection_unread %} reg-stat-n--danger{% endif %}" id="regInspUnreadStat">{{ inspection_unread|intcomma }}</span>
         <span class="reg-stat-lbl">수거검사 미확인</span>
       </span>
     </a>
@@ -178,6 +178,23 @@
 
           <span class="rs-chip-divider"></span>
 
+          {% comment %}
+            '모두 읽음' 은 세 탭이 모두 같은 자리에 갖는다.
+            읽음(봤다)과 조치 완료(처리했다)는 다른 일인데, 예전에는 부적합·
+            행정처분 탭에서 배지를 지울 방법이 상세 하단의 '전체 알림 일괄
+            처리'(=되돌릴 수 없는 조치 기록) 뿐이었다. 그냥 훑어보고 넘기려던
+            사람이 조치 이력을 남겨야 했다.
+            숫자는 탭마다 다르므로 두 값을 다 실어 두고 JS 가 현재 탭 것을 쓴다.
+          {% endcomment %}
+          <button type="button" class="rs-quick-chip" id="newsMarkAllReadBtn"
+                  data-unread-insp-news="{{ tab_insp_unread }}"
+                  data-unread-admin="{{ tab_admin_unread }}"
+                  onclick="markTabRead()" hidden
+                  title="지금 탭의 알림을 모두 읽음으로 표시합니다 (조치 이력은 남지 않습니다)">
+            <i class="bi bi-check2-all"></i>모두 읽음
+            <span class="rs-quick-chip-n" id="newsMarkAllReadN"></span>
+          </button>
+
           {# 미조치만 — 가장 자주 쓰는 조작이라 지름길을 둔다 (위 카드와 같은 곳) #}
           <a class="rs-quick-chip{% if no_action_on %} rs-quick-chip--on{% endif %}"
              href="{% if no_action_on %}?{{ scope_qs_all }}{% else %}?{{ no_action_qs }}{% endif %}"
@@ -212,9 +229,13 @@
       {# ── 2행(수거검사): 거르는 게 아니라 '무엇을 할지' ── #}
       <div class="reg-tb-row reg-tb-row--insp">
         <div class="rf-risk-chips">
+          {# 세 탭 공통 — 문구도 동작도 부적합·행정처분 탭의 '모두 읽음' 과 같다 #}
           {% if inspection_unread > 0 %}
-          <button type="button" class="rs-risk-chip active-L" id="inspMarkAllReadBtn" onclick="inspMarkAllRead()">
-            <i class="bi bi-check2-all"></i>전체 읽음
+          <button type="button" class="rs-risk-chip active-L" id="inspMarkAllReadBtn"
+                  onclick="markTabRead('insp')"
+                  title="수거검사 알림을 모두 읽음으로 표시합니다">
+            <i class="bi bi-check2-all"></i>모두 읽음
+            <span class="rs-quick-chip-n">{{ inspection_unread|intcomma }}</span>
           </button>
           <span class="rs-chip-divider"></span>
           {% endif %}
@@ -262,7 +283,9 @@
         </div>
 
         <div class="as-intro">
-          이 화면의 알림은 두 갈래로 들어옵니다. 아래에서 각각의 받는 기준을 정하세요.
+          이 화면의 알림은 <b>키워드</b>·<b>수거검사</b> 두 갈래로 들어오고,
+          내 원료·제품과 자동으로 맞춘 것이 함께 올라옵니다.
+          받는 기준은 앞의 두 탭에서, <b>그만 받을 것</b>은 마지막 탭에서 정하세요.
         </div>
 
         <ul class="nav nav-tabs as-tabs" role="tablist">
@@ -277,6 +300,13 @@
             <button class="nav-link" id="asInspTab" data-bs-toggle="tab"
                     data-bs-target="#asInspPane" type="button" role="tab">
               수거검사 알림
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="asMuteTab" data-bs-toggle="tab"
+                    data-bs-target="#asMutePane" type="button" role="tab">
+              받지 않기
+              <span class="as-tab-count" id="muteBadgeCountTab">{{ alert_mutes|length }}</span>
             </button>
           </li>
         </ul>
@@ -386,6 +416,48 @@
                 <button type="button" class="btn btn-primary v2-btn-sm" onclick="saveInspProfile()">
                   <i class="bi bi-check2 me-1"></i>저장
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {% comment %}
+            ── 3. 받지 않기 ────────────────────────────────────────────────
+            등록한 키워드(AlertRule)가 "이것을 받겠다" 라면, 여기 목록은
+            "이것 때문에 오는 것은 그만" 이다. 목록의 알림 상세에서 '알림 사유'
+            옆 단추를 누르면 이 목록에 한 줄이 쌓인다. 어디서 껐는지 되짚을
+            자리가 없으면, 껐다는 사실 자체를 잊고 "왜 안 오지" 가 된다.
+          {% endcomment %}
+          <div class="tab-pane fade" id="asMutePane" role="tabpanel">
+            <p class="as-desc">
+              여기 있는 값으로 걸리는 알림은 <b>앞으로 오지 않습니다</b>.
+              부적합 정보의 키워드(예: 대장균), 내 원료·제품명(예: 정제수),
+              업체명으로 끌 수 있습니다.
+              끄는 것은 목록에서 알림을 열고 <b>알림 사유</b> 옆의
+              <i class="bi bi-bell-slash"></i> 단추로 합니다.
+            </p>
+
+            <div class="kw-list-section">
+              <div class="kw-list-title">
+                받지 않는 값 <span class="kw-list-count" id="muteModalCount">{{ alert_mutes|length }}</span>개
+              </div>
+              <div class="kw-chips-wrap" id="muteChipsWrap">
+                {% if not alert_mutes %}
+                <div class="kw-empty" id="muteEmptyMsg">아직 끈 것이 없습니다.</div>
+                {% else %}
+                {% for m in alert_mutes %}
+                <span class="rkb-chip rkb-chip-mute" data-mute-id="{{ m.id }}"
+                      title="{{ m.get_scope_display }}{% if m.hidden_count %} · 끌 때 기존 {{ m.hidden_count }}건 정리{% endif %}">
+                  <span class="rkb-chip-cat">{{ m.get_scope_display }}</span>
+                  <span class="rkb-chip-kw">{{ m.value }}</span>
+                  <button class="rkb-chip-del" title="다시 받기"
+                          onclick="deleteMute({{ m.id }}, '{{ m.value|escapejs }}')"><i class="bi bi-x"></i></button>
+                </span>
+                {% endfor %}
+                {% endif %}
+              </div>
+              <div class="kw-add-help text-muted small mt-2">
+                다시 받기로 되돌리면 <b>앞으로 오는 것</b>부터 다시 옵니다.
+                끌 때 함께 정리한 지난 알림은 되살아나지 않습니다.
               </div>
             </div>
           </div>
@@ -719,23 +791,59 @@
             </div>
           </details>
 
-          {# ══ 매칭 사유 ══ #}
+          {% comment %}
+            ══ 알림 사유 ═════════════════════════════════════════════════
+            부적합·행정처분 탭의 상세와 같은 제목·같은 자리다. 세 탭이 모두
+            "왜 나한테 왔는가 → 그 이유를 끈다" 라는 같은 흐름을 갖는다.
+
+            수거검사 매칭은 품목보고번호·인허가번호·업소명 셋 중 하나로만
+            생긴다. 그중 오탐이 잦은 것은 업소명이다 — 회사명이 짧으면
+            ('삼립') 남의 업체('○○삼립식품')까지 걸린다. 그래서 끌 수 있는
+            것도 업소명이고, 내 제품 번호가 맞아 걸린 건은 끄는 것이 아니라
+            '해당 없음' 으로 지우는 것이 맞다.
+          {% endcomment %}
           <div class="rd-sec">
             <div class="rd-sec-hdr">
               <i class="bi bi-link-45deg text-primary"></i>
-              내 정보 매칭 사유
+              알림 사유
+              <span class="rd-sec-note">내 정보와 이렇게 맞아 걸렸습니다</span>
             </div>
-            <div class="rd-sec-body" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              {% if selected_insp.match_reason == 'label_no' %}
-                <span class="rd-insp-match-badge">내 제품 품목보고번호 일치</span>
-                {% if selected_insp.label %}<span class="rd-insp-match-val">{{ selected_insp.label.prdlst_nm }}</span>{% endif %}
-              {% elif selected_insp.match_reason == 'license_no' %}
-                <span class="rd-insp-match-badge">인허가번호 포함</span>
-              {% else %}
-                <span class="rd-insp-match-badge">회사명 포함</span>
-              {% endif %}
+            <div class="rd-sec-body">
+              <div class="rd-why">
+                <span class="rd-why-label">알림 사유</span>
+                {% if selected_insp.match_reason == 'label_no' %}
+                  <span class="rd-why-kw" title="수거검사 쪽 값">품목보고번호</span>
+                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
+                  <span class="rd-why-mine" title="내가 등록한 제품">{{ selected_insp.label.prdlst_nm|default:"내 제품" }}</span>
+                {% elif selected_insp.match_reason == 'license_no' %}
+                  <span class="rd-why-kw" title="수거검사 쪽 값">{{ selected_insp.inspection.prdlst_report_no|default:"품목보고번호" }}</span>
+                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
+                  <span class="rd-why-mine" title="내 정보의 인허가번호">인허가번호</span>
+                {% else %}
+                  <span class="rd-why-kw" title="수거검사 업소명">{{ selected_insp.inspection.bssh_nm|default:"업소명" }}</span>
+                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
+                  <span class="rd-why-mine" title="내 정보의 회사명">회사명</span>
+                {% endif %}
+              </div>
               {% if selected_insp.matched_value %}
-              <code class="rd-insp-matched-code">{{ selected_insp.matched_value }}</code>
+              <div class="rd-why">
+                <span class="rd-why-label">맞은 값</span>
+                <code class="rd-insp-matched-code">{{ selected_insp.matched_value }}</code>
+              </div>
+              {% endif %}
+              {% if selected_insp.match_reason != 'label_no' and selected_insp.inspection.bssh_nm %}
+              <div class="rd-why-mute">
+                <span class="rd-why-mute-lead"><i class="bi bi-bell-slash"></i>이 업소가 내 업체가 아니라면</span>
+                <button type="button" class="rd-mute-btn"
+                        onclick="muteAlert('company', '{{ selected_insp.inspection.bssh_nm|escapejs }}')"
+                        title="이 업소명으로 걸리는 수거검사 알림을 앞으로 받지 않습니다">
+                  업소 &lsquo;{{ selected_insp.inspection.bssh_nm|truncatechars:16 }}&rsquo; 끄기
+                </button>
+                <button type="button" class="rd-mute-btn" onclick="openAlertSettings('insp')"
+                        title="회사명·인허가번호를 더 정확하게 고칩니다">
+                  내 정보 고치기
+                </button>
+              </div>
               {% endif %}
             </div>
           </div>
@@ -745,8 +853,8 @@
             <div class="rd-sec-body">
               <button type="button" class="rd-insp-dismiss-btn"
                       onclick="inspDismiss({{ selected_insp.id }})"
-                      title="이 항목은 나와 관련 없습니다 (삭제)">
-                <i class="bi bi-x-circle"></i> 해당 없음 (삭제)
+                      title="이 건만 내 목록에서 지웁니다 (같은 업소의 다음 건은 계속 옵니다)">
+                <i class="bi bi-x-circle"></i> 해당 없음 (이 건만 삭제)
               </button>
             </div>
           </div>
@@ -984,6 +1092,8 @@
 
 {% block extra_js %}
 <script src="{% static 'js/regulatory_list.js' %}"></script>
+{# 알림 사유 끄기 — 뉴스 상세·수거검사 상세·상세 독립 페이지가 함께 쓴다 #}
+<script src="{% static 'js/regulatory_alert_mute.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
 (function(){
 function getCsrf(){return document.cookie.split('; ').find(r=>r.startsWith('csrftoken='))?.split('=')[1]||'';}
@@ -1014,33 +1124,87 @@ function quickResolve(e,newsId){
 }
 window.quickResolve=quickResolve;
 
-// ── 수거검사 전체 읽음 ──────────────────────────────────────────────────────
-function inspMarkAllRead() {
-  fetch("{% url 'regulatory:inspection_mark_all_read' %}", {
+// ── 모두 읽음 (세 탭 공통) ──────────────────────────────────────────────────
+// 탭 하나를 통째로 '봤음' 으로 바꾼다. 조치 완료와는 다른 일이라 조치 이력을
+// 남기지 않는다 — 되돌릴 수 없는 기록 없이 배지만 털고 싶을 때 쓰는 단추다.
+// 예전에는 이 단추가 수거검사 탭에만 있었고, 세 탭이 서로 다른 주소를 불렀다.
+var TAB_READ_LABEL = {'insp-news': '부적합', 'admin': '행정처분', 'insp': '수거검사'};
+
+function _currentTab() {
+  var sidebar = document.getElementById('regSidebar');
+  return (sidebar && sidebar.dataset.view) || 'insp-news';
+}
+
+function markTabRead(tab) {
+  tab = tab || _currentTab();
+  var label = TAB_READ_LABEL[tab] || '전체';
+  fetch("{% url 'regulatory:mark_tab_read' %}", {
     method: 'POST',
     headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+    body: JSON.stringify({tab: tab}),
   })
-  .then(r => r.json()).then(d => {
-    if (d.success) {
-      document.querySelectorAll('.rs-item--insp-unread').forEach(function(el) {
-        el.classList.remove('rs-item--insp-unread');
-        var dot = el.querySelector('.rs-unread-dot');
-        if (dot) dot.remove();
-      });
-      // 탭 미읽음 dot 제거
-      var tabDot = document.getElementById('vtabInspUnreadDot');
-      if (tabDot) tabDot.remove();
-      // "전체 읽음" 버튼 제거
-      var readAllBtn = document.getElementById('inspMarkAllReadBtn');
-      if (readAllBtn) {
-        var divider = readAllBtn.nextElementSibling;
+  .then(r => r.json()).then(function(d) {
+    if (!d.success) return;
+
+    // 목록에 보이는 미확인 표시를 그 자리에서 지운다 (부적합·행정처분·수거검사 공통)
+    document.querySelectorAll('.rs-item--unread, .rs-item--insp-unread').forEach(function(el) {
+      el.classList.remove('rs-item--unread', 'rs-item--insp-unread');
+      var dot = el.querySelector('.rs-unread-dot');
+      if (dot) dot.remove();
+    });
+
+    // 지금 턴 탭의 빨간 점과 단추를 거둔다
+    var dotId = {'insp-news': 'vtabInspNewsUnreadDot', 'admin': 'vtabAdminUnreadDot',
+                 'insp': 'vtabInspUnreadDot'}[tab];
+    var tabDot = dotId && document.getElementById(dotId);
+    if (tabDot) tabDot.remove();
+
+    if (tab === 'insp') {
+      var inspBtn = document.getElementById('inspMarkAllReadBtn');
+      if (inspBtn) {
+        var divider = inspBtn.nextElementSibling;
         if (divider && divider.classList.contains('rs-chip-divider')) divider.remove();
-        readAllBtn.remove();
+        inspBtn.remove();
+      }
+    } else {
+      var newsBtn = document.getElementById('newsMarkAllReadBtn');
+      if (newsBtn) {
+        newsBtn.dataset['unread' + (tab === 'admin' ? 'Admin' : 'InspNews')] = '0';
+        newsBtn.hidden = true;
       }
     }
+
+    // 상단 통계 카드(수거검사 미확인)와 네비바 배지도 같은 값으로 맞춘다
+    if (typeof d.inspection_unread === 'number') {
+      var inspStat = document.getElementById('regInspUnreadStat');
+      if (inspStat) {
+        inspStat.textContent = d.inspection_unread.toLocaleString();
+        inspStat.classList.toggle('reg-stat-n--danger', d.inspection_unread > 0);
+      }
+    }
+    var navB = document.getElementById('regAlertBadge');
+    if (navB && typeof d.unread === 'number') {
+      navB.textContent = d.unread > 9 ? '9+' : d.unread;
+      navB.style.display = d.unread > 0 ? '' : 'none';
+    }
+    if (typeof window.fetchNotifications === 'function') window.fetchNotifications();
+    if (typeof showSnackbar === 'function')
+      showSnackbar(label + ' 알림 ' + (d.updated || 0) + '건을 읽음으로 표시했습니다.', 'success');
   }).catch(function(){});
 }
-window.inspMarkAllRead = inspMarkAllRead;
+window.markTabRead = markTabRead;
+
+/** 현재 탭에 맞춰 '모두 읽음' 단추의 노출·숫자를 맞춘다 (탭마다 미확인 수가 다르다). */
+function syncMarkAllReadBtn(tab) {
+  var btn = document.getElementById('newsMarkAllReadBtn');
+  if (!btn) return;
+  if (tab === 'insp') { btn.hidden = true; return; }
+  var n = parseInt(btn.dataset[tab === 'admin' ? 'unreadAdmin' : 'unreadInspNews'] || '0', 10);
+  btn.hidden = !(n > 0);
+  var nEl = document.getElementById('newsMarkAllReadN');
+  if (nEl) nEl.textContent = n > 0 ? n.toLocaleString() : '';
+}
+window.syncMarkAllReadBtn = syncMarkAllReadBtn;
 
 // ── 수거검사 상태 필터 (서버 처리) ────────────────────────────────────────
 // 예전에는 현재 페이지의 DOM 만 숨겼기 때문에 2페이지 이후에는 필터가 적용되지 않고,
@@ -1164,7 +1328,7 @@ window.inspDismissSelected = inspDismissSelected;
 /**
  * 알림 설정 모달 열기.
  * 키워드 알림과 수거검사 알림을 한 모달의 두 탭으로 합쳤다.
- * pane: 'kw'(기본) | 'insp' — 어느 탭을 펼칠지
+ * pane: 'kw'(기본) | 'insp' | 'mute' — 어느 탭을 펼칠지
  */
 function openAlertSettings(pane) {
   var kwEl = document.getElementById('kwKeyword');
@@ -1174,14 +1338,14 @@ function openAlertSettings(pane) {
   var resEl = document.getElementById('kwBackfillResult');
   if (resEl) resEl.style.display = 'none';
 
-  var tabId = (pane === 'insp') ? 'asInspTab' : 'asKwTab';
+  var tabId = {insp: 'asInspTab', mute: 'asMuteTab'}[pane] || 'asKwTab';
   var tabEl = document.getElementById(tabId);
   if (tabEl && window.bootstrap && bootstrap.Tab) {
     bootstrap.Tab.getOrCreateInstance(tabEl).show();
   }
 
   new bootstrap.Modal(document.getElementById('alertSettingsModal')).show();
-  if (pane !== 'insp') {
+  if (pane !== 'insp' && pane !== 'mute') {
     setTimeout(function(){ if (kwEl) kwEl.focus(); }, 350);
   }
 }
@@ -1279,6 +1443,44 @@ function deleteKeyword(ruleId, keyword) {
   });
 }
 window.deleteKeyword = deleteKeyword;
+
+/**
+ * 받지 않기 해제 — 앞으로 다시 받는다.
+ * 끌 때 함께 정리한 지난 알림은 되살리지 않는다. '오탐지 신고' 와 같은 성질이라,
+ * 되살리면 이미 정리한 목록이 갑자기 불어나 무엇이 새 알림인지 알 수 없게 된다.
+ */
+function deleteMute(muteId, value) {
+  if (!confirm('‘' + value + '’ 알림을 다시 받습니다.
+'
+             + '앞으로 올라오는 것부터 다시 오며, 끌 때 정리한 지난 알림은 되살아나지 않습니다.')) return;
+  fetch('{% url "regulatory:alert_mute_delete" mute_id=0 %}'.replace('/0/', '/' + muteId + '/'), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data.success) { alert(data.error || '해제 실패'); return; }
+    var chip = document.querySelector('.rkb-chip[data-mute-id="' + muteId + '"]');
+    if (chip) chip.remove();
+    _updateMuteCount(-1);
+    var wrap = document.getElementById('muteChipsWrap');
+    if (wrap && wrap.querySelectorAll('.rkb-chip').length === 0) {
+      var msg = document.createElement('div');
+      msg.className = 'kw-empty'; msg.id = 'muteEmptyMsg'; msg.textContent = '아직 끈 것이 없습니다.';
+      wrap.appendChild(msg);
+    }
+  });
+}
+window.deleteMute = deleteMute;
+
+function _updateMuteCount(delta) {
+  ['muteModalCount', 'muteBadgeCountTab'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var n = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
+    el.textContent = n;
+  });
+}
 
 function showBackfillResult(count, previews, keyword) {
   var el = document.getElementById('kwBackfillResult');
@@ -1450,6 +1652,8 @@ function _applySwitchViewCSS(v) {
   var idMap = {'insp-news': 'vtabInspNews', 'admin': 'vtabAdmin', 'insp': 'vtabInsp'};
   var t = document.getElementById(idMap[v]);
   if (t) t.classList.add('rs-vtab--active');
+
+  if (typeof syncMarkAllReadBtn === 'function') syncMarkAllReadBtn(v);
 
   var filterBtn = document.getElementById('regCondToggle');
   if (filterBtn) {

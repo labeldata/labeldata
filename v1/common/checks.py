@@ -128,10 +128,10 @@ _OWN_SIZED_BUTTONS = frozenset({
     'quick-allergen-btn', 'side-panel-toggle', 'summary-type-btn',
     # 부적합·처분 알림
     'kw-add-btn', 'rd-ab-btn', 'rd-act-btn', 'rd-as-edit', 'rd-cond-submit',
-    'rd-insp-dismiss-btn', 'rd-insp-guide-btn', 'rd-memo-submit',
-    'reg-cond-toggle', 'rf-listctl-dir', 'rkb-chip-del', 'rs-day-btn',
-    'rs-quick-resolve', 'rs-risk-chip', 'rs-search-x', 'rs-settings-btn',
-    'rs-vtab',
+    'rd-insp-dismiss-btn', 'rd-insp-guide-btn', 'rd-kw-del', 'rd-memo-submit',
+    'rd-mute-btn', 'reg-cond-toggle', 'rf-listctl-dir', 'rkb-chip-del',
+    'rs-day-btn', 'rs-quick-chip', 'rs-quick-resolve', 'rs-risk-chip',
+    'rs-search-x', 'rs-settings-btn', 'rs-vtab',
     # 내 정보
     'g-btn-danger', 'g-btn-primary', 'g-btn-secondary',
 })

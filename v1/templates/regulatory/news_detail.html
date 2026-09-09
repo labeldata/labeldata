@@ -17,3 +17,8 @@
 
 {% include "regulatory/_news_detail_panel.html" with matches=my_matches ing_matches=ing_matches %}
 {% endblock %}
+
+{% block extra_js %}
+{# 알림 사유 끄기 — 목록의 상세 패널과 같은 단추가 여기에도 나온다 #}
+<script src="{% static 'js/regulatory_alert_mute.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{% endblock %}

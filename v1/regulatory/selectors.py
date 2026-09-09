@@ -226,3 +226,42 @@ def attach_match_info(news_items, ctx) -> None:
         n.ing_risk_level      = ctx['ing_risk'].get(nid)
         n.my_action_status    = ctx['prod_action'].get(nid)
         n.my_ing_action_status = ctx['ing_action'].get(nid)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 알림 제외(뮤트) 규칙
+# ─────────────────────────────────────────────────────────────────────────────
+
+def muted_values(user) -> dict:
+    """
+    사용자의 알림 제외 규칙을 scope 별 정규화 값 집합으로 모아 온다.
+
+    알림을 **만드는 쪽**(services/matcher.py)과 **보여 주는 쪽**(views.news_list)
+    이 같은 집합을 봐야 한다. 한쪽만 적용하면 "껐는데 목록에는 남아 있다"
+    또는 "목록에서는 사라졌는데 푸시는 계속 온다" 가 된다.
+
+    Returns: {'keyword': {...}, 'ingredient': {...}, 'company': {...}}
+    """
+    from v1.regulatory.models import AlertMute
+
+    out = {s: set() for s, _ in AlertMute.SCOPE_CHOICES}
+    if user is None or not getattr(user, 'is_authenticated', True):
+        return out
+    for scope, value_norm in (AlertMute.objects
+                              .filter(user=user)
+                              .values_list('scope', 'value_norm')):
+        if scope in out and value_norm:
+            out[scope].add(value_norm)
+    return out
+
+
+def is_muted(mutes: dict, scope: str, value: str) -> bool:
+    """muted_values() 결과에 value 가 걸리는지 — 정규화 규칙은 모델 한 곳에서 온다."""
+    from v1.regulatory.models import normalize_mute_value
+
+    if not mutes:
+        return False
+    bucket = mutes.get(scope)
+    if not bucket:
+        return False
+    return normalize_mute_value(value) in bucket

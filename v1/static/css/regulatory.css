@@ -567,6 +567,33 @@ details[open] .rd-ai-sum::after { content: "⌄"; font-size: 12px; }
 .rd-item-detail   { padding: 0 10px 5px; font-size: 11px; color: var(--c-text-hint); }
 .rd-item-detail b { color: var(--c-text-secondary); }
 
+/* ── 18-1. 알림 사유 + 끄기 ─────────────────────────────────
+   "왜 이게 나한테 왔는가" 를 한 줄로 보여 주고, 바로 아래에서 그 이유를 끈다.
+   좌변(부적합 정보에서 뽑힌 말)과 우변(내 원료·제조사)을 화살표로 잇는다 —
+   어느 쪽을 꺼야 하는지는 사람마다 달라서, 양쪽을 다 보여 줘야 고를 수 있다. */
+.rd-why         { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+                  padding: 0 10px 5px; font-size: 11.5px; }
+.rd-why-label   { font-size: 10px; font-weight: 700; color: var(--c-text-hint);
+                  background: var(--c-border-light); border-radius: var(--r-xs);
+                  padding: 1px 5px; flex-shrink: 0; }
+.rd-why-kw      { font-weight: 700; color: var(--c-danger-text);
+                  background: var(--c-danger-bg); border-radius: var(--r-xs); padding: 1px 6px; }
+.rd-why-arrow   { font-size: 10px; color: var(--c-text-hint); }
+.rd-why-mine    { font-weight: 700; color: var(--c-primary);
+                  background: var(--c-primary-bg); border-radius: var(--r-xs); padding: 1px 6px; }
+.rd-why-score   { font-size: 10px; color: var(--c-text-hint); margin-left: auto; }
+
+.rd-why-mute      { display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+                    padding: 0 10px 7px; }
+.rd-why-mute-lead { display: inline-flex; align-items: center; gap: 3px;
+                    font-size: 10px; color: var(--c-text-hint); }
+.rd-mute-btn      { display: inline-flex; align-items: center; gap: 3px;
+                    border: 1px solid var(--c-border); background: #fff;
+                    border-radius: 12px; padding: 2px 9px;
+                    font-size: 10.5px; color: var(--c-text-secondary); cursor: pointer; }
+.rd-mute-btn:hover { border-color: var(--c-danger); color: var(--c-danger);
+                     background: var(--c-danger-bg); }
+
 /* ── 19. 조치 이력 ─────────────────────────────────────────── */
 .rd-hist-line { display: flex; align-items: center; gap: 5px; padding: 4px 10px;
                 background: var(--c-bg-surface); border-top: 1px solid var(--c-border-light);
@@ -661,6 +688,13 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .rd-kw-word { font-weight: 600; color: var(--c-text-primary); flex: 1; }
 .rd-kw-mtype { font-size: 10px; color: var(--c-text-hint); flex-shrink: 0; }
 .rd-kw-when  { font-size: 10px; color: var(--c-text-hint); flex-shrink: 0; margin-left: auto; }
+/* 상세에서 바로 지우기 — 설정 모달을 열어 같은 말을 눈으로 찾지 않게 한다 */
+.rd-kw-del   { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+               border: 1px solid var(--c-border); background: #fff; border-radius: 12px;
+               padding: 2px 8px; font-size: 10.5px; color: var(--c-text-secondary); cursor: pointer; }
+.rd-kw-del:hover { border-color: var(--c-danger); color: var(--c-danger); background: var(--c-danger-bg); }
+/* 섹션 제목 옆 한 줄 설명 — 이 알림이 '내가 등록한 것' 때문임을 밝힌다 */
+.rd-sec-note { font-size: 10.5px; font-weight: 400; color: var(--c-text-hint); margin-left: auto; }
 
 .rd-nomatch    { display: flex; align-items: center; gap: 12px; padding: 18px 16px;
                  font-size: 12.5px; color: var(--c-text-secondary); line-height: 1.6; }
@@ -707,6 +741,9 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .rkb-chip-ingredient  { border-color: #a5d6a7; background: #f1f8f1; }
 .rkb-chip-company     { border-color: #90caf9; background: #f0f6ff; }
 .rkb-chip-origin      { border-color: #ffcc80; background: #fff8f0; }
+/* 받지 않기 칩 — '받겠다' 칩과 색으로 갈라 둔다 (회색 = 꺼져 있음) */
+.rkb-chip-mute        { border-color: var(--c-border); background: var(--c-bg-page); }
+.rkb-chip-mute .rkb-chip-kw { color: var(--c-text-hint); text-decoration: line-through; }
 .rkb-chip-cat         { font-size: 10px; color: #999; margin-right: 1px; }
 .rkb-chip-kw          { font-weight: 600; color: #333; }
 .rkb-chip-exact       { font-size: 10px; color: var(--c-warn); background: var(--c-warn-bg);

@@ -124,8 +124,18 @@ def _load_fp_patterns_for_user(user) -> '_FPPatternCache':
     소스 2 — NewsIngredientMatch.dismissed_yn=True
       보관함 원료에 대한 "해당 없음" 처리 이력.
       ingredient__prdlst_nm 을 원료명으로 사용.
+
+    제외 — 알림 제외(뮤트)로 한꺼번에 치워진 건
+      '이 키워드 알림 끄기' 는 한 번에 수백 건을 오탐으로 표시한다. 그것을
+      그대로 학습에 태우면 그 키워드의 FP 누적이 폭증해, **다른 원료**에
+      걸린 정상 매칭까지 Approach C 로 등급이 깎인다. 정제수 알림을 껐다고
+      대장균 소식 전체가 '일반' 이 되면 안 된다.
+      뮤트에 걸리는 짝은 어차피 매칭 단계에서 잘리므로, 학습에서 빼도
+      잃는 것이 없다.
     """
     from django.db.models import Count
+
+    mutes = load_mutes_for_user(user)
 
     prod_fps = list(
         NewsProductMatch.objects
@@ -144,7 +154,12 @@ def _load_fp_patterns_for_user(user) -> '_FPPatternCache':
     )
     ing_fps = [(kw, ing, cnt) for kw, ing, cnt in ing_fps_qs if ing]
 
-    return _FPPatternCache(prod_fps + ing_fps)
+    rows = prod_fps + ing_fps
+    if mutes:
+        rows = [(kw, ing, cnt) for kw, ing, cnt in rows
+                if not _muted_pair(mutes, kw or '', ing or '')]
+
+    return _FPPatternCache(rows)
 
 
 def _apply_fp_penalty(risk_dict: dict, fp_count: int) -> dict:
@@ -179,6 +194,39 @@ def _apply_fp_penalty(risk_dict: dict, fp_count: int) -> dict:
     }
 
 
+# ── 알림 제외(뮤트) ──────────────────────────────────────────────────────────
+# 오탐 학습(_FPPatternCache)이 "쌓인 이력으로 미루어 짐작" 하는 쪽이라면,
+# 이쪽은 사용자가 화면에서 직접 "이건 그만" 이라고 말한 것이다. 짐작보다 세므로
+# 점수를 깎지 않고 매칭 자체를 만들지 않는다.
+
+def load_mutes_for_user(user) -> dict:
+    """사용자의 알림 제외 규칙을 scope 별 집합으로 — 규칙 정의는 selectors 한 곳."""
+    from v1.regulatory import selectors
+    return selectors.muted_values(user)
+
+
+def _muted(mutes: dict | None, scope: str, value: str) -> bool:
+    if not mutes or not value:
+        return False
+    from v1.regulatory import selectors
+    return selectors.is_muted(mutes, scope, value)
+
+
+def _muted_pair(mutes: dict | None, keyword: str, ingredient: str) -> bool:
+    """
+    뉴스 쪽 키워드 또는 내 원료명 중 하나라도 꺼져 있으면 이 매칭은 만들지 않는다.
+
+    업체명(company)까지 함께 보는 이유: 제품 레벨 매칭은 키워드 자리에 제조사가
+    들어오기도 한다. 사용자가 '(주)○○' 를 껐다면 그것이 키워드 칸에 있든
+    업체 칸에 있든 같은 뜻이다.
+    """
+    if not mutes:
+        return False
+    return (_muted(mutes, 'keyword', keyword)
+            or _muted(mutes, 'ingredient', ingredient)
+            or _muted(mutes, 'company', keyword))
+
+
 def find_affected_products(
     news: RegulatoryNews,
     user: User,
@@ -187,6 +235,7 @@ def find_affected_products(
     fp_patterns: '_FPPatternCache | None' = None,
     prefetched_labels: list | None = None,
     prefetched_contacts: list | None = None,
+    mutes: dict | None = None,
 ) -> list[dict]:
     """
     뉴스의 ai_issues (또는 ai_keywords 폴백)를 해당 사용자의 BOM + 원료 보관함에서 퍼지 매칭.
@@ -217,6 +266,9 @@ def find_affected_products(
     # 오탐 패턴 캐시 — Approach A (퍼지 스킵) + C (위해도 패널티) 에 사용
     if fp_patterns is None:
         fp_patterns = _load_fp_patterns_for_user(user)
+    # 사용자가 직접 끈 키워드·원료·업체 — 여기 걸리면 매칭을 만들지 않는다
+    if mutes is None:
+        mutes = load_mutes_for_user(user)
 
     # ── 행정처분 분기: 업체명↔내 제조사 매칭 ──────────────────────────────
     if is_admin:
@@ -225,6 +277,7 @@ def find_affected_products(
             prefetched_boms=prefetched_boms,
             prefetched_contacts=prefetched_contacts,
             prefetched_labels=prefetched_labels,
+            mutes=mutes,
         )
 
     # 표시위반은 원료 매칭 불필요
@@ -279,6 +332,9 @@ def find_affected_products(
             keyword = issue['ingredient']
             score = _fuzzy_score(keyword, bom.ingredient_name)
             if score >= MATCH_THRESHOLD:
+                # 사용자가 끈 키워드·원료 → 매칭 자체를 만들지 않는다
+                if _muted_pair(mutes, keyword, bom.ingredient_name):
+                    continue
                 # Approach A: 정확 일치 또는 유사 키워드 오탐 패턴 → 완전 제외
                 if fp_patterns.is_fp(keyword, bom.ingredient_name):
                     logger.debug(
@@ -312,6 +368,8 @@ def find_affected_products(
             keyword = issue['ingredient']
             score = _fuzzy_score(keyword, ing_name)
             if score >= MATCH_THRESHOLD:
+                if _muted_pair(mutes, keyword, ing_name):
+                    continue
                 # Approach A: 정확 일치 또는 유사 키워드 오탐 패턴 → 완전 제외
                 if fp_patterns.is_fp(keyword, ing_name):
                     logger.debug(
@@ -339,6 +397,8 @@ def find_affected_products(
         prefetched_boms=prefetched_boms,
     )
     for m in product_level:
+        if _muted_pair(mutes, m['matched_keyword'], m['matched_ingredient']):
+            continue
         _update_best(
             m['product'], m['matched_bom'],
             m['matched_keyword'], m['matched_ingredient'],
@@ -507,6 +567,7 @@ def _find_admin_matches(
     prefetched_boms: list | None = None,
     prefetched_contacts: list | None = None,
     prefetched_labels: list | None = None,
+    mutes: dict | None = None,
 ) -> list[dict]:
     """
     행정처분 전용 매칭: 뉴스 업체명이 내 BOM 원료의 제조사 또는
@@ -519,6 +580,9 @@ def _find_admin_matches(
 
     news_company = _normalize_corp(news.company_name or '')
     if not news_company:
+        return []
+    # 이 업체 알림을 껐으면 여기서 끝 — 행정처분 매칭은 업체명 하나로 생긴다
+    if _muted(mutes, 'company', news.company_name or ''):
         return []
 
     best: dict[int, dict] = {}
@@ -702,6 +766,7 @@ def find_matching_ingredients_unlinked(
     user: User,
     prefetched_ingredients: list | None = None,
     fp_patterns: '_FPPatternCache | None' = None,
+    mutes: dict | None = None,
 ) -> list[dict]:
     """
     어떤 제품 BOM에도 연결되지 않은 원료 보관함(MyIngredient) 항목 중
@@ -729,6 +794,8 @@ def find_matching_ingredients_unlinked(
     # 오탐 패턴 캐시 로드 (A + C)
     if fp_patterns is None:
         fp_patterns = _load_fp_patterns_for_user(user)
+    if mutes is None:
+        mutes = load_mutes_for_user(user)
 
     base_issues = news.ai_issues if news.ai_issues else [
         {'ingredient': kw, 'origin': None, 'manufacturer': None, 'food_type': None}
@@ -769,6 +836,10 @@ def find_matching_ingredients_unlinked(
                 continue
             score = _fuzzy_score(keyword, ing_name)
             if score < MATCH_THRESHOLD:
+                continue
+
+            # 사용자가 끈 키워드·원료 → 매칭 자체를 만들지 않는다
+            if _muted_pair(mutes, keyword, ing_name):
                 continue
 
             # Approach A: 정확 일치 또는 유사 키워드 오탐 패턴 → 완전 제외
@@ -879,6 +950,7 @@ def build_match_cache_for_user(user) -> dict:
             'labels':      list[MyLabel],
             'contacts':    list[UserContact],
             'fp_patterns': _FPPatternCache,
+            'mutes':       dict,
         }
     """
     from v1.bom.models import ProductBOM
@@ -916,6 +988,7 @@ def build_match_cache_for_user(user) -> dict:
         'labels':      labels,
         'contacts':    contacts,
         'fp_patterns': _load_fp_patterns_for_user(user),
+        'mutes':       load_mutes_for_user(user),
     }
 
 
@@ -934,6 +1007,7 @@ def build_user_match_cache() -> dict:
                 'labels':      list[MyLabel],
                 'contacts':    list[UserContact],
                 'fp_patterns': _FPPatternCache,
+                'mutes':       dict,
             },
             ...
         }
@@ -961,6 +1035,7 @@ def run_matching_for_all_users(news: RegulatoryNews, user_cache: dict | None = N
         for entry in user_cache.values():
             user = entry['user']
             fp_patterns = entry.get('fp_patterns')
+            mutes = entry.get('mutes')
             product_matches = find_affected_products(
                 news, user,
                 prefetched_boms=entry['boms'],
@@ -968,6 +1043,7 @@ def run_matching_for_all_users(news: RegulatoryNews, user_cache: dict | None = N
                 fp_patterns=fp_patterns,
                 prefetched_labels=entry.get('labels'),
                 prefetched_contacts=entry.get('contacts'),
+                mutes=mutes,
             )
             if product_matches:
                 total += save_matches(news, product_matches)
@@ -975,6 +1051,7 @@ def run_matching_for_all_users(news: RegulatoryNews, user_cache: dict | None = N
                 news, user,
                 prefetched_ingredients=entry['ingredients'],
                 fp_patterns=fp_patterns,
+                mutes=mutes,
             )
             if ing_matches:
                 total += save_ingredient_matches(news, user, ing_matches)

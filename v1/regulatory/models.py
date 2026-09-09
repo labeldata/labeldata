@@ -4,6 +4,7 @@
 - NewsProductMatch: 부적합 뉴스 ↔ 내 제품 M:N 연결
 - InspectionResult: 수거검사(I0460) 원본
 - InspectionMatch: 수거검사 ↔ 사용자 매칭 이력
+- AlertMute: 알림 제외(뮤트) 규칙 — 특정 키워드·원료·업체로 생기는 알림을 끈다
 """
 import datetime
 from django.db import models
@@ -329,3 +330,86 @@ class InspectionMatch(models.Model):
 
     def __str__(self):
         return f"[{self.get_alert_phase_display()}] {self.inspection} → {self.user}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 알림 제외(뮤트) 규칙
+# ─────────────────────────────────────────────────────────────────────────────
+
+def normalize_mute_value(value: str) -> str:
+    """
+    뮤트 값 비교용 정규화 — 공백을 없애고 소문자로 내린다.
+    '고춧 가루' 와 '고춧가루' 를 같은 것으로 보기 위한 최소한의 처리다.
+    매칭 엔진의 _normalize_text 와 같은 규칙을 쓴다(그쪽은 import 순환을 피해 별도).
+    """
+    return ''.join((value or '').split()).lower()
+
+
+class AlertMute(models.Model):
+    """
+    "이것 때문에 오는 알림은 그만 받겠다" 를 담는 표.
+
+    부적합·행정처분 알림은 뉴스 쪽 키워드(AI 추출어)와 내 원료·제품명이 짝을
+    이룰 때 생긴다. 그런데 화면에는 그 결과만 있고 **원인을 끄는 자리**가
+    없었다. 정제수·소금처럼 어디에나 들어가는 원료 하나가 매일 수십 건을
+    끌고 와도, 사용자가 할 수 있는 것은 건건이 '해당 없음' 을 누르거나
+    원료 보관함에서 그 원료를 지우는 것뿐이었다 — 둘 다 원하는 일이 아니다.
+
+    이 표는 그 원인 한 줄을 직접 끈다. 알림을 만드는 쪽(matcher)과 보여
+    주는 쪽(views) 이 같은 집합을 보므로, 한 번 끄면 앞으로 안 생기고
+    이미 쌓인 것도 함께 정리된다.
+
+    scope
+      keyword    — 뉴스 쪽 키워드 (예: '대장균', '잔류농약')
+      ingredient — 내 원료·제품명 (예: '정제수')
+      company    — 업체명 (행정처분·수거검사 업체 매칭)
+
+    AlertRule(받겠다) 과 짝이 되는 반대편 규칙이다. 직접 등록한 알림 키워드는
+    여기서 끄지 않고 AlertRule 을 지우거나 끈다 — 두 표가 같은 말을 반대로
+    하면 어느 쪽이 이겼는지 화면에서 설명할 수 없다.
+    """
+
+    SCOPE_KEYWORD    = 'keyword'
+    SCOPE_INGREDIENT = 'ingredient'
+    SCOPE_COMPANY    = 'company'
+    SCOPE_CHOICES = [
+        (SCOPE_KEYWORD,    '부적합 키워드'),
+        (SCOPE_INGREDIENT, '내 원료·제품명'),
+        (SCOPE_COMPANY,    '업체명'),
+    ]
+
+    user  = models.ForeignKey(User, on_delete=models.CASCADE,
+                              related_name='alert_mutes', verbose_name='사용자')
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES,
+                             verbose_name='제외 기준', db_index=True)
+    value = models.CharField(max_length=200, verbose_name='제외 값',
+                             help_text='사용자에게 보여 줄 원래 표기')
+    value_norm = models.CharField(max_length=200, verbose_name='비교용 정규화 값',
+                                  db_index=True,
+                                  help_text='공백 제거 + 소문자. 중복 방지와 조회에 쓴다')
+    memo = models.CharField(max_length=200, blank=True, default='',
+                            verbose_name='끈 이유')
+    hidden_count = models.IntegerField(default=0, verbose_name='정리한 기존 알림 수',
+                                       help_text='끌 때 함께 숨긴 기존 매칭 건수')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
+
+    class Meta:
+        db_table            = 'regulatory_alert_mute'
+        ordering            = ['-created_at']
+        verbose_name        = '알림 제외 규칙'
+        verbose_name_plural = '알림 제외 규칙 목록'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'scope', 'value_norm'],
+                                    name='uniq_alert_mute_user_scope_value'),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'scope']),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.value = (self.value or '').strip()
+        self.value_norm = normalize_mute_value(self.value)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"[{self.get_scope_display()}] {self.value} → {self.user}"
