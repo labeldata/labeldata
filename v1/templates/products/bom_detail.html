@@ -553,11 +553,20 @@ body.in-iframe .bom-page-header { display: none !important; }
        가르는 규칙이 서버에 하나뿐이라야 어느 날 한쪽만 고쳐지지 않는다. */
     let NOTE_COLUMNS = [];
     function applyNoteColumns(names) {
-        window.NOTE_COLUMN_NAMES = names || [];
-        NOTE_COLUMNS = (names || []).filter(function (name) {
+        names = names || [];
+        const wanted = names.filter(function (name) {
             return BOM_HIDDEN.indexOf(name) < 0;
         });
-        if (!NOTE_COLUMNS.length) return;
+        /* 바뀐 것이 없으면 표를 건드리지 않는다. updateSettings 는 편집 중인
+           칸을 닫고 스크롤을 되돌리므로, 붙여넣을 때마다 부르면 화면이 튄다. */
+        const mark = function (list) { return JSON.stringify(list); };
+        if (mark(wanted) === mark(NOTE_COLUMNS)
+            && mark(names) === mark(window.NOTE_COLUMN_NAMES || [])) return;
+
+        window.NOTE_COLUMN_NAMES = names;
+        NOTE_COLUMNS = wanted;
+        /* 칸이 하나도 없어도 다시 그린다. 예전에는 여기서 그냥 돌아갔는데,
+           그러면 비고를 지워 항목이 없어져도 빈 칸이 표에 남았다. */
         hot.updateSettings({
             colHeaders: SHOWN_HEADERS.concat(NOTE_COLUMNS),
             columns: SHOWN_COLUMNS.concat(NOTE_COLUMNS.map(function (name) {
@@ -566,6 +575,59 @@ body.in-iframe .bom-page-header { display: none !important; }
             }))
         });
         wireColumnPicker();          // 새로 생긴 칸도 고를 수 있게
+    }
+
+    /*
+     * 비고를 다시 갈라 칸을 세운다.
+     *
+     * 붙여넣기는 우리 표에 자리가 없는 열을 이름 달아 비고에 모은다
+     * (sheet_paste.js 의 carry). 그런데 그것을 칸으로 세우는 일은 화면을 여는
+     * 순간에만 했다 — 붙여넣은 사람 눈에는 비고 한 칸에 뭉친 것만 보이다가,
+     * 칸 고르기를 눌러 화면이 다시 열릴 때 **갑자기** 갈라졌다.
+     *
+     * 갈라질 것이면 붙여넣은 그 자리에서 갈라져야 한다. 나중에 저절로 바뀌면
+     * 무엇 때문에 바뀐 것인지 알 수 없고, 그 사이에 저장하면 뭉친 채로 본 것을
+     * 맞다고 여기고 넘어간다.
+     *
+     * **가르는 규칙은 서버에 하나뿐이다**(note_fields). 여기서 따로 가르면
+     * 화면을 열 때와 붙여넣을 때가 달라진다.
+     */
+    let noteSplitTimer = null;
+    function refreshNoteColumns(delay) {
+        if (!hot) return;
+        clearTimeout(noteSplitTimer);
+        noteSplitTimer = setTimeout(function () {
+            const rows = hot.getSourceData() || [];
+            const notes = rows.map(function (r) { return (r && r.notes) || ''; });
+            if (!notes.some(Boolean)) { applyNoteColumns([]); return; }
+
+            fetch('/bom/api/notes/split/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-CSRFToken': getCsrfToken() },
+                body: JSON.stringify({ notes: notes })
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (body) {
+                    if (!body.success) return;
+                    /* 값을 먼저 넣고 칸을 세운다. 반대로 하면 칸이 한 번
+                       비어 보였다가 채워진다. */
+                    rows.forEach(function (row, i) {
+                        if (!row) return;
+                        Object.keys(row).forEach(function (k) {
+                            if (k.indexOf('note:') === 0) delete row[k];
+                        });
+                        const fields = (body.rows || [])[i] || {};
+                        Object.keys(fields).forEach(function (name) {
+                            row['note:' + name] = fields[name];
+                        });
+                    });
+                    applyNoteColumns(body.columns || []);
+                    hot.render();
+                })
+                /* 못 갈라도 값은 비고에 그대로 있다. 표가 멈추면 안 된다. */
+                .catch(function (err) { console.debug('비고 가르기 실패', err); });
+        }, delay == null ? 250 : delay);
     }
 
     /* 칸 고르기. 켜고 끄면 계정에 남기고 화면을 다시 그린다(새로고침).
@@ -768,6 +830,12 @@ body.in-iframe .bom-page-header { display: none !important; }
                         spillRemark(row, value);
                     }
                 });
+                /* 비고가 바뀌면 거기서 세운 칸도 따라 바뀌어야 한다.
+                   'remark-split' 로 들어온 것도 마찬가지다 — 알레르기를
+                   덜어 내면 비고에 남는 말이 달라진다. */
+                if (changes.some(change => change[1] === 'notes')) {
+                    refreshNoteColumns();
+                }
                 if (changes.some(change => change[1] === 'mixing_ratio')) {
                     calculateTotal();  // calculateTotal 내부에서 generateBomSummary 호출
                 } else {
@@ -811,6 +879,10 @@ body.in-iframe .bom-page-header { display: none !important; }
                             }
                         }
                     } catch (e) { /* 자리를 못 옮겨도 값은 이미 들어갔다 */ }
+                    /* 자리 없는 열은 비고에 뭉쳐 들어갔다. 여기서 바로 갈라
+                       칸으로 세운다 — 나중에 갑자기 갈라지면 사용자는 무엇
+                       때문에 바뀐 것인지 알 수 없다. */
+                    if (info.added) refreshNoteColumns(0);
                     showSnackbar(
                         window.sheetPasteMessage(info, tail),
                         !info.added ? 'warning'

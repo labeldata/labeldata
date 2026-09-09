@@ -12394,6 +12394,54 @@ class BomNoteColumnTests(TestCase):
         # 고르는 자리에도 나온다
         self.assertIn('NOTE_COLUMN_NAMES', html)
 
+    def test_붙여넣은_자리에서_바로_가른다(self):
+        """
+        칸이 서는 시점이 화면을 여는 순간뿐이면, 붙여넣은 사람은 비고에 뭉친
+        것만 보다가 나중에 갑자기 갈라진 것을 본다.
+        """
+        html = open('v1/templates/products/bom_detail.html', encoding='utf-8').read()
+        self.assertIn('function refreshNoteColumns', html)
+        # 붙여넣은 직후
+        self.assertIn('refreshNoteColumns(0)', html)
+        # 비고를 고쳤을 때도
+        self.assertIn("change[1] === 'notes'", html)
+
+
+class BomNoteSplitApiTests(TestCase):
+    """
+    비고를 가르는 규칙은 서버에 하나뿐이다. 표가 붙여넣은 직후 여기로 묻는다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='bsplit', password='x')
+        self.client.force_login(self.user)
+        self.url = reverse('bom:note_split_api')
+
+    def _split(self, notes):
+        return self.client.post(self.url, data=json.dumps({'notes': notes}),
+                                content_type='application/json')
+
+    def test_이름과_값으로_가른다(self):
+        body = self._split(['ERP 원재료: 백앙금 · 원료코드: 411208',
+                            '원료코드: 250521']).json()
+        self.assertEqual(body['columns'], ['ERP 원재료', '원료코드'])
+        self.assertEqual(body['rows'][0]['ERP 원재료'], '백앙금')
+        self.assertEqual(body['rows'][1]['원료코드'], '250521')
+        # 첫 줄에 없는 항목은 빈 자리로 둔다 (화면이 칸을 비운다)
+        self.assertNotIn('ERP 원재료', body['rows'][1])
+
+    def test_양식에_안_맞는_말은_남긴다(self):
+        body = self._split(['원료코드: 411208 · 그냥 메모']).json()
+        self.assertEqual(body['leftovers'][0], '그냥 메모')
+
+    def test_비고가_비면_칸도_없다(self):
+        self.assertEqual(self._split(['', '']).json()['columns'], [])
+
+    def test_목록이_아니면_400(self):
+        res = self.client.post(self.url, data=json.dumps({'notes': '문자열'}),
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 400)
+
 
 class ChromeHeightTests(TestCase):
     """

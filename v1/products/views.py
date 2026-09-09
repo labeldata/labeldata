@@ -6233,28 +6233,118 @@ def report_no_lookup(request, label_id):
     except (ValueError, TypeError):
         payload = {}
 
+    from v1.label.services import item_lookup
+
     report_no = ''.join(str(payload.get('report_no') or '').split())
     if not report_no:
         return JsonResponse({'success': False, 'error': '품목보고번호를 입력하세요.'},
                             status=400)
 
-    item = FoodItem.objects.filter(prdlst_report_no=report_no).first()
-    if item is None:
+    # 하이픈은 저장된 쪽에도 있고 없다("20220460436160" / "19980448010-697").
+    # 예전에는 친 문자열 그대로 조회해서, 라벨에 인쇄된 대로 친 번호가 저장된
+    # 꼴과 다르면 멀쩡한 품목을 "없는 번호" 라고 답했다.
+    item, matched = item_lookup.find_exact(report_no)
+    if item is not None:
         return JsonResponse({
-            'success': False,
-            'error': f'등록된 품목을 찾지 못했습니다 ({report_no}). 번호를 확인해 주세요.',
-        }, status=404)
+            'success': True,
+            'fields': item_lookup.as_fields(item),
+            'candidates': [],
+        })
 
+    # 못 찾았다고 거기서 끝내지 않는다. 한 자리를 잘못 봤거나(사진에서 옮겨
+    # 적는 자리다) 번호가 아니라 제품명을 친 것일 수 있다. **비슷한 것을 늘어
+    # 놓고 고르게 한다** - 무엇이 맞는지는 라벨을 든 사람이 안다.
+    candidates = item_lookup.search(report_no)
+    return JsonResponse({
+        'success': False,
+        'error': (f'"{report_no}" 와 정확히 맞는 품목은 없지만 '
+                  f'비슷한 품목 {len(candidates)}건을 찾았습니다 — 골라 주세요.'
+                  if candidates else
+                  f'"{report_no}" 로 등록된 품목을 찾지 못했습니다. '
+                  '번호를 확인하거나 제품명·제조사로 찾아 보세요.'),
+        'candidates': [item_lookup.as_fields(c) for c in candidates],
+    }, status=404)
+
+
+@login_required
+@require_POST
+def food_item_search(request, label_id):
+    """
+    품목을 찾아 늘어놓는다 (번호·제품명·제조사 아무거나).
+
+    사진으로 불러올 때 쓴다. 사진 판독은 번호가 **정확히** 읽혀야만 등록 정보와
+    대조했고, 한 자리가 어긋나거나 번호 자리가 아예 안 읽히면 "찾지 못했습니다"
+    한 줄로 끝났다. 그러면 사용자에게 남는 길이 없다 - 등록 정보가 눈앞에 있는데
+    쓸 수가 없었다.
+
+    고르는 것까지만 여기서 하고, 고른 품목으로 값을 견주는 일은 ocr_relink 가 한다.
+    """
+    _resolve_editable_label(request, label_id)
+
+    from v1.label.services import item_lookup
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    q = str(payload.get('q') or '').strip()
+    if len(q) < 2:
+        return JsonResponse({'success': False,
+                             'error': '두 글자 이상 입력하세요.'}, status=400)
+
+    items = item_lookup.search(q)
     return JsonResponse({
         'success': True,
-        'fields': {
-            'prdlst_report_no': item.prdlst_report_no or '',
-            'prdlst_nm': item.prdlst_nm or '',
-            'prdlst_dcnm': item.prdlst_dcnm or '',
-            'rawmtrl_nm': item.rawmtrl_nm or '',
-            'bssh_nm': item.bssh_nm or '',
-        },
+        'count': len(items),
+        'items': [item_lookup.as_fields(i) for i in items],
     })
+
+
+@login_required
+@require_POST
+def ocr_relink(request, label_id):
+    """
+    사용자가 고른 품목으로 판독 결과를 **다시 대조한다.**
+
+    자동 조회는 번호가 맞을 때만 걸린다. 그 문을 사람이 열 수 있게 하는 자리다.
+    받는 것은 확인 창이 지금 들고 있는 판독 결과이고, 돌려주는 것은 그 품목으로
+    대조·병합한 결과다. 창은 그것으로 표를 다시 그린다.
+
+    **값을 저장하지 않는다.** 여기서 나온 것도 확인 창의 재료일 뿐이고, 무엇을
+    쓸지는 사용자가 항목마다 고른다.
+    """
+    _resolve_editable_label(request, label_id)
+
+    from v1.label.services import item_lookup
+    from v1.label.services.ocr_reconcile import merge, reconcile
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    report_no = str(payload.get('report_no') or '').strip()
+    data = payload.get('data')
+    if not isinstance(data, dict):
+        return JsonResponse({'success': False, 'error': '판독 결과가 없습니다.'},
+                            status=400)
+
+    item, _ = item_lookup.find_exact(report_no)
+    if item is None:
+        return JsonResponse({'success': False,
+                             'error': f'품목을 찾지 못했습니다 ({report_no}).'},
+                            status=404)
+
+    try:
+        match = reconcile(data, item=item)
+        merged = merge(data, match) if match.get('matched') else data
+    except Exception:
+        logger.exception('품목 재대조 실패 (label=%s, no=%s)', label_id, report_no)
+        return JsonResponse({'success': False,
+                             'error': '대조 중 오류가 발생했습니다.'}, status=500)
+
+    return JsonResponse({'success': True, 'data': merged, 'api_match': match})
 
 
 @login_required

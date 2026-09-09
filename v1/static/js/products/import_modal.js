@@ -42,7 +42,8 @@
     document.head.appendChild(el);
   })();
 
-  var lookupFields = null;   // 품목보고번호로 조회한 결과
+  var lookupFields = null;   // 조회(또는 후보에서 고르기)로 확정한 품목
+  var candidates = [];       // 정확히 맞는 번호가 없을 때 늘어놓은 것들
 
   function csrf() {
     var input = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -110,18 +111,19 @@
       + '        <div class="border rounded p-3 mb-3 import-way import-way-first">'
       + '          <div class="d-flex align-items-center gap-2 mb-2">'
       + '            <span class="import-step">1</span>'
-      + '            <span class="fw-semibold" style="font-size:13px;">품목보고번호로</span>'
+      + '            <span class="fw-semibold" style="font-size:13px;">품목보고번호·제품명으로</span>'
       + '            <span class="badge bg-success-subtle text-success-emphasis"'
       + '                  style="font-size:10.5px;">권장 · 정확하고 비용 없음</span>'
       + '          </div>'
       + '          <div class="d-flex gap-2">'
       + '            <input type="text" class="form-control form-control-sm" id="importReportNo"'
-      + '                   placeholder="예: 20220460436160" inputmode="numeric">'
+      + '                   placeholder="예: 20220460436160 또는 제품명·제조사">'
       + '            <button type="button" class="btn btn-primary v2-btn-sm" id="importLookupBtn">조회</button>'
       + '          </div>'
       + '          <div class="text-muted mt-1" style="font-size:11px;">'
       + '            식약처에 등록된 정보를 그대로 가져옵니다. 판독을 거치지 않아'
       + '            틀릴 이유가 없고, 사진 판독과 달리 비용이 들지 않습니다.'
+      + '            번호가 정확하지 않으면 <b>비슷한 품목을 늘어놓아</b> 고르게 합니다.'
       + '          </div>'
       + '          <div class="text-muted mt-1" style="font-size:11px;">'
       + '            <i class="bi bi-info-circle me-1"></i>'
@@ -156,6 +158,14 @@
 
   function wire(modalEl) {
     modalEl.querySelector('#importLookupBtn').onclick = function () { lookup(modalEl); };
+
+    // 후보는 innerHTML 로 다시 그려지므로 개별 단추가 아니라 상자에 건다.
+    // 사진 판독이 실패해 창을 되살릴 때(clearBusy) 안쪽 handler 는 사라진다.
+    var box = modalEl.querySelector('#importLookupResult');
+    if (box) box.onclick = function (e) {
+      var btn = e.target.closest('.import-cand');
+      if (btn) pickCandidate(modalEl, candidates[parseInt(btn.dataset.i, 10)]);
+    };
     modalEl.querySelector('#importReportNo').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); lookup(modalEl); }
     });
@@ -196,6 +206,71 @@
     });
   }
 
+  /*
+   * 조회 결과 한 건. 이것이 확정되면 두 등록 단추가 열린다.
+   *
+   * 후보에서 고른 것도 여기로 온다 — 번호를 쳐서 맞힌 것과 고른 것을 다르게
+   * 다룰 이유가 없다. 화면 아래의 "조회한 품목보고번호로 등록" 은 그대로 쓴다.
+   */
+  function showFields(modalEl, fields) {
+    lookupFields = fields;
+    var box = modalEl.querySelector('#importLookupResult');
+    box.style.display = '';
+    box.innerHTML =
+      '<div class="border rounded bg-light p-2" style="font-size:12px;">'
+      + '<div><strong>' + esc(fields.prdlst_nm) + '</strong>'
+      + ' <span class="text-muted">' + esc(fields.prdlst_dcnm) + '</span></div>'
+      + '<div class="text-muted">' + esc(fields.prdlst_report_no) + '</div>'
+      + (fields.bssh_nm
+          ? '<div class="text-muted">' + esc(fields.bssh_nm) + '</div>' : '')
+      + (fields.rawmtrl_nm
+          ? '<div class="mt-1">' + esc(fields.rawmtrl_nm) + '</div>' : '')
+      + '</div>';
+    setLookupButtons(modalEl, true);
+  }
+
+  /*
+   * 못 찾았을 때 **비슷한 것을 늘어놓는다.**
+   *
+   * 예전에는 "등록된 품목을 찾지 못했습니다" 한 줄이 전부였다. 그런데 번호를
+   * 못 찾는 흔한 이유는 번호가 없어서가 아니라 한 자리를 잘못 봤거나, 저장된
+   * 꼴과 하이픈이 다르거나, 번호 대신 제품명을 쳤기 때문이다. 무엇이 맞는지는
+   * 라벨을 든 사람이 안다 — 늘어놓고 고르게 하는 편이 빠르다.
+   */
+  function showCandidates(modalEl, list) {
+    lookupFields = null;
+    candidates = list;
+    setLookupButtons(modalEl, false);
+
+    var box = modalEl.querySelector('#importLookupResult');
+    box.style.display = '';
+    box.innerHTML =
+      '<div class="text-muted mb-1" style="font-size:11px;">'
+      + '비슷한 품목 ' + list.length + '건입니다. 고르면 그 품목으로 등록합니다.'
+      + '</div>'
+      + '<div class="list-group" style="max-height:220px; overflow:auto;">'
+      + list.map(function (f, i) {
+          return '<button type="button" class="list-group-item list-group-item-action'
+            + ' py-2 import-cand" data-i="' + i + '" style="font-size:12px;">'
+            + '<div><strong>' + esc(f.prdlst_nm) + '</strong>'
+            + ' <span class="text-muted">' + esc(f.prdlst_dcnm) + '</span></div>'
+            + '<div class="text-muted" style="font-size:11px;">'
+            + esc(f.prdlst_report_no) + (f.bssh_nm ? ' · ' + esc(f.bssh_nm) : '')
+            + '</div>'
+            + '</button>';
+        }).join('')
+      + '</div>';
+  }
+
+  function pickCandidate(modalEl, fields) {
+    if (!fields) return;
+    modalEl.querySelector('#importReportNo').value = fields.prdlst_report_no || '';
+    showFields(modalEl, fields);
+    note('"' + (fields.prdlst_nm || fields.prdlst_report_no)
+         + '" 을(를) 골랐습니다. 아래에서 제품으로 등록할지, 원료로 등록할지 고르세요.',
+         'ok');
+  }
+
   function lookup(modalEl) {
     var input = modalEl.querySelector('#importReportNo');
     var value = (input.value || '').trim();
@@ -213,26 +288,23 @@
       .then(function (res) { return res.json(); })
       .then(function (body) {
         var box = modalEl.querySelector('#importLookupResult');
-        if (!body.success) {
-          lookupFields = null;
-          box.style.display = 'none';
-          setLookupButtons(modalEl, false);
-          note(body.error || '조회하지 못했습니다.', 'error');
+        if (body.success) {
+          candidates = [];
+          showFields(modalEl, body.fields);
+          note('아래에서 제품으로 등록할지, 원료로 등록할지 고르세요.', 'ok');
           return;
         }
-        lookupFields = body.fields;
-        box.style.display = '';
-        box.innerHTML =
-          '<div class="border rounded bg-light p-2" style="font-size:12px;">'
-          + '<div><strong>' + esc(body.fields.prdlst_nm) + '</strong>'
-          + ' <span class="text-muted">' + esc(body.fields.prdlst_dcnm) + '</span></div>'
-          + (body.fields.bssh_nm
-              ? '<div class="text-muted">' + esc(body.fields.bssh_nm) + '</div>' : '')
-          + (body.fields.rawmtrl_nm
-              ? '<div class="mt-1">' + esc(body.fields.rawmtrl_nm) + '</div>' : '')
-          + '</div>';
-        setLookupButtons(modalEl, true);
-        note('아래에서 제품으로 등록할지, 원료로 등록할지 고르세요.', 'ok');
+        if (body.candidates && body.candidates.length) {
+          showCandidates(modalEl, body.candidates);
+          note(body.error || '정확히 맞는 번호가 없습니다. 아래에서 골라 주세요.',
+               'error');
+          return;
+        }
+        lookupFields = null;
+        candidates = [];
+        box.style.display = 'none';
+        setLookupButtons(modalEl, false);
+        note(body.error || '조회하지 못했습니다.', 'error');
       })
       .catch(function (err) {
         console.error(err);

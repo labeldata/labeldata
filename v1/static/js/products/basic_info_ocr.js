@@ -32,6 +32,10 @@
  */
   var compareMode = false;
 
+  // 확인 창이 지금 들고 있는 것. 품목을 골라 **다시 대조**할 때 그대로 보낸다.
+  // 판독은 한 번만 하고(돈이 나간다), 대조만 다시 한다.
+  var lastData = null, lastPhoto = null, lastSnap = null;
+
   // OCR 항목 -> 기본 정보 탭의 입력칸 id
   // weight_calorie 는 이 탭에 칸이 없다(내용량에 함께 적는 항목이라 뺐다).
   // rawmtrl_nm 은 참고용이 아니라 인쇄되는 칸(rawmtrl_nm_display)으로 보낸다.
@@ -463,6 +467,169 @@
       + '</div>';
   }
 
+  /*
+   * **품목을 사람이 고른다.**
+   *
+   * 등록 정보와의 대조는 지금까지 자동으로만 걸렸다 - 사진에서 읽은 품목보고
+   * 번호가 저장된 번호와 글자까지 같아야 했다. 그런데 그 번호는 열대여섯 자리
+   * 숫자라 한 자리만 어긋나도 조회가 통째로 실패하고, 번호 자리가 아예 안 찍힌
+   * 라벨도 흔하다. 그때 화면에는 "등록 정보를 찾지 못했습니다" 한 줄만 남았고
+   * 사용자에게는 더 갈 길이 없었다 - 등록 정보가 눈앞에 있는데 쓸 수가 없었다.
+   *
+   * 그래서 찾는 문을 하나 연다. 제품명·제조사·번호로 찾아 고르면, 고른 품목을
+   * 기준으로 값을 견주고 사진이 못 읽은 자리를 채운다.
+   *
+   * **고른다고 바로 반영되지 않는다.** 대조 결과는 표를 다시 그릴 뿐이고,
+   * 무엇을 쓸지는 항목마다 사용자가 체크한다.
+   */
+  function itemPickHtml(match) {
+    var linked = match && match.matched;
+    return ''
+      + '<div class="ocr-itempick mb-2">'
+      + '  <button type="button" class="btn btn-outline-primary v2-btn-sm" id="ocrItemPickBtn">'
+      + '    <i class="bi bi-search me-1"></i>'
+      + (linked ? '다른 품목으로 대조' : '품목 찾아 연동')
+      + '  </button>'
+      + '  <span class="text-muted ms-2" style="font-size:11px;">'
+      + '제품명·제조사·품목보고번호로 식약처 등록 품목을 찾아 고르면, 그 품목 기준으로'
+      + ' 값을 견주고 사진이 못 읽은 자리를 채웁니다.'
+      + '  </span>'
+      + '  <div id="ocrItemPickBox" class="mt-2" style="display:none;">'
+      + '    <div class="d-flex gap-2">'
+      + '      <input type="text" class="form-control form-control-sm" id="ocrItemPickQ"'
+      + '             placeholder="제품명 · 제조사 · 품목보고번호">'
+      + '      <button type="button" class="btn btn-primary v2-btn-sm" id="ocrItemPickGo">찾기</button>'
+      + '    </div>'
+      + '    <div id="ocrItemPickList" class="mt-2"></div>'
+      + '  </div>'
+      + '</div>';
+  }
+
+  function itemPickList(items) {
+    if (!items.length) {
+      return '<div class="text-muted" style="font-size:12px;">'
+        + '찾은 품목이 없습니다. 제품명 일부나 제조사로 다시 찾아 보세요.</div>';
+    }
+    return '<div class="list-group" style="max-height:220px; overflow:auto;">'
+      + items.map(function (f, i) {
+          return '<button type="button" class="list-group-item list-group-item-action'
+            + ' py-2 ocr-item-cand" data-i="' + i + '" style="font-size:12px;">'
+            + '<div><strong>' + esc(f.prdlst_nm) + '</strong>'
+            + ' <span class="text-muted">' + esc(f.prdlst_dcnm) + '</span></div>'
+            + '<div class="text-muted" style="font-size:11px;">'
+            + esc(f.prdlst_report_no) + (f.bssh_nm ? ' · ' + esc(f.bssh_nm) : '')
+            + '</div></button>';
+        }).join('')
+      + '</div>';
+  }
+
+  // 창에서 고친 값을 안고 간다. 다시 그리면서 사용자가 친 것을 버리면,
+  // 품목을 고르는 대가로 손으로 고친 것을 잃는 셈이 된다.
+  function currentData() {
+    var data = JSON.parse(JSON.stringify(lastData || {}));
+    document.querySelectorAll('#basicInfoOcrBody .ocr-row[data-field]').forEach(function (row) {
+      var field = row.dataset.field;
+      var input = row.querySelector('.ocr-value');
+      if (!field || !input) return;
+      if (!data[field] || typeof data[field] !== 'object') {
+        data[field] = { confidence: 'high' };
+      }
+      data[field].value = input.value;
+    });
+    return data;
+  }
+
+  function pickFound(box, items) {
+    var list = box.querySelector('#ocrItemPickList');
+    list.innerHTML = itemPickList(items);
+    list.querySelectorAll('.ocr-item-cand').forEach(function (btn) {
+      btn.onclick = function () {
+        var chosen = items[parseInt(btn.dataset.i, 10)];
+        if (!chosen) return;
+        list.innerHTML = '<div class="text-muted" style="font-size:12px;">대조하는 중…</div>';
+        relinkTo(chosen.prdlst_report_no, list);
+      };
+    });
+  }
+
+  function pickSearch(box) {
+    var q = (box.querySelector('#ocrItemPickQ').value || '').trim();
+    var list = box.querySelector('#ocrItemPickList');
+    if (q.length < 2) {
+      list.innerHTML = '<div class="text-danger" style="font-size:12px;">'
+        + '두 글자 이상 입력하세요.</div>';
+      return;
+    }
+    list.innerHTML = '<div class="text-muted" style="font-size:12px;">찾는 중…</div>';
+    postJson('/products/labels/' + labelId() + '/lookup/food-items/', { q: q })
+      .then(function (body) {
+        if (!body.success) {
+          list.innerHTML = '<div class="text-danger" style="font-size:12px;">'
+            + esc(body.error || '찾지 못했습니다.') + '</div>';
+          return;
+        }
+        pickFound(box, body.items || []);
+      })
+      .catch(function (err) {
+        console.error(err);
+        list.innerHTML = '<div class="text-danger" style="font-size:12px;">'
+          + '찾는 중 오류가 발생했습니다.</div>';
+      });
+  }
+
+  // 고른 품목으로 다시 대조하고 표를 다시 그린다. 사진은 다시 읽지 않는다.
+  function relinkTo(reportNo, list) {
+    postJson('/products/labels/' + labelId() + '/lookup/relink/',
+             { report_no: reportNo, data: currentData() })
+      .then(function (body) {
+        if (!body.success) {
+          list.innerHTML = '<div class="text-danger" style="font-size:12px;">'
+            + esc(body.error || '대조하지 못했습니다.') + '</div>';
+          return;
+        }
+        showModal(body.data, lastPhoto, body.api_match, lastSnap);
+      })
+      .catch(function (err) {
+        console.error(err);
+        list.innerHTML = '<div class="text-danger" style="font-size:12px;">'
+          + '대조 중 오류가 발생했습니다.</div>';
+      });
+  }
+
+  // 표는 매번 다시 그려지므로 개별 요소가 아니라 본문에 한 번만 건다.
+  function wireItemPick(body) {
+    if (body.dataset.pickWired) return;
+    body.dataset.pickWired = '1';
+    body.addEventListener('click', function (e) {
+      var open = e.target.closest('#ocrItemPickBtn');
+      if (open) {
+        var box = body.querySelector('#ocrItemPickBox');
+        if (!box) return;
+        var showing = box.style.display !== 'none';
+        box.style.display = showing ? 'none' : '';
+        if (!showing) {
+          var input = box.querySelector('#ocrItemPickQ');
+          // 사진에서 읽은 제품명을 미리 넣어 둔다 — 대개 그것으로 찾는다
+          if (input && !input.value) {
+            var nm = (lastData && lastData.prdlst_nm && lastData.prdlst_nm.value) || '';
+            input.value = nm;
+          }
+          if (input) input.focus();
+        }
+        return;
+      }
+      if (e.target.closest('#ocrItemPickGo')) {
+        pickSearch(body.querySelector('#ocrItemPickBox'));
+      }
+    });
+    body.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target.id === 'ocrItemPickQ') {
+        e.preventDefault();
+        pickSearch(body.querySelector('#ocrItemPickBox'));
+      }
+    });
+  }
+
   // 무엇이 반영되고 무엇이 안 되는지를 창 안에서 한눈에.
   //
   // 이미 값이 있는 칸은 덮어쓰지 않으려고 체크를 꺼 두는데, 그걸 못 보고
@@ -565,6 +732,9 @@
     var modalEl = ensureModal();
     var body = modalEl.querySelector('#basicInfoOcrBody');
 
+    // 품목을 골라 다시 대조할 때 그대로 쓴다. 사진은 다시 읽지 않는다.
+    lastData = data; lastPhoto = photoFile; lastSnap = snapInfo;
+
     // 이번 판독이 대조였는지 여기서 한 번 읽고 깃발을 내린다. 남겨 두면
     // 다음에 "채우기" 로 연 창이 대조 화면으로 뜬다.
     var comparing = compareMode;
@@ -590,6 +760,7 @@
       var table =
         snapHtml(snapInfo)
         + apiMatchHtml(apiMatch)
+        + itemPickHtml(apiMatch)
         + skippedHtml(data)
         + pickBarHtml()
         + '<div class="ocr-table">'
@@ -602,36 +773,44 @@
       window.photoViewerLayout(body, photoFile, table);
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
 
+      wireItemPick(body);
+
       // 후보를 누르면 그 값으로 칸을 채운다. **채운 뒤에도 고칠 수 있다** -
       // 한 글자만 틀렸을 때 300자를 다시 치게 하지 않는다.
-      body.addEventListener('click', function (event) {
-        var button = event.target.closest('.ocr-cand');
-        if (!button) return;
-        var row = button.closest('.ocr-row');
-        var input = row && row.querySelector('.ocr-value');
-        if (!input) return;
+      // 표는 다시 그려도 본문은 그대로라, 위임 handler 는 한 번만 건다 -
+      // 품목을 골라 다시 대조하면 이 함수가 다시 도는 자리다.
+      if (!body.dataset.rowWired) {
+        body.dataset.rowWired = '1';
 
-        input.value = button.dataset.value || '';
-        row.querySelectorAll('.ocr-cand').forEach(function (other) {
-          other.classList.toggle('ocr-cand-on', other === button);
+        body.addEventListener('click', function (event) {
+          var button = event.target.closest('.ocr-cand');
+          if (!button) return;
+          var row = button.closest('.ocr-row');
+          var input = row && row.querySelector('.ocr-value');
+          if (!input) return;
+
+          input.value = button.dataset.value || '';
+          row.querySelectorAll('.ocr-cand').forEach(function (other) {
+            other.classList.toggle('ocr-cand-on', other === button);
+          });
+          // 후보를 골랐다는 것은 이 항목을 쓰겠다는 뜻이다
+          var pick = row.querySelector('.ocr-pick');
+          if (pick && !pick.checked) {
+            pick.checked = true;
+            pick.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          input.focus();
         });
-        // 후보를 골랐다는 것은 이 항목을 쓰겠다는 뜻이다
-        var pick = row.querySelector('.ocr-pick');
-        if (pick && !pick.checked) {
-          pick.checked = true;
-          pick.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        input.focus();
-      });
 
-      // 일괄 선택 버튼과 체크 변화를 한 곳에서 받는다 (표는 매번 다시 그려진다)
-      body.addEventListener('click', function (e) {
-        var btn = e.target.closest('[data-pick]');
-        if (btn) { applyPickPreset(btn.dataset.pick); return; }
-      });
-      body.addEventListener('change', function (e) {
-        if (e.target.classList.contains('ocr-pick')) refreshPickState();
-      });
+        // 일괄 선택 버튼과 체크 변화를 한 곳에서 받는다 (표는 매번 다시 그려진다)
+        body.addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-pick]');
+          if (btn) { applyPickPreset(btn.dataset.pick); return; }
+        });
+        body.addEventListener('change', function (e) {
+          if (e.target.classList.contains('ocr-pick')) refreshPickState();
+        });
+      }
       refreshPickState();
     }
 

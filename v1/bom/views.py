@@ -446,6 +446,53 @@ def bom_data_api(request, label_id):
 
 @login_required
 @require_POST
+def note_split_api(request):
+    """
+    비고 여러 줄을 항목으로 가른다. **표가 붙여넣기 직후에 부른다.**
+
+    비고에 담긴 항목을 칸으로 세우는 일은 지금까지 화면을 여는 순간에만 했다
+    (bom_data_api 가 note_columns 를 함께 준다). 그래서 엑셀을 붙여넣은 사람은
+    이런 것을 봤다.
+
+        붙여넣는다        →  자리 없는 열이 비고 한 칸에 뭉쳐 들어간다
+        (여기서 멈춘다)       "ERP 원재료: … · 원료코드: …"
+        칸 고르기를 연다  →  화면이 다시 열리면서 **갑자기** 항목이 갈라진다
+
+    갈라질 것이면 붙여넣은 그 자리에서 갈라져야 한다. 나중에 저절로 바뀌면
+    무엇 때문에 바뀐 것인지 알 수 없고, 그 사이에 저장하면 뭉친 채로 본 것을
+    맞다고 여긴 채 넘어간다.
+
+    **가르는 규칙은 여전히 서버에 하나뿐이다**(note_fields). 화면이 따로 가르면
+    열 때와 붙여넣을 때가 달라진다 — 같은 값이 화면마다 다르게 보이는 셈이다.
+
+    저장하지 않는다. 값은 표가 들고 있고, 저장은 사용자가 한다.
+    """
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    notes = payload.get('notes')
+    if not isinstance(notes, list):
+        return JsonResponse({'success': False, 'error': '비고 목록이 없습니다.'},
+                            status=400)
+
+    from v1.label.services import note_fields
+
+    # 표 한 장이 다룰 수 있는 줄 수의 상한. 이보다 긴 표는 없다.
+    notes = [str(n or '') for n in notes[:500]]
+    return JsonResponse({
+        'success': True,
+        'columns': note_fields.columns(notes),
+        'rows': [note_fields.parse(n)[0] for n in notes],
+        # 가르고 남은 말. 화면이 비고 칸에 그대로 둔다 — 사람이 적은 것을
+        # 우리가 이해 못 했다고 지울 수는 없다.
+        'leftovers': [note_fields.parse(n)[1] for n in notes],
+    })
+
+
+@login_required
+@require_POST
 def bom_save_api(request, label_id):
     """BOM Save API (오너 + can_edit_label 공유 사용자만 허용)"""
     label, is_owner, can_edit = _resolve_label_and_permission(request, label_id)

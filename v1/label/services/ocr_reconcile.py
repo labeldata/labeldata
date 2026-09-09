@@ -85,6 +85,44 @@ def normalize_report_no(text):
     return out
 
 
+def hyphen_forms(text):
+    """
+    같은 번호의 **하이픈 있는 꼴과 없는 꼴**.
+
+    품목보고번호는 등록 시기에 따라 "20220460436160" 처럼 붙여 쓴 것과
+    "19980448010-697" 처럼 하이픈이 든 것이 섞여 있다. 조회는 저장된 문자열
+    그대로 하므로, 라벨에 인쇄된 대로 친 번호가 저장된 꼴과 다르면 통째로
+    실패한다 — 사용자에게는 "등록되지 않은 번호" 로 보인다.
+
+    숫자만 남긴 꼴 하나와, 숫자 사이 한 자리마다 하이픈을 끼운 꼴들을 만든다.
+    열대여섯 개뿐이고 조회는 기본키 IN 이라 값이 싸다.
+
+    Returns: 시도할 문자열들 (숫자만 → 하이픈 끼운 순서)
+    """
+    digits = re.sub(r'\D', '', str(text or ''))
+    if len(digits) < 10:
+        return []
+    out = [digits]
+    for i in range(1, len(digits)):
+        out.append(digits[:i] + '-' + digits[i:])
+    return out
+
+
+def report_no_tries(text):
+    """
+    조회에 써 볼 번호 꼴 전부. 원문에 가까운 순서.
+
+    normalize_report_no 가 만드는 꼴(원문·공백 제거·숫자와 하이픈만·숫자만)에
+    hyphen_forms 를 더한다. 앞엣것은 **읽은 대로 조회**하고, 뒤엣것은 저장된
+    쪽에만 하이픈이 있는 경우를 잡는다.
+    """
+    out = []
+    for form in list(normalize_report_no(text)) + hyphen_forms(text):
+        if form and form not in out:
+            out.append(form)
+    return out
+
+
 def _value_of(item):
     """{'value':…, 'confidence':…} 또는 맨 값에서 값만 꺼낸다."""
     if isinstance(item, dict):
@@ -157,6 +195,26 @@ def _confirms(item, ocr_data):
     return False
 
 
+def near_report_nos(tries, per_form=2, limit=1500):
+    """
+    한 자리가 어긋난 번호 후보들 (아직 등록 여부는 모른다).
+
+    조회가 후보를 걸러 주므로 마구 만들어도 된다. 다만 꼴마다 600개씩 나오므로,
+    원문에 가까운 앞의 몇 꼴만 쓴다 — 같은 번호의 하이픈 변형까지 전부 부풀리면
+    IN 절이 만 개를 넘는다.
+    """
+    out = []
+    seen = set(tries)
+    for form in tries[:per_form]:
+        for variant in _digit_variants(form):
+            if variant not in seen and len(variant) >= 10:
+                seen.add(variant)
+                out.append(variant)
+                if len(out) >= limit:
+                    return out
+    return out
+
+
 def find_near_miss(tries, ocr_data):
     """
     한 자리가 어긋난 번호로 등록 품목을 찾는다.
@@ -168,13 +226,7 @@ def find_near_miss(tries, ocr_data):
     """
     from v1.label.models import FoodItem
 
-    candidates = []
-    seen = set(tries)
-    for form in tries:
-        for variant in _digit_variants(form):
-            if variant not in seen and len(variant) >= 10:
-                seen.add(variant)
-                candidates.append(variant)
+    candidates = near_report_nos(tries, per_form=4, limit=3000)
     if not candidates:
         return None, ''
 
@@ -203,9 +255,15 @@ def find_food_item(ocr_data):
     from v1.label.models import FoodItem
 
     item = (ocr_data or {}).get('prdlst_report_no')
-    tries = []
+
+    # base  는 사진에서 읽은 꼴 그대로. 근사 조회는 이쪽만 부풀린다.
+    # tries 는 하이픈 변형까지 더한 것. 곧이곧대로 조회할 때 쓴다.
+    base, tries = [], []
     for text in [_value_of(item)] + _candidates_of(item):
         for form in normalize_report_no(text):
+            if form not in base:
+                base.append(form)
+        for form in report_no_tries(text):
             if form not in tries:
                 tries.append(form)
     if not tries:
@@ -223,12 +281,17 @@ def find_food_item(ocr_data):
             return found[form], form
 
     # 곧이곧대로는 못 찾았다. 한 자리가 어긋났을 뿐일 수 있다.
-    return find_near_miss(tries, ocr_data)
+    return find_near_miss(base, ocr_data)
 
 
-def reconcile(ocr_data):
+def reconcile(ocr_data, item=None):
     """
     판독 결과를 등록 정보와 대조한 결과를 만든다. **원본은 건드리지 않는다.**
+
+    item 을 주면 그 품목으로 대조한다 — **사용자가 골랐다는 뜻**이다. 번호를
+    아예 못 읽었거나 한 자리가 어긋나 자동 조회가 실패했을 때, 화면에서 품목을
+    찾아 고르면 여기로 온다. 그때는 번호를 고쳤다는 안내(corrected)를 하지
+    않는다. 고른 사람이 이미 아는 일이다.
 
     Returns: {
         'matched': bool,
@@ -249,7 +312,11 @@ def reconcile(ocr_data):
              'fields': {}, 'agreed': [], 'filled': [], 'conflicts': [],
              'summary': ''}
 
-    item, report_no = find_food_item(ocr_data)
+    picked = item is not None
+    if picked:
+        report_no = item.prdlst_report_no or ''
+    else:
+        item, report_no = find_food_item(ocr_data)
     if item is None:
         # **조용히 넘어가지 않는다.** 번호를 읽었는데 못 찾은 것과, 번호 자체가
         # 안 읽힌 것은 완전히 다른 일이다. 앞의 경우 화면에는 "대조하면 +0점" 만
@@ -298,8 +365,14 @@ def reconcile(ocr_data):
         logger.exception('업소 항목 자리 확인 실패')
 
     read = _value_of((ocr_data or {}).get('prdlst_report_no'))
-    corrected = bool(read) and report_no not in normalize_report_no(read)
-    parts = [f'품목보고번호 {report_no} 로 등록 정보를 찾았습니다.']
+    # 하이픈이 있고 없고는 "고친" 것이 아니다 — 같은 번호를 저장된 꼴로 찾은
+    # 것뿐이다. report_no_tries 로 견줘야 멀쩡한 조회에 "한 자리를 고쳤다" 는
+    # 안내가 붙지 않는다.
+    corrected = (not picked) and bool(read) and report_no not in report_no_tries(read)
+    if picked:
+        parts = [f'고르신 품목({item.prdlst_nm or report_no}) 으로 대조했습니다.']
+    else:
+        parts = [f'품목보고번호 {report_no} 로 등록 정보를 찾았습니다.']
     if corrected:
         parts.insert(0, f'사진에서는 "{read}" 로 읽었는데 그 번호는 등록돼 있지 '
                         f'않습니다. 한 자리만 다른 {report_no} 가 등록돼 있고 '
@@ -320,6 +393,7 @@ def reconcile(ocr_data):
     return {
         'matched': True,
         'report_no': report_no,
+        'picked': picked,
         'corrected_report_no': corrected,
         'role_swap': role_swap,
         'source': '식약처 품목보고',

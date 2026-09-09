@@ -1025,11 +1025,128 @@ class ReportNoLookupTests(TestCase):
     def test_공백이_섞여도_찾는다(self):
         self.assertTrue(self._lookup(' 2022046 0436160 ').json()['success'])
 
+    def test_하이픈을_넣어_쳐도_찾는다(self):
+        # 라벨에는 "2022-0460436160" 처럼 끊어 인쇄돼 있기도 하다. 저장된 꼴과
+        # 다르다고 멀쩡한 품목을 "없는 번호" 라고 답하면 안 된다.
+        self.assertTrue(self._lookup('2022-0460436160').json()['success'])
+        self.assertTrue(self._lookup('2022046043-6160').json()['success'])
+
+    def test_저장된_쪽에_하이픈이_있어도_찾는다(self):
+        # 반대 방향. 등록된 번호에 하이픈이 있고 사용자는 숫자만 친 경우다.
+        from v1.label.models import FoodItem
+        FoodItem.objects.create(prdlst_report_no='19980448010-697',
+                                prdlst_nm='옛날간장', prdlst_dcnm='간장')
+        body = self._lookup('19980448010697').json()
+        self.assertTrue(body['success'])
+        self.assertEqual(body['fields']['prdlst_nm'], '옛날간장')
+
     def test_없는_번호는_404(self):
         self.assertEqual(self._lookup('99999999999999').status_code, 404)
 
+    def test_한_자리_틀리면_후보를_돌려준다(self):
+        # 못 찾았다고 거기서 끝내지 않는다. 고를 수 있게 늘어놓는다.
+        res = self._lookup('20220460436161')
+        self.assertEqual(res.status_code, 404)
+        nos = [c['prdlst_report_no'] for c in res.json()['candidates']]
+        self.assertIn('20220460436160', nos)
+
+    def test_제품명으로도_후보를_찾는다(self):
+        res = self._lookup('표고버섯')
+        nos = [c['prdlst_report_no'] for c in res.json()['candidates']]
+        self.assertIn('20220460436160', nos)
+
     def test_번호가_비면_400(self):
         self.assertEqual(self._lookup('').status_code, 400)
+
+
+class FoodItemSearchTests(TestCase):
+    """번호를 모를 때 — 제품명·제조사로 품목을 찾아 고른다."""
+
+    def setUp(self):
+        from v1.label.models import FoodItem
+
+        self.user = User.objects.create_user(username='itemsearch', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='만두')
+        FoodItem.objects.create(
+            prdlst_report_no='20220460436160',
+            prdlst_nm='표고버섯볶음', prdlst_dcnm='조림류',
+            bssh_nm='하늘농가(주)',
+            rawmtrl_nm='새송이버섯(국산)57.64%',
+        )
+
+    def _search(self, q):
+        url = reverse('products:food_item_search',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(url, data=json.dumps({'q': q}),
+                                content_type='application/json')
+
+    def test_제품명으로_찾는다(self):
+        body = self._search('표고버섯').json()
+        self.assertTrue(body['success'])
+        self.assertEqual(body['items'][0]['prdlst_report_no'], '20220460436160')
+
+    def test_번호로_찾으면_맨_앞에_온다(self):
+        body = self._search('20220460436160').json()
+        self.assertEqual(body['items'][0]['prdlst_nm'], '표고버섯볶음')
+
+    def test_한_글자는_400(self):
+        self.assertEqual(self._search('표').status_code, 400)
+
+
+class OcrRelinkTests(TestCase):
+    """
+    사용자가 고른 품목으로 판독 결과를 다시 대조한다.
+
+    자동 조회는 번호가 정확할 때만 걸린다. 번호가 아예 안 읽힌 사진에서도
+    등록 정보를 쓸 수 있어야 한다 - 그 문을 사람이 연다.
+    """
+
+    def setUp(self):
+        from v1.label.models import FoodItem
+
+        self.user = User.objects.create_user(username='relink', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='만두')
+        FoodItem.objects.create(
+            prdlst_report_no='20220460436160',
+            prdlst_nm='표고버섯볶음', prdlst_dcnm='조림류',
+            bssh_nm='하늘농가(주)',
+            rawmtrl_nm='새송이버섯(국산)57.64%',
+        )
+
+    def _relink(self, report_no, data):
+        url = reverse('products:ocr_relink',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(
+            url, data=json.dumps({'report_no': report_no, 'data': data}),
+            content_type='application/json')
+
+    def test_못_읽은_자리를_채운다(self):
+        # 번호는 아예 안 읽혔고 제품명만 읽힌 사진
+        data = {'prdlst_nm': {'value': '표고버섯볶음', 'confidence': 'high'}}
+        body = self._relink('20220460436160', data).json()
+        self.assertTrue(body['success'])
+        self.assertTrue(body['api_match']['matched'])
+        self.assertEqual(body['data']['prdlst_dcnm']['value'], '조림류')
+        self.assertEqual(body['data']['bssh_nm']['api_value'], '하늘농가(주)')
+
+    def test_고른_품목은_번호를_고쳤다고_하지_않는다(self):
+        data = {'prdlst_report_no': {'value': '11112222333344', 'confidence': 'low'},
+                'prdlst_nm': {'value': '표고버섯볶음', 'confidence': 'high'}}
+        match = self._relink('20220460436160', data).json()['api_match']
+        self.assertTrue(match['picked'])
+        self.assertFalse(match['corrected_report_no'])
+
+    def test_없는_품목은_404(self):
+        self.assertEqual(self._relink('99999999999999', {}).status_code, 404)
+
+    def test_판독_결과가_없으면_400(self):
+        url = reverse('products:ocr_relink',
+                      kwargs={'label_id': self.label.my_label_id})
+        res = self.client.post(url, data=json.dumps({'report_no': '20220460436160'}),
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 400)
 
 
 class IngredientToBomTests(TestCase):

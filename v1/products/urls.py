@@ -142,6 +142,10 @@ urlpatterns = [
 
     # 불러오기 모달 — 품목보고번호 조회 / 원료 사진 업로드 / 원료 BOM 등록
     path('labels/<int:label_id>/lookup/report-no/', views.report_no_lookup, name='report_no_lookup'),
+    # 번호를 모를 때 — 제품명·제조사로 품목을 찾아 고른다
+    path('labels/<int:label_id>/lookup/food-items/', views.food_item_search, name='food_item_search'),
+    # 고른 품목으로 판독 결과를 다시 대조한다
+    path('labels/<int:label_id>/lookup/relink/', views.ocr_relink, name='ocr_relink'),
     # 사진으로 불러오기에 쓴 원본 사진을 문서함에 남긴다
     path('labels/<int:label_id>/label-photo/', views.label_photo_upload, name='label_photo_upload'),
     path('labels/<int:label_id>/ingredient-photo/upload/', views.ingredient_photo_upload, name='ingredient_photo_upload'),
