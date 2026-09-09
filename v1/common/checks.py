@@ -332,6 +332,143 @@ def check_migration_dependencies(app_configs, **kwargs):
 # 존재하지 않는 필터·태그, 닫히지 않은 블록은 전부 컴파일 단계에서 걸린다.
 # 렌더링이 아니라 컴파일만 하므로 DB 도 컨텍스트도 필요 없고 빠르다.
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 인라인 스크립트의 끊긴 문자열
+# ─────────────────────────────────────────────────────────────────────────────
+# 따옴표 문자열 안에 진짜 줄바꿈이 들어가면 자바스크립트 구문 오류이고,
+# 구문 오류는 그 <script> 블록 **전체**를 죽인다. 함수 하나가 깨진 것이 아니라
+# 그 블록에 든 모든 함수가 정의되지 않는다.
+#
+# 실제로 그렇게 됐다. 알림 화면의 큰 인라인 블록에서 confirm() 문구 한 줄이
+# 끊겨 switchView·markTabRead·openAlertSettings 가 통째로 사라졌고, 화면에서는
+# "행정처분·수거검사 탭이 클릭되지 않는다" 로 나타났다. 탭 단추는 멀쩡히
+# 보이고 오류도 화면에 안 뜨니 원인을 찾기가 어렵다.
+#
+# 파이썬·시험·템플릿 컴파일 어느 것도 이것을 못 잡는다. 여기서 잡는다.
+
+# 정규식 리터럴이 시작될 수 있는 자리 — 이 문자 다음의 '/' 는 나눗셈이 아니다.
+_RE_ALLOWED_BEFORE = set('(,=:[!&|?{};+-*%~^<>') | {''}
+
+
+def _broken_string_lines(js):
+    """따옴표가 닫히기 전에 줄바꿈을 만나는 자리의 (줄번호, 따옴표) 목록."""
+    hits = []
+    i, n, line = 0, len(js), 1
+    prev = ''                      # 직전의 의미 있는 문자 (정규식 판별용)
+    while i < n:
+        ch = js[i]
+        if ch in ' \t\r':
+            i += 1
+            continue
+        if ch == '\n':
+            line += 1
+            i += 1
+            continue
+        # 줄 주석
+        if ch == '/' and i + 1 < n and js[i + 1] == '/':
+            while i < n and js[i] != '\n':
+                i += 1
+            continue
+        # 블록 주석
+        if ch == '/' and i + 1 < n and js[i + 1] == '*':
+            i += 2
+            while i + 1 < n and not (js[i] == '*' and js[i + 1] == '/'):
+                if js[i] == '\n':
+                    line += 1
+                i += 1
+            i += 2
+            continue
+        # 정규식 리터럴 — /"/g 같은 것을 문자열로 오해하지 않기 위해 건너뛴다
+        if ch == '/' and prev in _RE_ALLOWED_BEFORE:
+            i += 1
+            closed = False
+            while i < n:
+                if js[i] == chr(92):
+                    i += 2
+                    continue
+                if js[i] == '[':                 # 문자 클래스 안의 '/' 는 끝이 아니다
+                    while i < n and js[i] != ']':
+                        if js[i] == chr(92):
+                            i += 1
+                        i += 1
+                if js[i] == '\n':
+                    break                        # 정규식은 줄을 넘지 않는다 — 오판이었다
+                if js[i] == '/':
+                    closed = True
+                    break
+                i += 1
+            if closed:
+                i += 1
+                prev = '/'
+                continue
+            # 정규식이 아니었으면 나눗셈으로 보고 넘어간다
+            prev = '/'
+            continue
+        # 템플릿 리터럴 — 줄바꿈이 허용된다
+        if ch == '`':
+            i += 1
+            while i < n:
+                if js[i] == chr(92):
+                    i += 2
+                    continue
+                if js[i] == '`':
+                    break
+                if js[i] == '\n':
+                    line += 1
+                i += 1
+            i += 1
+            prev = '`'
+            continue
+        # 따옴표 문자열 — 여기서 줄바꿈을 만나면 구문 오류다
+        if ch in ('"', "'"):
+            q, start = ch, line
+            i += 1
+            while i < n:
+                if js[i] == chr(92):
+                    i += 2
+                    continue
+                if js[i] == q:
+                    break
+                if js[i] == '\n':
+                    hits.append((start, q))
+                    line += 1
+                    break
+                i += 1
+            i += 1
+            prev = q
+            continue
+        prev = ch
+        i += 1
+    return hits
+
+
+_INLINE_SCRIPT = re.compile(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', re.S)
+
+
+@register()
+def check_inline_script_strings(app_configs, **kwargs):
+    """템플릿 인라인 <script> 안에 끊긴 문자열이 있으면 오류로 보고한다."""
+    errors = []
+    for root in _template_dirs():
+        for path in root.rglob('*.html'):
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in _INLINE_SCRIPT.finditer(text):
+                base = text.count('\n', 0, m.start(1))
+                for line, quote in _broken_string_lines(m.group(1)):
+                    errors.append(Error(
+                        f'{path.name}:{base + line} 자바스크립트 문자열({quote})이 '
+                        f'닫히기 전에 줄이 바뀝니다 — 이 <script> 블록 전체가 죽습니다.',
+                        hint=r'줄을 잇거나 \n 으로 쓰세요. '
+                             r"예: confirm('첫 줄\n' + '둘째 줄')",
+                        obj=str(path),
+                        id='templates.E006',
+                    ))
+    return errors
+
+
 @register()
 def check_templates_compile(app_configs, **kwargs):
     """모든 템플릿이 컴파일되는지 확인한다."""

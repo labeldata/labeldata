@@ -190,13 +190,41 @@
                    flex-shrink: 0; margin: 0 3px; }
 
 /* 칩 공통 — 제품 조회의 .pv-chip 과 같은 알약 */
-.rs-day-btn, .rs-risk-chip, .rs-day-btn:hover, .rs-risk-chip:hover, .rs-day-btn.active, .rs-quick-chip--on {
+.rs-day-btn, .rs-risk-chip, .rs-quick-chip, .reg-cond-toggle {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  height: 30px; padding: 0 13px;
+  border: 1px solid var(--c-border-line); border-radius: var(--ez-radius-pill);
+  background: #fff; color: var(--c-text-body);
+  font-size: 12.5px; line-height: 1; white-space: nowrap;
+  cursor: pointer; text-decoration: none;
+  transition: background var(--ez-transition-fast), border-color var(--ez-transition-fast),
+              color var(--ez-transition-fast);
+}
+.rs-day-btn:hover, .rs-risk-chip:hover,
+.rs-quick-chip:hover, .reg-cond-toggle:hover {
+  background: var(--c-primary-bg); border-color: var(--c-primary);
+  color: var(--c-primary); text-decoration: none;
+}
+.rs-day-btn.active,
+.rs-risk-chip.active-L, .rs-risk-chip.active-no, .rs-risk-chip.active-res,
+.reg-cond-toggle--on {
+  background: var(--c-primary-bg); border-color: var(--c-primary);
+  color: var(--c-primary); font-weight: 700;
+}
+/* 노란 강조는 '미조치만' 같은 경고성 켜짐 하나뿐이다.
+   공용 규칙과 붙여 두면 선택자를 잘못 건드렸을 때 모든 칩이 노래진다. */
+.rs-quick-chip--on {
   background: var(--c-warn-bg); border-color: var(--c-warning, #f9ab00);
   border-color: #f9ab00; color: #7a5b06; font-weight: 700;
 }
 .rs-quick-chip--on:hover { background: #feefc3; border-color: #f9ab00; color: #7a5b06; }
 
 /* 칩 안의 건수 — 탭 배지와 같은 모양 */
+.rs-quick-chip-n, .rs-vtab-count {
+  background: var(--c-border); color: var(--c-text-secondary);
+  font-size: 10px; font-weight: 700; border-radius: 9px; padding: 1px 6px;
+}
+.rs-vtab--active .rs-vtab-count { background: #fff; color: var(--c-primary); }
 .rs-quick-chip--on .rs-quick-chip-n { background: #fce8b2; color: #7a5b06; }
 
 /* 조건 초기화 */

@@ -1451,8 +1451,7 @@ window.deleteKeyword = deleteKeyword;
  * 되살리면 이미 정리한 목록이 갑자기 불어나 무엇이 새 알림인지 알 수 없게 된다.
  */
 function deleteMute(muteId, value) {
-  if (!confirm('‘' + value + '’ 알림을 다시 받습니다.
-'
+  if (!confirm('‘' + value + '’ 알림을 다시 받습니다.\n'
              + '앞으로 올라오는 것부터 다시 오며, 끌 때 정리한 지난 알림은 되살아나지 않습니다.')) return;
   fetch('{% url "regulatory:alert_mute_delete" mute_id=0 %}'.replace('/0/', '/' + muteId + '/'), {
     method: 'POST',
