@@ -14069,3 +14069,48 @@ class 고를_일이_드문_것은_접어_둔다(TestCase):
         head = h[h.index('id="allergyBtnList"') - 900:h.index('id="allergyBtnList"')]
         self.assertIn('allergyAutoDetectBtn', head)
         self.assertIn('allergyToggleBtn', head)
+
+
+class AllergenDetectRuleTests(TestCase):
+    """
+    '자동감지' 가 두 벌이다 — 화면과 서버가 다르게 판정한다.
+
+    이 시험은 고치지 않는다. **지금 어긋나 있다는 사실을 못 박아 둔다.**
+    한쪽으로 합칠 때 이 시험이 먼저 깨져서, 무엇이 달라졌는지 알려 준다.
+    """
+
+    def rules(self):
+        from v1.label.management.commands.check_allergen_detect import (
+            detect_both, detect_screen, detect_server)
+        return detect_screen, detect_server, detect_both
+
+    def test_한_글자_키워드가_긴_이름_속에_숨어_있을_때(self):
+        screen, server, both = self.rules()
+        # 아밀라아제는 효소이고 당밀은 사탕수수 부산물이다. 둘 다 밀이 아니다.
+        # 서버는 목록에 적어 둔 것만 겨우 피한다. 화면은 낱말 경계를 보므로
+        # **목록이 없어도** 안 걸린다 — 이쪽이 낫다.
+        for word in ('아밀라아제', '당밀', '밀랍'):
+            self.assertNotIn('밀', screen(word), word)
+            self.assertNotIn('밀', server(word), word)
+        # 목록에 없는 것에서 서버만 헛짚는다. 가짜 친구는 하나씩 손으로
+        # 적는 목록이라 늘 뒤늦다.
+        self.assertIn('밀', server('현미밀크티'))
+        self.assertNotIn('밀', screen('현미밀크티'))
+        self.assertNotIn('밀', both('현미밀크티'))
+
+    def test_서버는_한_글자를_아무_데서나_잡는다(self):
+        screen, server, both = self.rules()
+        # '게' 가 '조개탕' 이 아니라 '보관하게' 같은 말꼬리에도 붙는다.
+        self.assertIn('게', server('실온에서 보관하게 두세요'))
+        self.assertNotIn('게', screen('실온에서 보관하게 두세요'))
+        self.assertNotIn('게', both('실온에서 보관하게 두세요'))
+        # 낱말로 적힌 것은 셋 다 잡는다 — 경계를 보느라 놓치면 안 된다
+        for fn in (screen, server, both):
+            self.assertIn('게', fn('꽃게, 새우'))
+
+    def test_안_들었다는_말을_들었다고_읽는다(self):
+        screen, server, both = self.rules()
+        # '노밀가루' 는 밀가루가 없다는 뜻인데 셋 다 밀로 읽는다.
+        # 실제 원료에 있던 이름이다. 아직 아무도 이것을 못 가린다.
+        for fn in (screen, server, both):
+            self.assertIn('밀', fn('노밀가루 쌀카스테라 프리믹스'))
