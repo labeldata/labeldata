@@ -1359,6 +1359,72 @@ class RegulatoryLayoutTests(TestCase):
             self.assertNotIn('.badge-status-no', source)
 
 
+class 숫자와_점이_같은_것을_말한다(TestCase):
+    """
+    "부적합 탭은 0건인데 빨간 점이 있다."
+
+    한 배지 안에서 숫자와 점이 서로 다른 질문에 답하고 있었다.
+      숫자 = 지금 조건으로 이 탭에 보이는 건수
+      점   = 조건과 무관하게, 전 기간에 안 읽은 것이 있는가
+    조건이 좁혀지면 둘이 어긋나고, 어느 쪽을 믿어야 할지 알 수 없다.
+
+    다만 '모두 읽음' 단추는 다르다 — 그 단추는 조건과 무관하게 탭을 통째로
+    읽음 처리하므로, 조건 안에서 센 값을 쓰면 단추가 거짓말을 한다.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='dot', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                            prdlst_nm='내 제품')
+        # 오래된 미확인 — 기간을 좁히면 목록에서 빠진다
+        old = RegulatoryNews.objects.create(
+            external_id='dot-old', api_source='I2620', source='domestic',
+            product_name='오래된 부적합', collected_date='2020-01-01',
+            event_date='2020-01-01')
+        NewsProductMatch.objects.create(news=old, product=self.label,
+                                        match_score=90, risk_score=50)
+
+    def test_보이지_않는_미확인은_점을_켜지_않는다(self):
+        r = self.client.get('/regulatory/')          # 전체 기간
+        self.assertEqual(r.context['tab_insp_total'], 1)
+        self.assertEqual(r.context['tab_insp_unread'], 1)
+
+        r = self.client.get('/regulatory/?days=3')   # 최근 3일 — 그 건은 빠진다
+        self.assertEqual(r.context['tab_insp_total'], 0)
+        self.assertEqual(r.context['tab_insp_unread'], 0,
+                         '0건인데 점이 켜져 있다')
+
+    def test_점이_켜지면_그_숫자_안에_있다(self):
+        """점의 뜻은 '이 숫자 안에 안 읽은 것이 있다' 여야 한다."""
+        for qs in ('', '?days=3', '?days=30', '?tab=admin'):
+            r = self.client.get('/regulatory/' + qs)
+            for total, unread in (('tab_insp_total', 'tab_insp_unread'),
+                                  ('tab_admin_total', 'tab_admin_unread')):
+                self.assertLessEqual(r.context[unread], r.context[total],
+                                     f'{qs}: {unread} > {total}')
+
+    def test_모두_읽음_단추는_조건_밖까지_센다(self):
+        """
+        그 단추는 조건과 무관하게 탭을 통째로 읽음 처리한다. 조건 안에서 센
+        값을 쓰면 "0건" 이라 해 놓고 1건을 처리하게 된다.
+        """
+        r = self.client.get('/regulatory/?days=3')
+        self.assertEqual(r.context['tab_insp_unread'], 0)   # 점은 안 켜진다
+        self.assertEqual(r.context['tab_unread'], 1)        # 단추는 진짜 건수
+
+    def test_단추가_말한_만큼_처리한다(self):
+        import json
+
+        r = self.client.get('/regulatory/?days=3')
+        said = r.context['tab_unread']
+        resp = self.client.post('/regulatory/api/mark-tab-read/',
+                                data=json.dumps({'tab': 'insp-news'}),
+                                content_type='application/json')
+        self.assertEqual(resp.json()['news_updated'], said)
+
+
 class 폼을_거쳐도_목록이_비지_않는다(TestCase):
     """
     기간 단추 하나만 눌러도 목록이 통째로 비었다.

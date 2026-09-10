@@ -390,17 +390,30 @@ def news_list(request):
     tab_admin_total = count_qs.filter(api_source__in=_ADMIN_SOURCES).count()
     tab_insp_total  = count_qs.exclude(api_source__in=_ADMIN_SOURCES).count()
 
-    # 미확인 dot — 필터와 무관한 전 기간 기준 (알림 표시등 성격)
+    # 미확인 dot — **숫자와 같은 범위**로 센다.
+    #
+    # 예전에는 점만 조건과 무관한 전 기간 기준이었다. 그래서 조건이 좁혀지면
+    # "0건인데 빨간 점" 이 됐다 — 한 배지 안에서 숫자와 점이 서로 다른 질문에
+    # 답하니, 어느 쪽을 믿어야 할지 알 수 없다.
+    # 지금은 둘 다 "지금 조건으로 이 탭에 보이는 것" 을 말한다.
+    # 조건에 가려 못 보는 미확인은 네비바 배지(regAlertBadge)가 따로 말한다.
     if my_unread_news_ids:
-        _unread_src_map = dict(
+        _unread_in_view = count_qs.filter(id__in=my_unread_news_ids)
+        tab_admin_unread = _unread_in_view.filter(api_source__in=_ADMIN_SOURCES).count()
+        tab_insp_unread  = _unread_in_view.exclude(api_source__in=_ADMIN_SOURCES).count()
+
+        # '모두 읽음' 단추가 말할 숫자는 다르다. 그 단추는 조건과 무관하게 이 탭을
+        # 통째로 읽음 처리하므로, 조건 안에서 센 값을 쓰면 "3건" 이라 해 놓고
+        # 50건을 처리하게 된다. 점과 단추는 서로 다른 것을 말한다.
+        _all_src = dict(
             RegulatoryNews.objects.filter(id__in=my_unread_news_ids)
             .values_list('id', 'api_source')
         )
-        tab_admin_unread = sum(1 for src in _unread_src_map.values() if src in _ADMIN_SOURCES)
-        tab_insp_unread  = len(_unread_src_map) - tab_admin_unread
+        tab_admin_unread_all = sum(1 for src in _all_src.values() if src in _ADMIN_SOURCES)
+        tab_insp_unread_all  = len(_all_src) - tab_admin_unread_all
     else:
-        tab_admin_unread = 0
-        tab_insp_unread  = 0
+        tab_admin_unread = tab_admin_unread_all = 0
+        tab_insp_unread  = tab_insp_unread_all  = 0
 
     # 탭별 독립 검색: 건수 집계 완료 후 qs 범위 제한
     if tab == 'admin':
@@ -534,6 +547,8 @@ def news_list(request):
         .aggregate(total=Count('id'), unread=Count('id', filter=Q(read_yn=False)))
     )
     inspection_has_matches = bool(_ins_stat['total'])
+    # 이 값은 전 기간 기준이다. 아래에서 조건이 걸리면 그 범위로 다시 센다
+    # (탭 배지의 숫자·점이 같은 것을 말하도록).
     inspection_unread      = _ins_stat['unread']
 
     # 공용 필터(검색어·기간)는 활성 탭과 무관하게 적용한다.
@@ -572,6 +587,9 @@ def news_list(request):
     # 탭 배지 = 목록 헤더 = 현재 필터가 적용된 총 건수 (부적합·행정처분 탭과 같은 규칙).
     # 필터가 하나도 안 걸렸으면 위에서 이미 센 전 기간 건수와 같은 값이다.
     inspection_total  = ins_qs.count() if ins_filtered else _ins_stat['total']
+    inspection_unread_all = _ins_stat['unread']       # 단추가 실제로 처리할 건수
+    if ins_filtered:
+        inspection_unread = ins_qs.filter(read_yn=False).count()   # 점
     insp_page_num     = request.GET.get('insp_page', 1)
     insp_paginator    = _CountedPaginator(ins_qs, 20, inspection_total)
     insp_page_obj     = insp_paginator.get_page(insp_page_num)
@@ -778,12 +796,14 @@ def news_list(request):
     else:
         active_tab = TAB_INSP_NEWS
 
-    # 지금 탭의 미확인 수 — '모두 읽음' 단추를 그릴지 말지가 여기에 달려 있다.
+    # '모두 읽음' 단추의 숫자 — **조건 밖까지** 센 값이다.
+    # 그 단추는 조건과 무관하게 이 탭을 통째로 읽음 처리하므로, 조건 안에서 센
+    # 값(=탭의 빨간 점)을 쓰면 단추가 거짓말을 한다.
     # 탭 상태와 같은 이유로 서버가 고른다(템플릿 주석 참고).
     tab_unread = {
-        TAB_ADMIN:      tab_admin_unread,
-        TAB_INSPECTION: inspection_unread,
-    }.get(active_tab, tab_insp_unread)
+        TAB_ADMIN:      tab_admin_unread_all,
+        TAB_INSPECTION: inspection_unread_all,
+    }.get(active_tab, tab_insp_unread_all)
 
     # ── 지금 탭의 페이지네이션 한 벌 ────────────────────────────────────────
     # 예전에는 세 벌을 다 그려 놓고 CSS 로 둘을 감췄다. 활성 탭은 서버가 이미
