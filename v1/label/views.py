@@ -43,7 +43,7 @@ from .forms import LabelCreationForm, MyIngredientsForm
 from v1.label.services import product_search
 from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem, 
                      FoodType, ImportedFood, LabelIngredientRelation, MyIngredient, 
-                     MyLabel, MyPhrase)
+                     MyIngredientNutrition, MyLabel, MyPhrase)
 
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
@@ -5280,11 +5280,8 @@ def phrase_update_api(request, phrase_id):
 # 때문이다. 이름이 완전히 같아 어떤 유사도로도 못 가른다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-NUTRITION_INPUT_FIELDS = (
-    'calories', 'carbohydrates', 'sugars', 'proteins', 'fats',
-    'saturated_fats', 'trans_fats', 'cholesterols', 'natriums',
-    'dietary_fiber', 'sugar_alcohols', 'moisture', 'ash',
-)
+# 성분 칸 목록은 모델이 들고 있다 — 두 곳에 두면 언젠가 어긋난다.
+NUTRITION_INPUT_FIELDS = MyIngredientNutrition.VALUE_FIELDS
 
 
 def _ingredient_for_nutrition(request, ingredient_id):

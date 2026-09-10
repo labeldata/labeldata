@@ -1054,6 +1054,18 @@ class MyIngredientNutrition(models.Model):
         """신뢰도 등급. 출처가 정한다."""
         return self.GRADE.get(self.source_kind, 'C')
 
+    # 이 표가 담는 성분 칸. **모델이 들고 있는다.**
+    #
+    # 처음에는 views.py 에 두고 관리 명령이 그것을 가져다 썼는데, 상수 하나
+    # 때문에 웹 뷰 모듈이 통째로 딸려 왔다. 원료에 영양성분을 붙이는 일에
+    # ratelimit·openai 를 불러올 이유가 없고, 실제로 서버에서 그 import 가
+    # 터지며 엉뚱한 곳을 가리키는 오류가 났다.
+    VALUE_FIELDS = (
+        'calories', 'carbohydrates', 'sugars', 'proteins', 'fats',
+        'saturated_fats', 'trans_fats', 'cholesterols', 'natriums',
+        'dietary_fiber', 'sugar_alcohols', 'moisture', 'ash',
+    )
+
     def as_values(self, fields):
         """
         배합 계산이 쓰는 모양으로 돌려준다.

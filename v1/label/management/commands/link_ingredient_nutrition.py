@@ -22,14 +22,16 @@
 고른 것을 자동 판단으로 덮으면, 사람이 한 일이 조용히 사라진다.
 다시 붙이려면 --force 를 준다.
 """
-from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
 from v1.label.models import MyIngredient, MyIngredientNutrition
 from v1.label.services import nutrition_candidates as ncd
-from v1.label.views import NUTRITION_INPUT_FIELDS
+
+# 성분 칸 목록은 모델에서 가져온다. 예전에는 views 에서 가져왔는데, 상수 하나
+# 때문에 웹 뷰 모듈이 통째로 딸려 와 ratelimit·openai 까지 불러왔다.
+NUTRITION_INPUT_FIELDS = MyIngredientNutrition.VALUE_FIELDS
 
 
 class Command(BaseCommand):
