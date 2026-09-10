@@ -124,6 +124,9 @@ _OWN_SIZED_BUTTONS = frozenset({
     'allergen-add-btn', 'allergen-chip', 'allergen-icon-btn',
     'allergen-selectall-btn', 'btn-apply', 'btn-storage-badge',
     'contacts-filter-btn', 'contacts-icon-btn', 'di-name', 'doc-ver-btn',
+    # 배합 표의 행 머리 단추. 행 머리는 높이 22px·너비 54px 라 공용 단추가
+    # 들어가지 않는다 — 표 자체가 정하는 크기다.
+    'bom-rowbtn',
     'dr-tab-btn', 'gmo-btn', 'panel-toggle-btn', 'product-quick-text-btn',
     'quick-allergen-btn', 'side-panel-toggle', 'summary-type-btn',
     # 부적합·처분 알림
