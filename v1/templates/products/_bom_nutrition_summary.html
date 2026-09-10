@@ -1,0 +1,130 @@
+{% comment %}
+  배합 요약의 '영양성분' 줄.
+
+  보여 주는 것은 둘뿐이다 — **계산이 되는가**, **무엇이 막고 있는가**.
+  값 자체는 영양성분 탭에서 본다. 한 가지 일에 자리를 둘로 두지 않는다.
+
+  막는 것을 원료가 아니라 **성분 단위**로 말한다. 향료 하나 때문에 아홉 개를
+  다 물으면 규격서를 통째로 구해야 하지만, 실제로 모자란 것은 한둘일 때가
+  많다(서버의 nutrition_contrib 이 그것을 가른다).
+
+  판정은 서버가 한다. 화면은 그 결과를 글로 옮길 뿐이다 — 여기서 다시
+  판단하면 서버와 두 벌이 되고, 언젠가 서로 다른 말을 한다.
+{% endcomment %}
+<script>
+(function () {
+  var slot = document.getElementById('bom-summary-nutrition');
+  if (!slot) return;
+
+  var URL_ = (window.BOM_NUTRITION_URL || '');
+  if (!URL_) return;
+
+  // 성분 이름을 사람 말로. 서버는 우리 필드 이름으로 말한다.
+  var LABEL = {
+    calories: '열량', carbohydrates: '탄수화물', sugars: '당류',
+    proteins: '단백질', fats: '지방', saturated_fats: '포화지방',
+    trans_fats: '트랜스지방', cholesterols: '콜레스테롤', natriums: '나트륨'
+  };
+
+  function esc(t) {
+    return String(t === null || t === undefined ? '' : t).replace(
+      /[&<>"']/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;',
+                '"': '&quot;', "'": '&#39;'}[c];
+      });
+  }
+
+  function names(fields) {
+    return (fields || []).map(function (f) { return LABEL[f] || f; }).join('·');
+  }
+
+  function render(d) {
+    var out = [];
+
+    if (!d.rows || !d.rows.length) {
+      slot.innerHTML = '<span class="text-muted">원료를 넣으면 계산할 수 있는지 알려 드립니다.</span>';
+      return;
+    }
+
+    var blocking = d.blocking || [];
+    if (!blocking.length) {
+      out.push('<span class="bom-nut-ok">'
+        + '<i class="bi bi-check-circle-fill"></i> 배합으로 계산할 수 있습니다</span>');
+      if (d.known_ratio) {
+        out.push('<span class="bom-nut-dim">영양성분을 아는 원료가 '
+          + Number(d.known_ratio).toFixed(2) + '%</span>');
+      }
+    } else {
+      out.push('<span class="bom-nut-block">'
+        + '<i class="bi bi-exclamation-circle-fill"></i> 아직 계산할 수 없습니다</span>');
+      out.push('<span class="bom-nut-dim">막히는 성분: ' + esc(names(blocking)) + '</span>');
+    }
+
+    // 무엇을 채우면 풀리는지.
+    //
+    // **배합비가 없는 원료는 성분을 나열하지 않는다.** 배합비를 모르면 판정
+    // 자체가 안 되므로 서버는 아홉 개를 모두 blocking 으로 돌려준다. 그것을
+    // 그대로 늘어놓으면 원료마다 '열량·탄수화물·당류…' 아홉 줄이 반복돼,
+    // 정작 할 일(배합비 넣기)이 안 보인다. 세어서 한 줄로 말한다.
+    var needed = d.needed || {};
+    var noRatio = [];
+    var todo = [];
+    (d.rows || []).forEach(function (r) {
+      var want = needed[r.name];
+      if (!want || !want.length) return;
+      if (r.ratio === null || r.ratio === undefined) { noRatio.push(r); return; }
+      todo.push({name: r.name, ratio: r.ratio, want: want, id: r.ingredient_id});
+    });
+
+    if (noRatio.length) {
+      out.push('<div class="bom-nut-warn">배합비를 넣어야 판정할 수 있습니다 ('
+        + noRatio.length + '건)</div>');
+    }
+
+    if (todo.length) {
+      // **한 줄로 말한다.** 이 패널의 다른 줄(알레르기·GMO)이 모두 한 줄이고,
+      // 요약은 표 위에 붙어 있어 높이가 곧 표의 자리다. 목록으로 늘어놓았더니
+      // 표가 요약 아래를 덮어 줄이 반만 보였다.
+      //
+      // 모자란 성분은 title 로 숨긴다 — 화면에서 바로 봐야 하는 것은 "무엇을
+      // 고쳐야 하는가"(원료 이름)이고, 어느 성분인지는 그 원료로 가면 나온다.
+      var chips = todo.slice(0, 3).map(function (t) {
+        var label = esc(t.name) + ' '
+          + '<span class="bom-nut-dim">' + Number(t.ratio).toFixed(2) + '%</span>';
+        var tip = ' title="' + esc(names(t.want)) + ' 이(가) 필요합니다"';
+        return t.id
+          ? '<a href="/label/my-ingredient-detail/' + t.id + '/" target="_blank"'
+              + tip + '>' + label + '</a>'
+          : '<span' + tip + '>' + label + '</span>';
+      });
+      if (todo.length > 3) {
+        chips.push('<span class="bom-nut-dim">그 밖에 ' + (todo.length - 3) + '건</span>');
+      }
+      out.push('<span class="bom-nut-todo">' + chips.join(' · ') + '</span>');
+    }
+
+    (d.warnings || []).forEach(function (w) {
+      out.push('<div class="bom-nut-warn">' + esc(w) + '</div>');
+    });
+
+    slot.innerHTML = out.join(' ');
+  }
+
+  function load() {
+    fetch(URL_, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.success) render(d); })
+      .catch(function () { /* 요약이 못 뜨는 것이 표를 막으면 안 된다 */ });
+  }
+
+  // 표를 고치면 다시 센다. 자주 부르지 않도록 잠깐 묶어 둔다 —
+  // 배합비를 타이핑하는 동안 글자마다 서버를 부를 이유가 없다.
+  var timer = null;
+  window.refreshBomNutrition = function () {
+    clearTimeout(timer);
+    timer = setTimeout(load, 800);
+  };
+
+  load();
+})();
+</script>

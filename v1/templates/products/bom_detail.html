@@ -8,6 +8,20 @@
 <link rel="stylesheet" href="{% static 'css/bom.css' %}?v={{ STATIC_BUILD_DATE }}">
 <style>
 body.in-iframe .bom-page-header { display: none !important; }
+
+  /* ── 배합 요약의 영양성분 줄 ─────
+     새 컴포넌트를 만들지 않는다. 공용 색 토큰만 쓴다. */
+  .bom-nut-ok    { color: #137333; font-weight: 600; }
+  .bom-nut-block { color: #c5221f; font-weight: 600; }
+  .bom-nut-dim   { color: #5f6368; font-size: .78rem; }
+  .bom-nut-warn  { color: #a35400; font-size: .78rem; }
+  /* 요약은 표 위에 붙어 있어 높이가 곧 표의 자리다. 다른 줄(알레르기·GMO)
+     처럼 한 줄로 둔다 — 목록으로 늘어놓았더니 표가 요약 아래를 덮어
+     줄이 반만 보였다. */
+  .bom-nut-todo  { font-size: .8rem; }
+  .bom-nut-todo li { margin: 1px 0; }
+  .bom-nut-todo a  { color: #1967d2; }
+
 </style>
 {% endblock %}
 
@@ -184,6 +198,24 @@ body.in-iframe .bom-page-header { display: none !important; }
                         </span>
                         <div id="bom-summary-gmo" class="bom-summary-value bom-summary-value--gmo">
                             <span class="text-muted">-</span>
+                        </div>
+                    </div>
+                    {% comment %}
+                      영양성분은 이 배합의 또 다른 결과물이다. 여기서 보여
+                      주는 것은 **계산값이 나오는가 아닌가**와 **무엇이 막고
+                      있는가** 둘뿐이다. 값 자체는 영양성분 탭에서 본다 —
+                      한 가지 일에 자리를 둘로 두지 않는다.
+
+                      막는 것을 원료 단위가 아니라 **성분 단위**로 말한다.
+                      향료 하나 때문에 아홉 개를 다 물으면 규격서를 통째로
+                      구해야 하지만, 실제로 모자란 것은 한둘일 때가 많다.
+                    {% endcomment %}
+                    <div class="bom-summary-row">
+                        <span class="bom-summary-label">
+                            <i class="bi bi-calculator text-primary"></i>영양성분
+                        </span>
+                        <div id="bom-summary-nutrition" class="bom-summary-value">
+                            <span class="text-muted">배합비를 넣으면 계산할 수 있는지 알려 드립니다.</span>
                         </div>
                     </div>
                 </div>
@@ -409,6 +441,9 @@ body.in-iframe .bom-page-header { display: none !important; }
     window.GRID_HIDDEN = JSON.parse(
       document.getElementById('grid-hidden-data').textContent) || [];
   } catch (e) { window.GRID_HIDDEN = []; }
+  /* 영양성분 요약이 부를 주소. 화면이 주소를 지어내면 라우팅이 바뀔 때
+     조용히 깨진다 — 서버가 준 것을 쓴다. */
+  window.BOM_NUTRITION_URL = "{% url 'bom:bom_calculate_nutrition' label_id=label.my_label_id %}";
   try {
     window.ALLERGEN_HEADER_NAMES = JSON.parse(
       document.getElementById('allergen-header-data').textContent) || {};
@@ -1802,6 +1837,11 @@ body.in-iframe .bom-page-header { display: none !important; }
     function generateBomSummary() {
         if (!hot) return;
 
+        /* 영양성분 요약은 서버가 판정한다(배합비·원료 영양성분을 함께
+           봐야 하므로 화면 혼자 못 정한다). 표가 바뀔 때마다 다시 묻되,
+           타이핑 중에 글자마다 부르지 않도록 잠깐 묶어 둔다. */
+        if (window.refreshBomNutrition) window.refreshBomNutrition();
+
         const rawmtrlEl   = document.getElementById('bom-summary-rawmtrl');
         const allergensEl = document.getElementById('bom-summary-allergens');
         const gmoEl       = document.getElementById('bom-summary-gmo');
@@ -2438,5 +2478,7 @@ body.in-iframe .bom-page-header { display: none !important; }
 
     bindContextInputs();
 </script>
+
+{% include 'products/_bom_nutrition_summary.html' %}
 {% endblock %}
 

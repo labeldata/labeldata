@@ -13490,3 +13490,90 @@ class 원료_상세에_영양성분_구역이_있다(TestCase):
         pub = MyIngredient.objects.create(user_id=None, prdlst_nm='정제수', delete_YN='N')
         html = self.get(pub.my_ingredient_id).content.decode('utf-8')
         self.assertNotIn('id="ingNutrition"', html)
+
+
+class 배합_탭이_영양성분_계산을_말한다(TestCase):
+    """
+    bom_calculate_nutrition 은 오래 더미였다(전부 0 을 돌려주고
+    '# TODO: 원재료별 영양성분 DB에서 조회 후 계산'). 그 자리를 채운다.
+
+    보여 주는 것은 둘이다 — **계산이 되는가**, **무엇이 막고 있는가**.
+    값 자체는 영양성분 탭이 본다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyIngredient, MyIngredientNutrition, MyLabel
+
+        self.user = User.objects.create_user(username='bomnut', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='식빵')
+
+        def ingredient(name, ratio, **vals):
+            ing = MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm=name, delete_YN='N')
+            if vals:
+                MyIngredientNutrition.objects.create(
+                    ingredient=ing, source_kind='manual', **vals)
+            return ProductBOM.objects.create(
+                parent_label=self.label, ingredient_name=name,
+                source_ingredient=ing, usage_ratio=ratio, active_yn=True)
+
+        self.ingredient = ingredient
+
+    def get(self):
+        return self.client.get(
+            '/bom/api/label/%d/nutrition/' % self.label.my_label_id).json()
+
+    def test_영양성분을_아는_원료만_있으면_계산된다(self):
+        self.ingredient('밀가루', 100, calories=333.0, carbohydrates=71.0,
+                        proteins=10.0, fats=1.0, sugars=1.0, saturated_fats=0.2,
+                        trans_fats=0.0, cholesterols=0.0, natriums=2.0)
+        d = self.get()
+        self.assertTrue(d['success'])
+        self.assertEqual(d['blocking'], [])
+        self.assertAlmostEqual(d['ratio_total'], 100.0, places=3)
+        # 열량은 원료가 적어 낸 333 이 아니라 탄단지로 다시 센 값이다
+        self.assertAlmostEqual(d['values']['calories'], 71 * 4 + 10 * 4 + 1 * 9, places=3)
+
+    def test_모르는_원료가_있으면_무엇이_막는지_말한다(self):
+        self.ingredient('밀가루', 99.95, calories=333.0, carbohydrates=71.0,
+                        proteins=10.0, fats=1.0, sugars=1.0, saturated_fats=0.2,
+                        trans_fats=0.0, cholesterols=0.0, natriums=2.0)
+        self.ingredient('향료', 0.05)
+        d = self.get()
+        self.assertTrue(d['blocking'])
+        # 아홉을 다 묻지 않는다 — 향료가 못 바꾸는 성분은 빼고 말한다
+        self.assertLess(len(d['needed']['향료']), 9)
+
+    def test_원료로_바로_갈_수_있게_id_를_준다(self):
+        """무엇이 막는지 알려 주고 고치러 갈 길이 없으면 소용이 없다."""
+        self.ingredient('향료', 0.05)
+        d = self.get()
+        self.assertTrue(d['rows'][0]['ingredient_id'])
+
+    def test_배합비가_비면_합계에_넣지_않고_알린다(self):
+        self.ingredient('밀가루', None, calories=333.0, carbohydrates=71.0,
+                        proteins=10.0, fats=1.0)
+        d = self.get()
+        self.assertEqual(d['ratio_total'], 0.0)
+        self.assertTrue(any('배합비가 빈 줄' in w for w in d['warnings']))
+
+    def test_저장_전_배합비로도_계산한다(self):
+        """표를 고치는 중에 결과를 보려면 저장을 기다리게 할 수 없다."""
+        import json
+        row = self.ingredient('밀가루', 50, calories=333.0, carbohydrates=71.0,
+                              proteins=10.0, fats=1.0)
+        d = self.client.post(
+            '/bom/api/label/%d/nutrition/' % self.label.my_label_id,
+            data=json.dumps({'items': [{'bom_id': row.bom_id, 'usage_ratio': 100}]}),
+            content_type='application/json').json()
+        self.assertAlmostEqual(d['ratio_total'], 100.0, places=3)
+
+    def test_남의_배합은_볼_수_없다(self):
+        from django.contrib.auth.models import User
+        self.ingredient('밀가루', 100)
+        self.client.force_login(User.objects.create_user(username='nope', password='x'))
+        r = self.client.get('/bom/api/label/%d/nutrition/' % self.label.my_label_id)
+        self.assertEqual(r.status_code, 404)

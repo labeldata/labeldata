@@ -786,47 +786,72 @@ def bom_load_from_label_api(request, label_id):
 
 @login_required
 def bom_calculate_nutrition(request, label_id):
-    """BOM 기반 영양성분 계산 API"""
-    label = get_object_or_404(
-        MyLabel,
-        my_label_id=label_id,
-        user_id=request.user
+    """
+    배합으로 100 g 당 영양성분 **계산값**을 낸다.
+
+    오차도 반올림도 물리지 않는다 — 그 세 걸음은 영양성분 탭이 이미 한다.
+    여기서 오차까지 물리면 화면이 다시 물려 두 번 곱해진다(계산기가 겪은
+    사고가 그것이다: 309 를 두 번 저장해 475 가 되고 731 이 됐다).
+
+    모르는 원료를 0 으로 세지 않는다. 그 대신 **표시값을 흔들 수 있는지**를
+    판정해, 흔들지 못하면 물어볼 필요가 없다고 알린다. 향료 0.05 % 하나 때문에
+    영양성분표를 못 만드는 일이 없게 하려는 것이다.
+
+    POST 로 저장 전 배합을 보내면 그것으로 계산한다. 표를 고치는 중에도
+    결과를 보려면 저장을 기다리게 할 수 없다.
+    """
+    from v1.label.services import nutrition_recipe as nr
+
+    label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+
+    rows = list(
+        ProductBOM.objects
+        .filter(parent_label=label, active_yn=True)
+        .select_related('child_label', 'source_ingredient__nutrition')
+        .order_by('sort_order', 'bom_id')
     )
-    
-    # POST body에서 임시 BOM 데이터 받기 (저장 전 계산용)
+
     if request.method == 'POST':
+        # 저장 전 표의 배합비를 덮어쓴다. 원료가 무엇인지는 저장된 줄이 알고
+        # 있으므로, 화면이 보내는 것 중 **배합비만** 받는다.
         try:
-            temp_data = json.loads(request.body)
-            bom_items = temp_data.get('items', [])
-        except:
-            bom_items = []
-    else:
-        # DB에서 저장된 BOM 가져오기
-        bom_items = list(ProductBOM.objects.filter(
-            parent_label=label,
-            active_yn=True
-        ).values('ingredient_name', 'usage_ratio', 'usage_amount'))
-    
-    # 영양성분 초기화 (향후 구현)
-    nutrition = {
-        'calories': 0,
-        'carbohydrate': 0,
-        'protein': 0,
-        'fat': 0,
-        'sodium': 0,
-        'sugars': 0,
-    }
-    
-    total_ratio = sum(float(item.get('usage_ratio') or item.get('content_ratio') or 0) for item in bom_items)
-    
-    # TODO: 원재료별 영양성분 DB에서 조회 후 계산
-    # 현재는 더미 데이터 반환
-    
+            sent = (json.loads(request.body or '{}') or {}).get('items') or []
+        except ValueError:
+            sent = []
+        by_id = {}
+        for item in sent:
+            key = item.get('bom_id') or item.get('id')
+            if key:
+                by_id[str(key)] = item
+        for row in rows:
+            item = by_id.get(str(row.bom_id))
+            if item is not None:
+                row.usage_ratio = item.get('usage_ratio') or item.get('content_ratio')
+
+    items = nr.collect_items(rows)
+    result = nr.calculate(items)
+
     return JsonResponse({
         'success': True,
-        'nutrition': nutrition,
-        'total_ratio': total_ratio,
-        'is_valid': abs(total_ratio - 100) < 0.01 if total_ratio > 0 else True
+        'values': result['values'],
+        'ratio_total': result['ratio_total'],
+        'known_ratio': result['known_ratio'],
+        'is_valid': abs(result['ratio_total'] - 100) < 0.01 if result['ratio_total'] else False,
+        'unknown': result['unknown'],
+        'needed': result['needed'],
+        'blocking': result['contribution']['blocking'],
+        'warnings': result['warnings'],
+        # 화면이 원료로 바로 갈 수 있게 id 를 함께 준다
+        'rows': [
+            {'bom_id': row.bom_id,
+             'name': item['name'],
+             'ratio': item['ratio'],
+             'ingredient_id': row.source_ingredient_id,
+             'source': item.get('source') or '',
+             'grade': item.get('grade') or '',
+             'why': item.get('why') or ''}
+            for row, item in zip(rows, items)
+        ],
     })
 
 
