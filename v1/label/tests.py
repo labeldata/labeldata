@@ -13873,3 +13873,70 @@ class 원료_영양성분을_직접_찾을_수_있다(TestCase):
             HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
         self.assertIn('ingNutQ', h)
         self.assertIn("data-act=\"search\"", h)
+
+
+class 실제_배합_원료_이름을_견딘다(TestCase):
+    """
+    서버의 배합 원료는 전부 보고번호 없이 이름으로만 등록돼 있었다.
+
+        설탕 · 밀가루[밀/미국산, 호주산] · 전란액/국산 · 정제소금 · 아질산나트륨 …
+
+    그 이름들로 실제로 찾아 보고서야 두 가지가 드러났다.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_candidates as ncd
+        self.ncd = ncd
+
+    def 행(self, name, calories=100.0, method='수집'):
+        from v1.label.models import PublicFoodNutrition
+        return PublicFoodNutrition.objects.create(
+            food_cd='T' + name, food_nm_kr=name, basis_unit='g',
+            basis_amount=100.0, calories=calories, crt_mth_nm=method)
+
+    # ── 괄호 부연 ────────────────────────────────────────────────────────
+
+    def test_괄호_부연_때문에_못_찾던_것을_찾는다(self):
+        """
+        '밀가루[밀/미국산, 호주산]' 은 후보가 없었는데 '밀가루' 는 잘 찾았다.
+        같은 물건인데 괄호째 견준 탓이다.
+        """
+        self.행('밀가루', 333.0)
+        cs = self.ncd.candidates('밀가루[밀/미국산, 호주산]')
+        self.assertTrue(cs)
+        self.assertEqual(cs[0]['row'].food_nm_kr, '밀가루')
+
+    def test_뒤에_붙은_원산지를_뗀다(self):
+        self.행('전란액', 128.0)
+        cs = self.ncd.candidates('전란액/국산')
+        self.assertTrue(cs)
+
+    def test_이름이_통째로_괄호면_그대로_둔다(self):
+        """떼고 나면 견줄 것이 없다."""
+        self.assertEqual(self.ncd.normalize('(무표기)'), '(무표기)')
+
+    def test_기존_정규화를_깨지_않는다(self):
+        self.assertEqual(self.ncd.normalize('설탕_백설탕'), '설탕_백설탕')
+        self.assertEqual(self.ncd.normalize('비타민 B12'), '비타민 b12')
+        self.assertEqual(self.ncd.normalize('한라봉향 FAC-HMT4733012'), '한라봉향')
+
+    # ── 뜻을 뒤집는 이름 ─────────────────────────────────────────────────
+
+    def test_무첨가는_그_원료가_아니다(self):
+        """
+        '아질산나트륨' 의 1 위가 '아질산나트륨 무첨가 잠봉' 이었다. 이름은 가장
+        비슷한데 가리키는 것은 정반대다 — 그 행의 값은 아질산나트륨의 값이
+        아니라 그것을 넣지 않은 햄의 값이다. 유사도는 뜻을 모른다.
+        """
+        self.행('아질산나트륨 무첨가 잠봉', 145.0)
+        self.assertEqual(self.ncd.candidates('아질산나트륨'), [])
+
+    def test_사람이_무첨가로_찾으면_막지_않는다(self):
+        """그건 정말 그 제품을 찾는 것이다."""
+        self.행('아질산나트륨 무첨가 잠봉', 145.0)
+        cs = self.ncd.candidates('아질산나트륨 무첨가 잠봉')
+        self.assertTrue(cs)
+
+    def test_무가당_무염도_같이_막는다(self):
+        self.행('무가당 두유', 50.0)
+        self.assertEqual(self.ncd.candidates('두유'), [])
