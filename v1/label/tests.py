@@ -13751,3 +13751,44 @@ class 고를_것이_없으면_묻지_않는다(TestCase):
         self.run_cmd()
         from v1.label.models import MyIngredientNutrition
         self.assertFalse(MyIngredientNutrition.objects.exists())
+
+
+class 관리_명령은_웹_뷰를_끌어오지_않는다(SimpleTestCase):
+    """
+    link_ingredient_nutrition 이 상수 하나를 views 에서 가져오는 바람에, 원료에
+    영양성분을 붙이는 일에 ratelimit·openai 까지 딸려 왔다. 서버에서 그 import
+    가 터지며 **엉뚱한 곳을 가리키는 오류**가 났다.
+
+        ModuleNotFoundError: No module named 'django_ratelimit'
+          ← link_ingredient_nutrition.py 에서 난 것처럼 보였다
+
+    성분 칸 목록은 모델이 들고 있어야 한다. 그 표의 칸이기 때문이다.
+    """
+
+    def test_명령을_불러와도_views_가_딸려오지_않는다(self):
+        import importlib
+        import sys
+
+        sys.modules.pop('v1.label.views', None)
+        importlib.import_module(
+            'v1.label.management.commands.link_ingredient_nutrition')
+        self.assertNotIn('v1.label.views', sys.modules)
+
+    def test_성분_칸_목록은_모델이_들고_있다(self):
+        from v1.label.models import MyIngredientNutrition
+
+        fields = MyIngredientNutrition.VALUE_FIELDS
+        self.assertIn('calories', fields)
+        self.assertIn('natriums', fields)
+        # 모델에 실제로 있는 칸만 적혀 있어야 한다
+        names = {f.name for f in MyIngredientNutrition._meta.fields}
+        for f in fields:
+            self.assertIn(f, names, '%s 는 모델에 없는 칸이다' % f)
+
+    def test_views_는_모델_것을_그대로_쓴다(self):
+        """두 곳에 목록을 두면 언젠가 한쪽만 고쳐진다."""
+        from v1.label import views
+        from v1.label.models import MyIngredientNutrition
+
+        self.assertIs(views.NUTRITION_INPUT_FIELDS,
+                      MyIngredientNutrition.VALUE_FIELDS)
