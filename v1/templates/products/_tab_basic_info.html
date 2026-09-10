@@ -1,3 +1,4 @@
+{% include "includes/_field_help.html" %}
 {% load quick_phrases %}
 {% load static %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
@@ -175,7 +176,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                 </select>
             </div>
             <div class="col-md-6 col-xl-3">
-                <label class="form-label v2-field-label">소분류</label>
+                <label class="form-label v2-field-label">소분류<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>검증의 기준이 되는 값</b>표시사항 검증이 이 값으로 <strong>그 유형에만 있는 의무 표시사항</strong> 과 금지 문구를 고릅니다.<br>비어 있으면 <strong>그 검사가 통째로 빠집니다</strong> — 통과한 것이 아니라 안 본 것입니다.<em>인쇄되는 글자는 아래 “식품유형 (표시용)” 입니다.</em></span></span></label>
                 <select id="field-food-type" name="food_type"
                         class="form-select bg-light border-0 v2-field-input"
                        >
@@ -190,7 +191,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                 </select>
             </div>
             <div class="col-12 col-xl-6">
-                <label class="form-label v2-field-label">식품유형 (표시용)</label>
+                <label class="form-label v2-field-label">식품유형 (표시용)<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>라벨에 인쇄되는 값</b>규정은 유형명 뒤에 살균 여부·섭취 방법을 괄호로 덧붙이라고 하는 자리가 있어, 인쇄되는 값에는 부기가 붙습니다 — <strong>빵류 [가열하여 섭취하는 냉동식품]</strong>.<br>검증이 <strong>소분류와 같은 말인지</strong> 견줍니다. 서로 다르면 알려 줍니다.<em>규칙을 고르는 키는 위의 소분류입니다. 이 칸이 아닙니다.</em></span></span></label>
                 <input type="text" id="field-prdlst-dcnm" name="prdlst_dcnm"
                        class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.prdlst_dcnm|default:'' }}"
@@ -255,7 +256,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
         </h6>
         <div class="row g-2">
             <div class="col-12">
-                <label class="form-label v2-field-label">품목보고번호</label>
+                <label class="form-label v2-field-label">품목보고번호<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>있으면 편한 것</b><i>[번호검증]</i> 이 식품안전나라에 그 번호가 있는지 봅니다. 이미 등록된 제품이면 <i>[복사하기]</i> 로 <strong>제품명·식품유형·원재료명·제조사·용기포장재질</strong> 이 한 번에 채워집니다.<br>표시사항 검증에서 <strong>“품목보고번호가 비어 있습니다”</strong> 지적도 사라집니다.<em>수입 제품은 이 번호가 없는 것이 정상이라 지적하지 않습니다.</em></span></span></label>
                 {# 입력칸과 검증 버튼을 한 줄에 — 버튼만 아래로 밀려나 있었다 #}
                 <div class="d-flex align-items-start gap-2">
                     <textarea id="field-prdlst-report-no" name="prdlst_report_no"
@@ -278,7 +279,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                 <div id="verifyResultMessage" style="display:none; margin-top:6px; font-size:0.84rem;"></div>
             </div>
             <div class="col-md-6">
-                <label class="form-label v2-field-label">내용량</label>
+                <label class="form-label v2-field-label">내용량<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>영양성분을 표시하는 제품은 내용량 옆에 <strong>총 열량</strong> 을 함께 적어야 합니다. 영양성분 탭의 열량(100g 당)과 이 값이 둘 다 있으면 검증이 <strong>적을 문구를 계산해서</strong> 알려 줍니다.<em>예: 500g, 1L, 30g×10포</em></span></span></label>
                 <input type="text" id="field-content-weight" name="content_weight"
                        class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.content_weight|default:'' }}"
@@ -454,7 +455,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
         </h6>
         <div class="row g-2">
             <div class="col-12">
-                <label class="form-label v2-field-label">원재료명 표시명</label>
+                <label class="form-label v2-field-label">원재료명 표시명<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>라벨에 인쇄되는 값</b><i>[BOM에서 만들기]</i> 를 누르면 배합 탭의 줄로 조립합니다 — 배합비 순서, 첨가물 표시명, 복합원재료 괄호, 알레르기 문구를 규정대로 붙입니다.<br>원료관리에 <strong>원재료 표시명</strong> 을 적어 둔 원료는 그 글자가 그대로 들어갑니다.<em>직접 입력도 됩니다. 조립한 뒤 고쳐도 그대로 남습니다.</em></span></span></label>
                 {% comment %}
                   라벨에 인쇄되는 값은 rawmtrl_nm_display 다. 이 칸은 이름과 달리
                   rawmtrl_nm(참고)에 쓰고 있어서, 여기서 고쳐도 인쇄물은 그대로였다.
@@ -519,7 +520,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                     <!-- 헤더 바: 항상 표시 -->
                     <div class="allergen-panel-header d-flex align-items-center gap-2">
                         <span class="allergen-panel-title">
-                            <i class="bi bi-shield-exclamation me-1"></i>알레르기 성분
+                            <i class="bi bi-shield-exclamation me-1"></i>알레르기 성분<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디서 오나</b>원재료명에서 자동으로 찾고, 원료관리에서 그 원료에 골라 둔 것도 함께 모입니다.<br><strong>추천일 뿐이니 반드시 눈으로 확인하세요.</strong> “노밀가루” 처럼 <strong>없다는 말을 있다고 읽는</strong> 경우가 있습니다.<em>표시기준의 19가지만 다룹니다.</em></span></span>
                         </span>
                         <div id="field-allergen-summary" class="d-flex flex-wrap gap-1 flex-grow-1 align-items-center" style="min-height:22px;">
                             <span class="text-muted" style="font-size:12px; color:var(--v2-text-sub);">원재료명 입력 시 자동 감지</span>

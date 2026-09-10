@@ -14316,3 +14316,117 @@ class 언제_할_수_있는지_말한다(TestCase):
         self.assertIn('저장하면 여기서 영양성분을 정할 수 있습니다', h)
         # 아직 붙일 자리는 없다 — 말만 하고 칸은 안 만든다
         self.assertNotIn('id="ingNutrition"', h)
+
+
+class 칸_옆의_설명(TestCase):
+    """
+    [?] 는 그 칸이 **무엇에 쓰이는지** 말한다.
+
+    설명이 코드와 어긋나면 없느니만 못하다 — 사용자는 안 되는 것을 된다고
+    믿고 기다린다. 그래서 여기서는 문구가 있는지만이 아니라 **그 문구가
+    가리키는 코드가 실제로 그 일을 하는지**를 함께 못 박는다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        U = get_user_model()
+        self.u = U.objects.create_user(
+            username='a@a.com', email='a@a.com', password='x')
+        self.client.force_login(self.u)
+
+    def tpl(self, path):
+        import io
+        return io.open(path, encoding='utf-8').read()
+
+    # ── 조각이 제 몫을 하는가 ───────────────────────────────────────
+    def test_손가락으로도_열린다(self):
+        """
+        native title 은 손으로는 아예 안 열린다. 태블릿으로 라벨을 만드는
+        사람에게는 없는 기능이다 — 마우스·키보드·손가락 셋을 다 받는다.
+        """
+        h = self.tpl('v1/templates/includes/_field_help.html')
+        self.assertIn(':hover', h)           # 마우스
+        self.assertIn(':focus-within', h)    # 키보드
+        self.assertIn("addEventListener('click'", h)   # 손가락
+        self.assertIn("'Escape'", h)
+
+    def test_두_번_불러도_한_번만_건다(self):
+        h = self.tpl('v1/templates/includes/_field_help.html')
+        self.assertIn('__fhelpReady', h)
+
+    # ── 원료관리 ───────────────────────────────────────────────────
+    def test_원료_화면이_조각을_부른다(self):
+        h = self.tpl('v1/templates/label/my_ingredient_detail_partial.html')
+        self.assertIn('includes/_field_help.html', h)
+
+    def test_영양성분은_필수가_아니라고_말한다(self):
+        """
+        분석성적서를 이미 가진 사람이 많다. 계산기를 안 써도 되는데 화면이
+        그 말을 안 하면, 못 쓰는 기능 앞에서 막혔다고 느낀다.
+        """
+        h = self.tpl('v1/templates/label/my_ingredient_detail_partial.html')
+        self.assertIn('분석성적서가 있으면 그 값을 그대로 쓰면 됩니다', h)
+        self.assertIn('지장이 없습니다', h)
+
+    def test_품목보고번호가_채우는_칸을_정확히_적는다(self):
+        """
+        불러오기가 실제로 채우는 것은 셋이다. 더 적으면 거짓말이 된다.
+        """
+        import io
+        h = self.tpl('v1/templates/label/my_ingredient_detail_partial.html')
+        self.assertIn('원재료명·식품유형·제조사명', h)
+        js = io.open('v1/static/js/label/my_ingredient_detail_partial.js',
+                     encoding='utf-8').read()
+        body = js[js.index('function fetchFoodItemByReportNo'):]
+        body = body[:body.index('\nfunction ')]
+        for field in ('prdlst_nm', 'prdlst_dcnm', 'bssh_nm'):
+            self.assertIn(field, body, field)
+
+    # ── 제품관리 ───────────────────────────────────────────────────
+    def test_제품_화면이_조각을_부른다(self):
+        h = self.tpl('v1/templates/products/_tab_basic_info.html')
+        self.assertIn('includes/_field_help.html', h)
+
+    def test_복사하기가_채우는_칸을_정확히_적는다(self):
+        h = self.tpl('v1/templates/products/_tab_basic_info.html')
+        self.assertIn('제품명·식품유형·원재료명·제조사·용기포장재질', h)
+        # 실제 대응표와 개수가 맞는가
+        table = h[h.index("'prdlst_nm':"):]
+        table = table[:table.index('}')]
+        self.assertEqual(table.count(':'), 5)
+
+    def test_수입_제품은_번호가_없어도_된다고_말한다(self):
+        """
+        수입 제품은 품목보고번호가 없는 것이 정상이다. 검증도 그렇게 짜여
+        있다(_applies_to). 화면이 같은 말을 해야 한다.
+        """
+        import inspect
+
+        from v1.label.services import validation_service as vs
+        h = self.tpl('v1/templates/products/_tab_basic_info.html')
+        self.assertIn('수입 제품은 이 번호가 없는 것이 정상', h)
+        src = inspect.getsource(vs)
+        self.assertIn("if field == 'prdlst_report_no':", src)
+        self.assertIn('return not is_imported(label)', src)
+
+    def test_규칙을_고르는_키는_소분류라고_말한다(self):
+        """
+        규칙을 찾는 키는 food_type(소분류)이고 prdlst_dcnm(표시용)은 인쇄되는
+        값이다. 처음에 표시용 칸에 '검증의 기준' 이라고 붙였다가 고쳤다 —
+        틀린 설명은 없느니만 못하다.
+        """
+        import inspect
+
+        from v1.label.services import validation_service as vs
+        h = self.tpl('v1/templates/products/_tab_basic_info.html')
+        sub = h[h.index('>소분류'):]
+        sub = sub[:sub.index('</label>')]
+        self.assertIn('그 유형에만 있는 의무 표시사항', sub)
+
+        printed = h[h.index('>식품유형 (표시용)'):]
+        printed = printed[:printed.index('</label>')]
+        self.assertIn('인쇄되는 값', printed)
+        self.assertNotIn('검증의 기준', printed)
+
+        src = inspect.getsource(vs.check_food_type_known)
+        self.assertIn('label.food_type', src)
