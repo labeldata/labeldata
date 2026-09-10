@@ -1003,6 +1003,42 @@ class RegulatoryLayoutTests(TestCase):
         self.assertEqual(self.html.count('<tbody>'), 1)
         self.assertEqual(self.html.count('</tbody>'), 1)
 
+    def test_페이지네이션이_한_벌이다(self):
+        """
+        예전에는 탭마다 한 벌씩 셋을 다 그려 놓고 CSS 로 둘을 감췄다.
+        활성 탭은 서버가 이미 아니까(active_tab) 그 탭 것만 그리면 된다.
+        """
+        self.assertLessEqual(self.tpl.count('<div class="rs-pagination'), 1)
+        for gone in ('rs-pagination--insp', 'rs-pagination--pub'):
+            self.assertNotIn(gone, self.tpl, gone)
+            self.assertNotIn(f'.{gone}', self.css, f'{gone} (css)')
+
+    def test_수거검사_탭도_같은_페이지네이션을_쓴다(self):
+        """한 벌로 줄이면서 그 탭의 페이지 이동이 사라지면 안 된다."""
+        r = self.client.get('/regulatory/?tab=insp')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context['pager_param'], 'insp_page')
+        r = self.client.get('/regulatory/?tab=admin')
+        self.assertEqual(r.context['pager_param'], 'page')
+
+    def test_목록을_키보드로_열_수_있다(self):
+        """
+        <tr onclick> 이라 Tab 으로 닿지 않고 Enter 로도 안 열렸다. 상세를 여는
+        유일한 길이라, 키보드만 쓰는 사람은 이 화면을 못 썼다.
+        주소가 이미 ?id=… 모양이므로 제품명 칸을 진짜 링크로 뒀다.
+        """
+        self.assertIn('<a class="rs-item-name"', self.item)
+        # 줄 전체의 onclick 과 겹쳐 두 번 열리지 않게 전파를 멈춘다
+        self.assertIn('event.stopPropagation()', self.item)
+        html = self.client.get('/regulatory/').content.decode('utf-8')
+        self.assertIn('&id=', html)
+
+    def test_수거검사_줄도_링크다(self):
+        r = self.client.get('/regulatory/?tab=insp')
+        html = r.content.decode('utf-8')
+        self.assertIn('<a class="rs-item-name"', html)
+        self.assertIn('insp_id=', html)
+
     def test_페이지네이션이_표_밖에_있다(self):
         """
         <tbody> 안의 <div> 는 브라우저가 표 앞으로 끌어낸다. 예전 마크업에서는

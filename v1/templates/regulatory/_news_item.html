@@ -32,7 +32,13 @@
   <td>
     <div class="rs-name-cell">
       {% if news.my_unread_yn or news.ing_unread_yn or news.kw_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
-      <span class="rs-item-name" title="{{ news.product_name }}">{{ news.product_name }}</span>
+      {% comment %}
+        진짜 링크다 — Tab 으로 닿고 Enter 로 열린다. 줄 전체의 onclick 은
+        마우스 편의로 남기되, 여기서 전파를 멈춰 두 번 열리지 않게 한다.
+      {% endcomment %}
+      <a class="rs-item-name" href="?{{ page_query_string }}&id={{ news.id }}"
+         title="{{ news.product_name }}"
+         onclick="event.stopPropagation()">{{ news.product_name }}</a>
       {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}
       <button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시">
         <i class="bi bi-check-lg"></i>

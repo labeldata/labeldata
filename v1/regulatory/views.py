@@ -767,16 +767,30 @@ def news_list(request):
         TAB_INSPECTION: inspection_unread,
     }.get(active_tab, tab_insp_unread)
 
+    # ── 지금 탭의 페이지네이션 한 벌 ────────────────────────────────────────
+    # 예전에는 세 벌을 다 그려 놓고 CSS 로 둘을 감췄다. 활성 탭은 서버가 이미
+    # 아니까 그 탭 것만 그리면 된다 — 화면에 보이는 결과는 같고, 템플릿에서
+    # 똑같이 생긴 덩어리 셋이 하나가 된다.
+    if active_tab == TAB_INSPECTION:
+        if inspection_has_matches:
+            _pager = (insp_page_obj, insp_paginator, 'insp_page')
+        else:
+            _pager = (recent_insp_page_obj, recent_insp_paginator, 'pub_page')
+    else:
+        _pager = (page_obj, paginator, 'page')
+    _pager_obj, _pager_paginator, _pager_param = _pager
+
     return render(request, 'regulatory/news_list.html', {
         'active_tab':         active_tab,
         'tab_unread':         tab_unread,
+        # 페이지네이션 — 지금 탭 것 한 벌
+        'pager':              _pager_obj,
+        'pager_pages':        _pager_paginator.num_pages if _pager_paginator else 0,
+        'pager_window':       _page_window(_pager_obj),
+        'pager_param':        _pager_param,
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,
         'paginator':          paginator,
-        # 페이지 단추는 그려질 것만 미리 골라 넘긴다 (_page_window 주석 참고)
-        'page_window':        _page_window(page_obj),
-        'insp_page_window':   _page_window(insp_page_obj),
-        'pub_page_window':    _page_window(recent_insp_page_obj),
         'page_query_string':  page_query_string,
         'current_tab':        current_tab,
         'selected_news':           selected_news,

@@ -221,7 +221,12 @@
 /* 이름 칸 — 안 읽은 표시와 빠른 조치 단추가 함께 산다 */
 .rs-name-cell  { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .rs-item-name  { font-size: 12.5px; font-weight: 600; color: var(--c-text-primary);
-                 flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                 flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                       text-decoration: none; }
+/* 줄 전체가 눌리지만, 제품명은 진짜 링크라 키보드로도 닿는다.
+   글자 모양은 링크가 되기 전과 같게 두고, 초점만 눈에 보이게 한다. */
+a.rs-item-name:hover { text-decoration: underline; color: var(--c-primary); }
+a.rs-item-name:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; border-radius: 2px; }
 .rs-item-date  { font-size: 11.5px; color: var(--c-text-hint); white-space: nowrap; }
 .rs-item-sub   { font-size: 12px; color: var(--c-text-muted);
                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -807,24 +812,20 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 #regSidebar[data-view="insp-news"] .rs-item--insp,
 #regSidebar[data-view="insp-news"] .rs-item--insp-public,
 #regSidebar[data-view="insp-news"] .rs-insp-empty,
-#regSidebar[data-view="insp-news"] .rs-pagination--insp,
-#regSidebar[data-view="insp-news"] .rs-pagination--pub   { display: none !important; }
+
 
 /* ── 행정처분 탭: 부적합 뉴스·수거검사 줄 숨김 ── */
 #regSidebar[data-view="admin"] .rs-item[data-group="insp"],
 #regSidebar[data-view="admin"] .rs-item--insp,
 #regSidebar[data-view="admin"] .rs-item--insp-public,
 #regSidebar[data-view="admin"] .rs-insp-empty,
-#regSidebar[data-view="admin"] .rs-pagination--insp,
-#regSidebar[data-view="admin"] .rs-pagination--pub       { display: none !important; }
+
 
 /* ── 수거검사 탭: 뉴스 줄·구분줄·일반 페이지네이션 숨김 ── */
 #regSidebar[data-view="insp"] .rs-item:not(.rs-item--insp):not(.rs-item--insp-public),
 #regSidebar[data-view="insp"] .reg-sep,
-#regSidebar[data-view="insp"] .rs-pagination:not(.rs-pagination--insp):not(.rs-pagination--pub),
 #regSidebar[data-view="insp"] .rs-empty-row              { display: none !important; }
-#regSidebar[data-view="insp"] .rs-pagination--insp,
-#regSidebar[data-view="insp"] .rs-pagination--pub        { display: flex !important; }
+
 
 /* ── 툴바 2행: 탭에 맞는 줄 하나만 ──
    부적합·처분은 '무엇을 거를지'(범위·기간·미조치), 수거검사는 '무엇을 할지'

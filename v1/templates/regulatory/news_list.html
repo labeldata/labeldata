@@ -546,7 +546,9 @@
             <td>
               <div class="rs-name-cell">
                 {% if not m.read_yn %}<span class="rs-unread-dot"></span>{% endif %}
-                <span class="rs-item-name" title="{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}">{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}</span>
+                <a class="rs-item-name" href="?{{ page_query_string }}&tab=insp&insp_id={{ m.id }}"
+                   title="{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}"
+                   onclick="event.stopPropagation()">{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}</a>
               </div>
             </td>
             <td class="reg-col--company">
@@ -572,7 +574,9 @@
             <td><span class="rs-insp-badge-phase rs-insp-badge-phase--1">수거검사</span></td>
             <td>
               <div class="rs-name-cell">
-                <span class="rs-item-name" title="{{ r.prdtnm|default:r.bssh_nm }}">{{ r.prdtnm|default:r.bssh_nm }}</span>
+                <a class="rs-item-name" href="?{{ page_query_string }}&tab=insp&pub_insp_id={{ r.id }}"
+                   title="{{ r.prdtnm|default:r.bssh_nm }}"
+                   onclick="event.stopPropagation()">{{ r.prdtnm|default:r.bssh_nm }}</a>
               </div>
             </td>
             <td class="reg-col--company"><span class="rs-insp-bssh" title="{{ r.bssh_nm }}">{{ r.bssh_nm }}</span></td>
@@ -642,64 +646,28 @@
       </div>{# end rs-list-body #}
 
       {% comment %}
- ── 페이지네이션 ────────────────────────────────────────────────
-        탭마다 목록이 달라 페이지도 따로 센다. 표 안에 두면 tbody 밖의 요소가
-        되어 브라우저가 표 밖으로 끌어내므로, 목록 스크롤 바깥에 나란히 둔다.
-{% endcomment %}
-      {% if page_obj.paginator.num_pages > 1 %}
+        ── 페이지네이션 ────────────────────────────────────────────────
+        **한 벌만 그린다.** 예전에는 탭마다 한 벌씩 셋을 다 그려 놓고 CSS 로
+        둘을 감췄다. 활성 탭은 서버가 이미 아니까(active_tab) 그 탭 것만
+        넘겨받는다 — 보이는 결과는 같고, 똑같이 생긴 덩어리 셋이 하나가 된다.
+
+        표 안에 두면 tbody 밖의 요소가 되어 브라우저가 표 밖으로 끌어내므로,
+        목록 스크롤 바깥에 둔다.
+      {% endcomment %}
+      {% if pager_pages > 1 %}
       <div class="rs-pagination">
-        {% if page_obj.has_previous %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ page_obj.previous_page_number }}">‹</a>
-        {% else %}
-        <span class="rs-page-btn disabled">‹</span>
-        {% endif %}
-        {% for p in page_window %}
-          {% if p.ellipsis %}<span class="rs-page-info">…</span>
-          {% elif p.active %}<span class="rs-page-btn active">{{ p.n }}</span>
-          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&page={{ p.n }}">{{ p.n }}</a>{% endif %}
-        {% endfor %}
-        {% if page_obj.has_next %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ page_obj.next_page_number }}">›</a>
-        {% else %}
-        <span class="rs-page-btn disabled">›</span>
-        {% endif %}
-        <span class="rs-page-info" style="margin-left:4px;">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}p</span>
-      </div>
-      {% endif %}
-
-      {# 수거검사(내 매칭) 페이지네이션 #}
-      {% if insp_paginator.num_pages > 1 %}
-      <div class="rs-pagination rs-pagination--insp">
-        {% if insp_page_obj.has_previous %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ insp_page_obj.previous_page_number }}">‹</a>
+        {% if pager.has_previous %}
+        <a class="rs-page-btn" href="?{{ page_query_string }}&{{ pager_param }}={{ pager.previous_page_number }}" aria-label="이전 쪽">‹</a>
         {% else %}<span class="rs-page-btn disabled">‹</span>{% endif %}
-        {% for p in insp_page_window %}
+        {% for p in pager_window %}
           {% if p.ellipsis %}<span class="rs-page-info">…</span>
-          {% elif p.active %}<span class="rs-page-btn active">{{ p.n }}</span>
-          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ p.n }}">{{ p.n }}</a>{% endif %}
+          {% elif p.active %}<span class="rs-page-btn active" aria-current="page">{{ p.n }}</span>
+          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&{{ pager_param }}={{ p.n }}">{{ p.n }}</a>{% endif %}
         {% endfor %}
-        {% if insp_page_obj.has_next %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ insp_page_obj.next_page_number }}">›</a>
+        {% if pager.has_next %}
+        <a class="rs-page-btn" href="?{{ page_query_string }}&{{ pager_param }}={{ pager.next_page_number }}" aria-label="다음 쪽">›</a>
         {% else %}<span class="rs-page-btn disabled">›</span>{% endif %}
-        <span class="rs-page-info" style="margin-left:4px;">{{ insp_page_obj.number }}/{{ insp_paginator.num_pages }}p</span>
-      </div>
-      {% endif %}
-
-      {# 수거검사(공개 목록) 페이지네이션 #}
-      {% if recent_insp_paginator and recent_insp_paginator.num_pages > 1 %}
-      <div class="rs-pagination rs-pagination--pub">
-        {% if recent_insp_page_obj.has_previous %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ recent_insp_page_obj.previous_page_number }}">‹</a>
-        {% else %}<span class="rs-page-btn disabled">‹</span>{% endif %}
-        {% for p in pub_page_window %}
-          {% if p.ellipsis %}<span class="rs-page-info">…</span>
-          {% elif p.active %}<span class="rs-page-btn active">{{ p.n }}</span>
-          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ p.n }}">{{ p.n }}</a>{% endif %}
-        {% endfor %}
-        {% if recent_insp_page_obj.has_next %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ recent_insp_page_obj.next_page_number }}">›</a>
-        {% else %}<span class="rs-page-btn disabled">›</span>{% endif %}
-        <span class="rs-page-info" style="margin-left:4px;">{{ recent_insp_page_obj.number }}/{{ recent_insp_paginator.num_pages }}p</span>
+        <span class="rs-page-info" style="margin-left:4px;">{{ pager.number }}/{{ pager_pages }}p</span>
       </div>
       {% endif %}
     </section>
