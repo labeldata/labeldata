@@ -837,8 +837,14 @@ class PublicFoodNutrition(models.Model):
     옮기는 일은 적재 한 곳에서만 일어나야 한다 — 화면과 계산이 저마다 번호를
     풀면 한 곳만 밀려도 알 수 없다. 매핑은 services/mfds_nutrition.py 에 있다.
 
-    원문(raw)을 통째로 남긴다. 157 개 성분 중 20 여 개만 컬럼으로 꺼냈는데,
-    아미노산·지방산이 필요해지는 날 API 를 다시 639 번 부르지 않기 위해서다.
+    **원문은 남기지 않는다.** 157 개 성분 중 20 여 개만 꺼내 쓰는데, 나머지를
+    JSON 으로 붙여 두었더니 그 칼럼 하나가 1,106 MB 로 표의 66 % 를 차지했다
+    (행당 평균 3.6 KB · 표 1,670 MB). 게다가 이름으로 후보를 찾을 때 이 무거운
+    행을 읽느라 한 질의가 13 초까지 걸렸다.
+
+    없어서 아쉬운 날에는 다시 받으면 된다 — 전량 적재가 639 회 호출에 20 분이고
+    개발계정 일 한도(10,000 회) 안이다. 어차피 새 성분을 쓰려면 컬럼을 만들고
+    다시 돌려야 하므로, 원문을 이고 있는다고 그 일이 줄지 않는다.
     """
 
     BASIS_G = 'g'
@@ -924,8 +930,6 @@ class PublicFoodNutrition(models.Model):
                                      db_index=True, verbose_name='검산 결과')
     verify_note = models.CharField(max_length=200, null=True, blank=True, verbose_name='검산 사유')
 
-    raw = models.JSONField(null=True, blank=True, verbose_name='원문',
-                           help_text='꺼내지 않은 성분 130여 종이 여기 남아 있다')
     fetched_at = models.DateTimeField(auto_now=True, verbose_name='적재일시')
 
     class Meta:

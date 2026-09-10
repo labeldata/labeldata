@@ -210,7 +210,6 @@ class Command(BaseCommand):
                 'update_date': (item.get('UPDATE_DATE') or '')[:20],
                 'verify_status': status,
                 'verify_note': (note or '')[:200],
-                'raw': item,
             })
 
             fields['food_cd'] = food_cd

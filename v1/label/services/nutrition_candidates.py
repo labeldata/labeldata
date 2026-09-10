@@ -196,15 +196,17 @@ def _pool(key):
     """
     이름으로 후보를 긁어 온다. **두 걸음으로 나눈다.**
 
-    한 걸음으로 하면 13 초가 걸렸다. 이 표에는 원문을 통째로 담은 raw(JSON)
-    칸이 있어 행 하나가 무겁고, LIKE '%…%' 는 인덱스를 못 타므로 표 전체를
-    읽게 되기 때문이다. 재 보면 이렇다.
+    한 걸음으로 하면 13 초가 걸렸다. LIKE '%…%' 는 인덱스를 못 타므로 표
+    전체를 읽는데, 이 표는 32 만 행이라 그 값이 비싸다. 재 보면 이렇다.
 
         contains + count()            0.19 초   ← 인덱스만 훑는다
-        contains + 행 가져오기          9.8 초   ← raw 까지 읽는다
+        contains + 행 가져오기          9.8 초   ← 표를 읽는다
 
     그래서 먼저 **id 만** 뽑고(InnoDB 보조 인덱스는 PK 를 품고 있어 인덱스만
     읽으면 된다), 그 id 로 행을 가져온다. 0.2 초로 떨어진다.
+
+    (처음에는 원문 JSON 을 행마다 이고 있어 더 느렸다. 그 칼럼은 걷어냈지만
+    두 걸음으로 나누는 이유는 그대로다 — LIKE 는 여전히 인덱스를 못 탄다.)
 
     basis_unit·calories 같은 조건도 SQL 에 넣지 않는다. 넣는 순간 옵티마이저가
     계획을 바꿔 이름 인덱스를 버리고 9.5 초가 된다(같은 질의가 조건 하나에
@@ -244,8 +246,7 @@ def _pool(key):
 
     if not ids:
         return []
-    # raw 는 빼고 가져온다 — 후보를 고르는 데 원문은 쓰지 않는다
-    return list(PublicFoodNutrition.objects.filter(id__in=ids).defer('raw'))
+    return list(PublicFoodNutrition.objects.filter(id__in=ids))
 
 
 def candidates(name, limit=TOP_N):
