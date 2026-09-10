@@ -13032,3 +13032,119 @@ class 모르는_원료가_표시값을_바꾸는가(SimpleTestCase):
         self.assertEqual(self.nc.NUTRIENT_MAX['cholesterols'][1], 'practical')
         d = self.nc.assess(self.배합(), [0.05])['detail']['cholesterols']
         self.assertEqual(d['bound'], 'practical')
+
+
+class 배합으로_영양성분을_낸다(SimpleTestCase):
+    """
+    nutrition_recipe 는 **계산값까지만** 만든다. 오차·반올림은 그 뒤 단계다.
+
+    이 시험이 지키는 것은 셋이다 — 계산값에서 멈추는가, 열량을 계수로 다시
+    세는가, 모르는 원료를 0 으로 세지 않는가.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_recipe as nr
+        self.nr = nr
+
+    def 원료(self, name, ratio, **vals):
+        base = {f: None for f in self.nr.SUM_FIELDS}
+        base.update(vals)
+        return {'name': name, 'ratio': ratio, 'values': base, 'why': ''}
+
+    def 모르는원료(self, name, ratio, why='영양성분을 등록하지 않았다'):
+        return {'name': name, 'ratio': ratio, 'values': None, 'why': why}
+
+    # ── 기본 계산 ────────────────────────────────────────────────────────
+
+    def test_배합비만큼_섞어_100g당_값을_낸다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 50.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+            self.원료('설탕', 50.0, carbohydrates=99.8, proteins=0.0, fats=0.0),
+        ])
+        # 71×0.5 + 99.8×0.5 = 85.4
+        self.assertAlmostEqual(r['values']['carbohydrates'], 85.4, places=3)
+        self.assertAlmostEqual(r['values']['proteins'], 5.0, places=3)
+        self.assertEqual(r['ratio_total'], 100.0)
+        self.assertEqual(r['warnings'], [])
+
+    def test_열량은_원료_열량_합이_아니라_계수로_다시_센다(self):
+        """
+        규정이 열량을 계수로 정의한다. 원료 열량을 그냥 더하면 표 안에서
+        열량과 탄단지가 서로 맞지 않게 된다.
+        """
+        r = self.nr.calculate([
+            self.원료('가루', 100.0, calories=999.0,
+                     carbohydrates=50.0, proteins=10.0, fats=1.0),
+        ])
+        # 50×4 + 10×4 + 1×9 = 249 — 원료가 적어 낸 999 가 아니다
+        self.assertAlmostEqual(r['values']['calories'], 249.0, places=3)
+
+    def test_열량이_크게_벌어지면_원료_데이터를_의심하라고_알린다(self):
+        r = self.nr.calculate([
+            self.원료('가루', 100.0, calories=999.0,
+                     carbohydrates=50.0, proteins=10.0, fats=1.0),
+        ])
+        self.assertTrue(any('벌어진다' in w for w in r['warnings']), r['warnings'])
+
+    def test_식이섬유와_당알콜은_탄수화물에서_빼고_센다(self):
+        """CALORIE_FACTORS 가 정한 계수를 그대로 따라야 한다."""
+        r = self.nr.calculate([
+            self.원료('가루', 100.0, carbohydrates=50.0, proteins=0.0, fats=0.0,
+                     dietary_fiber=20.0, sugar_alcohols=10.0),
+        ])
+        # (50-20-10)×4 + 20×2 + 10×2.4 = 80 + 40 + 24 = 144
+        self.assertAlmostEqual(r['values']['calories'], 144.0, places=3)
+
+    # ── 모르는 것과 아닌 것 ──────────────────────────────────────────────
+
+    def test_모르는_원료를_0으로_세지_않는다(self):
+        """0 으로 두면 합계가 조용히 낮아진다. 그것은 '없다' 가 아니다."""
+        r = self.nr.calculate([
+            self.원료('밀가루', 99.95, carbohydrates=71.0, proteins=10.0, fats=1.0),
+            self.모르는원료('향료', 0.05),
+        ])
+        self.assertEqual(len(r['unknown']), 1)
+        self.assertEqual(r['unknown'][0]['name'], '향료')
+        self.assertAlmostEqual(r['known_ratio'], 99.95, places=3)
+
+    def test_아무도_주지_않은_성분은_0이_아니라_None_이다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 100.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+        ])
+        self.assertIsNone(r['values']['natriums'])
+        self.assertIsNone(r['values']['cholesterols'])
+
+    def test_모르는_향료가_표시를_흔드는지_판정한다(self):
+        """엔진이 붙어 있어야 '무엇을 물어야 하는가' 가 나온다."""
+        r = self.nr.calculate([
+            self.원료('밀가루', 99.95, carbohydrates=71.0, proteins=10.0, fats=1.0,
+                     sugars=1.0, saturated_fats=0.2, trans_fats=0.0,
+                     cholesterols=0.0, natriums=2.0),
+            self.모르는원료('향료', 0.05),
+        ])
+        self.assertIn('향료', r['needed'])
+        # 아홉을 다 묻지는 않는다
+        self.assertLess(len(r['needed']['향료']), 9)
+
+    # ── 배합비가 수상할 때 ───────────────────────────────────────────────
+
+    def test_배합비_합계가_100이_아니면_알린다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 80.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+        ])
+        self.assertTrue(any('배합비 합계' in w for w in r['warnings']), r['warnings'])
+
+    def test_배합비가_비면_더하지_않고_알린다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 100.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+            self.원료('이름만있는것', None, carbohydrates=50.0),
+        ])
+        self.assertTrue(any('배합비가 빈 줄' in w for w in r['warnings']), r['warnings'])
+        self.assertAlmostEqual(r['values']['carbohydrates'], 71.0, places=3)
+
+    # ── 아직 안 한 것 ────────────────────────────────────────────────────
+
+    def test_수율은_아직_붙이지_않았다(self):
+        """자리만 잡아 두었다. 조용히 1.0 으로 넘어가면 안 된다."""
+        with self.assertRaises(NotImplementedError):
+            self.nr.apply_yield({}, 100.0, 85.0)
