@@ -132,6 +132,24 @@ def _scope_qs(request, scope):
     return params.urlencode()
 
 
+def _tab_qs(request, tab):
+    """
+    탭을 옮기는 주소. 지금 보고 있는 조건은 그대로 들고 간다.
+
+    탭이 <button onclick> 이던 시절에는 이 주소를 스크립트가 만들었다.
+    탭 전환은 곧 페이지 이동이므로 링크여야 한다 — 가운데 클릭으로 새 탭에서
+    열리고, 주소를 복사할 수 있고, 스크립트가 죽어도 눌린다.
+    (실제로 스크립트가 한 번 죽어 "탭이 클릭되지 않는다" 는 신고가 나왔다)
+    """
+    params = request.GET.copy()
+    for k in ('page', 'id', 'insp_id', 'pub_insp_id', 'insp_page', 'pub_page'):
+        params.pop(k, None)
+    params.pop('tab', None)
+    if tab and tab != TAB_INSP_NEWS:
+        params['tab'] = tab
+    return params.urlencode()
+
+
 def _toggle_condition_qs(request, conditions, key, value):
     """
     조건 하나(key=value)를 켜고 끄는 주소를 만든다 — '미조치만 보기' 같은 단축 버튼용.
@@ -785,6 +803,10 @@ def news_list(request):
         'scope_qs_all':       _scope_qs(request, ''),
         'scope_qs_mine':      _scope_qs(request, 'mine'),
         'scope_qs_others':    _scope_qs(request, 'others'),
+        # 탭 이동 주소 — 지금 조건을 그대로 들고 간다
+        'tab_qs_insp_news':   _tab_qs(request, TAB_INSP_NEWS),
+        'tab_qs_admin':       _tab_qs(request, TAB_ADMIN),
+        'tab_qs_inspection':  _tab_qs(request, TAB_INSPECTION),
         # 알림 기준 요약에 "언제까지 모은 자료인지" 를 함께 보여준다
         'last_collected':     RegulatoryNews.objects.aggregate(m=Max('collected_date'))['m'],
         'no_action_qs':       no_action_qs,

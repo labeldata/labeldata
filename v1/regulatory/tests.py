@@ -924,36 +924,68 @@ class RegulatoryLayoutTests(TestCase):
         self.css = (base / 'static/css/regulatory.css').read_text(encoding='utf-8')
         self.html = self.client.get('/regulatory/').content.decode('utf-8')
 
-    # ── 상단: 제품 관리와 같은 통계 카드 줄 ──────────────────────────────
-    def test_통계_카드_줄이_있다(self):
-        """이 화면에 들어와 제일 먼저 묻는 것이 "지금 볼 게 몇 건인가" 다."""
-        self.assertIn('class="reg-stats"', self.html)
-        self.assertEqual(self.html.count('class="reg-stat-icon'), 5)
-        for label in ('전체 알림', '내 알림', '일반', '미조치', '수거검사 미확인'):
+    # ── 상단: 건수는 목록 머리 한 줄에 있다 ──────────────────────────────
+    def test_통계는_목록_머리_한_줄이다(self):
+        """
+        이 화면에 들어와 제일 먼저 묻는 것이 "지금 볼 게 몇 건인가" 다.
+        예전에는 그 답을 화면 맨 위 카드 다섯 장(세로 150px)이 말했는데, 하는
+        일은 목록을 거르는 것이라 목록 머리와 같은 일이었다. 다른 어느 목록
+        화면에도 그런 줄이 없어서 이 화면만 유난히 복잡해 보였다.
+        """
+        self.assertNotIn('class="reg-stats"', self.html)
+        self.assertNotIn('reg-stat-icon', self.html)
+        self.assertIn('class="rs-scope"', self.html)
+        for label in ('전체', '내 알림', '일반', '미조치'):
             self.assertIn(label, self.html)
 
-    def test_카드가_눌러서_거르는_지름길이다(self):
+    def test_건수가_눌러서_거르는_지름길이다(self):
         """숫자만 보여 주면 그 숫자를 만든 목록으로 갈 방법이 없다."""
         self.assertIn('href="?scope=mine"', self.html)
-        self.assertIn('href="?tab=insp"', self.html)
+        self.assertIn('href="?scope=others"', self.html)
 
     def test_같은_것을_두_번_묻지_않는다(self):
         """
-        예전에는 카드 줄이 '지표', 툴바의 칩 줄이 '스위치' 라고 갈라 놓았다.
-        그런데 둘이 같은 곳으로 가는 같은 링크여서, 한 화면에서 같은 것을 두 번
-        묻는 꼴이었고 어느 쪽을 눌러야 하는지가 오히려 헷갈렸다.
-        범위와 미조치는 카드 한 벌로 합쳤다.
+        범위를 바꾸는 자리가 카드 줄과 툴바 칩 줄 둘이었다. 같은 곳으로 가는
+        같은 링크라, 어느 쪽을 눌러야 하는지가 오히려 헷갈렸다. 한 줄로 합쳤다.
         """
         self.assertNotIn('rs-scope-chip', self.html)
         self.assertNotIn('미조치만', self.html)
-        # 카드가 스위치를 겸하므로 켜짐 상태를 카드가 들고 있어야 한다
+        self.assertEqual(self.html.count('class="rs-scope"'), 1)
+        # 그 한 줄이 스위치를 겸하므로 켜짐 상태를 들고 있어야 한다
         r = self.client.get('/regulatory/?scope=others')
-        self.assertIn('reg-stat--on', r.content.decode('utf-8'))
+        self.assertIn('rs-scope-item--on', r.content.decode('utf-8'))
 
-    def test_범위_셋이_모두_카드에_있다(self):
-        """칩을 걷어내면서 '일반만 보기' 로 갈 길이 사라지면 안 된다."""
+    def test_범위_셋으로_모두_갈_수_있다(self):
+        """합치면서 '일반만 보기' 로 갈 길이 사라지면 안 된다."""
         for qs in ('scope=mine', 'scope=others'):
             self.assertIn(f'href="?{qs}"', self.html)
+
+    def test_다른_목록_화면과_같은_부품을_쓴다(self):
+        """
+        list_common.css 머리말은 제품 조회·식품첨가물·부적합·처분이 같은 모양
+        이라고 적혀 있다. 같은 뜻의 컨트롤에 화면마다 다른 이름을 붙이면
+        한쪽을 고칠 때 다른 쪽이 조용히 뒤처진다.
+        """
+        self.assertIn('class="pv-tabs', self.html)
+        self.assertIn('pv-tab--active', self.html)
+        self.assertIn('pv-chip', self.html)
+        # 이 화면만 들고 있던 이름은 사라졌다
+        for gone in ('rs-vtab', 'rs-day-btn', 'rs-risk-chip', 'rs-quick-chip',
+                     'reg-cond-toggle'):
+            self.assertNotIn(gone, self.html, gone)
+            # 주석이 옛 이름을 설명하는 것은 괜찮다 — 살아 있는 '규칙' 만 본다
+            self.assertNotIn(f'.{gone}', self.css, f'{gone} (css 규칙)')
+
+    def test_탭이_링크다(self):
+        """
+        탭 전환은 곧 페이지 이동이다. 링크여야 가운데 클릭으로 새 탭에서 열리고,
+        주소를 복사할 수 있고, 스크립트가 죽어도 눌린다.
+        (스크립트가 한 번 죽어 "탭이 클릭되지 않는다" 는 신고가 실제로 나왔다)
+        """
+        self.assertNotIn('onclick="switchView', self.html)
+        self.assertNotIn('function switchView', self.tpl)
+        # 세 탭 모두 <a href> 로 그려진다
+        self.assertEqual(self.html.count('<a class="pv-tab'), 3)
 
     # ── 본문: 원료 관리와 같은 좌 목록 / 우 상세 ─────────────────────────
     def test_목록이_표다(self):
@@ -1175,13 +1207,14 @@ class 탭_상태는_서버가_그린다(TestCase):
         view, _ = self._view(f'/regulatory/?insp_id={self.insp_match.id}')
         self.assertEqual(view, 'insp')
 
-    def test_눌린_탭_단추도_서버가_표시한다(self):
+    def test_눌린_탭도_서버가_표시한다(self):
+        import re
+
         _, html = self._view('/regulatory/?tab=admin')
-        admin_btn = html[html.index('id="vtabAdmin"') - 200:html.index('id="vtabAdmin"')]
-        self.assertIn('rs-vtab--active', admin_btn)
-        # 기본 탭이 함께 켜져 있으면 안 된다
-        news_btn = html[html.index('id="vtabInspNews"') - 200:html.index('id="vtabInspNews"')]
-        self.assertNotIn('rs-vtab--active', news_btn)
+        tabs = re.findall(r'<a class="pv-tab[^"]*"[^>]*>\s*<i[^>]*></i>([^<\n]+)', html)
+        active = re.findall(r'<a class="pv-tab pv-tab--active"[^>]*>\s*<i[^>]*></i>([^<\n]+)', html)
+        self.assertEqual(len(tabs), 3, tabs)
+        self.assertEqual([t.strip() for t in active], ['행정처분'], active)
 
     def test_툴바_줄도_서버가_고른다(self):
         """수거검사 탭은 툴바 2행이 다르다 — 이것도 스크립트에 맡기지 않는다."""
@@ -1215,13 +1248,17 @@ class 탭_상태는_서버가_그린다(TestCase):
         self.assertIn('id="inspMarkAllReadBtn"', html)
         self.assertNotIn('id="newsMarkAllReadBtn"', html)
 
-    def test_스크립트가_주소를_다시_읽지_않는다(self):
+    def test_탭_전환을_흉내_내는_스크립트가_없다(self):
         """
-        서버가 그린 값이 있는데 스크립트가 주소에서 다시 뽑아 쓰면, 두 곳이
-        어긋날 여지가 남는다. 초기화는 서버가 그린 data-view 를 그대로 쓴다.
+        탭이 <a href> 가 되면서, 그 전환을 흉내 내던 switchView /
+        _applySwitchViewCSS 한 덩어리가 통째로 필요 없어졌다. 서버가 그리는
+        값을 스크립트가 또 그리면 두 곳이 어긋날 여지가 남는다.
         """
         _, html = self._view('/regulatory/')
-        self.assertIn("var initialTab = (sidebar && sidebar.dataset.view)", html)
+        # 주석이 옛 이름을 설명하는 것은 괜찮다 — 살아 있는 '코드' 만 본다
+        for gone in ('function switchView', 'function _applySwitchViewCSS',
+                     'window.switchView', 'dataset.view = v'):
+            self.assertNotIn(gone, html, gone)
 
 
 class 등록했는데_안_걸렸을_때(TestCase):

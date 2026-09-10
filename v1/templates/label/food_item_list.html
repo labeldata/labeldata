@@ -261,32 +261,7 @@
         margin: 0;
     }
 
-    /* ── 국내/수입 탭 ─────────────────────────────────────── */
-    .pv-tabs {
-        display: flex; flex-shrink: 0;
-        background: #f6f8fa;
-        border-bottom: 2px solid #e0e2e0;
-        padding: 0 24px;
-    }
-    .pv-tab {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 10px 18px;
-        font-size: 13px; font-weight: 600;
-        color: #5f6368; text-decoration: none;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -2px;
-        transition: color .12s, background .12s, border-color .12s;
-    }
-    .pv-tab:hover { color: #1967d2; background: #eef3fd; text-decoration: none; }
-    .pv-tab--active { color: #1967d2; background: #fff; border-bottom-color: #1967d2; }
-    .pv-tab-count {
-        background: #e8eaed; color: #5f6368;
-        font-size: 10px; font-weight: 700;
-        border-radius: 9px; padding: 1px 6px;
-    }
-    .pv-tab--active .pv-tab-count { background: #e8f0fe; color: #1558b0; }
-    /* 반대쪽 탭 건수는 화면이 뜬 뒤에 채워진다 */
-    .pv-tab-count--pending { color: #b0b4b8; letter-spacing: 1px; }
+    /* 국내/수입 탭 — 규칙은 list_common.css 로 옮겼다 (부적합·처분 알림과 공용) */
 
     /* ── 다중 조건 검색 ─────────────────────────────────────── */
     .filter-toolbar--stack { display: block; padding-top: 10px; padding-bottom: 10px; }
@@ -336,17 +311,7 @@
     }
     .pv-chips-label .bi { color: #f9ab00; }
     .pv-chips { display: flex; flex-wrap: wrap; gap: 7px; }
-    .pv-chip {
-        display: inline-block;
-        font-size: 12.5px; padding: 6px 14px;
-        background: #fff; border: 1px solid #dadce0; border-radius: 16px;
-        color: #3c4043; text-decoration: none;
-        transition: all .13s;
-    }
-    .pv-chip:hover {
-        background: #e8f0fe; border-color: #1967d2; color: #1558b0;
-        text-decoration: none;
-    }
+    /* .pv-chip 규칙도 list_common.css 에 있다 */
 
     .pv-intro-tip {
         margin-top: 26px; padding: 11px 14px;

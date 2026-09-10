@@ -129,9 +129,8 @@ _OWN_SIZED_BUTTONS = frozenset({
     # 부적합·처분 알림
     'kw-add-btn', 'rd-ab-btn', 'rd-act-btn', 'rd-as-edit', 'rd-cond-submit',
     'rd-insp-dismiss-btn', 'rd-insp-guide-btn', 'rd-kw-del', 'rd-memo-submit',
-    'rd-why-link', 'rd-why-mute-x', 'reg-cond-toggle', 'rf-listctl-dir',
-    'rkb-chip-del', 'rs-day-btn', 'rs-quick-chip', 'rs-quick-resolve',
-    'rs-risk-chip', 'rs-search-x', 'rs-settings-btn', 'rs-vtab',
+    'rd-why-link', 'rd-why-mute-x', 'rf-listctl-dir',
+    'rkb-chip-del', 'rs-quick-resolve', 'rs-search-x', 'rs-settings-btn',
     # 내 정보
     'g-btn-danger', 'g-btn-primary', 'g-btn-secondary',
 })
@@ -141,12 +140,14 @@ _SHARED_BUTTON_CLASSES = frozenset({
     'btn',                       # 부트스트랩 + .v2-btn 계열
     'v2-action-btn', 'v2-action-btn-outline', 'v2-sidebar-toggle',
     'v2-seg-btn', 'act-btn',
+    # 목록 화면 공용 (list_common.css) — 제품 조회·식품첨가물·부적합·처분이 함께 쓴다
+    'pv-chip', 'pv-tab',
     # 부트스트랩이 제 컴포넌트로 크기를 주는 것
     'btn-close', 'nav-link', 'accordion-button', 'navbar-toggler',
     'page-link', 'dropdown-item', 'dropdown-toggle', 'list-group-item',
 })
 
-_SIZED_BY_CLASS = ('v2-btn', 'v2-chip-btn', 'v2-link-btn') + tuple(
+_SIZED_BY_CLASS = ('v2-btn', 'v2-chip-btn', 'v2-link-btn', 'pv-chip') + tuple(
     sorted(_OWN_SIZED_BUTTONS))
 
 

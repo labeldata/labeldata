@@ -3862,11 +3862,12 @@ class 단추_명부(TestCase):
             self.assertEqual(checks.check_button_component_registry(None), [])
 
     def test_클래스_안의_장고_태그에_속지_않는다(self):
-        # class="rs-vtab {% if x %}active{% endif %}" 같은 것이 실제로 있다
+        # class="pv-chip {% if x %}pv-chip--on{% endif %}" 같은 것이 실제로 있다
+        # (예전 예시는 rs-vtab 이었는데, 그 이름은 공용 pv-tab 으로 옮겨 가며 사라졌다)
         from unittest.mock import patch
         from v1.common import checks
 
-        html = '<button class="rs-vtab {% if x %}rs-vtab--active{% endif %}">가</button>'
+        html = '<button class="pv-chip {% if x %}pv-chip--on{% endif %}">가</button>'
         with patch.object(checks, '_v2_templates',
                           return_value=[('a.html', 'C:/a.html', html)]):
             self.assertEqual(checks.check_button_component_registry(None), [])
