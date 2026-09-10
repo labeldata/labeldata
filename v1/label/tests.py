@@ -16,7 +16,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -12897,3 +12897,138 @@ class 규정표는_화면에_박아_두지_않는다(TestCase):
         self.assertNotIn('window.REGULATIONS', js)
         self.assertNotIn('window.REGULATIONS', self.preview)
         self.assertIn('window.PREVIEW_REGULATIONS', js)
+
+
+class 모르는_원료가_표시값을_바꾸는가(SimpleTestCase):
+    """
+    향료 0.05 % 의 영양성분을 몰라도 영양성분표는 만들 수 있다 — 그것을
+    증명해서 묻지 않는 것이 nutrition_contrib 의 일이다.
+
+    이 시험이 지키는 것은 **판정 방식**이다. 정적 임계값으로 돌아가면
+    반올림 경계에서 조용히 틀린 표가 나온다.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_contrib as nc
+        self.nc = nc
+
+    def 배합(self, **override):
+        """
+        표시 성분 아홉이 다 찬 배합. 빈 칸을 두면 안 된다 — 0 인 성분에
+        아주 작은 값이 더해지면 '0' 이 '1g 미만' 으로 바뀌는 것이 **맞는**
+        판정이라, 성분을 빠뜨린 시험은 엔진이 아니라 시험을 탓해야 한다.
+        """
+        base = {'calories': 300.0, 'carbohydrates': 45.0, 'sugars': 12.0,
+                'proteins': 8.0, 'fats': 10.0, 'saturated_fats': 4.0,
+                'trans_fats': 0.3, 'cholesterols': 25.0, 'natriums': 100.0}
+        base.update(override)
+        return base
+
+    # ── 판정 방식 ────────────────────────────────────────────────────────
+
+    def test_반올림_폭보다_작은_기여도_경계에서는_표시를_바꾼다(self):
+        """
+        정적 임계값이 왜 틀리는지를 못으로 박아 둔다.
+
+        열량 반올림 폭은 5 kcal 이다. 그런데 기여 0.6 kcal 가 287 을 285 에서
+        290 으로 옮긴다 — 폭보다 작다고 안전하다고 하면 안 된다.
+        """
+        from v1.label.services.nutrition_calc import display_value
+
+        self.assertEqual(display_value('calories', 287.0), '285')
+        self.assertEqual(display_value('calories', 287.6), '290')
+
+        # 그 상황을 assess 가 blocking 으로 잡아야 한다.
+        # 배합비 0.0667 % 면 최대 기여가 900 × 0.000667 = 0.6 kcal 이다.
+        r = self.nc.assess({'calories': 287.0}, [0.0667])
+        self.assertIn('calories', r['blocking'])
+
+    def test_같은_배합비라도_아는_값이_다르면_판정이_다르다(self):
+        """판정은 원료가 아니라 배합에 붙는다. 원료에 '안전'을 새기면 안 된다."""
+        경계 = self.nc.assess({'calories': 287.0}, [0.0667])
+        여유 = self.nc.assess({'calories': 100.0}, [0.0667])
+        self.assertIn('calories', 경계['blocking'])
+        self.assertIn('calories', 여유['safe'])
+
+    # ── 향료는 대체로 몰라도 된다 ────────────────────────────────────────
+
+    def test_향료_한_방울은_표시를_못_바꾼다(self):
+        """0.05 % 면 최악의 원료여도 열량 0.45 kcal 다."""
+        r = self.nc.assess(self.배합(), [0.05])
+        for field in ('calories', 'fats', 'proteins'):
+            self.assertIn(field, r['safe'], '%s 가 blocking 으로 잡혔다' % field)
+
+    # ── 나트륨은 예외다 ──────────────────────────────────────────────────
+
+    def test_나트륨은_아주_적게_넣어도_걸린다(self):
+        """
+        정제소금은 100 g 에 나트륨이 39,340 mg 이다. 0.05 % 만 들어와도
+        19.7 mg 이라 반올림 폭(5 mg)을 훌쩍 넘는다. '부원료니까 무시' 를
+        성분과 무관하게 적용하면 나트륨에서 틀린다.
+        """
+        r = self.nc.assess({'natriums': 100.0}, [0.05])
+        self.assertIn('natriums', r['blocking'])
+
+    def test_나트륨_상한은_정제소금이다(self):
+        self.assertAlmostEqual(self.nc.NUTRIENT_MAX['natriums'][0], 39340.0, places=0)
+        self.assertEqual(self.nc.NUTRIENT_MAX['natriums'][1], 'physical')
+
+    # ── 모르는 것과 아닌 것은 다르다 ─────────────────────────────────────
+
+    def test_배합비를_모르면_안전하다고_하지_않는다(self):
+        """배합비가 비면 0 으로 메우지 않는다 — 잴 수 없는 것이다."""
+        r = self.nc.assess(self.배합(), [None])
+        self.assertFalse(r['assessable'])
+        self.assertIn('calories', r['blocking'])
+        self.assertEqual(r['detail']['calories']['reason'], '배합비를 모르는 원료가 있다')
+
+    def test_배합비를_모르면_최대기여도_None_이다(self):
+        self.assertIsNone(self.nc.max_contribution('calories', None))
+        self.assertIsNone(self.nc.max_contribution('calories', ''))
+
+    # ── 여럿이 모이면 걸린다 ─────────────────────────────────────────────
+
+    def test_향료_하나는_괜찮아도_스무_개면_걸릴_수_있다(self):
+        one = self.nc.assess(self.배합(), [0.05])
+        many = self.nc.assess(self.배합(), [0.05] * 20)
+        self.assertIn('calories', one['safe'])
+        self.assertIn('calories', many['blocking'])
+
+    def test_원료가_아니라_성분_단위로_알려준다(self):
+        """
+        "이 원료를 알아야 하는가" 로 물으면 나트륨 때문에 거의 다 '알아야 함'
+        이 된다. 향료 0.05 % 도 정제소금이라면 19.7 mg 이라 걸리기 때문이다.
+
+        그런데 같은 향료가 열량·지방에서는 안전하다. 규격서 한 장을 통째로
+        구하는 대신 숫자 하나만 넣으면 되도록, 판정을 성분에 붙인다.
+        """
+        need = self.nc.needed_fields(self.배합(), [('향료', 0.05), ('소금', 1.5)])
+
+        # 아홉 중 둘만 남는다. 포화지방은 표시 폭이 0.1 g 이라 0.05 g 기여에도
+        # 4.0 → 4.1 로 움직이고, 나트륨은 정제소금 상한 때문에 걸린다.
+        self.assertEqual(need['향료'], ['saturated_fats', 'natriums'])
+        self.assertIn('natriums', need['소금'])
+        self.assertIn('calories', need['소금'])           # 1.5 % 면 열량도 걸린다
+        self.assertGreater(len(need['소금']), len(need['향료']))
+
+    def test_아주_적게_들어가면_아무것도_안_물어도_된다(self):
+        need = self.nc.needed_fields(self.배합(), [('향료', 0.005)])
+        self.assertEqual(need['향료'], [])
+
+    # ── 근거를 남긴다 ────────────────────────────────────────────────────
+
+    def test_판정_근거를_함께_돌려준다(self):
+        """화면이 '왜 몰라도 되는지' 를 말할 수 있어야 한다."""
+        d = self.nc.assess(self.배합(), [0.05])['detail']['calories']
+        self.assertEqual(d['low'], d['high'])
+        self.assertAlmostEqual(d['max_extra'], 0.45, places=4)
+        self.assertEqual(d['bound'], 'physical')
+
+    def test_콜레스테롤_상한은_가정이라고_밝힌다(self):
+        """
+        순 콜레스테롤 100 g 은 식품 원료로 의미가 없어 실용 상한을 쓴다.
+        가정을 쓴 자리는 가정이라고 말해야 화면에서 설명할 수 있다.
+        """
+        self.assertEqual(self.nc.NUTRIENT_MAX['cholesterols'][1], 'practical')
+        d = self.nc.assess(self.배합(), [0.05])['detail']['cholesterols']
+        self.assertEqual(d['bound'], 'practical')
