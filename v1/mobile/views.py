@@ -537,3 +537,123 @@ def version_check(request):
         'store_url': v.store_url,
         'message': v.force_message or '',
     })
+
+
+# ── 알림 받지 않기(뮤트) — 회원 전용 ──────────────────────────────────────────
+#
+# 웹의 /regulatory/api/alert-mutes/ 와 같은 일을 한다. 판정·정리·푸시 거두기는
+# 모두 regulatory.services.mute 한 곳에 있으므로, 여기서는 기기→사용자를
+# 풀어 주고 그 서비스를 부르기만 한다. 규칙이 두 벌이 되면 웹에서 끈 것과
+# 앱에서 끈 것이 서로 다르게 동작한다.
+#
+# AlertMute 는 user 에만 붙는다(AlertRule 과 달리 device 갈래가 없다).
+# 그래서 이 API 는 로그인한 기기만 받는다 — 비회원은 403.
+
+def _mute_user_or_error(device):
+    """뮤트는 사용자에 붙는다. 비회원 기기면 (None, 403 응답)."""
+    if device.user_id is None:
+        return None, Response(
+            {'error': '로그인이 필요합니다. 받지 않기는 계정에 저장됩니다.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return device.user, None
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+def alert_mutes_list(request, device_id):
+    """
+    GET  /mobile/devices/<device_id>/alert-mutes/  — 내 받지 않기 목록
+    POST /mobile/devices/<device_id>/alert-mutes/  — 등록 + 기존 알림 정리
+    Body(POST): {"scope": "keyword|ingredient|company", "value": "...", "memo": ""}
+    """
+    from django.core.cache import cache
+
+    from v1.regulatory.models import AlertMute, normalize_mute_value
+    from v1.regulatory.services import mute as mute_service
+
+    device = _get_device_or_404(device_id)
+    if device is None:
+        return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    user, denied = _mute_user_or_error(device)
+    if denied:
+        return denied
+
+    if request.method == 'GET':
+        return Response({'mutes': [
+            mute_service.mute_payload(m)
+            for m in AlertMute.objects.filter(user=user).order_by('-created_at')
+        ]})
+
+    scope = (request.data.get('scope') or '').strip()
+    value = (request.data.get('value') or '').strip()
+    memo  = (request.data.get('memo')  or '').strip()[:200]
+
+    if scope not in mute_service.VALID_SCOPES:
+        return Response({'error': '유효하지 않은 제외 기준'}, status=status.HTTP_400_BAD_REQUEST)
+    if not value:
+        return Response({'error': '끌 값이 비어 있습니다'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(value) > 200:
+        return Response({'error': '200자 이내로 입력해주세요'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 직접 등록한 알림 키워드와 정면으로 부딪히면 어느 쪽이 이겼는지 화면에서
+    # 설명할 수 없다. 끄는 것이 아니라 그 키워드를 지우도록 되돌려 보낸다
+    # (웹 regulatory.views.alert_mutes_api 와 같은 처리).
+    conflict = [
+        r for r in AlertRule.objects.filter(user=user, is_active=True)
+        if normalize_mute_value(r.keyword) == normalize_mute_value(value)
+    ]
+    if conflict:
+        return Response({
+            'error': f'"{value}" 은(는) 직접 등록한 알림 키워드입니다. '
+                     f'알림 설정에서 키워드를 삭제해 주세요.',
+            'conflict_rule_ids': [r.id for r in conflict],
+        }, status=status.HTTP_409_CONFLICT)
+
+    try:
+        result = mute_service.apply_mute(user, scope, value, memo)
+    except ValueError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    cache.delete(f'regulatory_alert_count_{user.id}')
+    return Response(
+        {
+            'created':        result['created'],
+            'hidden':         result['hidden'],
+            'push_cancelled': result['push_cancelled'],
+            'mute':           mute_service.mute_payload(result['mute']),
+        },
+        status=status.HTTP_201_CREATED if result['created'] else status.HTTP_200_OK,
+    )
+
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+def alert_mute_detail(request, device_id, mute_id):
+    """
+    DELETE /mobile/devices/<device_id>/alert-mutes/<mute_id>/ — 해제
+
+    앞으로 오는 것부터 다시 받는다. 이미 치워 둔 지난 알림은 되살리지 않는다
+    (오탐지 처리와 같은 성질 — 되살리면 정리한 목록이 갑자기 불어난다).
+    """
+    from django.core.cache import cache
+
+    from v1.regulatory.models import AlertMute
+
+    device = _get_device_or_404(device_id)
+    if device is None:
+        return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    user, denied = _mute_user_or_error(device)
+    if denied:
+        return denied
+
+    try:
+        mute = AlertMute.objects.get(pk=mute_id, user=user)
+    except AlertMute.DoesNotExist:
+        return Response({'error': '규칙을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    mute.delete()
+    cache.delete(f'regulatory_alert_count_{user.id}')
+    return Response(status=status.HTTP_204_NO_CONTENT)

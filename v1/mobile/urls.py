@@ -19,6 +19,10 @@ urlpatterns = [
     path('devices/<str:device_id>/rules/', views.rules_list, name='rules_list'),
     path('devices/<str:device_id>/rules/<int:rule_id>/', views.rule_detail, name='rule_detail'),
 
+    # 알림 받지 않기(뮤트) — 회원 전용
+    path('devices/<str:device_id>/alert-mutes/', views.alert_mutes_list, name='alert_mutes_list'),
+    path('devices/<str:device_id>/alert-mutes/<int:mute_id>/', views.alert_mute_detail, name='alert_mute_detail'),
+
     # 보관함
     path('devices/<str:device_id>/bookmarks/', views.bookmarks_list, name='bookmarks_list'),
     path('devices/<str:device_id>/bookmarks/<int:bookmark_id>/', views.bookmark_detail, name='bookmark_detail'),
