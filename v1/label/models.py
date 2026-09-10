@@ -948,3 +948,113 @@ class PublicFoodNutrition(models.Model):
         없음)은 막지 않는다 — 원본에 빈 칸이 많아 못 잰 것이지 틀린 것이 아니다.
         """
         return self.basis_unit == self.BASIS_G and self.verify_status != self.VERIFY_FAIL
+
+
+class MyIngredientNutrition(models.Model):
+    """
+    내 원료의 영양성분 — 배합 계산이 딛고 서는 자리.
+
+    MyIngredient 에는 영양성분 칸이 하나도 없다. 그래서 BOM 이 원료 보관함을
+    가리키면 배합 계산이 빈손으로 돌아온다(실제로 여덟 줄 전부 그랬다).
+    이 표가 그 칸이다.
+
+    **값보다 출처가 중요하다.** 이론치로 만든 표는 그 자체가 감사 대상이라,
+    "이 숫자가 어디서 왔는가" 를 값과 함께 남겨야 한다. source_kind 가 그것이고,
+    컨설팅이 A~E 로 매기자던 신뢰도 등급이 여기서 자연스럽게 나온다.
+
+        spec_ocr    업체 시험성적서 (가장 정확하다)
+        report_no   품목제조보고번호가 식약처 DB 와 정확히 일치
+        picked      후보 중 사람이 고른 식약처 DB 행
+        manual      사람이 직접 입력
+        negligible  배합비가 작아 표시값을 못 바꾼다고 판정된 것
+
+    picked 는 자동 확정이 아니다. '버터' 라는 이름으로 동명 항목이 열두 건이고
+    열량이 164 ~ 761 kcal(4.6 배)이라, 이름만으로는 어느 것인지 알 수 없다.
+    사람이 한 번 고르면 그 선택을 여기 남겨 다시 묻지 않는다.
+
+    public_row 를 값 복사가 아니라 FK 로 잡는다. 식약처 DB 가 갱신됐을 때
+    **어느 행을 보고 정한 값인지** 추적할 수 있어야 하기 때문이다.
+    """
+
+    SOURCE_SPEC_OCR = 'spec_ocr'
+    SOURCE_REPORT_NO = 'report_no'
+    SOURCE_PICKED = 'picked'
+    SOURCE_MANUAL = 'manual'
+    SOURCE_NEGLIGIBLE = 'negligible'
+    SOURCE_CHOICES = [
+        (SOURCE_SPEC_OCR, '업체 시험성적서'),
+        (SOURCE_REPORT_NO, '품목보고번호 일치'),
+        (SOURCE_PICKED, '식약처DB에서 고름'),
+        (SOURCE_MANUAL, '직접 입력'),
+        (SOURCE_NEGLIGIBLE, '영향 없음으로 확정'),
+    ]
+
+    # 신뢰도 등급 — 등급을 따로 저장하지 않고 출처에서 끌어낸다.
+    # 두 곳에 두면 언젠가 서로 어긋난다.
+    GRADE = {
+        SOURCE_SPEC_OCR: 'A',
+        SOURCE_REPORT_NO: 'B',
+        SOURCE_PICKED: 'C',
+        SOURCE_MANUAL: 'C',
+        SOURCE_NEGLIGIBLE: '-',
+    }
+
+    ingredient = models.OneToOneField('label.MyIngredient', on_delete=models.CASCADE,
+                                      related_name='nutrition', verbose_name='원료')
+    source_kind = models.CharField(max_length=20, choices=SOURCE_CHOICES,
+                                   default=SOURCE_MANUAL, db_index=True,
+                                   verbose_name='값의 출처')
+    public_row = models.ForeignKey('label.PublicFoodNutrition', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='picked_by_ingredients',
+                                   verbose_name='본 식약처 행',
+                                   help_text='값을 베낀 것이 아니라 어느 행을 보았는지를 남긴다')
+    source_note = models.CharField(max_length=300, null=True, blank=True,
+                                   verbose_name='근거', help_text='성적서 번호·발급일 등')
+
+    picked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='picked_ingredient_nutritions',
+                                  verbose_name='고른 사람')
+    picked_at = models.DateTimeField(null=True, blank=True, verbose_name='고른 때')
+
+    # ── 성분 (100 g 당) ─────────────────────────────────────────────────
+    # 이름을 nutrition_calc·nutrition_recipe 와 똑같이 둔다. 옮겨 담는 자리가
+    # 생기면 거기서 밀린다.
+    calories = models.FloatField(null=True, blank=True, verbose_name='열량(kcal)')
+    carbohydrates = models.FloatField(null=True, blank=True, verbose_name='탄수화물(g)')
+    sugars = models.FloatField(null=True, blank=True, verbose_name='당류(g)')
+    proteins = models.FloatField(null=True, blank=True, verbose_name='단백질(g)')
+    fats = models.FloatField(null=True, blank=True, verbose_name='지방(g)')
+    saturated_fats = models.FloatField(null=True, blank=True, verbose_name='포화지방(g)')
+    trans_fats = models.FloatField(null=True, blank=True, verbose_name='트랜스지방(g)')
+    cholesterols = models.FloatField(null=True, blank=True, verbose_name='콜레스테롤(mg)')
+    natriums = models.FloatField(null=True, blank=True, verbose_name='나트륨(mg)')
+    dietary_fiber = models.FloatField(null=True, blank=True, verbose_name='식이섬유(g)')
+    sugar_alcohols = models.FloatField(null=True, blank=True, verbose_name='당알콜(g)')
+    moisture = models.FloatField(null=True, blank=True, verbose_name='수분(g)',
+                                 help_text='수율 검산에 쓴다 — 표시 성분은 아니다')
+    ash = models.FloatField(null=True, blank=True, verbose_name='회분(g)')
+
+    created_datetime = models.DateTimeField(auto_now_add=True, verbose_name='등록일시')
+    update_datetime = models.DateTimeField(auto_now=True, verbose_name='수정일시')
+
+    class Meta:
+        db_table = 'my_ingredient_nutrition'
+        verbose_name = '내 원료 영양성분'
+        verbose_name_plural = '내 원료 영양성분'
+
+    def __str__(self):
+        return '%s (%s)' % (self.ingredient_id, self.get_source_kind_display())
+
+    @property
+    def grade(self):
+        """신뢰도 등급. 출처가 정한다."""
+        return self.GRADE.get(self.source_kind, 'C')
+
+    def as_values(self, fields):
+        """
+        배합 계산이 쓰는 모양으로 돌려준다.
+
+        빈 칸은 0 이 아니라 None 이다 — 모르는 것과 없는 것은 다르고, 0 으로
+        내려보내면 합계가 조용히 낮아진다.
+        """
+        return {f: getattr(self, f, None) for f in fields}

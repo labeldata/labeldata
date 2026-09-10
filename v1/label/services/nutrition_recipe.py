@@ -65,26 +65,63 @@ def collect_items(bom_rows):
     """
     BOM 줄을 (이름, 배합비, 영양성분 또는 None) 으로 편다.
 
-    영양성분을 어디서 얻는가는 줄마다 다르다.
-      child_label       내 표시사항을 원료로 쓴 것 — 그 라벨의 값이 있다
-      source_ingredient 내 원료 보관함 — 아직 영양성분 칸이 없다(1 단계 과제)
+    영양성분을 어디서 얻는가는 줄마다 다르다. 앞의 것이 이긴다.
+      source_ingredient 내 원료 보관함 → MyIngredientNutrition
+      child_label       내 표시사항을 원료로 쓴 것 — 그 라벨의 값
       shared_receipt    공유받은 제품 — 영양성분 칸이 없다
+
+    원료 보관함을 먼저 보는 이유는, 같은 물건에 대해 **사람이 직접 정해 둔 값**
+    이 거기 있기 때문이다(성적서·고른 행·직접 입력). 라벨 쪽 값은 그 라벨을
+    만들 때의 값이라 원료로서의 값과 다를 수 있다.
     """
     items = []
     for row in bom_rows:
         name = row.ingredient_name or getattr(row.child_label, 'my_label_name', '') or ''
         ratio = _number(row.usage_ratio)
-        values = nutrition_of_label(getattr(row, 'child_label', None))
+
+        values, source, grade = None, '', ''
+
+        nut = _ingredient_nutrition(row)
+        if nut is not None:
+            values = nut.as_values(SUM_FIELDS)
+            if all(v is None for v in values.values()):
+                values = None
+            else:
+                source, grade = nut.get_source_kind_display(), nut.grade
+
+        if values is None:
+            values = nutrition_of_label(getattr(row, 'child_label', None))
+            if values is not None:
+                source, grade = '표시사항의 값', 'C'
+
         why = ''
         if values is None:
             if getattr(row, 'source_ingredient_id', None):
-                why = '원료 보관함에 영양성분 칸이 아직 없다'
+                why = '원료에 영양성분을 아직 정하지 않았다'
             elif getattr(row, 'shared_receipt_id', None):
                 why = '공유받은 제품에 영양성분이 없다'
             else:
                 why = '영양성분을 등록하지 않았다'
-        items.append({'name': name, 'ratio': ratio, 'values': values, 'why': why})
+
+        items.append({'name': name, 'ratio': ratio, 'values': values,
+                      'why': why, 'source': source, 'grade': grade})
     return items
+
+
+def _ingredient_nutrition(row):
+    """
+    BOM 줄이 가리키는 원료의 영양성분. 없으면 None.
+
+    select_related('source_ingredient__nutrition') 로 미리 당겨 두면 줄마다
+    질의하지 않는다. 안 당겨 왔더라도 동작은 해야 하므로 예외를 삼킨다.
+    """
+    ing = getattr(row, 'source_ingredient', None)
+    if ing is None:
+        return None
+    try:
+        return ing.nutrition
+    except Exception:
+        return None
 
 
 def calculate(items):
@@ -164,9 +201,46 @@ def calculate(items):
     needed = nutrition_contrib.needed_fields(
         values, [(u['name'], u['ratio']) for u in unknown])
 
+    warnings.extend(cross_check(values, known_ratio))
+
     return {'values': values, 'ratio_total': ratio_total, 'known_ratio': known_ratio,
             'unknown': unknown, 'contribution': contribution,
             'needed': needed, 'warnings': warnings}
+
+
+def cross_check(values, known_ratio, mass_tol=10.0):
+    """
+    합계가 스스로 말이 되는지 본다 — 원료를 잘못 고른 것을 여기서 잡는다.
+
+    개별 원료로는 못 잡는다. '버터' 를 164 kcal 짜리(실은 가공버터)로 잘못
+    골라도 그 행 자체는 멀쩡하기 때문이다. 그런데 배합 전체를 놓고 보면
+    질량이 안 맞거나 열량이 어긋난다.
+
+    이건 적재할 때 AMT_NUM 자릿수를 검증한 그 검산과 **같은 것**이다
+    (mfds_nutrition.verify_row). 같은 자를 두 자리에서 쓴다.
+
+        수분 + 단백 + 지방 + 회분 + 탄수  ≈ 아는 원료가 차지하는 무게
+
+    폭을 좁게 잡으면 안 된다. 실제 식품 데이터는 ±10 g 쯤 흔들리고(골뱅이
+    통조림 92.86 g · 고등어구이 103.40 g), 원료를 잘못 고르면 그보다 훨씬
+    크게 어긋난다. 큰 것만 잡는다.
+
+    수분·회분을 아는 원료가 드물어 대개는 잴 수 없다. **못 재는 것과 틀린
+    것은 다르므로**, 못 잴 때는 아무 말도 하지 않는다.
+    """
+    out = []
+    mass_fields = ('moisture', 'proteins', 'fats', 'ash', 'carbohydrates')
+    if any(values.get(f) is None for f in mass_fields):
+        return out          # 잴 수 없다 — 경고가 아니다
+    if not known_ratio:
+        return out
+
+    total = sum(values[f] for f in mass_fields)
+    if abs(total - known_ratio) > mass_tol:
+        out.append('성분 질량 합이 %.1f g 인데 아는 원료의 무게는 %.1f g 이다 '
+                   '— 원료를 잘못 골랐거나 기준량이 다른 것이 섞였다'
+                   % (total, known_ratio))
+    return out
 
 
 def apply_yield(values, input_weight, output_weight):

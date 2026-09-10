@@ -13148,3 +13148,116 @@ class 배합으로_영양성분을_낸다(SimpleTestCase):
         """자리만 잡아 두었다. 조용히 1.0 으로 넘어가면 안 된다."""
         with self.assertRaises(NotImplementedError):
             self.nr.apply_yield({}, 100.0, 85.0)
+
+
+class 원료에_붙일_행은_사람이_고른다(TestCase):
+    """
+    '버터' 는 동명 항목이 열두 건이고 열량이 164 ~ 761 kcal 로 갈린다. 이름이
+    완전히 같아 어떤 유사도로도 못 가른다 — 그래서 후보만 내놓고 사람이 고른다.
+
+    이 시험이 지키는 것은 **이름 척도**다. token_set_ratio 로 돌아가면 순위가
+    통째로 무너진다.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_candidates as ncd
+        self.ncd = ncd
+
+    def 행(self, name, calories, method='수집', ref='식품의약품안전처',
+          ymd='2024-01-01', status='skip'):
+        from v1.label.models import PublicFoodNutrition
+        return PublicFoodNutrition.objects.create(
+            food_cd='T%s' % name + str(calories), food_nm_kr=name,
+            basis_unit='g', basis_amount=100.0, calories=calories,
+            crt_mth_nm=method, sub_ref_name=ref, research_ymd=ymd,
+            verify_status=status)
+
+    # ── 이름 척도 ────────────────────────────────────────────────────────
+
+    def test_부분집합에_만점을_주는_척도를_쓰면_안_된다(self):
+        """
+        '사탕, 버터' 는 '버터' 를 품고 있어 token_set_ratio 로는 100 점이다.
+        그 척도로는 사탕이 버터보다 앞선다.
+        """
+        from rapidfuzz import fuzz
+        self.assertEqual(fuzz.token_set_ratio('버터', '사탕, 버터'), 100)
+        self.assertLess(self.ncd.name_score('버터', '사탕, 버터'), 70)
+        self.assertEqual(self.ncd.name_score('버터', '버터'), 100)
+
+    def test_군더더기가_붙은_이름은_점수가_깎인다(self):
+        self.assertLess(self.ncd.name_score('밀가루', '밀가루 0% 파프리카 쌀국수'),
+                        self.ncd.name_score('밀가루', '밀가루'))
+
+    def test_규격_꼬리를_떼고_견준다(self):
+        self.assertEqual(self.ncd.normalize('한라봉향 FAC-HMT4733012'), '한라봉향')
+        self.assertEqual(self.ncd.normalize('모카향 2111041'), '모카향')
+
+    # ── 순위 ─────────────────────────────────────────────────────────────
+
+    def test_이름이_같으면_분석값이_수집값보다_앞선다(self):
+        self.행('버터', 164.0, method='수집')
+        self.행('버터', 761.0, method='분석')
+        cs = self.ncd.candidates('버터')
+        self.assertEqual(cs[0]['row'].calories, 761.0)
+
+    def test_가점이_이름을_뒤집지_못한다(self):
+        """
+        이름이 먼저고 근거가 나중이다. 가점을 크게 주면 이름이 한참 뒤진
+        후보가 뒤집는다 — 처음에 그렇게 만들었다가 사탕이 1 위가 됐다.
+        """
+        self.행('버터', 750.0, method='수집', ref='식품의약품안전처')
+        self.행('사탕, 버터', 431.0, method='분석', ref="농진청('19)", ymd='2023-01-01')
+        cs = self.ncd.candidates('버터')
+        self.assertEqual(cs[0]['row'].food_nm_kr, '버터')
+
+    def test_부피_기준_행은_후보에서_뺀다(self):
+        """골라 봐야 중량 배합에 못 넣는다."""
+        from v1.label.models import PublicFoodNutrition
+        PublicFoodNutrition.objects.create(
+            food_cd='TML', food_nm_kr='우유', basis_unit='mL',
+            basis_amount=100.0, calories=60.0)
+        self.assertEqual(self.ncd.candidates('우유'), [])
+
+    # ── 이상값 경고 ──────────────────────────────────────────────────────
+
+    def test_후보끼리_두_배_넘게_갈리면_경고한다(self):
+        self.행('버터', 164.0)
+        self.행('버터', 761.0)
+        w = self.ncd.spread_warning(self.ncd.candidates('버터'))
+        self.assertIsNotNone(w)
+        self.assertIn('배 차이', w)
+
+    def test_고만고만하면_경고하지_않는다(self):
+        """경고가 흔하면 아무도 보지 않는다."""
+        self.행('물엿', 304.0)
+        self.행('물엿', 321.0)
+        self.assertIsNone(self.ncd.spread_warning(self.ncd.candidates('물엿')))
+
+
+class 배합_합계가_스스로_말이_되는가(SimpleTestCase):
+    """
+    원료를 잘못 골라도 그 행 자체는 멀쩡하다. 합계를 봐야 잡힌다 —
+    적재 때 AMT_NUM 을 검증한 그 검산을 여기서 다시 쓴다.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_recipe as nr
+        self.nr = nr
+
+    def test_질량_합이_크게_어긋나면_알린다(self):
+        values = {'moisture': 5.0, 'proteins': 10.0, 'fats': 5.0,
+                  'ash': 1.0, 'carbohydrates': 20.0}      # 합 41 g
+        w = self.nr.cross_check(values, known_ratio=100.0)
+        self.assertTrue(w and '질량 합' in w[0], w)
+
+    def test_흔들림_정도는_넘어간다(self):
+        """실제 식품은 ±10 g 쯤 흔들린다. 좁게 잡으면 멀쩡한 배합이 걸린다."""
+        values = {'moisture': 40.0, 'proteins': 10.0, 'fats': 5.0,
+                  'ash': 1.0, 'carbohydrates': 38.0}      # 합 94 g
+        self.assertEqual(self.nr.cross_check(values, known_ratio=100.0), [])
+
+    def test_못_재면_아무_말도_하지_않는다(self):
+        """수분·회분을 아는 원료는 드물다. 못 재는 것과 틀린 것은 다르다."""
+        values = {'moisture': None, 'proteins': 10.0, 'fats': 5.0,
+                  'ash': None, 'carbohydrates': 20.0}
+        self.assertEqual(self.nr.cross_check(values, known_ratio=100.0), [])
