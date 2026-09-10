@@ -13987,8 +13987,9 @@ class 저장되는_것과_안_되는_것을_구별해_준다(TestCase):
         """
         h = self.html()
         js = h[h.index('var form = document.getElementById(\'ingredientForm\')'):]
-        self.assertIn("form.addEventListener('input', mark)", js)
-        self.assertNotIn("document.addEventListener('input', mark)", js)
+        for ev in ("input", "change"):
+            self.assertIn("form.addEventListener('%s'" % ev, js)
+            self.assertNotIn("document.addEventListener('%s'" % ev, js)
 
 
 class 나트륨이_화면에_보인다(TestCase):
@@ -14114,3 +14115,89 @@ class AllergenDetectRuleTests(TestCase):
         # 실제 원료에 있던 이름이다. 아직 아무도 이것을 못 가린다.
         for fn in (screen, server, both):
             self.assertIn('밀', fn('노밀가루 쌀카스테라 프리믹스'))
+
+
+class IngredientNameRequiredTests(TestCase):
+    """
+    빨간 별표가 아무것도 막지 않았다.
+
+    모델이 `blank=True` 라 ModelForm 이 `required=False` 로 만들었고, 화면의
+    입력 칸에도 `required` 가 없었다. 화면 JS 에 검사가 하나 있었지만 그 길로
+    안 들어오면 그만이다 — 이름 없는 원료가 그대로 저장됐다.
+
+    이름이 비면 배합 목록에 빈 줄로 뜨고, 알레르기 자동감지도 영양성분 후보
+    찾기도 읽을 글자가 없다.
+    """
+
+    def test_이름_없이는_저장되지_않는다(self):
+        from v1.label.forms import MyIngredientsForm
+        for value in ('', '   ', None):
+            form = MyIngredientsForm({'prdlst_nm': value} if value is not None else {})
+            self.assertFalse(form.is_valid(), repr(value))
+            self.assertIn('prdlst_nm', form.errors)
+            self.assertIn('원재료명', str(form.errors['prdlst_nm']))
+
+    def test_이름이_있으면_저장된다(self):
+        from v1.label.forms import MyIngredientsForm
+        self.assertTrue(MyIngredientsForm({'prdlst_nm': '밀가루'}).is_valid())
+
+    def test_앞뒤_공백은_이름이_아니다(self):
+        """'  밀가루  ' 는 이름이다. 공백은 떼고 남긴다."""
+        from v1.label.forms import MyIngredientsForm
+        form = MyIngredientsForm({'prdlst_nm': '  밀가루  '})
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data['prdlst_nm'], '밀가루')
+
+    def test_브라우저도_막는다(self):
+        """폼만 막으면 다 친 뒤에야 알게 된다. 칸에 required 가 있어야 한다."""
+        import io
+        html = io.open('v1/templates/label/my_ingredient_detail_partial.html',
+                       encoding='utf-8').read()
+        at = html.index('id="prdlst_nm"')
+        tag = html[html.rindex('<input', 0, at):]
+        tag = tag[:tag.index('>') + 1]
+        self.assertIn('required', tag)
+
+
+class SaveButtonStateTests(TestCase):
+    """
+    단추의 옷을 통째로 갈아입히면 안의 글자 자리가 사라진다.
+
+    여섯 군데가 `saveBtn.className = 'btn btn-danger'` 로 덮어쓰고 있었다.
+    이 단추의 진짜 class 는 `panel-btn primary` 라 **한 번 저장하면 모양이
+    바뀌었고**, 안의 `<span id="ingSaveLabel">` 도 함께 사라져 '저장 안 됨'
+    표시가 그 뒤로 안 켜졌다.
+    """
+
+    def js(self):
+        import io
+        return io.open('v1/static/js/label/my_ingredient_detail_partial.js',
+                       encoding='utf-8').read()
+
+    def test_단추를_통째로_덮어쓰지_않는다(self):
+        js = self.js()
+        body = js[js.index('function setSaveBtn'):]
+        self.assertNotIn("saveBtn.className = 'btn", body)
+        self.assertNotIn('saveBtn.innerHTML', body)
+
+    def test_다시_그려도_글자_자리가_남는다(self):
+        js = self.js()
+        self.assertIn('id="ingSaveLabel"', js)
+
+    def test_저장이_끝난_뒤에_안_남았다는_표시를_끈다(self):
+        """
+        submit 에서 끄면 서버가 되돌려보낸 경우에도 꺼져서, 못 남은 것을
+        남았다고 말한다.
+        """
+        import io
+        js = self.js()
+        self.assertIn('window.setIngredientDirty(false)', js)
+        tpl = io.open('v1/templates/label/_ingredient_nutrition.html',
+                      encoding='utf-8').read()
+        script = tpl[tpl.index('window.setIngredientDirty'):]
+        self.assertNotIn("addEventListener('submit'", script)
+
+    def test_막힌_칸에_그_자리에서_말한다(self):
+        js = self.js()
+        self.assertIn('showFieldError', js)
+        self.assertIn('data.errors', js)

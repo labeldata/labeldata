@@ -336,6 +336,24 @@
   }
   .ing-nut-flash.is-on { opacity: 1; }
 
+  /* 별표가 아무것도 막지 않았다.
+     모델이 blank=True 라 ModelForm 이 required=False 로 만들었고, 이 칸에도
+     required 가 없어 브라우저조차 안 막았다 — 이름 없는 원료가 그대로
+     저장됐다. 이제 셋이 다 막는다: 브라우저 · 화면 검사 · 폼. */
+  #ingredientForm .is-invalid {
+    border-color: #C5221F;
+    box-shadow: 0 0 0 .12rem rgba(197, 34, 31, .16);
+  }
+  .field-error {
+    margin-top: 4px; font-size: .76rem; color: #C5221F;
+  }
+
+  /* 저장 단추의 상태. 옷(panel-btn primary)은 그대로 두고 색만 바꾼다 —
+     통째로 갈아입히면 단추 모양이 변하고 안의 글자 자리가 사라진다. */
+  #ingSaveBtn.is-busy { background: #6b7280; border-color: #6b7280; }
+  #ingSaveBtn.is-ok   { background: #1E8E3E; border-color: #1E8E3E; }
+  #ingSaveBtn.is-bad  { background: #C5221F; border-color: #C5221F; }
+
   /* 나머지 칸은 [저장] 을 눌러야 남는다 — 값이 바뀌면 단추가 그렇게 말한다. */
   #ingSaveBtn.is-dirty {
     background: #a35400; border-color: #a35400;
@@ -418,7 +436,7 @@
                     <tr>
                         <th style="width: 120px;">원재료명 <span class="text-danger">*</span></th>
                         <td style="width: 60%;">
-                            <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}" placeholder="예: 밀가루">
+                            <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}" placeholder="예: 밀가루" required>
                         </td>
                         <th style="width: 120px;">식품유형</th>
                         <td style="width: auto;">

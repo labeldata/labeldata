@@ -1503,9 +1503,14 @@ def my_ingredient_detail(request, ingredient_id=None):
             return redirect('label:my_ingredient_detail', ingredient_id=new_ingredient.my_ingredient_id)
         else:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                # 폼 에러를 문자열로 반환
-                errors = {field: str(error) for field, error in form.errors.items()}
-                return JsonResponse({'success': False, 'errors': errors, 'message': '입력값 오류'})
+                # 어느 칸이 왜 막혔는지 칸 이름으로 돌려준다. 화면이 그 칸에
+                # 붙여 보여 준다 — 구석의 단추만 빨개지면 무엇을 고쳐야 하는지
+                # 알 수 없다.
+                errors = {field: [str(m) for m in msgs]
+                          for field, msgs in form.errors.items()}
+                first = next(iter(errors.values()), ['입력값 오류'])[0]
+                return JsonResponse({'success': False, 'errors': errors,
+                                     'error': first, 'message': first})
     else:
         form = MyIngredientsForm(instance=ingredient)
 
