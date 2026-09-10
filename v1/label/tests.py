@@ -13792,3 +13792,84 @@ class 관리_명령은_웹_뷰를_끌어오지_않는다(SimpleTestCase):
 
         self.assertIs(views.NUTRITION_INPUT_FIELDS,
                       MyIngredientNutrition.VALUE_FIELDS)
+
+
+class 요약은_지금_표를_보고_말한다(TestCase):
+    """
+    요약이 GET 으로 물어 **저장된 배합**을 읽었다. 그래서 표를 아무리 고쳐도
+    '배합비 합계가 95.95 % 다' 같은 문구가 붙박이처럼 남았다. 저장을 눌러야
+    바뀌는 요약은 고치는 동안 쓸모가 없다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyLabel
+        self.user = User.objects.create_user(username='live', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='식빵')
+
+    def test_현재_표의_배합비를_보낸다(self):
+        h = self.client.get(
+            '/bom/label/%d/workspace/' % self.label.my_label_id).content.decode('utf-8')
+        js = h[h.index('function currentItems'):h.index('function load()')]
+        self.assertIn('getSourceData', js)
+        self.assertIn('usage_ratio', js)
+        self.assertIn("method: 'POST'", h[h.index('function load()'):])
+
+    def test_계산은_누를_때_한다(self):
+        """
+        배합을 짜는 동안 '아직 계산할 수 없습니다' 가 늘 떠 있었다. 원료를
+        넣는 중이니 당연한 것을 매번 말했다 — 늘 켜진 경고는 안 읽힌다.
+        """
+        h = self.client.get(
+            '/bom/label/%d/workspace/' % self.label.my_label_id).content.decode('utf-8')
+        self.assertIn("data-act=\"calc\"", h)
+        self.assertIn('건 등록', h)
+        self.assertIn('계산 가능합니다', h)
+        # 처음에는 관문을 그린다
+        self.assertIn('renderGate(d)', h)
+
+
+class 원료_영양성분을_직접_찾을_수_있다(TestCase):
+    """
+    이름으로 추린 후보가 늘 맞지는 않는다 — '분리대두단백(NEWPRO 90)' 에
+    '흰떡국떡(90)' 이 붙었다. 사람이 아는 이름으로 뒤질 수 있어야 한다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient, PublicFoodNutrition
+        self.user = User.objects.create_user(username='search', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='분리대두단백(NEWPRO 90)', delete_YN='N')
+        PublicFoodNutrition.objects.create(
+            food_cd='S1', food_nm_kr='분리대두단백', basis_unit='g',
+            basis_amount=100.0, calories=350.0, proteins=88.0, crt_mth_nm='분석')
+
+    def url(self):
+        return '/label/my-ingredient/%d/nutrition/' % self.ing.my_ingredient_id
+
+    def test_검색어로_찾는다(self):
+        d = self.client.get(self.url() + '?q=분리대두단백').json()
+        self.assertEqual(d['query'], '분리대두단백')
+        self.assertEqual(d['candidates'][0]['name'], '분리대두단백')
+
+    def test_찾은_것도_같은_방식으로_고른다(self):
+        """고른 것이 picked 로 남아, 무엇을 무엇에 붙였는지가 쌓인다."""
+        import json
+        from v1.label.models import PublicFoodNutrition
+        row = PublicFoodNutrition.objects.get(food_cd='S1')
+        r = self.client.post(self.url() + 'save/',
+                             data=json.dumps({'kind': 'picked', 'public_row_id': row.id}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.ing.nutrition.proteins, 88.0)
+        self.assertEqual(self.ing.nutrition.source_kind, 'picked')
+
+    def test_검색창이_화면에_있다(self):
+        h = self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+        self.assertIn('ingNutQ', h)
+        self.assertIn("data-act=\"search\"", h)

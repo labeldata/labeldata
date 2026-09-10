@@ -55,6 +55,23 @@
       });
   }
 
+  /* 사람이 친 말로 DB 를 뒤진다. 찾은 결과도 고르는 방식은 같다 — 고른 것이
+     picked 로 남아, 무엇을 무엇에 붙였는지가 쌓인다. */
+  function search(q) {
+    if (!q) { load(true); return; }
+    box.innerHTML = '<div class="ing-nut-why">찾는 중…</div>';
+    fetch(box.dataset.url + '?q=' + encodeURIComponent(q),
+          {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) { throw new Error(d.error || '찾지 못했습니다'); }
+        render(d);
+      })
+      .catch(function (e) {
+        box.innerHTML = '<div class="ing-nut-why">' + esc(e.message) + '</div>';
+      });
+  }
+
   function save(payload) {
     return fetch(box.dataset.saveUrl, {
       method: 'POST',
@@ -147,14 +164,27 @@
         parts.push('<div class="ing-nut-cands">'
           + d.candidates.map(function (c) { return candRow(c, 'picked'); }).join('')
           + '</div>');
+      } else if (d.query) {
+        parts.push('<div class="ing-nut-why">'
+          + '"' + esc(d.query) + '" 로는 찾지 못했습니다. 다른 이름으로 찾아보세요.</div>');
       } else {
         parts.push('<div class="ing-nut-why">'
-          + '식약처 자료에서 맞는 것을 찾지 못했습니다. 직접 넣어 주세요.</div>');
+          + '식약처 자료에서 맞는 것을 찾지 못했습니다. 아래에서 직접 찾거나 값을 넣어 주세요.</div>');
       }
 
       if (d.warning) {
         parts.push('<div class="ing-nut-warn">' + esc(d.warning) + '</div>');
       }
+
+      /* 이름으로 추린 후보가 늘 맞지는 않는다 — '분리대두단백(NEWPRO 90)' 에
+         '흰떡국떡(90)' 이 붙는 식이다. 사람이 아는 이름으로 직접 뒤질 수
+         있어야 한다. */
+      parts.push('<div class="ing-nut-search">'
+        + '<input type="text" class="form-control form-control-sm" id="ingNutQ"'
+        + ' placeholder="식약처 자료에서 직접 찾기 (예: 강력밀가루)"'
+        + ' value="' + esc(d.query || '') + '">'
+        + '<button type="button" class="panel-btn" data-act="search">찾기</button>'
+        + '</div>');
 
       parts.push('<div class="ing-nut-actions">'
         + '<button type="button" class="panel-btn" data-act="manual">직접 입력</button>'
@@ -182,6 +212,12 @@
 
     if (act === 'refresh') { load(true); return; }
 
+    if (act === 'search') {
+      var q = (document.getElementById('ingNutQ') || {}).value || '';
+      search(q.trim());
+      return;
+    }
+
     if (act === 'clear' || act === 'negligible') {
       save({kind: act === 'clear' ? 'clear' : 'negligible'})
         .then(function (ok) { if (ok) { load(); } });
@@ -203,6 +239,14 @@
       save({kind: 'manual', values: values,
             source_note: noteEl ? noteEl.value : ''})
         .then(function (ok) { if (ok) { load(); } });
+    }
+  });
+
+  box.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter') return;
+    if (ev.target && ev.target.id === 'ingNutQ') {
+      ev.preventDefault();
+      search((ev.target.value || '').trim());
     }
   });
 

@@ -5347,6 +5347,25 @@ def my_ingredient_nutrition_api(request, ingredient_id):
             'values': {f: getattr(saved, f) for f in NUTRITION_INPUT_FIELDS},
         }
 
+    # 사람이 직접 찾아본다.
+    #
+    # 이름으로 추린 후보가 늘 맞지는 않는다 — '분리대두단백(NEWPRO 90)' 에
+    # '흰떡국떡(90)' 이 붙는 식이다. 그때 사람이 아는 이름으로 DB 를 뒤질 수
+    # 있어야 한다. 고른 결과는 그대로 남으므로(picked), 무엇을 무엇에 붙였는지가
+    # 쌓인다 — 나중에 순위 규칙을 고칠 근거가 된다.
+    query = (request.GET.get('q') or '').strip()
+    if query:
+        found = ncd.candidates(query, limit=10)
+        return JsonResponse({
+            'success': True,
+            'current': current,
+            'auto': None,
+            'query': query,
+            'candidates': [dict(_row_brief(c['row']), reason=c['reason'],
+                                name_score=c['name_score']) for c in found],
+            'warning': ncd.spread_warning(found),
+        })
+
     # 이미 정해 뒀으면 후보를 다시 찾지 않는다 — 0.3 초라도 헛일이다.
     # '다시 고르기' 를 누르면 refresh=1 로 다시 부른다.
     if current and request.GET.get('refresh') != '1':
