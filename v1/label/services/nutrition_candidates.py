@@ -151,6 +151,61 @@ def _reason(row):
     return ' · '.join(bits)
 
 
+# 한 번에 훑어볼 최대 행 수. 이름이 흔하면(‘버터’ 는 3,999 건) 다 볼 필요가 없다.
+_POOL_CAP = 800
+
+
+def _pool(key):
+    """
+    이름으로 후보를 긁어 온다. **두 걸음으로 나눈다.**
+
+    한 걸음으로 하면 13 초가 걸렸다. 이 표에는 원문을 통째로 담은 raw(JSON)
+    칸이 있어 행 하나가 무겁고, LIKE '%…%' 는 인덱스를 못 타므로 표 전체를
+    읽게 되기 때문이다. 재 보면 이렇다.
+
+        contains + count()            0.19 초   ← 인덱스만 훑는다
+        contains + 행 가져오기          9.8 초   ← raw 까지 읽는다
+
+    그래서 먼저 **id 만** 뽑고(InnoDB 보조 인덱스는 PK 를 품고 있어 인덱스만
+    읽으면 된다), 그 id 로 행을 가져온다. 0.2 초로 떨어진다.
+
+    basis_unit·calories 같은 조건도 SQL 에 넣지 않는다. 넣는 순간 옵티마이저가
+    계획을 바꿔 이름 인덱스를 버리고 9.5 초가 된다(같은 질의가 조건 하나에
+    0.15 초 → 9.5 초로 뛴다). 800 행을 파이썬에서 거르는 편이 훨씬 싸다.
+
+    **가까운 것부터 담는다.** 800 개로 끊을 것이므로 담는 순서가 곧 정확도다.
+    '버터' 는 이름에 그 두 글자가 든 행이 3,999 건이라, 아무렇게나 800 개를
+    담으면 정작 '버터' 라는 행이 안 들어와 1 위가 '땅콩버터' 가 된다.
+    그래서 정확 일치 → 앞부분 일치 → 부분 일치 순으로 채운다.
+    """
+    tokens = [t for t in key.split() if len(t) >= _MIN_TOKEN] or [key]
+
+    contains_q = Q()
+    for t in tokens:
+        contains_q |= Q(food_nm_kr__contains=t)
+
+    ids, seen = [], set()
+    for cond in (Q(food_nm_kr=key),               # 정확히 같은 이름
+                 Q(food_nm_kr__startswith=key),   # 앞부분이 같은 이름
+                 contains_q):                     # 어딘가에 든 이름
+        if len(ids) >= _POOL_CAP:
+            break
+        room = _POOL_CAP - len(ids)
+        for pk in (PublicFoodNutrition.objects.filter(cond)
+                   .values_list('id', flat=True)[:room + len(seen)]):
+            if pk in seen:
+                continue
+            seen.add(pk)
+            ids.append(pk)
+            if len(ids) >= _POOL_CAP:
+                break
+
+    if not ids:
+        return []
+    # raw 는 빼고 가져온다 — 후보를 고르는 데 원문은 쓰지 않는다
+    return list(PublicFoodNutrition.objects.filter(id__in=ids).defer('raw'))
+
+
 def candidates(name, limit=TOP_N):
     """
     이 이름으로 붙일 만한 식약처 행을 순위대로 돌려준다.
@@ -164,19 +219,19 @@ def candidates(name, limit=TOP_N):
     if not key:
         return []
 
-    # 1 차 그물: 이름 조각으로 좁힌다
-    tokens = [t for t in key.split() if len(t) >= _MIN_TOKEN] or [key]
-    q = Q()
-    for t in tokens:
-        q |= Q(food_nm_kr__contains=t)
-
-    pool = (PublicFoodNutrition.objects
-            .filter(q, basis_unit=PublicFoodNutrition.BASIS_G)
-            .exclude(calories__isnull=True)
-            .exclude(verify_status=PublicFoodNutrition.VERIFY_FAIL)[:400])
+    pool = _pool(key)
 
     scored = []
     for row in pool:
+        # 쓸 수 없는 행은 여기서 거른다. 이 조건들을 SQL 에 넣으면 안 된다
+        # — 아래 _pool 의 주석 참고.
+        if row.basis_unit != PublicFoodNutrition.BASIS_G:
+            continue
+        if row.calories is None:
+            continue
+        if row.verify_status == PublicFoodNutrition.VERIFY_FAIL:
+            continue
+
         ns = name_score(key, row.food_nm_kr)
         if ns < _NAME_CUTOFF:
             continue
@@ -202,3 +257,47 @@ def spread_warning(cands):
         return None
     return ('후보끼리 열량이 %.1f 배 차이난다 (%.0f ~ %.0f kcal) — '
             '같은 이름이지만 다른 물건일 수 있다' % (hi / lo, lo, hi))
+
+
+def auto_link(ingredient):
+    """
+    품목제조보고번호로 딱 떨어지는 행을 찾는다. 없으면 None.
+
+    번호가 맞으면 사람에게 묻지 않는다 — 같은 번호는 같은 품목이라 고를 것이
+    없다. 실측으로는 원료 172 개 중 18 개가 이 길로 붙었다(고유번호 75 개 중
+    24 %). 나머지는 번호가 아예 없거나 식약처 DB 에 그 품목이 없다.
+
+    숫자가 아닌 번호('2020_DNSP_04044')는 조인 키로 쓰지 않는다 — 우리
+    MyIngredient 쪽은 숫자만 들고 있어 억지로 맞추면 엉뚱한 원료에 붙는다.
+    """
+    no = (getattr(ingredient, 'prdlst_report_no', '') or '').strip()
+    if not no or not no.isdigit():
+        return None
+    return (PublicFoodNutrition.objects
+            .filter(item_report_no=no, basis_unit=PublicFoodNutrition.BASIS_G)
+            .exclude(calories__isnull=True)
+            .exclude(verify_status=PublicFoodNutrition.VERIFY_FAIL)
+            .order_by('-crt_mth_nm', '-research_ymd')
+            .first())
+
+
+def for_ingredient(ingredient, limit=TOP_N):
+    """
+    원료 하나를 두고 화면이 필요한 것을 한 번에 모아 준다.
+
+    Returns
+        auto        보고번호로 찾은 행 (없으면 None)
+        candidates  이름으로 추린 후보 (auto 가 있으면 비운다 — 물을 것이 없다)
+        warning     후보끼리 값이 크게 갈릴 때의 경고
+    """
+    auto = auto_link(ingredient)
+    if auto is not None:
+        return {'auto': auto, 'candidates': [], 'warning': None}
+
+    cands = candidates(getattr(ingredient, 'prdlst_nm', '') or '', limit=limit)
+    return {'auto': None, 'candidates': cands, 'warning': spread_warning(cands)}
+
+
+def row_values(row, fields):
+    """식약처 행에서 우리 성분 이름으로 값을 뽑는다."""
+    return {f: getattr(row, f, None) for f in fields}

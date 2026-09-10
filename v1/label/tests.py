@@ -13210,6 +13210,35 @@ class 원료에_붙일_행은_사람이_고른다(TestCase):
         cs = self.ncd.candidates('버터')
         self.assertEqual(cs[0]['row'].food_nm_kr, '버터')
 
+    def test_정확히_같은_이름을_먼저_담는다(self):
+        """
+        후보 웅덩이를 800 개로 끊는다. 그래서 **담는 순서가 곧 정확도다.**
+
+        '버터' 는 이름에 그 두 글자가 든 행이 3,999 건이라, 아무렇게나 800 개를
+        담으면 정작 '버터' 라는 행이 안 들어와 1 위가 '땅콩버터' 가 된다.
+        실제로 그렇게 나왔었다.
+        """
+        for i in range(30):
+            self.행('땅콩버터%d' % i, 658.0)
+        self.행('버터', 761.0, method='분석')
+        cs = self.ncd.candidates('버터')
+        self.assertEqual(cs[0]['row'].food_nm_kr, '버터')
+
+    def test_후보_찾기가_화면에_쓸_만큼_빨라야_한다(self):
+        """
+        한 걸음으로 짜면 13 초가 걸렸다. raw(JSON) 칸 때문에 행이 무거워
+        LIKE 로 표 전체를 읽기 때문이다. id 만 먼저 뽑아 0.3 초로 줄였다.
+
+        이 시험은 그 구조가 무너지는 것을 막는다 — 조건을 SQL 에 도로 넣거나
+        id 두 걸음을 한 걸음으로 되돌리면 여기서 걸린다.
+        """
+        import time
+        for i in range(50):
+            self.행('버터%d' % i, 700.0)
+        started = time.time()
+        self.ncd.candidates('버터')
+        self.assertLess(time.time() - started, 3.0)
+
     def test_부피_기준_행은_후보에서_뺀다(self):
         """골라 봐야 중량 배합에 못 넣는다."""
         from v1.label.models import PublicFoodNutrition
