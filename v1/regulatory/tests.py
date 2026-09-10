@@ -937,6 +937,26 @@ class RegulatoryLayoutTests(TestCase):
         cell = html[row_start:html.index('</td>', row_start)]
         self.assertNotIn('—', cell)
 
+    def test_가로지르는_줄이_칸_수와_맞는다(self):
+        """
+        구분선·빈 목록 안내처럼 표를 가로지르는 줄은 colspan 으로 칸 수를 적는다.
+        칸을 하나 합쳤을 때 이 숫자를 같이 안 고치면 그 줄만 한 칸 더 뻗어
+        표가 어긋난다 — 실제로 등급·조치를 합치면서 7 로 남아 있었다.
+        """
+        import re
+
+        heads = re.findall(r'<thead[^>]*>(.*?)</thead>', self.tpl, re.S)
+        self.assertTrue(heads, '표 머리를 못 찾았다')
+        # '<th' 로 세면 <thead> 자신도 함께 세어진다 — 여는 칸 태그만 센다
+        col_counts = {len(re.findall(r'<th[\s>]', h)) for h in heads}
+        self.assertEqual(len(col_counts), 1,
+                         f'표 머리마다 칸 수가 다르다: {col_counts}')
+        cols = col_counts.pop()
+
+        spans = {int(n) for n in re.findall(r'colspan="(\d+)"', self.tpl)}
+        self.assertEqual(spans, {cols},
+                         f'표는 {cols}칸인데 colspan 은 {spans} 이다')
+
     def test_조치_칸을_통째로_다시_쓴다(self):
         """
         미조치 상태에는 배지가 없다(칸이 '—' 다). 예전 스크립트는 배지 요소를
@@ -1019,6 +1039,32 @@ class 탭_상태는_서버가_그린다(TestCase):
         _, html = self._view('/regulatory/?tab=insp')
         page = html[html.index('id="regPage"') - 200:html.index('id="regPage"')]
         self.assertIn('reg-page--insp', page)
+
+    def test_모두_읽음_단추도_서버가_그린다(self):
+        """
+        탭과 같은 이유다. 예전에는 두 탭의 미확인 수를 data- 로 실어 두고
+        hidden 인 채로 내보낸 뒤 JS 가 현재 탭 것을 골라 보이게 했는데,
+        그러면 스크립트가 멈춘 순간 단추가 영영 안 나타난다.
+        """
+        from v1.regulatory.models import NewsProductMatch
+
+        news = RegulatoryNews.objects.get(external_id='ts-admin')
+        NewsProductMatch.objects.create(news=news, product=self.label,
+                                        match_score=90, risk_score=50)
+
+        _, admin_html = self._view('/regulatory/?tab=admin')
+        self.assertIn('id="newsMarkAllReadBtn"', admin_html)
+        self.assertNotIn('data-unread-admin', admin_html)   # 두 값을 실어 보내지 않는다
+
+        # 미확인이 없는 탭에는 아예 안 그린다
+        _, news_html = self._view('/regulatory/')
+        self.assertNotIn('id="newsMarkAllReadBtn"', news_html)
+
+    def test_수거검사_탭에는_단추가_하나뿐이다(self):
+        """수거검사 탭은 제 단추(inspMarkAllReadBtn)를 따로 갖는다."""
+        _, html = self._view('/regulatory/?tab=insp')
+        self.assertIn('id="inspMarkAllReadBtn"', html)
+        self.assertNotIn('id="newsMarkAllReadBtn"', html)
 
     def test_스크립트가_주소를_다시_읽지_않는다(self):
         """

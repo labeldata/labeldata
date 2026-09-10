@@ -4,7 +4,7 @@
 {% block title %}{{ news.product_name }} – 부적합·처분 알림{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/regulatory.css' %}">
+<link rel="stylesheet" href="{% static 'css/regulatory.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% endblock %}
 
 {% block content %}

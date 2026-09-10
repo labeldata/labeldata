@@ -675,9 +675,13 @@ def news_list(request):
         except RegulatoryNews.DoesNotExist:
             pass
 
-    # 웹 전용 기기를 항상 보장 — 모바일 로그아웃으로 device.user=None이 돼도 웹 키워드 유지
-    from v1.mobile.models import AppDevice as _AppDevice
     # 사용자의 AlertRule 목록 — user 기반으로 직접 조회
+    #
+    # 여기 "웹 전용 기기를 항상 보장" 이라는 주석과 쓰이지 않는 AppDevice import 가
+    # 있었다. 하려던 일(앱을 안 쓰는 사용자에게도 키워드 매칭을 남기는 것)은
+    # 끝내 붙지 않았고, 그래서 웹 전용 사용자에게는 키워드 알림이 아무 일도 하지
+    # 않는다. 지키지 못한 약속을 코드에 남겨 두면 다음 사람이 "이미 되어 있다" 고
+    # 믿는다 — 걷어내고, 남은 문제는 REGULATORY_ALERT_PIPELINE.md 에 적어 둔다.
     unique_alert_rules = list(
         AlertRule.objects
         .filter(user=request.user, is_active=True)
@@ -740,8 +744,16 @@ def news_list(request):
     else:
         active_tab = TAB_INSP_NEWS
 
+    # 지금 탭의 미확인 수 — '모두 읽음' 단추를 그릴지 말지가 여기에 달려 있다.
+    # 탭 상태와 같은 이유로 서버가 고른다(템플릿 주석 참고).
+    tab_unread = {
+        TAB_ADMIN:      tab_admin_unread,
+        TAB_INSPECTION: inspection_unread,
+    }.get(active_tab, tab_insp_unread)
+
     return render(request, 'regulatory/news_list.html', {
         'active_tab':         active_tab,
+        'tab_unread':         tab_unread,
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,
         'paginator':          paginator,

@@ -13,7 +13,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/regulatory.css' %}">
+<link rel="stylesheet" href="{% static 'css/regulatory.css' %}?v={{ STATIC_BUILD_DATE }}">
 <link rel="stylesheet" href="{% static 'css/list_common.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% endblock %}
 
@@ -187,16 +187,21 @@
             행정처분 탭에서 배지를 지울 방법이 상세 하단의 '전체 알림 일괄
             처리'(=되돌릴 수 없는 조치 기록) 뿐이었다. 그냥 훑어보고 넘기려던
             사람이 조치 이력을 남겨야 했다.
-            숫자는 탭마다 다르므로 두 값을 다 실어 두고 JS 가 현재 탭 것을 쓴다.
+            숫자는 탭마다 다르다. **지금 탭의 값을 서버가 골라 그린다** —
+            탭 상태와 같은 이유다. 예전에는 두 값을 data- 로 실어 두고 hidden 인
+            채로 내보낸 뒤 JS 가 현재 탭 것을 골라 보이게 했는데, 그러면 스크립트가
+            멈춘 순간 단추가 영영 안 나타난다. 그 자리에 있는지 없는지를 스크립트에
+            맡기지 않는다.
           {% endcomment %}
+          {# 수거검사 탭에는 제 단추가 따로 있다 (아래 reg-tb-row--insp) #}
+          {% if tab_unread and active_tab != 'insp' %}
           <button type="button" class="rs-quick-chip" id="newsMarkAllReadBtn"
-                  data-unread-insp-news="{{ tab_insp_unread }}"
-                  data-unread-admin="{{ tab_admin_unread }}"
-                  onclick="markTabRead()" hidden
+                  onclick="markTabRead()"
                   title="지금 탭의 알림을 모두 읽음으로 표시합니다 (조치 이력은 남지 않습니다)">
             <i class="bi bi-check2-all"></i>모두 읽음
-            <span class="rs-quick-chip-n" id="newsMarkAllReadN"></span>
+            <span class="rs-quick-chip-n" id="newsMarkAllReadN">{{ tab_unread|intcomma }}</span>
           </button>
+          {% endif %}
 
           {% comment %}
  상세 조건은 접어 둔다 — 늘 펼쳐 두면 목록이 그만큼 아래로 밀린다.
@@ -602,7 +607,7 @@
             <td class="tc"><span class="rs-item-date">{{ r.tkawydtm|slice:"4:6" }}/{{ r.tkawydtm|slice:"6:8" }}</span></td>
           </tr>
           {% empty %}
-          <tr class="rs-insp-empty"><td colspan="7">수거검사 데이터가 없습니다.</td></tr>
+          <tr class="rs-insp-empty"><td colspan="6">수거검사 데이터가 없습니다.</td></tr>
           {% endfor %}
           {% endfor %}
 
@@ -615,7 +620,7 @@
 {% endcomment %}
           {% if pinned_news %}
           <tr class="reg-sep">
-            <td colspan="7">
+            <td colspan="6">
               <div class="reg-sep-line">
                 <i class="bi bi-bookmark-star-fill"></i>내 알림
                 <span class="reg-sep-count">{{ pinned_news|length }} / {{ mine_total|intcomma }}건</span>
@@ -626,20 +631,20 @@
           {% for news in pinned_news %}
             {% include 'regulatory/_news_item.html' %}
           {% endfor %}
-          <tr class="reg-sep"><td colspan="7"><div class="reg-sep-line">일반 알림</div></td></tr>
+          <tr class="reg-sep"><td colspan="6"><div class="reg-sep-line">일반 알림</div></td></tr>
           {% endif %}
 
           {# ── 일반 부적합·처분 알림 목록 ── #}
           {% for news in news_list %}
           {% ifchanged news.match_priority %}
             {% if news.match_priority == 1 and not forloop.first %}
-            <tr class="reg-sep"><td colspan="7"><div class="reg-sep-line">일반 정보</div></td></tr>
+            <tr class="reg-sep"><td colspan="6"><div class="reg-sep-line">일반 정보</div></td></tr>
             {% endif %}
           {% endifchanged %}
             {% include 'regulatory/_news_item.html' %}
           {% empty %}
           <tr class="rs-empty-row">
-            <td colspan="7">
+            <td colspan="6">
               <div class="rs-empty">
                 <i class="bi bi-inbox"></i>
                 <div class="rs-empty-title">조건에 맞는 결과가 없습니다</div>
@@ -1092,7 +1097,7 @@
 
 
 {% block extra_js %}
-<script src="{% static 'js/regulatory_list.js' %}"></script>
+<script src="{% static 'js/regulatory_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {# 알림 사유 끄기 — 뉴스 상세·수거검사 상세·상세 독립 페이지가 함께 쓴다 #}
 <script src="{% static 'js/regulatory_alert_mute.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
@@ -1169,10 +1174,7 @@ function markTabRead(tab) {
       }
     } else {
       var newsBtn = document.getElementById('newsMarkAllReadBtn');
-      if (newsBtn) {
-        newsBtn.dataset['unread' + (tab === 'admin' ? 'Admin' : 'InspNews')] = '0';
-        newsBtn.hidden = true;
-      }
+      if (newsBtn) newsBtn.remove();
     }
 
     // 상단 통계 카드(수거검사 미확인)와 네비바 배지도 같은 값으로 맞춘다
@@ -1195,17 +1197,7 @@ function markTabRead(tab) {
 }
 window.markTabRead = markTabRead;
 
-/** 현재 탭에 맞춰 '모두 읽음' 단추의 노출·숫자를 맞춘다 (탭마다 미확인 수가 다르다). */
-function syncMarkAllReadBtn(tab) {
-  var btn = document.getElementById('newsMarkAllReadBtn');
-  if (!btn) return;
-  if (tab === 'insp') { btn.hidden = true; return; }
-  var n = parseInt(btn.dataset[tab === 'admin' ? 'unreadAdmin' : 'unreadInspNews'] || '0', 10);
-  btn.hidden = !(n > 0);
-  var nEl = document.getElementById('newsMarkAllReadN');
-  if (nEl) nEl.textContent = n > 0 ? n.toLocaleString() : '';
-}
-window.syncMarkAllReadBtn = syncMarkAllReadBtn;
+
 
 // ── 수거검사 상태 필터 (서버 처리) ────────────────────────────────────────
 // 예전에는 현재 페이지의 DOM 만 숨겼기 때문에 2페이지 이후에는 필터가 적용되지 않고,
@@ -1652,8 +1644,6 @@ function _applySwitchViewCSS(v) {
   var idMap = {'insp-news': 'vtabInspNews', 'admin': 'vtabAdmin', 'insp': 'vtabInsp'};
   var t = document.getElementById(idMap[v]);
   if (t) t.classList.add('rs-vtab--active');
-
-  if (typeof syncMarkAllReadBtn === 'function') syncMarkAllReadBtn(v);
 
   var filterBtn = document.getElementById('regCondToggle');
   if (filterBtn) {
