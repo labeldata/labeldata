@@ -4,6 +4,7 @@
 - NewsProductMatch: 부적합 뉴스 ↔ 내 제품 M:N 연결
 - InspectionResult: 수거검사(I0460) 원본
 - InspectionMatch: 수거검사 ↔ 사용자 매칭 이력
+- NewsKeywordMatch: 부적합 뉴스 ↔ 내가 등록한 알림 키워드 매칭
 - AlertMute: 알림 제외(뮤트) 규칙 — 특정 키워드·원료·업체로 생기는 알림을 끈다
 """
 import datetime
@@ -157,6 +158,67 @@ class NewsIngredientMatch(models.Model):
 
     def __str__(self):
         return f"{self.news} → {self.ingredient}"
+
+
+class NewsKeywordMatch(models.Model):
+    """
+    부적합 뉴스 ↔ 내가 등록한 알림 키워드(AlertRule) 매칭.
+
+    왜 표를 따로 두는가
+    ───────────────────
+    예전에는 이 매칭이 `mobile.PushNotificationLog` 로만 남았다. 그런데 그 표는
+    **기기(AppDevice)마다** 행을 만든다. 그래서 앱을 깐 적 없는 웹 사용자는
+    기기가 없어 행이 하나도 안 생겼고, 키워드를 아무리 등록해도
+
+        · 등록 직후 "일치하는 정보가 없습니다" (실제로는 있는데)
+        · 목록에 '키워드' 배지가 안 뜨고
+        · 상세에 '알림 키워드 매칭' 구역이 안 나온다
+
+    는 상태였다. 웹에서는 기능이 통째로 없는 것과 같았다.
+
+    키워드 알림은 **사용자**의 것이지 기기의 것이 아니다. 그래서 제품 매칭
+    (NewsProductMatch)·원료 매칭(NewsIngredientMatch)과 같은 결로, 사용자에
+    붙는 표를 둔다. 기기별 푸시 이력(PushNotificationLog)은 발송 기록으로
+    그대로 남는다 — 같은 판정에서 나오는 두 산출물이다.
+
+    rule 을 지우면 이 행도 함께 사라진다(CASCADE). "이 키워드 알림 그만 받기"
+    가 곧 규칙 삭제이고, 예약된 푸시도 그때 함께 거둔다. 다만 규칙이 사라져도
+    무엇 때문에 걸렸는지는 화면에 남아야 하므로, 키워드·분류는 여기에 베껴 둔다.
+    """
+
+    news = models.ForeignKey(RegulatoryNews, on_delete=models.CASCADE,
+                             related_name='keyword_matches', verbose_name='부적합 정보')
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name='keyword_news_matches', verbose_name='사용자')
+    rule = models.ForeignKey('mobile.AlertRule', on_delete=models.CASCADE,
+                             related_name='news_matches', verbose_name='알림 키워드')
+
+    # 규칙이 지워진 뒤에도 "무엇 때문에 걸렸는지" 를 말할 수 있게 베껴 둔다
+    matched_keyword = models.CharField(max_length=100, verbose_name='매칭 키워드')
+    category = models.CharField(max_length=20, blank=True, default='',
+                                verbose_name='키워드 분류',
+                                help_text='INGREDIENT / COMPANY / ORIGIN')
+    match_type = models.CharField(max_length=20, blank=True, default='',
+                                  verbose_name='매칭 방식', help_text='EXACT / CONTAINS')
+
+    read_yn = models.BooleanField(default=False, db_index=True, verbose_name='확인 여부')
+    read_at = models.DateTimeField(null=True, blank=True, verbose_name='확인 일시')
+    dismissed_yn = models.BooleanField(default=False, db_index=True, verbose_name='해당 없음')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
+
+    class Meta:
+        db_table            = 'regulatory_news_keyword_match'
+        unique_together     = ('news', 'user', 'rule')
+        ordering            = ['-created_at']
+        verbose_name        = '부적합-키워드 연결'
+        verbose_name_plural = '부적합-키워드 연결 목록'
+        indexes = [
+            models.Index(fields=['user', 'read_yn']),
+        ]
+
+    def __str__(self):
+        return f"{self.news} → [{self.matched_keyword}] {self.user}"
 
 
 class RegulatoryMatchAction(models.Model):

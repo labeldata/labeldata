@@ -8,16 +8,17 @@
 
 집계 규칙
 ─────────
-actionable (조치 대상) — 모든 건수의 모수
+actionable (조치 대상) — '미조치' 의 모수
     내 제품 매칭 + 원료 보관함 매칭.
-    조치 이력(RegulatoryMatchAction)과 읽음 상태(read_yn)는 이 두 매칭에만 붙일 수 있다.
-    키워드 푸시 매칭은 읽음 상태가 앱(PushNotificationLog.is_read)에 있어서 제외한다.
-    포함하면 웹에서 지울 수 없는 숫자가 배지에 영구히 남는다.
-    ※ 목록에서 "내 매칭"으로 상단 고정·강조되는 대상은 여기에 키워드 푸시 매칭까지
-      더한 집합이며, 그쪽은 news_list 의 SQL 어노테이션(match_priority)으로 표현한다.
+    조치 이력(RegulatoryMatchAction)은 이 두 매칭에만 붙일 수 있다.
+    키워드 매칭은 여기 넣지 않는다 — 조치를 남길 자리가 없어서, 넣으면 영원히
+    '미조치' 로 남는다. 키워드 알림은 '봤다/못 봤다' 만 있는 소식이다.
 
-unread (미확인)
-    actionable 중 read_yn=False.
+unread (미확인) — 배지의 모수
+    제품·원료·**키워드** 매칭 중 read_yn=False.
+    예전에는 키워드를 뺐다. 읽음 상태가 앱(PushNotificationLog.is_read)에만
+    있어서, 넣으면 웹에서 지울 수 없는 숫자가 배지에 영구히 남았기 때문이다.
+    지금은 NewsKeywordMatch.read_yn 을 웹에서 만질 수 있으므로 함께 센다.
 
 no_action (미조치)
     actionable 중 monitoring/resolved 조치 이력이 하나도 없는 건.
@@ -28,7 +29,7 @@ no_action (미조치)
     수집기(services/collector.py)의 알림 발송 기준과 동일한 값을 사용한다.
 """
 from v1.regulatory.models import (
-    NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction,
+    NewsIngredientMatch, NewsKeywordMatch, NewsProductMatch, RegulatoryMatchAction,
 )
 
 # 조치로 인정하는 action_type (memo/dismissed 는 "조치함"으로 보지 않는다)
@@ -40,7 +41,7 @@ ACTION_STATUSES = ('monitoring', 'resolved')
 # ─────────────────────────────────────────────────────────────────────────────
 
 def actionable_news_ids(user) -> set:
-    """읽음·조치 처리가 가능한 매칭 뉴스 ID — 제품 + 원료 보관함"""
+    """조치를 남길 수 있는 매칭 뉴스 ID — 제품 + 원료 보관함"""
     return (
         set(
             NewsProductMatch.objects
@@ -56,7 +57,7 @@ def actionable_news_ids(user) -> set:
 
 
 def unread_news_ids(user) -> set:
-    """미확인 뉴스 ID — actionable 중 아직 읽지 않은 건"""
+    """미확인 뉴스 ID — 제품·원료·키워드 매칭 중 아직 읽지 않은 건"""
     return (
         set(
             NewsProductMatch.objects
@@ -65,6 +66,11 @@ def unread_news_ids(user) -> set:
         )
         | set(
             NewsIngredientMatch.objects
+            .filter(user=user, dismissed_yn=False, read_yn=False)
+            .values_list('news_id', flat=True)
+        )
+        | set(
+            NewsKeywordMatch.objects
             .filter(user=user, dismissed_yn=False, read_yn=False)
             .values_list('news_id', flat=True)
         )
@@ -120,8 +126,6 @@ def user_match_context(user) -> dict:
     사용자별 매칭 건수는 보통 수십 건 수준이라, 여기서 집합·사전으로 미리 만들어
     두고 목록 쿼리에서는 상수 IN 목록만 쓰는 편이 훨씬 싸다.
     """
-    from v1.mobile.models import PushNotificationLog
-
     prod_qs = (NewsProductMatch.objects
                .filter(product__user_id=user, false_positive_yn=False)
                .values_list('news_id', 'read_yn', 'risk_level', 'risk_score'))
@@ -149,11 +153,17 @@ def user_match_context(user) -> dict:
             _ing_best[nid] = score
             ing_risk[nid] = risk
 
-    kw_matched = set(
-        PushNotificationLog.objects
-        .filter(device__user=user, trigger_type='keyword')
-        .values_list('news_id', flat=True)
-    )
+    # 키워드 매칭 — 기기가 아니라 사용자에 붙는 표에서 읽는다.
+    # 예전에는 PushNotificationLog(device__user=…) 를 봤는데, 앱을 깐 적 없는
+    # 사용자는 기기가 없어 이 집합이 늘 비었다. 목록의 '키워드' 배지가 웹에서
+    # 한 번도 뜬 적이 없던 이유다.
+    kw_matched, kw_unread = set(), set()
+    for nid, read_yn in (NewsKeywordMatch.objects
+                         .filter(user=user, dismissed_yn=False)
+                         .values_list('news_id', 'read_yn')):
+        kw_matched.add(nid)
+        if not read_yn:
+            kw_unread.add(nid)
 
     # 최신 조치 상태 (monitoring / resolved) — 조치 시각까지 남긴다.
     # 제품·원료 양쪽에 조치가 있으면 목록의 조치상태 필터가 더 나중 것을 따라야 하는데,
@@ -192,7 +202,7 @@ def user_match_context(user) -> dict:
     return {
         'prod_matched': prod_matched, 'prod_unread': prod_unread, 'prod_risk': prod_risk,
         'ing_matched': ing_matched,   'ing_unread': ing_unread,   'ing_risk': ing_risk,
-        'kw_matched': kw_matched,
+        'kw_matched': kw_matched, 'kw_unread': kw_unread,
         'prod_action': {nid: a for nid, (a, _) in prod_action_at.items()},
         'ing_action':  {nid: a for nid, (a, _) in ing_action_at.items()},
         'all_matched': prod_matched | ing_matched | kw_matched,
@@ -202,7 +212,7 @@ def user_match_context(user) -> dict:
         #  no_action_news_ids) 을 목록 뷰에서 다시 부르면 매칭 테이블을
         #  세 번, 조치 조인을 두 번 더 돌게 된다 — 규칙은 같으니 여기서 낸다.
         'actionable':    actionable,
-        'unread':        prod_unread | ing_unread,
+        'unread':        prod_unread | ing_unread | kw_unread,
         'actioned':      actioned,
         'no_action':     actionable - actioned,
         # 제품·원료를 합친 뉴스별 최신 조치 (목록의 조치상태 필터용)
@@ -222,6 +232,7 @@ def attach_match_info(news_items, ctx) -> None:
         n.ing_matched_yn      = nid in ctx['ing_matched']
         n.ing_unread_yn       = nid in ctx['ing_unread']
         n.kw_matched_yn       = nid in ctx['kw_matched']
+        n.kw_unread_yn        = nid in ctx['kw_unread']
         n.my_risk_level       = ctx['prod_risk'].get(nid)
         n.ing_risk_level      = ctx['ing_risk'].get(nid)
         n.my_action_status    = ctx['prod_action'].get(nid)

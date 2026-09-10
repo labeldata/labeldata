@@ -460,6 +460,155 @@ class 알림_사유를_그_자리에서_끈다(TestCase):
         self.assertEqual(InspectionMatch.objects.filter(user=self.user).count(), 0)
 
 
+class 키워드_알림은_사용자의_것이다(TestCase):
+    """
+    앱을 깐 적 없는 사용자에게 키워드 알림이 통째로 없는 것과 같았다.
+
+    매칭이 `mobile.PushNotificationLog` 로만 남았는데 그 표는 **기기마다** 행을
+    만든다. 기기가 없으면 행이 없고, 그래서 웹에서는
+      · 등록 직후 "일치하는 정보가 없습니다" (실제로는 있는데)
+      · 목록에 '키워드' 배지가 안 뜨고
+      · 상세에 '알림 키워드 매칭' 구역이 안 나왔다.
+    키워드 알림은 사용자의 것이지 기기의 것이 아니다.
+    """
+
+    def setUp(self):
+        import json
+
+        cache.clear()
+        self._json = json
+        self.user = User.objects.create_user(username='kwuser', password='x')
+        self.client.force_login(self.user)
+        for i in range(5):
+            RegulatoryNews.objects.create(
+                external_id=f'kwm{i}', api_source='I2620', source='domestic',
+                product_name=f'대장균 검출 제품 {i}', ai_keywords=['대장균'],
+                ai_parsed=True, collected_date='2026-08-01')
+
+    def _add_rule(self, keyword='대장균', category='INGREDIENT'):
+        return self.client.post(
+            '/regulatory/api/alert-rules/',
+            data=self._json.dumps({'category': category, 'keyword': keyword,
+                                   'match_type': 'CONTAINS'}),
+            content_type='application/json')
+
+    def test_기기가_없어도_매칭이_남는다(self):
+        from v1.mobile.models import AppDevice
+        from v1.regulatory.models import NewsKeywordMatch
+
+        self.assertEqual(AppDevice.objects.filter(user=self.user).count(), 0)
+        r = self._add_rule()
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(NewsKeywordMatch.objects.filter(user=self.user).count(), 5)
+
+    def test_등록_응답의_건수가_미리보기와_어긋나지_않는다(self):
+        """
+        예전에는 푸시 로그 수를 셌다. 기기가 없으면 0 이라, 화면에 "일치하는
+        정보가 없습니다" 가 뜨면서 그 아래 미리보기가 다섯 건 보였다.
+        """
+        body = self._add_rule().json()
+        self.assertEqual(body['matched_count'], 5)
+        self.assertEqual(len(body['previews']), 5)
+
+    def test_기기_수가_건수를_부풀리지_않는다(self):
+        """기기가 둘이면 한 건이 두 건으로 세어지던 것."""
+        from v1.mobile.models import AppDevice
+
+        AppDevice.objects.create(device_id='d1', user=self.user, fcm_token='t1')
+        AppDevice.objects.create(device_id='d2', user=self.user, fcm_token='t2')
+        self.assertEqual(self._add_rule().json()['matched_count'], 5)
+
+    def test_목록과_상세에_나온다(self):
+        self._add_rule()
+        html = self.client.get('/regulatory/').content.decode()
+        self.assertIn('badge-kw-match', html)
+
+        news = RegulatoryNews.objects.first()
+        detail = self.client.get(f'/regulatory/?id={news.id}').content.decode()
+        self.assertIn('알림 키워드 매칭', detail)
+        self.assertIn('이 키워드 삭제', detail)
+
+    def test_수집_경로에서도_남는다(self):
+        """소급(등록 시)뿐 아니라 새 뉴스가 들어올 때도 같아야 한다."""
+        from v1.mobile.models import AlertRule
+        from v1.mobile.services.push_service import send_mobile_alerts_for_news
+        from v1.regulatory.models import NewsKeywordMatch
+
+        AlertRule.objects.create(user=self.user, category='INGREDIENT',
+                                 keyword='대장균', match_type='CONTAINS')
+        news = RegulatoryNews.objects.create(
+            external_id='kw-live', api_source='I2620', source='domestic',
+            product_name='대장균 검출 신제품', ai_keywords=['대장균'],
+            ai_parsed=True, collected_date='2026-08-02')
+        send_mobile_alerts_for_news(news)
+        self.assertEqual(
+            NewsKeywordMatch.objects.filter(user=self.user, news=news).count(), 1)
+
+    def test_배지에_함께_세어진다(self):
+        """읽음을 웹에서 만질 수 있으므로 이제 미확인 건수에 넣는다."""
+        from v1.regulatory import selectors
+
+        self._add_rule()
+        self.assertEqual(selectors.unread_news_count(self.user), 5)
+
+    def test_모두_읽음으로_지울_수_있다(self):
+        """
+        예전에 키워드를 배지에서 뺐던 이유가 '웹에서 지울 수 없는 숫자' 였다.
+        이제 지울 수 있으므로 넣어도 된다.
+        """
+        from v1.regulatory import selectors
+
+        self._add_rule()
+        r = self.client.post('/regulatory/api/mark-tab-read/',
+                             data=self._json.dumps({'tab': 'insp-news'}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(selectors.unread_news_count(self.user), 0)
+
+    def test_상세를_열면_그_건은_읽음이_된다(self):
+        from v1.regulatory import selectors
+
+        self._add_rule()
+        news = RegulatoryNews.objects.first()
+        self.client.get(f'/regulatory/?id={news.id}')
+        self.assertEqual(selectors.unread_news_count(self.user), 4)
+
+    def test_조치_대상에는_넣지_않는다(self):
+        """조치를 남길 자리가 없다 — 넣으면 영원히 '미조치' 로 남는다."""
+        self._add_rule()
+        r = self.client.get('/regulatory/')
+        self.assertEqual(r.context['no_action_count'], 0)
+
+    def test_키워드를_지우면_매칭도_사라진다(self):
+        from v1.mobile.models import AlertRule
+        from v1.regulatory.models import NewsKeywordMatch
+
+        self._add_rule()
+        rule = AlertRule.objects.get(user=self.user)
+        self.client.post(f'/regulatory/api/alert-rules/{rule.id}/delete/')
+        self.assertEqual(NewsKeywordMatch.objects.filter(user=self.user).count(), 0)
+
+    def test_규칙이_여럿_걸리면_여럿_보여_준다(self):
+        """예전에는 사용자당 첫 규칙 하나만 기록해 '무엇 때문에' 를 하나만 봤다."""
+        from v1.regulatory.models import NewsKeywordMatch
+
+        self._add_rule('대장균')
+        self._add_rule('검출')
+        news = RegulatoryNews.objects.first()
+        self.assertEqual(
+            NewsKeywordMatch.objects.filter(user=self.user, news=news).count(), 2)
+
+    def test_남의_키워드_매칭은_안_보인다(self):
+        from v1.regulatory.models import NewsKeywordMatch
+
+        self._add_rule()
+        other = User.objects.create_user(username='kwother', password='x')
+        self.client.force_login(other)
+        html = self.client.get('/regulatory/').content.decode()
+        self.assertNotIn('badge-kw-match', html)
+        self.assertEqual(NewsKeywordMatch.objects.filter(user=other).count(), 0)
+
+
 class 끄면_예약된_푸시도_거둔다(TestCase):
     """
     식품 안심 알리미(앱) 푸시는 수집 즉시 나가지 않는다.

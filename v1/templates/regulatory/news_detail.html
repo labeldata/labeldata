@@ -15,7 +15,7 @@
   <h1 class="v2-page-title mb-0" style="font-size:18px;">부적합·처분 알림 상세</h1>
 </div>
 
-{% include "regulatory/_news_detail_panel.html" with matches=my_matches ing_matches=ing_matches %}
+{% include "regulatory/_news_detail_panel.html" with matches=my_matches ing_matches=ing_matches kw_logs=kw_matches %}
 {% endblock %}
 
 {% block extra_js %}

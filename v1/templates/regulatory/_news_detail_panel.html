@@ -439,28 +439,23 @@
       <span class="rd-sec-note">내가 등록한 키워드 때문에 온 알림입니다</span>
     </div>
     <div class="rd-sec-body">
-    {% for log in kw_logs %}
-    <div class="rd-kw-match-item" id="kw-log-rule-{{ log.rule_triggered.id|default:0 }}">
-      {% if log.rule_triggered %}
-        <span class="rd-kw-cat rd-kw-cat-{{ log.rule_triggered.category|lower }}">
-          {% if log.rule_triggered.category == 'INGREDIENT' %}원료/제품명
-          {% elif log.rule_triggered.category == 'COMPANY' %}업체명
-          {% elif log.rule_triggered.category == 'ORIGIN' %}원산지
-          {% else %}{{ log.rule_triggered.get_category_display }}
-          {% endif %}
-        </span>
-        <span class="rd-kw-word">{{ log.rule_triggered.keyword }}</span>
-        <span class="rd-kw-mtype">
-          {% if log.rule_triggered.match_type == 'EXACT' %}일치{% else %}포함{% endif %}
-        </span>
-      {% else %}
-        <span class="rd-kw-cat rd-kw-cat-ingredient">키워드</span>
-        <span class="rd-kw-word">{{ log.trigger_label }}</span>
-      {% endif %}
-      <span class="rd-kw-when">{{ log.created_at|date:"m/d H:i" }}</span>
-      {% if log.rule_triggered %}
+    {% for kw in kw_logs %}
+    <div class="rd-kw-match-item" id="kw-log-rule-{{ kw.rule_id|default:0 }}">
+      <span class="rd-kw-cat rd-kw-cat-{{ kw.category|lower }}">
+        {% if kw.category == 'INGREDIENT' %}원료/제품명
+        {% elif kw.category == 'COMPANY' %}업체명
+        {% elif kw.category == 'ORIGIN' %}원산지
+        {% else %}키워드
+        {% endif %}
+      </span>
+      <span class="rd-kw-word">{{ kw.matched_keyword }}</span>
+      <span class="rd-kw-mtype">
+        {% if kw.match_type == 'EXACT' %}일치{% else %}포함{% endif %}
+      </span>
+      <span class="rd-kw-when">{{ kw.created_at|date:"m/d H:i" }}</span>
+      {% if kw.rule_id %}
       <button type="button" class="rd-kw-del"
-              onclick="deleteKeywordFromDetail({{ log.rule_triggered.id }}, '{{ log.rule_triggered.keyword|escapejs }}')"
+              onclick="deleteKeywordFromDetail({{ kw.rule_id }}, '{{ kw.matched_keyword|escapejs }}')"
               title="이 키워드를 지워 앞으로 알림을 받지 않습니다">
         <i class="bi bi-bell-slash"></i>이 키워드 삭제
       </button>

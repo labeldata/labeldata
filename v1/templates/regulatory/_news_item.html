@@ -10,7 +10,7 @@
 {% endcomment %}
 <tr class="rs-item
            {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% elif news.kw_matched_yn %}kw-matched{% endif %}
-           {% if news.my_unread_yn or news.ing_unread_yn %}rs-item--unread{% endif %}
+           {% if news.my_unread_yn or news.ing_unread_yn or news.kw_unread_yn %}rs-item--unread{% endif %}
            {% if selected_news and selected_news.id == news.id %}active{% endif %}
            {% if news.my_action_status == 'resolved' or news.my_ing_action_status == 'resolved' %}rs-item--resolved{% endif %}"
     data-group="{% if news.api_source == 'I0470' or news.api_source == 'I0480' or news.api_source == 'I0482' or news.api_source == 'saol_admin' %}admin{% else %}insp{% endif %}"
@@ -31,7 +31,7 @@
   {# 2. 제품명 — 안 읽은 표시와 빠른 조치가 함께 산다 #}
   <td>
     <div class="rs-name-cell">
-      {% if news.my_unread_yn or news.ing_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
+      {% if news.my_unread_yn or news.ing_unread_yn or news.kw_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
       <span class="rs-item-name" title="{{ news.product_name }}">{{ news.product_name }}</span>
       {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}
       <button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시">

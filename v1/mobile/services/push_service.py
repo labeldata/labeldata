@@ -68,17 +68,61 @@ def send_mobile_alerts_for_news(news) -> int:
     return saved
 
 
+def news_fields_for_matching(news) -> tuple:
+    """_matches_rule 이 보는 네 가지를 한 번만 소문자로 만들어 둔다."""
+    return (
+        (news.product_name or '').lower(),
+        (news.company_name or '').lower(),
+        [kw.lower() for kw in (news.ai_keywords or [])],
+        (news.violation_reason or '').lower(),
+    )
+
+
+def matching_rules_for_news(news, rules) -> list:
+    """주어진 규칙 중 이 뉴스에 걸리는 것만 고른다."""
+    fields = news_fields_for_matching(news)
+    return [r for r in rules if _matches_rule(r, *fields)]
+
+
+def save_keyword_match(news, rule) -> bool:
+    """
+    키워드 매칭을 **사용자**에 남긴다 (regulatory.NewsKeywordMatch).
+
+    이것이 웹 화면이 보는 진짜 기록이다. 기기별 푸시 로그와 달리 앱을 깐 적이
+    없어도 남는다 — 예전에는 이 표가 없어서, 앱을 안 쓰는 사용자에게는 키워드
+    알림이 통째로 없는 것과 같았다(등록해도 "일치하는 정보가 없습니다").
+
+    Returns: 새로 만들었으면 True
+    """
+    from v1.regulatory.models import NewsKeywordMatch
+
+    if not rule.user_id:
+        return False          # 비회원(기기) 규칙은 푸시 로그로만 남는다
+    _, created = NewsKeywordMatch.objects.get_or_create(
+        news=news, user_id=rule.user_id, rule=rule,
+        defaults={
+            'matched_keyword': rule.keyword,
+            'category':        rule.category,
+            'match_type':      rule.match_type,
+        },
+    )
+    return created
+
+
 def _save_keyword_logs(news) -> int:
-    """AlertRule 키워드 매칭 — PushNotificationLog 저장 (FCM 발송 없음)."""
+    """
+    AlertRule 키워드 매칭.
+
+    판정은 한 번이고, 남기는 것은 둘이다.
+      · NewsKeywordMatch — 사용자에 붙는다. 웹 화면(목록 배지·상세 구역)이 본다.
+      · PushNotificationLog — 기기에 붙는다. FCM 발송 대기 줄이다.
+    앱을 안 쓰는 사용자는 두 번째가 안 생기지만 첫 번째는 생긴다.
+    """
     from django.conf import settings
     from v1.mobile.models import AppDevice, AlertRule, PushNotificationLog
 
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
-
-    product_name     = (news.product_name or '').lower()
-    company_name     = (news.company_name or '').lower()
-    ai_keywords      = [kw.lower() for kw in (news.ai_keywords or [])]
-    violation_reason = (news.violation_reason or '').lower()
+    fields = news_fields_for_matching(news)
 
     saved = 0
 
@@ -89,14 +133,20 @@ def _save_keyword_logs(news) -> int:
         .select_related('user')
     )
 
-    matched_users: dict = {}  # user_id → matched AlertRule
+    # 사용자별로 **걸린 규칙을 모두** 모은다. 예전에는 첫 규칙 하나만 보고
+    # 넘어갔는데, 그러면 상세에서 "무엇 때문에 왔는지" 를 한 개밖에 못 보여 준다.
+    matched_by_user: dict = {}
     for rule in user_rules:
-        if rule.user_id in matched_users:
-            continue
-        if _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
-            matched_users[rule.user_id] = rule
+        if _matches_rule(rule, *fields):
+            matched_by_user.setdefault(rule.user_id, []).append(rule)
 
-    for user_id, matched_rule in matched_users.items():
+    for user_id, rules in matched_by_user.items():
+        for rule in rules:
+            if save_keyword_match(news, rule):
+                saved += 1
+
+        # 푸시는 사용자당 한 건이면 된다 — 기기 알림함이 같은 뉴스로 도배되지 않게
+        first_rule = rules[0]
         for device in AppDevice.objects.filter(user_id=user_id):
             if PushNotificationLog.objects.filter(device=device, news=news).exists():
                 continue
@@ -104,9 +154,9 @@ def _save_keyword_logs(news) -> int:
             PushNotificationLog.objects.create(
                 device=device,
                 news=news,
-                rule_triggered=matched_rule,
+                rule_triggered=first_rule,
                 trigger_type='keyword',
-                trigger_label=matched_rule.keyword,
+                trigger_label=first_rule.keyword,
                 sent_at=None,
             )
             saved += 1
@@ -122,7 +172,7 @@ def _save_keyword_logs(news) -> int:
     for device in guest_devices:
         matched_rule = None
         for rule in device.rules.filter(is_active=True, user__isnull=True):
-            if _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
+            if _matches_rule(rule, *fields):
                 matched_rule = rule
                 break
 
@@ -260,6 +310,13 @@ def backfill_alerts_for_rule(rule) -> dict:
     새로 등록된 AlertRule에 대해 기존 수집 데이터 전체를 소급 매칭.
     소급분은 과거 데이터이므로 sent_at을 즉시 설정해 배치 발송 대상에서 제외한다.
 
+    'created' 는 **걸린 부적합 건수**다.
+    예전에는 만들어진 푸시 로그 수였는데, 그 수는 기기 수에 따라 달라졌다.
+    기기가 둘이면 한 건이 두 건으로 세어졌고, 앱을 안 쓰는 사용자는 아무리 많이
+    걸려도 0 이었다 — 화면에는 "일치하는 정보가 없습니다" 가 뜨면서 그 아래
+    미리보기가 다섯 건 보이는 모순이 여기서 나왔다.
+    지금은 사용자 매칭(NewsKeywordMatch)을 세므로 화면 문구와 어긋나지 않는다.
+
     Returns: {'created': int, 'previews': list[dict], 'log_ids': list[int]}
     """
     from django.conf import settings
@@ -269,11 +326,11 @@ def backfill_alerts_for_rule(rule) -> dict:
 
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
 
-    # 이 규칙이 알림을 생성할 대상 기기 결정
+    # 이 규칙이 푸시를 보낼 기기 (없어도 된다 — 웹 매칭은 기기와 무관하다)
     if rule.user:
         target_devices = list(AppDevice.objects.filter(user=rule.user))
     else:
-        target_devices = [rule.device]
+        target_devices = [rule.device] if rule.device_id else []
 
     if rule.category == 'COMPANY':
         qs = RegulatoryNews.objects.all().order_by('-event_date', '-collected_date')
@@ -286,12 +343,7 @@ def backfill_alerts_for_rule(rule) -> dict:
     to_create = []
 
     for news in qs:
-        product_name     = (news.product_name or '').lower()
-        company_name     = (news.company_name or '').lower()
-        ai_keywords      = [kw.lower() for kw in (news.ai_keywords or [])]
-        violation_reason = (news.violation_reason or '').lower()
-
-        if not _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
+        if not _matches_rule(rule, *news_fields_for_matching(news)):
             continue
 
         if len(previews) < 5:
@@ -309,6 +361,13 @@ def backfill_alerts_for_rule(rule) -> dict:
     created_ids = []
     if to_create:
         now = timezone.now()
+
+        # ① 사용자 매칭 — 웹 화면이 보는 기록. 기기가 없어도 남는다.
+        for news in to_create:
+            if save_keyword_match(news, rule):
+                created_count += 1
+
+        # ② 기기 푸시 로그 — 앱 알림함용. 기기가 없으면 이 단계는 통째로 건너뛴다.
         for device in target_devices:
             target_trim = max(1, max_noti - len(to_create))
             _trim_notifications(device, target_trim)
@@ -324,7 +383,6 @@ def backfill_alerts_for_rule(rule) -> dict:
                     sent_at=now,  # 소급 데이터 — 배치 발송 대상 제외
                 )
                 created_ids.append(log.pk)
-                created_count += 1
 
     return {'created': created_count, 'previews': previews, 'log_ids': created_ids}
 

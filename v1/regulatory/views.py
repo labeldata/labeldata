@@ -25,11 +25,11 @@ from v1.regulatory import selectors
 from v1.regulatory.services import news_search
 from v1.regulatory.services.collector import INSPECTION_BACKFILL_DAYS
 from v1.regulatory.models import (
-    AlertMute, NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction,
-    RegulatoryNews, InspectionResult, InspectionMatch, judgment_status_of,
-    normalize_mute_value,
+    AlertMute, NewsIngredientMatch, NewsKeywordMatch, NewsProductMatch,
+    RegulatoryMatchAction, RegulatoryNews, InspectionResult, InspectionMatch,
+    judgment_status_of, normalize_mute_value,
 )
-from v1.mobile.models import AlertRule, PushNotificationLog
+from v1.mobile.models import AlertRule
 from v1.user_management.models import UserProfile
 from v1.regulatory.saol_url_map import SAOL_URLS
 from v1.activity_log.utils import log_activity
@@ -607,7 +607,7 @@ def news_list(request):
     selected_news = None
     selected_matches = []
     selected_ing_matches = []   # NewsIngredientMatch 인스턴스 목록
-    selected_kw_logs = []       # PushNotificationLog (키워드 매칭)
+    selected_kw_logs = []       # NewsKeywordMatch (내 알림 키워드 매칭)
     if selected_id:
         try:
             selected_news = RegulatoryNews.objects.get(pk=selected_id)
@@ -655,23 +655,21 @@ def news_list(request):
                 )
                 .order_by('-risk_score', '-match_score')
             )
-            # 키워드 알림 매칭 로그 (중복 제거: category+keyword+match_type 기준)
-            _kw_seen = set()
-            _kw_logs_raw = (
-                PushNotificationLog.objects
-                .filter(news=selected_news, device__user=request.user, trigger_type='keyword')
-                .select_related('rule_triggered')
-                .order_by('rule_triggered__category', 'rule_triggered__keyword')
+            # 키워드 매칭 — 사용자에 붙는 표에서 읽는다.
+            # 예전에는 기기별 푸시 로그를 봤기 때문에, 앱을 깐 적 없는 사용자
+            # 에게는 이 구역이 한 번도 나온 적이 없다.
+            selected_kw_logs = list(
+                NewsKeywordMatch.objects
+                .filter(news=selected_news, user=request.user, dismissed_yn=False)
+                .select_related('rule')
+                .order_by('category', 'matched_keyword')
             )
-            for log in _kw_logs_raw:
-                rule = log.rule_triggered
-                if rule is None:
-                    key = ('', log.trigger_label, '')
-                else:
-                    key = (rule.category, rule.keyword, rule.match_type)
-                if key not in _kw_seen:
-                    _kw_seen.add(key)
-                    selected_kw_logs.append(log)
+            # 열어 본 것은 읽음으로 — 제품·원료 매칭과 같은 결
+            _unread_kw = [m.pk for m in selected_kw_logs if not m.read_yn]
+            if _unread_kw:
+                NewsKeywordMatch.objects.filter(pk__in=_unread_kw).update(
+                    read_yn=True, read_at=timezone.now())
+                cache.delete(f'regulatory_alert_count_{request.user.id}')
         except RegulatoryNews.DoesNotExist:
             pass
 
@@ -862,11 +860,21 @@ def news_detail(request, pk):
         .prefetch_related('ingredient__bom_usages__parent_label', 'actions')
         .order_by('-risk_score', '-match_score')
     )
+    # 목록의 상세 패널과 같은 구역을 쓰므로 키워드 매칭도 같이 넘긴다.
+    # (안 넘기면 이 페이지에서만 '알림 키워드 매칭' 이 통째로 빠진다)
+    kw_matches = list(
+        NewsKeywordMatch.objects
+        .filter(news=news, user=request.user, dismissed_yn=False)
+        .select_related('rule')
+        .order_by('category', 'matched_keyword')
+    )
+    news.is_admin_source = news.api_source in ADMIN_API_SOURCES
     log_activity(request, 'regulatory', 'regulatory_detail', news.pk)
     return render(request, 'regulatory/news_detail.html', {
         'news':        news,
         'my_matches':  my_matches,
         'ing_matches': ing_matches,
+        'kw_matches':  kw_matches,
     })
 
 
@@ -903,6 +911,12 @@ def mark_as_read(request):
     if news_id:
         ing_qs = ing_qs.filter(news_id=news_id)
     ing_qs.update(read_yn=True)
+
+    # 키워드 매칭도 같은 기준으로 (배지의 모수에 함께 들어간다)
+    kw_qs = NewsKeywordMatch.objects.filter(user=request.user, read_yn=False, dismissed_yn=False)
+    if news_id:
+        kw_qs = kw_qs.filter(news_id=news_id)
+    kw_qs.update(read_yn=True, read_at=timezone.now())
 
     # 읽음 처리 후 남은 미확인 뉴스 건수 (사이드바 배지와 동일 기준)
     cache.delete(f'regulatory_alert_count_{request.user.id}')
@@ -1156,6 +1170,9 @@ def mark_all_news_resolved(request):
     NewsIngredientMatch.objects.filter(
         user=request.user, dismissed_yn=False, read_yn=False,
     ).update(read_yn=True)
+    NewsKeywordMatch.objects.filter(
+        user=request.user, dismissed_yn=False, read_yn=False,
+    ).update(read_yn=True, read_at=timezone.now())
 
     # 수거검사 매칭도 함께 읽음 처리한다.
     #
@@ -1242,12 +1259,16 @@ def _mark_news_tab_read(user, tab: str) -> int:
         product__user_id=user, false_positive_yn=False, read_yn=False)
     ing_qs = NewsIngredientMatch.objects.filter(
         user=user, dismissed_yn=False, read_yn=False)
+    kw_qs = NewsKeywordMatch.objects.filter(
+        user=user, dismissed_yn=False, read_yn=False)
     if news_ids is not None:
         prod_qs = prod_qs.filter(news_id__in=news_ids)
         ing_qs  = ing_qs.filter(news_id__in=news_ids)
+        kw_qs   = kw_qs.filter(news_id__in=news_ids)
 
     updated  = prod_qs.update(read_yn=True, read_at=now)
     updated += ing_qs.update(read_yn=True)
+    updated += kw_qs.update(read_yn=True, read_at=now)
     return updated
 
 

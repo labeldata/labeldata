@@ -320,10 +320,12 @@ def rule_detail(request, device_id, rule_id):
         serializer = AlertRuleSerializer(rule, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            # 규칙을 껐으면(is_active=False) 그 키워드로 예약돼 있던 푸시도 거둔다.
-            # 끄고 나서도 낮 배치에 그대로 울리면, 껐다는 사실을 못 믿게 된다.
+            # 규칙을 껐으면(is_active=False) 그 키워드로 예약돼 있던 푸시를 거두고,
+            # 그 키워드로 걸린 매칭도 미확인에서 내린다. 끄고 나서도 낮 배치에
+            # 울리거나 배지에 숫자가 남아 있으면, 껐다는 사실을 못 믿게 된다.
             if not serializer.instance.is_active:
                 _cancel_rule_pushes(owner_user, device, rule)
+                _mark_rule_matches_read(rule)
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -344,6 +346,15 @@ def _cancel_rule_pushes(owner_user, device, rule) -> None:
         cancel_pending_logs(user=owner_user, rule=rule)
     else:
         cancel_pending_logs(device=device, rule=rule)
+
+
+def _mark_rule_matches_read(rule) -> None:
+    """꺼진 키워드로 걸린 매칭은 배지에서 내린다 (지우지는 않는다 — 다시 켤 수 있다)."""
+    from django.utils import timezone
+    from v1.regulatory.models import NewsKeywordMatch
+
+    NewsKeywordMatch.objects.filter(rule=rule, read_yn=False).update(
+        read_yn=True, read_at=timezone.now())
 
 
 # ── 보관함 ───────────────────────────────────────────────────────────────────
