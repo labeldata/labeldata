@@ -1,0 +1,207 @@
+{% comment %}
+  알림 설정 — 세 갈래를 한 모달의 세 탭으로.
+
+    키워드 알림   무엇이 나오면 알려 줄지 (AlertRule)
+    수거검사 알림 내 회사를 무엇으로 알아볼지 (UserProfile)
+    받지 않기     무엇 때문에 오는 것을 그만 받을지 (AlertMute)
+
+  앞의 둘이 '받겠다', 마지막이 '안 받겠다' 다. 같은 말을 양쪽에 넣으면 어느
+  쪽이 이겼는지 화면에서 설명할 수 없어서, 서버가 409 로 되돌려 보낸다.
+
+  news_list.html 에서 떼어 냈다 — 그 파일은 목록을 그리는 곳이고, 이것은
+  '앞으로 무엇을 받을지' 를 정하는 곳이라 하는 일이 다르다.
+{% endcomment %}
+{# ─── 알림 키워드 관리 모달 ─── #}
+  {# ─── 알림 설정 통합 모달 (키워드 알림 + 수거검사 알림) ─── #}
+  <div class="modal fade" id="alertSettingsModal" tabindex="-1">
+    <div class="modal-dialog kw-modal-dialog">
+      <div class="modal-content kw-modal">
+        <div class="modal-header kw-modal-header">
+          <span class="kw-modal-title"><i class="bi bi-bell me-2"></i>알림 설정</span>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="as-intro">
+          이 화면의 알림은 <b>키워드</b>·<b>수거검사</b> 두 갈래로 들어오고,
+          내 원료·제품과 자동으로 맞춘 것이 함께 올라옵니다.
+          받는 기준은 앞의 두 탭에서, <b>그만 받을 것</b>은 마지막 탭에서 정하세요.
+        </div>
+
+        <ul class="nav nav-tabs as-tabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="asKwTab" data-bs-toggle="tab"
+                    data-bs-target="#asKwPane" type="button" role="tab">
+              키워드 알림
+              <span class="as-tab-count" id="kwBadgeCountTab">{{ alert_rules|length }}</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="asInspTab" data-bs-toggle="tab"
+                    data-bs-target="#asInspPane" type="button" role="tab">
+              수거검사 알림
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="asMuteTab" data-bs-toggle="tab"
+                    data-bs-target="#asMutePane" type="button" role="tab">
+              받지 않기
+              <span class="as-tab-count" id="muteBadgeCountTab">{{ alert_mutes|length }}</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="modal-body kw-modal-body tab-content">
+
+          {# ── 1. 키워드 알림 ── #}
+          <div class="tab-pane fade show active" id="asKwPane" role="tabpanel">
+            <p class="as-desc">
+              등록한 키워드가 <b>부적합·회수·행정처분</b> 정보에 나타나면 목록에서 표시되고,
+              모바일 앱을 쓰면 푸시 알림도 받습니다. 원료명·업체명·원산지로 등록할 수 있습니다.
+            </p>
+
+            <div class="kw-list-section">
+              <div class="kw-list-title">등록된 키워드 <span class="kw-list-count" id="kwModalCount">{{ alert_rules|length }}</span>개</div>
+              <div class="kw-chips-wrap" id="kwChipsWrap">
+                {% if not alert_rules %}
+                <div class="kw-empty" id="kwEmptyMsg">등록된 키워드가 없습니다.</div>
+                {% else %}
+                {% for rule in alert_rules %}
+                <span class="rkb-chip rkb-chip-{{ rule.category|lower }}" data-rule-id="{{ rule.id }}"
+                      title="{{ rule.get_category_display }} · {{ rule.get_match_type_display }}">
+                  <span class="rkb-chip-cat">{{ rule.get_category_display }}</span>
+                  <span class="rkb-chip-kw">{{ rule.keyword }}</span>
+                  {% if rule.match_type == 'EXACT' %}<span class="rkb-chip-exact">=</span>{% endif %}
+                  <button class="rkb-chip-del" onclick="deleteKeyword({{ rule.id }}, '{{ rule.keyword|escapejs }}')" title="삭제"><i class="bi bi-x"></i></button>
+                </span>
+                {% endfor %}
+                {% endif %}
+              </div>
+            </div>
+
+            <div id="kwBackfillResult" style="display:none;"></div>
+
+            <div class="kw-add-section">
+              <div class="kw-add-form">
+                <select id="kwCategory" class="form-select form-select-sm kw-select">
+                  <option value="INGREDIENT">원료/제품명</option>
+                  <option value="COMPANY">업체명</option>
+                  <option value="ORIGIN">원산지</option>
+                </select>
+                <input type="text" id="kwKeyword" class="form-control form-control-sm kw-input"
+                       placeholder="키워드 입력" maxlength="100"
+                       onkeydown="if(event.key==='Enter'){saveKeyword();}"
+                       oninput="var r=document.getElementById('kwBackfillResult');if(r)r.style.display='none';">
+                <select id="kwMatchType" class="form-select form-select-sm kw-select-match">
+                  <option value="CONTAINS">포함</option>
+                  <option value="EXACT">일치</option>
+                </select>
+                <button type="button" class="btn btn-primary kw-add-btn" id="kwSaveBtn" onclick="saveKeyword()">
+                  <i class="bi bi-plus-lg"></i> 추가
+                </button>
+              </div>
+              <div id="kwError" class="text-danger small mt-1" style="display:none"></div>
+              <div class="kw-add-help text-muted small mt-1">
+                포함 = 부분 일치 · 일치 = 완전 일치 · 등록하면 기존 데이터도 소급 매칭됩니다
+              </div>
+            </div>
+          </div>
+
+          {# ── 2. 수거검사 알림 ── #}
+          <div class="tab-pane fade" id="asInspPane" role="tabpanel">
+            <p class="as-desc">
+              식약처가 <b>내 회사 제품을 수거해 검사</b>하면 알려드립니다.
+              아래 정보로 수거검사 데이터와 대조하며, 위에서부터 순서대로 확인합니다.
+            </p>
+
+            <div class="ipm-info-box">
+              <div class="ipm-rule-row">
+                <span class="ipm-rule-badge">1</span>
+                <span class="ipm-rule-desc"><b>품목보고번호</b> — 내가 등록한 제품의 품목보고번호가 일치할 때 (자동)</span>
+              </div>
+              <div class="ipm-rule-row">
+                <span class="ipm-rule-badge">2</span>
+                <span class="ipm-rule-desc"><b>인허가번호</b> — 아래 번호가 수거검사 업체 정보에 포함될 때 (하이픈 없는 숫자 11자리)</span>
+              </div>
+              <div class="ipm-rule-row">
+                <span class="ipm-rule-badge">3</span>
+                <span class="ipm-rule-desc"><b>회사명</b> — 아래 회사명이 수거검사 업소명에 포함될 때</span>
+              </div>
+            </div>
+
+            <div class="ipm-edit-section">
+              <div class="ipm-field-row">
+                <label class="ipm-label">회사명</label>
+                <input type="text" id="inspCompanyName" class="ipm-input"
+                       value="{{ user_profile.company_name|default:'' }}"
+                       placeholder="(주)예시식품"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();saveInspProfile();}">
+              </div>
+              <div class="ipm-field-row">
+                <label class="ipm-label">인허가번호</label>
+                {% comment %}
+ 인허가번호는 하이픈 없는 11자리 숫자다 (품목보고번호 데이터 전수 확인).
+                   예전 예시 "2025-인허가번호-01234" 는 실제 형식과 달라 혼동을 줬다.
+{% endcomment %}
+                <input type="text" id="inspLicenseNumber" class="ipm-input"
+                       value="{{ user_profile.license_number|default:'' }}"
+                       placeholder="19630364001 (숫자 11자리)"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();saveInspProfile();}">
+              </div>
+              <div id="inspProfileMsg" class="ipm-msg" style="display:none;"></div>
+              <div class="as-actions">
+                <a href="{% url 'user_management:user_profile' %}" class="v2-action-btn-outline as-btn-sm" target="_blank">
+                  <i class="bi bi-box-arrow-up-right"></i>전체 내 정보
+                </a>
+                <button type="button" class="btn btn-primary v2-btn-sm" onclick="saveInspProfile()">
+                  <i class="bi bi-check2 me-1"></i>저장
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {% comment %}
+            ── 3. 받지 않기 ────────────────────────────────────────────────
+            등록한 키워드(AlertRule)가 "이것을 받겠다" 라면, 여기 목록은
+            "이것 때문에 오는 것은 그만" 이다. 목록의 알림 상세에서 '알림 사유'
+            옆 단추를 누르면 이 목록에 한 줄이 쌓인다. 어디서 껐는지 되짚을
+            자리가 없으면, 껐다는 사실 자체를 잊고 "왜 안 오지" 가 된다.
+          {% endcomment %}
+          <div class="tab-pane fade" id="asMutePane" role="tabpanel">
+            <p class="as-desc">
+              여기 있는 값으로 걸리는 알림은 <b>앞으로 오지 않습니다</b>.
+              부적합 정보의 키워드(예: 대장균), 내 원료·제품명(예: 정제수),
+              업체명으로 끌 수 있습니다.
+              끄는 것은 목록에서 알림을 열고 <b>알림 사유</b> 옆의
+              <i class="bi bi-bell-slash"></i> 단추로 합니다.
+            </p>
+
+            <div class="kw-list-section">
+              <div class="kw-list-title">
+                받지 않는 값 <span class="kw-list-count" id="muteModalCount">{{ alert_mutes|length }}</span>개
+              </div>
+              <div class="kw-chips-wrap" id="muteChipsWrap">
+                {% if not alert_mutes %}
+                <div class="kw-empty" id="muteEmptyMsg">아직 끈 것이 없습니다.</div>
+                {% else %}
+                {% for m in alert_mutes %}
+                <span class="rkb-chip rkb-chip-mute" data-mute-id="{{ m.id }}"
+                      title="{{ m.get_scope_display }}{% if m.hidden_count %} · 끌 때 기존 {{ m.hidden_count }}건 정리{% endif %}">
+                  <span class="rkb-chip-cat">{{ m.get_scope_display }}</span>
+                  <span class="rkb-chip-kw">{{ m.value }}</span>
+                  <button class="rkb-chip-del" title="다시 받기"
+                          onclick="deleteMute({{ m.id }}, '{{ m.value|escapejs }}')"><i class="bi bi-x"></i></button>
+                </span>
+                {% endfor %}
+                {% endif %}
+              </div>
+              <div class="kw-add-help text-muted small mt-2">
+                다시 받기로 되돌리면 <b>앞으로 오는 것</b>부터 다시 옵니다.
+                끌 때 함께 정리한 지난 알림은 되살아나지 않습니다.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>

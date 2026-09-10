@@ -70,6 +70,58 @@
                overflow: hidden; background: var(--c-bg-page); }
 
 /* ── 1-1. 통계 카드 줄 (제품 관리 .stats-strip 과 같은 규격) ──────── */
+/* ── 1-2. 필터 툴바 (제품 관리 .filter-toolbar 과 같은 규격) ─────── */
+.reg-toolbar {
+  flex-shrink: 0; background: #fff;
+  border-bottom: 1px solid var(--ez-gray-300, #dadce0);
+  position: relative; z-index: var(--z-filter);
+}
+.reg-tb-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 24px; min-width: 0;
+}
+.reg-tb-row + .reg-tb-row { border-top: 1px solid var(--c-border-light); }
+.reg-tb-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* 탭 바 — 모양은 공용 .pv-tabs (list_common.css) 가 준다.
+   여기서는 이 화면에서의 자리만 잡는다. 툴바 **위** 제 줄이라 좌우 여백을
+   툴바와 맞추고, 아래 툴바와 선이 겹치지 않게 한 겹만 남긴다. */
+.reg-tabs.pv-tabs { padding: 0 24px; border-bottom: none; }
+
+/* 검색 — 제품 관리의 input-group 과 같은 모양 */
+.rf-search-wrap { width: 300px; flex-shrink: 0; }
+.rs-search-inner {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--c-border-line); border-radius: var(--r-md);
+  background: #fff; padding: 0 10px; height: 34px;
+  transition: border-color var(--ez-transition-fast), box-shadow var(--ez-transition-fast);
+}
+.rs-search-inner:focus-within { border-color: var(--c-primary);
+                                box-shadow: 0 0 0 3px rgba(26,115,232,.1); }
+.rs-search-icon { color: var(--c-text-hint); font-size: 13px; flex-shrink: 0; }
+.rs-search-inner input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font-size: 13px; color: var(--c-text-primary);
+}
+.rs-search-x { background: none; border: none; padding: 2px 4px; cursor: pointer;
+               color: var(--c-text-hint); font-size: 11px; line-height: 1; }
+.rs-search-x:hover { color: var(--c-danger); }
+
+/* 알림 설정 — 사이트 공용 아웃라인 버튼과 같은 톤 */
+.rs-settings-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  height: 34px; padding: 0 14px;
+  border: 1px solid var(--c-border-line); border-radius: var(--ez-radius-pill);
+  background: #fff; color: var(--c-text-body); font-size: 12.5px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+}
+.rs-settings-btn:hover { border-color: var(--c-primary); color: var(--c-primary);
+                         background: var(--c-primary-bg); }
+.rs-settings-badge {
+  background: var(--c-warn-bg); color: var(--c-warn-text);
+  font-size: 10px; font-weight: 700; border-radius: 9px; padding: 1px 6px;
+}
+
 /* 2행의 칩 묶음 — 범위·기간·상태 */
 .rf-risk-chips  { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .rs-days-group  { display: flex; gap: 4px; flex-shrink: 0; }
@@ -452,6 +504,25 @@ details[open] .rd-ai-sum::after { content: "⌄"; font-size: 12px; }
 .rs-mine-cell > *        { display: inline-block; vertical-align: middle; }
 .rs-mine-cell .rs-status-cell:empty { display: none; }
 .rs-mine-cell .rs-status-cell > *   { margin-left: 3px; }
+
+/* ── 17-1. 알림 사유 안의 종류 줄 ───────────────────────────
+   제품 · 원료 · 키워드가 한 구역에 함께 산다. 예전에는 셋이 각각 제 카드로
+   쌓였는데(머리 셋·건수 셋·안내 문구 셋), 셋 다 답하는 질문은 하나다 —
+   왜 나한테 왔나. 머리는 하나로 두고 종류만 이 줄로 가른다. */
+.rd-kind {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: 12px 0 6px; font-size: 11.5px; color: var(--c-text-hint);
+}
+.rd-sec-body > .rd-kind:first-child { margin-top: 0; }
+.rd-kind-badge {
+  font-size: 10.5px; font-weight: 700; border-radius: var(--r-xs);
+  padding: 2px 7px; white-space: nowrap;
+}
+.rd-kind-badge--prod { background: var(--c-danger-bg); color: var(--c-danger-text); }
+.rd-kind-badge--ing  { background: var(--c-warn-bg);   color: var(--c-warn-text); }
+.rd-kind-badge--kw   { background: var(--c-primary-bg); color: var(--c-primary); }
+.rd-kind-n   { font-weight: 700; color: var(--c-text-secondary); font-variant-numeric: tabular-nums; }
+.rd-kind-sub { color: var(--c-text-hint); }
 
 /* ── 18. 매칭 아이템 ───────────────────────────────────────── */
 .rd-item             { border: 1px solid var(--c-border); border-radius: var(--r-sm);

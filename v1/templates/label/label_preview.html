@@ -14,7 +14,7 @@
   <!-- Label Preview CSS -->
   <link href="{% static 'css/label_preview.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
   <!-- 라벨 상수 로드 -->
-  <script src="{% static 'js/label/constants.js' %}"></script>
+  <script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
   <script src="{% static 'js/label/date_entries.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 </head>
 <body{% if request.GET.readonly %} class="readonly-mode"{% endif %}>

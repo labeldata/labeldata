@@ -15,7 +15,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/board.css' %}">
+<link rel="stylesheet" href="{% static 'css/board.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% endblock %}
 
 {% block content %}

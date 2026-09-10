@@ -26,6 +26,41 @@
     (#condForm)이 따로 있어서, 같은 값(검색어·기간·탭·정렬)을 양쪽에 hidden
     으로 두 벌 들고 다녔다. 한쪽만 고치면 조건이 조용히 사라졌다.
 {% endcomment %}
+  {% comment %}
+    ── 탭 ────────────────────────────────────────────────────────────
+    제품 조회와 같은 자리·같은 부품(.pv-tabs / .pv-tab)이다. 화면 폭을 다 쓰는
+    바라서 툴바 안이 아니라 **툴바 위 제 줄**에 둔다 — 검색창과 한 줄에 넣었더니
+    줄이 넘쳐 검색창이 아래로 밀렸다.
+
+    탭은 **링크**다. 탭 전환이 곧 페이지 이동이므로 <a href> 여야 한다 —
+    가운데 클릭으로 새 탭에서 열리고, 주소를 복사할 수 있고, 스크립트가 죽어도
+    눌린다. 폼 밖이어도 되는 이유이기도 하다.
+    배지 숫자 = 그 탭 목록의 총 건수(현재 필터 적용) / 점 = 미확인 있음.
+  {% endcomment %}
+  <div class="pv-tabs reg-tabs">
+    <a class="pv-tab{% if active_tab == 'insp-news' %} pv-tab--active{% endif %}"
+       href="?{{ tab_qs_insp_news }}"
+       {% if tab_insp_unread %}title="미확인 {{ tab_insp_unread }}건"{% endif %}>
+      <i class="bi bi-shield-exclamation"></i>부적합
+      <span class="pv-tab-count">{{ tab_insp_total|intcomma }}</span>
+      {% if tab_insp_unread %}<span class="pv-tab-dot"></span>{% endif %}
+    </a>
+    <a class="pv-tab{% if active_tab == 'admin' %} pv-tab--active{% endif %}"
+       href="?{{ tab_qs_admin }}"
+       {% if tab_admin_unread %}title="미확인 {{ tab_admin_unread }}건"{% endif %}>
+      <i class="bi bi-gavel"></i>행정처분
+      <span class="pv-tab-count">{{ tab_admin_total|intcomma }}</span>
+      {% if tab_admin_unread %}<span class="pv-tab-dot"></span>{% endif %}
+    </a>
+    <a class="pv-tab{% if active_tab == 'insp' %} pv-tab--active{% endif %}"
+       href="?{{ tab_qs_inspection }}"
+       {% if inspection_unread %}title="미확인 {{ inspection_unread }}건"{% endif %}>
+      <i class="bi bi-search"></i>수거검사
+      <span class="pv-tab-count">{% if inspection_has_matches %}{{ inspection_total|intcomma }}{% else %}{{ recent_insp_total|intcomma }}{% endif %}</span>
+      {% if inspection_unread %}<span class="pv-tab-dot"></span>{% endif %}
+    </a>
+  </div>
+
   <div class="reg-toolbar">
     <form method="get" id="filterForm">
       {% if request.GET.id %}<input type="hidden" name="id" value="{{ request.GET.id }}">{% endif %}
@@ -44,42 +79,8 @@
       {# 수거검사(I0460)는 버튼으로 제어 — 체크 상태면 hidden으로 전달 #}
       {% if show_inspection %}<input type="hidden" name="cat" value="I0460" id="hiddenInsp46">{% endif %}
 
-      {% comment %}
-        ── 1행: 탭 · 검색 · 알림 설정 ────────────────────────────────
-        탭은 **링크**다. 탭 전환이 곧 페이지 이동이므로 <a href> 여야 한다 —
-        가운데 클릭으로 새 탭에서 열리고, 주소를 복사할 수 있고, 스크립트가
-        죽어도 눌린다. (스크립트가 한 번 죽어 "탭이 클릭되지 않는다" 는 신고가
-        실제로 나왔다)
-
-        클래스는 제품 조회와 같은 pv-tab 이다. 같은 뜻의 컨트롤에 화면마다
-        다른 이름을 붙이면, 한쪽을 고칠 때 다른 쪽이 조용히 뒤처진다.
-        배지 숫자 = 그 탭 목록의 총 건수(현재 필터 적용) / 점 = 미확인 있음.
-      {% endcomment %}
+      {# 1행: 검색 · 알림 설정 (탭은 툴바 위 제 줄에 있다) #}
       <div class="reg-tb-row">
-        <div class="pv-tabs reg-tabs">
-          <a class="pv-tab{% if active_tab == 'insp-news' %} pv-tab--active{% endif %}"
-             href="?{{ tab_qs_insp_news }}"
-             {% if tab_insp_unread %}title="미확인 {{ tab_insp_unread }}건"{% endif %}>
-            <i class="bi bi-shield-exclamation"></i>부적합
-            <span class="pv-tab-count">{{ tab_insp_total|intcomma }}</span>
-            {% if tab_insp_unread %}<span class="pv-tab-dot"></span>{% endif %}
-          </a>
-          <a class="pv-tab{% if active_tab == 'admin' %} pv-tab--active{% endif %}"
-             href="?{{ tab_qs_admin }}"
-             {% if tab_admin_unread %}title="미확인 {{ tab_admin_unread }}건"{% endif %}>
-            <i class="bi bi-gavel"></i>행정처분
-            <span class="pv-tab-count">{{ tab_admin_total|intcomma }}</span>
-            {% if tab_admin_unread %}<span class="pv-tab-dot"></span>{% endif %}
-          </a>
-          <a class="pv-tab{% if active_tab == 'insp' %} pv-tab--active{% endif %}"
-             href="?{{ tab_qs_inspection }}"
-             {% if inspection_unread %}title="미확인 {{ inspection_unread }}건"{% endif %}>
-            <i class="bi bi-search"></i>수거검사
-            <span class="pv-tab-count">{% if inspection_has_matches %}{{ inspection_total|intcomma }}{% else %}{{ recent_insp_total|intcomma }}{% endif %}</span>
-            {% if inspection_unread %}<span class="pv-tab-dot"></span>{% endif %}
-          </a>
-        </div>
-
         <div class="reg-tb-right">
           <div class="rf-search-wrap">
             <div class="rs-search-inner">
@@ -216,200 +217,7 @@
     </form>
   </div>{# end reg-toolbar #}
 
-  {# ─── 알림 키워드 관리 모달 ─── #}
-  {# ─── 알림 설정 통합 모달 (키워드 알림 + 수거검사 알림) ─── #}
-  <div class="modal fade" id="alertSettingsModal" tabindex="-1">
-    <div class="modal-dialog kw-modal-dialog">
-      <div class="modal-content kw-modal">
-        <div class="modal-header kw-modal-header">
-          <span class="kw-modal-title"><i class="bi bi-bell me-2"></i>알림 설정</span>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="as-intro">
-          이 화면의 알림은 <b>키워드</b>·<b>수거검사</b> 두 갈래로 들어오고,
-          내 원료·제품과 자동으로 맞춘 것이 함께 올라옵니다.
-          받는 기준은 앞의 두 탭에서, <b>그만 받을 것</b>은 마지막 탭에서 정하세요.
-        </div>
-
-        <ul class="nav nav-tabs as-tabs" role="tablist">
-          <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="asKwTab" data-bs-toggle="tab"
-                    data-bs-target="#asKwPane" type="button" role="tab">
-              키워드 알림
-              <span class="as-tab-count" id="kwBadgeCountTab">{{ alert_rules|length }}</span>
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="asInspTab" data-bs-toggle="tab"
-                    data-bs-target="#asInspPane" type="button" role="tab">
-              수거검사 알림
-            </button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="asMuteTab" data-bs-toggle="tab"
-                    data-bs-target="#asMutePane" type="button" role="tab">
-              받지 않기
-              <span class="as-tab-count" id="muteBadgeCountTab">{{ alert_mutes|length }}</span>
-            </button>
-          </li>
-        </ul>
-
-        <div class="modal-body kw-modal-body tab-content">
-
-          {# ── 1. 키워드 알림 ── #}
-          <div class="tab-pane fade show active" id="asKwPane" role="tabpanel">
-            <p class="as-desc">
-              등록한 키워드가 <b>부적합·회수·행정처분</b> 정보에 나타나면 목록에서 표시되고,
-              모바일 앱을 쓰면 푸시 알림도 받습니다. 원료명·업체명·원산지로 등록할 수 있습니다.
-            </p>
-
-            <div class="kw-list-section">
-              <div class="kw-list-title">등록된 키워드 <span class="kw-list-count" id="kwModalCount">{{ alert_rules|length }}</span>개</div>
-              <div class="kw-chips-wrap" id="kwChipsWrap">
-                {% if not alert_rules %}
-                <div class="kw-empty" id="kwEmptyMsg">등록된 키워드가 없습니다.</div>
-                {% else %}
-                {% for rule in alert_rules %}
-                <span class="rkb-chip rkb-chip-{{ rule.category|lower }}" data-rule-id="{{ rule.id }}"
-                      title="{{ rule.get_category_display }} · {{ rule.get_match_type_display }}">
-                  <span class="rkb-chip-cat">{{ rule.get_category_display }}</span>
-                  <span class="rkb-chip-kw">{{ rule.keyword }}</span>
-                  {% if rule.match_type == 'EXACT' %}<span class="rkb-chip-exact">=</span>{% endif %}
-                  <button class="rkb-chip-del" onclick="deleteKeyword({{ rule.id }}, '{{ rule.keyword|escapejs }}')" title="삭제"><i class="bi bi-x"></i></button>
-                </span>
-                {% endfor %}
-                {% endif %}
-              </div>
-            </div>
-
-            <div id="kwBackfillResult" style="display:none;"></div>
-
-            <div class="kw-add-section">
-              <div class="kw-add-form">
-                <select id="kwCategory" class="form-select form-select-sm kw-select">
-                  <option value="INGREDIENT">원료/제품명</option>
-                  <option value="COMPANY">업체명</option>
-                  <option value="ORIGIN">원산지</option>
-                </select>
-                <input type="text" id="kwKeyword" class="form-control form-control-sm kw-input"
-                       placeholder="키워드 입력" maxlength="100"
-                       onkeydown="if(event.key==='Enter'){saveKeyword();}"
-                       oninput="var r=document.getElementById('kwBackfillResult');if(r)r.style.display='none';">
-                <select id="kwMatchType" class="form-select form-select-sm kw-select-match">
-                  <option value="CONTAINS">포함</option>
-                  <option value="EXACT">일치</option>
-                </select>
-                <button type="button" class="btn btn-primary kw-add-btn" id="kwSaveBtn" onclick="saveKeyword()">
-                  <i class="bi bi-plus-lg"></i> 추가
-                </button>
-              </div>
-              <div id="kwError" class="text-danger small mt-1" style="display:none"></div>
-              <div class="kw-add-help text-muted small mt-1">
-                포함 = 부분 일치 · 일치 = 완전 일치 · 등록하면 기존 데이터도 소급 매칭됩니다
-              </div>
-            </div>
-          </div>
-
-          {# ── 2. 수거검사 알림 ── #}
-          <div class="tab-pane fade" id="asInspPane" role="tabpanel">
-            <p class="as-desc">
-              식약처가 <b>내 회사 제품을 수거해 검사</b>하면 알려드립니다.
-              아래 정보로 수거검사 데이터와 대조하며, 위에서부터 순서대로 확인합니다.
-            </p>
-
-            <div class="ipm-info-box">
-              <div class="ipm-rule-row">
-                <span class="ipm-rule-badge">1</span>
-                <span class="ipm-rule-desc"><b>품목보고번호</b> — 내가 등록한 제품의 품목보고번호가 일치할 때 (자동)</span>
-              </div>
-              <div class="ipm-rule-row">
-                <span class="ipm-rule-badge">2</span>
-                <span class="ipm-rule-desc"><b>인허가번호</b> — 아래 번호가 수거검사 업체 정보에 포함될 때 (하이픈 없는 숫자 11자리)</span>
-              </div>
-              <div class="ipm-rule-row">
-                <span class="ipm-rule-badge">3</span>
-                <span class="ipm-rule-desc"><b>회사명</b> — 아래 회사명이 수거검사 업소명에 포함될 때</span>
-              </div>
-            </div>
-
-            <div class="ipm-edit-section">
-              <div class="ipm-field-row">
-                <label class="ipm-label">회사명</label>
-                <input type="text" id="inspCompanyName" class="ipm-input"
-                       value="{{ user_profile.company_name|default:'' }}"
-                       placeholder="(주)예시식품"
-                       onkeydown="if(event.key==='Enter'){event.preventDefault();saveInspProfile();}">
-              </div>
-              <div class="ipm-field-row">
-                <label class="ipm-label">인허가번호</label>
-                {% comment %}
- 인허가번호는 하이픈 없는 11자리 숫자다 (품목보고번호 데이터 전수 확인).
-                   예전 예시 "2025-인허가번호-01234" 는 실제 형식과 달라 혼동을 줬다.
-{% endcomment %}
-                <input type="text" id="inspLicenseNumber" class="ipm-input"
-                       value="{{ user_profile.license_number|default:'' }}"
-                       placeholder="19630364001 (숫자 11자리)"
-                       onkeydown="if(event.key==='Enter'){event.preventDefault();saveInspProfile();}">
-              </div>
-              <div id="inspProfileMsg" class="ipm-msg" style="display:none;"></div>
-              <div class="as-actions">
-                <a href="{% url 'user_management:user_profile' %}" class="v2-action-btn-outline as-btn-sm" target="_blank">
-                  <i class="bi bi-box-arrow-up-right"></i>전체 내 정보
-                </a>
-                <button type="button" class="btn btn-primary v2-btn-sm" onclick="saveInspProfile()">
-                  <i class="bi bi-check2 me-1"></i>저장
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {% comment %}
-            ── 3. 받지 않기 ────────────────────────────────────────────────
-            등록한 키워드(AlertRule)가 "이것을 받겠다" 라면, 여기 목록은
-            "이것 때문에 오는 것은 그만" 이다. 목록의 알림 상세에서 '알림 사유'
-            옆 단추를 누르면 이 목록에 한 줄이 쌓인다. 어디서 껐는지 되짚을
-            자리가 없으면, 껐다는 사실 자체를 잊고 "왜 안 오지" 가 된다.
-          {% endcomment %}
-          <div class="tab-pane fade" id="asMutePane" role="tabpanel">
-            <p class="as-desc">
-              여기 있는 값으로 걸리는 알림은 <b>앞으로 오지 않습니다</b>.
-              부적합 정보의 키워드(예: 대장균), 내 원료·제품명(예: 정제수),
-              업체명으로 끌 수 있습니다.
-              끄는 것은 목록에서 알림을 열고 <b>알림 사유</b> 옆의
-              <i class="bi bi-bell-slash"></i> 단추로 합니다.
-            </p>
-
-            <div class="kw-list-section">
-              <div class="kw-list-title">
-                받지 않는 값 <span class="kw-list-count" id="muteModalCount">{{ alert_mutes|length }}</span>개
-              </div>
-              <div class="kw-chips-wrap" id="muteChipsWrap">
-                {% if not alert_mutes %}
-                <div class="kw-empty" id="muteEmptyMsg">아직 끈 것이 없습니다.</div>
-                {% else %}
-                {% for m in alert_mutes %}
-                <span class="rkb-chip rkb-chip-mute" data-mute-id="{{ m.id }}"
-                      title="{{ m.get_scope_display }}{% if m.hidden_count %} · 끌 때 기존 {{ m.hidden_count }}건 정리{% endif %}">
-                  <span class="rkb-chip-cat">{{ m.get_scope_display }}</span>
-                  <span class="rkb-chip-kw">{{ m.value }}</span>
-                  <button class="rkb-chip-del" title="다시 받기"
-                          onclick="deleteMute({{ m.id }}, '{{ m.value|escapejs }}')"><i class="bi bi-x"></i></button>
-                </span>
-                {% endfor %}
-                {% endif %}
-              </div>
-              <div class="kw-add-help text-muted small mt-2">
-                다시 받기로 되돌리면 <b>앞으로 오는 것</b>부터 다시 옵니다.
-                끌 때 함께 정리한 지난 알림은 되살아나지 않습니다.
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-  </div>
+  {% include "regulatory/_alert_settings_modal.html" %}
 
   {% comment %}
  ─── 3. 본문 ────────────────────────────────────────────────────────
@@ -688,341 +496,13 @@
 
       <div class="rd-content-scroll">
         {% if selected_insp %}
-        {# ── 수거검사 상세 패널 ── #}
-        <div class="rd-wrap">
-
-          {# ══ 헤더 ══ #}
-          <div class="rd-hdr">
-            <div class="rd-hdr-top">
-              {% if selected_insp.alert_phase == 2 %}
-                <span class="rh-badge rh-src-dom"><i class="bi bi-arrow-repeat me-1"></i>판정결과 변동</span>
-              {% else %}
-                <span class="rh-badge rh-src-dom"><i class="bi bi-search me-1"></i>수거검사</span>
-              {% endif %}
-              {% if selected_insp.inspection.jdgmnt_cd_nm %}
-                <span class="rh-badge {% if '부적합' in selected_insp.inspection.jdgmnt_cd_nm %}rh-risk-H{% else %}rh-risk-L{% endif %}">
-                  {{ selected_insp.inspection.jdgmnt_cd_nm }}
-                </span>
-              {% else %}
-                <span class="rh-badge" style="background:#fff8e1;color:#f57f17;">검사중</span>
-              {% endif %}
-              <div class="ms-auto">
-                {% if selected_insp.inspection.tkawydtm %}
-                <span class="rd-hdr-date">{{ selected_insp.inspection.tkawydtm|slice:":4" }}.{{ selected_insp.inspection.tkawydtm|slice:"4:6" }}.{{ selected_insp.inspection.tkawydtm|slice:"6:8" }}<span class="rg-note"> (수거)</span></span>
-                {% endif %}
-                <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
-              </div>
-            </div>
-            <div class="rd-title">{{ selected_insp.inspection.prdtnm|default:selected_insp.inspection.bssh_nm }}</div>
-            <div class="rd-subtitle">
-              <b><i class="bi bi-building"></i> {{ selected_insp.inspection.bssh_nm }}</b>
-              {% if selected_insp.inspection.induty_cd_nm %}&nbsp;·&nbsp;{{ selected_insp.inspection.induty_cd_nm }}{% endif %}
-            </div>
-          </div>
-
-          {# ══ 판정변동 강조 박스 ══ #}
-          {% if selected_insp.alert_phase == 2 and selected_insp.prev_judgment %}
-          <div class="rd-insp-change-box">
-            <span class="rd-insp-change-label">판정 변동</span>
-            <span class="rd-insp-change-val">{{ selected_insp.prev_judgment }} → {{ selected_insp.inspection.jdgmnt_cd_nm }}</span>
-          </div>
-          {% endif %}
-
-          {# ══ 원본 수집 데이터 (접기) ══ #}
-          <details class="rd-raw-details">
-            <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 수거검사 상세 정보</summary>
-            <div class="rd-raw-body">
-              <table class="rd-raw-table">
-                {% if selected_insp.inspection.tkawyprno %}<tr><td class="rd-raw-key">수거증번호</td><td class="rd-raw-val">{{ selected_insp.inspection.tkawyprno }}</td></tr>{% endif %}
-                {% if selected_insp.inspection.plan_titl %}<tr><td class="rd-raw-key">수거계획명</td><td class="rd-raw-val">{{ selected_insp.inspection.plan_titl }}</td></tr>{% endif %}
-                {% if selected_insp.inspection.tkawyspci_typecd_nm %}<tr><td class="rd-raw-key">검체구분</td><td class="rd-raw-val">{{ selected_insp.inspection.tkawyspci_typecd_nm }}</td></tr>{% endif %}
-                {% if selected_insp.inspection.site_addr %}<tr><td class="rd-raw-key">소재지</td><td class="rd-raw-val">{{ selected_insp.inspection.site_addr }}</td></tr>{% endif %}
-                {% if selected_insp.inspection.exc_instt_nm %}<tr><td class="rd-raw-key">수행기관</td><td class="rd-raw-val">{{ selected_insp.inspection.exc_instt_nm }}</td></tr>{% endif %}
-                {% if selected_insp.inspection.prdlst_report_no %}<tr><td class="rd-raw-key">품목보고번호</td><td class="rd-raw-val">{{ selected_insp.inspection.prdlst_report_no }}</td></tr>{% endif %}
-              </table>
-            </div>
-          </details>
-
-          {% comment %}
-            ══ 알림 사유 ═════════════════════════════════════════════════
-            부적합·행정처분 탭의 상세와 같은 제목·같은 자리다. 세 탭이 모두
-            "왜 나한테 왔는가 → 그 이유를 끈다" 라는 같은 흐름을 갖는다.
-
-            수거검사 매칭은 품목보고번호·인허가번호·업소명 셋 중 하나로만
-            생긴다. 그중 오탐이 잦은 것은 업소명이다 — 회사명이 짧으면
-            ('삼립') 남의 업체('○○삼립식품')까지 걸린다. 그래서 끌 수 있는
-            것도 업소명이고, 내 제품 번호가 맞아 걸린 건은 끄는 것이 아니라
-            '해당 없음' 으로 지우는 것이 맞다.
-          {% endcomment %}
-          <div class="rd-sec">
-            <div class="rd-sec-hdr">
-              <i class="bi bi-link-45deg text-primary"></i>
-              알림 사유
-              <span class="rd-sec-note">내 정보와 이렇게 맞아 걸렸습니다</span>
-            </div>
-            <div class="rd-sec-body">
-              <div class="rd-why">
-                <span class="rd-why-label">알림 사유</span>
-                {% if selected_insp.match_reason == 'label_no' %}
-                  <span class="rd-why-kw" title="수거검사 쪽 값">품목보고번호</span>
-                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
-                  <span class="rd-why-mine" title="내가 등록한 제품">{{ selected_insp.label.prdlst_nm|default:"내 제품" }}</span>
-                {% elif selected_insp.match_reason == 'license_no' %}
-                  <span class="rd-why-kw" title="수거검사 쪽 값">{{ selected_insp.inspection.prdlst_report_no|default:"품목보고번호" }}</span>
-                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
-                  <span class="rd-why-mine" title="내 정보의 인허가번호">인허가번호</span>
-                {% else %}
-                  <span class="rd-why-kw" title="수거검사 업소명">{{ selected_insp.inspection.bssh_nm|default:"업소명" }}{% if selected_insp.inspection.bssh_nm %}
-                    <button type="button" class="rd-why-mute-x"
-                            onclick="muteAlert('company', '{{ selected_insp.inspection.bssh_nm|escapejs }}')"
-                            title="업소 '{{ selected_insp.inspection.bssh_nm }}' 로 걸리는 수거검사 알림을 앞으로 받지 않습니다"
-                            aria-label="이 업소 알림 끄기"><i class="bi bi-bell-slash"></i></button>
-                  {% endif %}</span>
-                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
-                  <span class="rd-why-mine" title="내 정보의 회사명">회사명</span>
-                {% endif %}
-              </div>
-              {% if selected_insp.matched_value %}
-              <div class="rd-why">
-                <span class="rd-why-label">맞은 값</span>
-                <code class="rd-insp-matched-code">{{ selected_insp.matched_value }}</code>
-              </div>
-              {% endif %}
-              {% if selected_insp.match_reason != 'label_no' %}
-              <div class="rd-why-hint">
-                <i class="bi bi-info-circle"></i>
-                이 업소가 내 업체가 아니라면 배지의 종 단추로 끄거나,
-                <button type="button" class="rd-why-link" onclick="openAlertSettings('insp')">내 정보를 고쳐</button>
-                더 정확히 맞추세요.
-              </div>
-              {% endif %}
-            </div>
-          </div>
-
-          {# ══ 액션 ══ #}
-          <div class="rd-insp-actions">
-            <div class="rd-sec-body">
-              <button type="button" class="rd-insp-dismiss-btn"
-                      onclick="inspDismiss({{ selected_insp.id }})"
-                      title="이 건만 내 목록에서 지웁니다 (같은 업소의 다음 건은 계속 옵니다)">
-                <i class="bi bi-x-circle"></i> 해당 없음 (이 건만 삭제)
-              </button>
-            </div>
-          </div>
-
-        </div>
+        {% include "regulatory/_inspection_detail_panel.html" %}
         {% elif selected_pub_insp %}
-        {# ── 공개 수거검사 상세 패널 ── #}
-        <div class="rd-wrap">
-          <div class="rd-hdr">
-            <div class="rd-hdr-top">
-              <span class="rh-badge rh-src-dom"><i class="bi bi-search me-1"></i>수거검사</span>
-              {% if selected_pub_insp.jdgmnt_cd_nm %}
-                <span class="rh-badge {% if '부적합' in selected_pub_insp.jdgmnt_cd_nm %}rh-risk-H{% else %}rh-risk-L{% endif %}">
-                  {{ selected_pub_insp.jdgmnt_cd_nm }}
-                </span>
-              {% else %}
-                <span class="rh-badge" style="background:#fff8e1;color:#f57f17;">검사중</span>
-              {% endif %}
-              <div class="ms-auto">
-                {% if selected_pub_insp.tkawydtm %}
-                <span class="rd-hdr-date">{{ selected_pub_insp.tkawydtm|slice:":4" }}.{{ selected_pub_insp.tkawydtm|slice:"4:6" }}.{{ selected_pub_insp.tkawydtm|slice:"6:8" }}<span class="rg-note"> (수거)</span></span>
-                {% endif %}
-                <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
-              </div>
-            </div>
-            <div class="rd-title">{{ selected_pub_insp.prdtnm|default:selected_pub_insp.bssh_nm }}</div>
-            <div class="rd-subtitle">
-              <b><i class="bi bi-building"></i> {{ selected_pub_insp.bssh_nm }}</b>
-              {% if selected_pub_insp.induty_cd_nm %}&nbsp;·&nbsp;{{ selected_pub_insp.induty_cd_nm }}{% endif %}
-            </div>
-          </div>
-
-          <details class="rd-raw-details" open>
-            <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 수거검사 상세 정보</summary>
-            <div class="rd-raw-body">
-              <table class="rd-raw-table">
-                {% if selected_pub_insp.tkawyprno %}<tr><td class="rd-raw-key">수거증번호</td><td class="rd-raw-val">{{ selected_pub_insp.tkawyprno }}</td></tr>{% endif %}
-                {% if selected_pub_insp.plan_titl %}<tr><td class="rd-raw-key">수거계획명</td><td class="rd-raw-val">{{ selected_pub_insp.plan_titl }}</td></tr>{% endif %}
-                {% if selected_pub_insp.tkawyspci_typecd_nm %}<tr><td class="rd-raw-key">검체구분</td><td class="rd-raw-val">{{ selected_pub_insp.tkawyspci_typecd_nm }}</td></tr>{% endif %}
-                {% if selected_pub_insp.site_addr %}<tr><td class="rd-raw-key">소재지</td><td class="rd-raw-val">{{ selected_pub_insp.site_addr }}</td></tr>{% endif %}
-                {% if selected_pub_insp.exc_instt_nm %}<tr><td class="rd-raw-key">수행기관</td><td class="rd-raw-val">{{ selected_pub_insp.exc_instt_nm }}</td></tr>{% endif %}
-                {% if selected_pub_insp.prdlst_report_no %}<tr><td class="rd-raw-key">품목보고번호</td><td class="rd-raw-val">{{ selected_pub_insp.prdlst_report_no }}</td></tr>{% endif %}
-              </table>
-            </div>
-          </details>
-        </div>
+        {% include "regulatory/_inspection_public_panel.html" %}
         {% elif selected_news %}
           {% include "regulatory/_news_detail_panel.html" with news=selected_news matches=selected_matches ing_matches=selected_ing_matches kw_logs=selected_kw_logs %}
         {% else %}
-        {% if not inspection_has_matches and current_tab == 'insp' %}
-        {% comment %}
- ── 걸린 것이 없을 때 ────────────────────────────────────────
-           **등록을 안 한 것과 등록했는데 안 걸린 것은 다르다.**
-           예전에는 둘 다 "내 정보가 등록되지 않았습니다" 였다. 회사명을 넣어
-           둔 사람이 그 문구를 보면 저장이 안 된 줄 알고 같은 값을 다시 넣는다.
-           등록된 값이 있으면 그 값을 보여 주고, 무엇을 어디까지 맞춰 봤는지를
-           말한다.
-{% endcomment %}
-        <div class="rd-insp-guide-panel">
-          {% if user_profile.company_name or user_profile.license_number %}
-          <div class="rd-insp-guide-notice">
-            <i class="bi bi-info-circle-fill"></i>
-            <div>
-              <strong>등록은 되어 있습니다. 아직 걸린 수거검사가 없습니다.</strong><br>
-              {% if user_profile.company_name %}회사명 <b>{{ user_profile.company_name }}</b>{% endif %}{% if user_profile.company_name and user_profile.license_number %} · {% endif %}{% if user_profile.license_number %}인허가번호 <b>{{ user_profile.license_number }}</b>{% endif %}
-              (으)로 최근 {{ insp_backfill_days }}일치를 맞춰 봤습니다.<br>
-              왼쪽에는 식약처 수거검사 전체 목록이 표시됩니다.
-            </div>
-          </div>
-          <div class="rd-insp-guide-icon"><i class="bi bi-search"></i></div>
-          <div class="rd-insp-guide-title">아직 걸린 것이 없습니다</div>
-          <div class="rd-insp-guide-desc">
-            새 수거검사가 올라오면 <strong>이 탭과 앱 푸시로 자동으로</strong> 알려드립니다.<br>
-            지금 아무것도 없는 것은 설정이 잘못돼서가 아닙니다.
-          </div>
-          <div class="rd-insp-guide-steps">
-            <div class="rd-insp-guide-step">
-              <span class="rd-insp-guide-step-num">1</span>
-              <span>거슬러 맞춰 보는 것은 <strong>최근 {{ insp_backfill_days }}일치</strong>입니다.
-                    그 전 것은 아래 단추로 전체 목록에서 찾아보세요</span>
-            </div>
-            <div class="rd-insp-guide-step">
-              <span class="rd-insp-guide-step-num">2</span>
-              <span>회사명은 <strong>수거검사 업소명에 그대로 들어 있어야</strong> 걸립니다
-                    (주식회사·㈜는 떼고 맞춥니다). 사업자등록증의 상호를 그대로 넣어 주세요</span>
-            </div>
-            <div class="rd-insp-guide-step">
-              <span class="rd-insp-guide-step-num">3</span>
-              <span>인허가번호는 <strong>하이픈 없는 숫자 11자리</strong>입니다.
-                    등록한 제품의 품목보고번호로도 자동으로 맞춥니다</span>
-            </div>
-          </div>
-          {% if user_profile.company_name %}
-          <a class="rd-insp-guide-btn" href="?tab=insp&amp;q={{ user_profile.company_name|urlencode }}">
-            <i class="bi bi-search me-1"></i> 전체 목록에서 "{{ user_profile.company_name }}" 찾아보기
-          </a>
-          {% endif %}
-          <button type="button" class="rd-insp-guide-btn rd-insp-guide-btn--ghost"
-                  onclick="openInspProfileModal()">
-            <i class="bi bi-person-gear me-1"></i> 내 정보 고치기
-          </button>
-          {% else %}
-          <div class="rd-insp-guide-notice">
-            <i class="bi bi-info-circle-fill"></i>
-            <div>
-              <strong>내 정보가 등록되지 않았습니다.</strong><br>
-              왼쪽에는 식약처 수거검사 전체 목록이 표시됩니다.<br>
-              내 정보를 등록하면 관련 검사만 필터링해서 알림으로 받을 수 있습니다.
-            </div>
-          </div>
-          <div class="rd-insp-guide-icon"><i class="bi bi-bell-fill"></i></div>
-          <div class="rd-insp-guide-title">수거검사 맞춤 알림 설정</div>
-          <div class="rd-insp-guide-desc">
-            내 정보(인허가번호 또는 회사명)를 등록하면<br>
-            <strong>해당 업체와 관련된 수거검사 결과</strong>를<br>
-            자동으로 알림으로 받아볼 수 있습니다.
-          </div>
-          <div class="rd-insp-guide-steps">
-            <div class="rd-insp-guide-step">
-              <span class="rd-insp-guide-step-num">1</span>
-              <span>왼쪽 상단 <strong>내 정보</strong> 버튼을 눌러 인허가번호 또는 회사명 등록</span>
-            </div>
-            <div class="rd-insp-guide-step">
-              <span class="rd-insp-guide-step-num">2</span>
-              <span>식약처 수거검사 데이터와 자동 매칭</span>
-            </div>
-            <div class="rd-insp-guide-step">
-              <span class="rd-insp-guide-step-num">3</span>
-              <span>관련 제품이 수거검사 대상이 되면 이 탭에 표시 및 앱 푸시 알림 발송</span>
-            </div>
-          </div>
-          <button type="button" class="rd-insp-guide-btn" onclick="openInspProfileModal()">
-            <i class="bi bi-person-gear me-1"></i> 내 정보 등록하기
-          </button>
-          {% endif %}
-        </div>
-        {% else %}
-        {% comment %}
- ── 항목을 고르기 전 자리 ─────────────────────────────────────
-           예전에는 "왼쪽에서 선택하세요" 한 줄뿐이라 화면의 40%가 비어 있었다.
-           이 자리에 '내가 지금 어떤 기준으로 알림을 받고 있는지' 를 보여준다.
-           목록에 원하는 게 안 뜰 때 "키워드를 더 넣어야겠다" 로 바로 이어진다.
-{% endcomment %}
-        <div class="rd-alert-summary">
-          <div class="rd-as-lead">
-            <i class="bi bi-shield-exclamation"></i>
-            왼쪽 목록에서 항목을 선택하면 여기에 상세가 나옵니다.
-          </div>
-
-          {% if no_action_count > 0 %}
-          <a class="rd-as-todo" href="?{{ no_action_qs }}">
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            미조치 <b>{{ no_action_count|intcomma }}건</b> — 눌러서 그 건만 보기
-          </a>
-          {% endif %}
-
-          <div class="rd-as-card">
-            <div class="rd-as-head">
-              <span><i class="bi bi-bell-fill"></i> 내 알림 기준</span>
-              <button type="button" class="rd-as-edit" onclick="openAlertSettings()">
-                <i class="bi bi-gear"></i> 설정 변경
-              </button>
-            </div>
-
-            <div class="rd-as-sec">
-              <div class="rd-as-sec-title">
-                키워드 알림
-                <span class="rd-as-count">{{ alert_rules|length }}</span>
-              </div>
-              {% if alert_rules %}
-              <div class="rd-as-chips">
-                {% for rule in alert_rules %}
-                <span class="rkb-chip rkb-chip-{{ rule.category|lower }}"
-                      title="{{ rule.get_category_display }} · {{ rule.get_match_type_display }}">
-                  <span class="rkb-chip-cat">{{ rule.get_category_display }}</span>
-                  <span class="rkb-chip-kw">{{ rule.keyword }}</span>
-                  {% if rule.match_type == 'EXACT' %}<span class="rkb-chip-exact">=</span>{% endif %}
-                </span>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="rd-as-empty">
-                등록된 키워드가 없습니다.
-                제품명·원료명·업체명을 넣어두면 그 말이 들어간 부적합·처분이 올라올 때 알려드립니다.
-              </div>
-              {% endif %}
-            </div>
-
-            <div class="rd-as-sec">
-              <div class="rd-as-sec-title">수거검사 알림</div>
-              {% if user_profile.company_name or user_profile.license_number %}
-              <div class="rd-as-kv">
-                {% if user_profile.company_name %}
-                <div><span class="rd-as-k">회사명</span><span class="rd-as-v">{{ user_profile.company_name }}</span></div>
-                {% endif %}
-                {% if user_profile.license_number %}
-                <div><span class="rd-as-k">인허가번호</span><span class="rd-as-v">{{ user_profile.license_number }}</span></div>
-                {% endif %}
-              </div>
-              {% else %}
-              <div class="rd-as-empty">
-                회사명이나 인허가번호를 등록하면 내 업체의 수거검사 결과를 자동으로 받습니다.
-              </div>
-              {% endif %}
-              <div class="rd-as-note">
-                내가 등록한 제품의 <b>품목보고번호</b>가 일치하면 등록 없이도 자동으로 잡힙니다.
-              </div>
-            </div>
-
-            {% if last_collected %}
-            <div class="rd-as-foot">
-              <i class="bi bi-clock-history"></i> 마지막 수집 {{ last_collected|date:"Y-m-d" }}
-            </div>
-            {% endif %}
-          </div>
-        </div>
-        {% endif %}
+        {% include "regulatory/_empty_detail_panel.html" %}
         {% endif %}
       </div>
     </main>
@@ -1104,11 +584,15 @@ function markTabRead(tab) {
       if (dot) dot.remove();
     });
 
-    // 지금 턴 탭의 빨간 점과 단추를 거둔다
-    var dotId = {'insp-news': 'vtabInspNewsUnreadDot', 'admin': 'vtabAdminUnreadDot',
-                 'insp': 'vtabInspUnreadDot'}[tab];
-    var tabDot = dotId && document.getElementById(dotId);
-    if (tabDot) tabDot.remove();
+    // 지금 턴 탭의 빨간 점과 단추를 거둔다.
+    // 예전에는 점을 id 로 찾았는데, 탭이 <a> 로 바뀌면서 그 id 가 사라졌다.
+    // 눌러도 점이 그대로 남는다는 신고가 여기서 나왔다 — 자리로 찾는다.
+    if (tab === 'all') {
+      document.querySelectorAll('.pv-tab-dot').forEach(function (d) { d.remove(); });
+    } else {
+      var activeTab = document.querySelector('.pv-tab--active .pv-tab-dot');
+      if (activeTab) activeTab.remove();
+    }
 
     if (tab === 'insp') {
       var inspBtn = document.getElementById('inspMarkAllReadBtn');

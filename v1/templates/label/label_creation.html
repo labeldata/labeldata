@@ -998,7 +998,7 @@
 </div>
 
 <!-- 라벨 상수 로드 -->
-<script src="{% static 'js/label/constants.js' %}"></script>
+<script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {# 알레르기 표기 판정 — constants.js 의 키워드 표를 쓰므로 그 뒤에 실어야 한다 #}
 <script src="{% static 'js/label/allergen_names.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 

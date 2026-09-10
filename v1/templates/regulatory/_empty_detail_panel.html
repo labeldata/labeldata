@@ -1,0 +1,183 @@
+{% load humanize %}
+{% comment %}
+  항목을 고르기 전, 또는 걸린 것이 없을 때 오른쪽 패널에 오는 자리.
+
+  두 가지를 가른다.
+    · 수거검사 탭에서 내 매칭이 없다 → 등록했는지/안 했는지를 나눠 안내한다.
+      "등록을 안 한 것" 과 "등록했는데 안 걸린 것" 은 다르다. 예전에는 둘 다
+      "내 정보가 등록되지 않았습니다" 여서, 회사명을 넣어 둔 사람이 저장이
+      안 된 줄 알고 같은 값을 다시 넣었다.
+    · 그 밖 → 지금 내가 어떤 기준으로 알림을 받고 있는지를 보여 준다.
+      목록에 원하는 게 안 뜰 때 "키워드를 더 넣어야겠다" 로 바로 이어진다.
+
+  바깥의 {% if %} 사슬은 news_list.html 에 있다. 이 조각은 그 사슬의
+  {% else %} 가지 안쪽만 담는다.
+{% endcomment %}
+{% if not inspection_has_matches and current_tab == 'insp' %}
+        {% comment %}
+ ── 걸린 것이 없을 때 ────────────────────────────────────────
+           **등록을 안 한 것과 등록했는데 안 걸린 것은 다르다.**
+           예전에는 둘 다 "내 정보가 등록되지 않았습니다" 였다. 회사명을 넣어
+           둔 사람이 그 문구를 보면 저장이 안 된 줄 알고 같은 값을 다시 넣는다.
+           등록된 값이 있으면 그 값을 보여 주고, 무엇을 어디까지 맞춰 봤는지를
+           말한다.
+{% endcomment %}
+        <div class="rd-insp-guide-panel">
+          {% if user_profile.company_name or user_profile.license_number %}
+          <div class="rd-insp-guide-notice">
+            <i class="bi bi-info-circle-fill"></i>
+            <div>
+              <strong>등록은 되어 있습니다. 아직 걸린 수거검사가 없습니다.</strong><br>
+              {% if user_profile.company_name %}회사명 <b>{{ user_profile.company_name }}</b>{% endif %}{% if user_profile.company_name and user_profile.license_number %} · {% endif %}{% if user_profile.license_number %}인허가번호 <b>{{ user_profile.license_number }}</b>{% endif %}
+              (으)로 최근 {{ insp_backfill_days }}일치를 맞춰 봤습니다.<br>
+              왼쪽에는 식약처 수거검사 전체 목록이 표시됩니다.
+            </div>
+          </div>
+          <div class="rd-insp-guide-icon"><i class="bi bi-search"></i></div>
+          <div class="rd-insp-guide-title">아직 걸린 것이 없습니다</div>
+          <div class="rd-insp-guide-desc">
+            새 수거검사가 올라오면 <strong>이 탭과 앱 푸시로 자동으로</strong> 알려드립니다.<br>
+            지금 아무것도 없는 것은 설정이 잘못돼서가 아닙니다.
+          </div>
+          <div class="rd-insp-guide-steps">
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">1</span>
+              <span>거슬러 맞춰 보는 것은 <strong>최근 {{ insp_backfill_days }}일치</strong>입니다.
+                    그 전 것은 아래 단추로 전체 목록에서 찾아보세요</span>
+            </div>
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">2</span>
+              <span>회사명은 <strong>수거검사 업소명에 그대로 들어 있어야</strong> 걸립니다
+                    (주식회사·㈜는 떼고 맞춥니다). 사업자등록증의 상호를 그대로 넣어 주세요</span>
+            </div>
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">3</span>
+              <span>인허가번호는 <strong>하이픈 없는 숫자 11자리</strong>입니다.
+                    등록한 제품의 품목보고번호로도 자동으로 맞춥니다</span>
+            </div>
+          </div>
+          {% if user_profile.company_name %}
+          <a class="rd-insp-guide-btn" href="?tab=insp&amp;q={{ user_profile.company_name|urlencode }}">
+            <i class="bi bi-search me-1"></i> 전체 목록에서 "{{ user_profile.company_name }}" 찾아보기
+          </a>
+          {% endif %}
+          <button type="button" class="rd-insp-guide-btn rd-insp-guide-btn--ghost"
+                  onclick="openInspProfileModal()">
+            <i class="bi bi-person-gear me-1"></i> 내 정보 고치기
+          </button>
+          {% else %}
+          <div class="rd-insp-guide-notice">
+            <i class="bi bi-info-circle-fill"></i>
+            <div>
+              <strong>내 정보가 등록되지 않았습니다.</strong><br>
+              왼쪽에는 식약처 수거검사 전체 목록이 표시됩니다.<br>
+              내 정보를 등록하면 관련 검사만 필터링해서 알림으로 받을 수 있습니다.
+            </div>
+          </div>
+          <div class="rd-insp-guide-icon"><i class="bi bi-bell-fill"></i></div>
+          <div class="rd-insp-guide-title">수거검사 맞춤 알림 설정</div>
+          <div class="rd-insp-guide-desc">
+            내 정보(인허가번호 또는 회사명)를 등록하면<br>
+            <strong>해당 업체와 관련된 수거검사 결과</strong>를<br>
+            자동으로 알림으로 받아볼 수 있습니다.
+          </div>
+          <div class="rd-insp-guide-steps">
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">1</span>
+              <span>왼쪽 상단 <strong>내 정보</strong> 버튼을 눌러 인허가번호 또는 회사명 등록</span>
+            </div>
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">2</span>
+              <span>식약처 수거검사 데이터와 자동 매칭</span>
+            </div>
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">3</span>
+              <span>관련 제품이 수거검사 대상이 되면 이 탭에 표시 및 앱 푸시 알림 발송</span>
+            </div>
+          </div>
+          <button type="button" class="rd-insp-guide-btn" onclick="openInspProfileModal()">
+            <i class="bi bi-person-gear me-1"></i> 내 정보 등록하기
+          </button>
+          {% endif %}
+        </div>
+        {% else %}
+        {% comment %}
+ ── 항목을 고르기 전 자리 ─────────────────────────────────────
+           예전에는 "왼쪽에서 선택하세요" 한 줄뿐이라 화면의 40%가 비어 있었다.
+           이 자리에 '내가 지금 어떤 기준으로 알림을 받고 있는지' 를 보여준다.
+           목록에 원하는 게 안 뜰 때 "키워드를 더 넣어야겠다" 로 바로 이어진다.
+{% endcomment %}
+        <div class="rd-alert-summary">
+          <div class="rd-as-lead">
+            <i class="bi bi-shield-exclamation"></i>
+            왼쪽 목록에서 항목을 선택하면 여기에 상세가 나옵니다.
+          </div>
+
+          {% if no_action_count > 0 %}
+          <a class="rd-as-todo" href="?{{ no_action_qs }}">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            미조치 <b>{{ no_action_count|intcomma }}건</b> — 눌러서 그 건만 보기
+          </a>
+          {% endif %}
+
+          <div class="rd-as-card">
+            <div class="rd-as-head">
+              <span><i class="bi bi-bell-fill"></i> 내 알림 기준</span>
+              <button type="button" class="rd-as-edit" onclick="openAlertSettings()">
+                <i class="bi bi-gear"></i> 설정 변경
+              </button>
+            </div>
+
+            <div class="rd-as-sec">
+              <div class="rd-as-sec-title">
+                키워드 알림
+                <span class="rd-as-count">{{ alert_rules|length }}</span>
+              </div>
+              {% if alert_rules %}
+              <div class="rd-as-chips">
+                {% for rule in alert_rules %}
+                <span class="rkb-chip rkb-chip-{{ rule.category|lower }}"
+                      title="{{ rule.get_category_display }} · {{ rule.get_match_type_display }}">
+                  <span class="rkb-chip-cat">{{ rule.get_category_display }}</span>
+                  <span class="rkb-chip-kw">{{ rule.keyword }}</span>
+                  {% if rule.match_type == 'EXACT' %}<span class="rkb-chip-exact">=</span>{% endif %}
+                </span>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="rd-as-empty">
+                등록된 키워드가 없습니다.
+                제품명·원료명·업체명을 넣어두면 그 말이 들어간 부적합·처분이 올라올 때 알려드립니다.
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="rd-as-sec">
+              <div class="rd-as-sec-title">수거검사 알림</div>
+              {% if user_profile.company_name or user_profile.license_number %}
+              <div class="rd-as-kv">
+                {% if user_profile.company_name %}
+                <div><span class="rd-as-k">회사명</span><span class="rd-as-v">{{ user_profile.company_name }}</span></div>
+                {% endif %}
+                {% if user_profile.license_number %}
+                <div><span class="rd-as-k">인허가번호</span><span class="rd-as-v">{{ user_profile.license_number }}</span></div>
+                {% endif %}
+              </div>
+              {% else %}
+              <div class="rd-as-empty">
+                회사명이나 인허가번호를 등록하면 내 업체의 수거검사 결과를 자동으로 받습니다.
+              </div>
+              {% endif %}
+              <div class="rd-as-note">
+                내가 등록한 제품의 <b>품목보고번호</b>가 일치하면 등록 없이도 자동으로 잡힙니다.
+              </div>
+            </div>
+
+            {% if last_collected %}
+            <div class="rd-as-foot">
+              <i class="bi bi-clock-history"></i> 마지막 수집 {{ last_collected|date:"Y-m-d" }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}

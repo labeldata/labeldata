@@ -3,5 +3,5 @@
      data-label-id="{{ label.my_label_id }}"
      style="height: calc(100vh - 120px); width: 100%;">
 </div>
-<link rel="stylesheet" href="{% static 'label_editor/label_editor.css' %}" />
-<script type="module" src="{% static 'label_editor/label_editor.js' %}"></script>
+<link rel="stylesheet" href="{% static 'label_editor/label_editor.css' %}?v={{ STATIC_BUILD_DATE }}" />
+<script type="module" src="{% static 'label_editor/label_editor.js' %}?v={{ STATIC_BUILD_DATE }}"></script>

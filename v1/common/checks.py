@@ -258,9 +258,18 @@ def check_button_component_registry(app_configs, **kwargs):
 _FIXED_CSS_VERSION = re.compile(r"\{%\s*static\s+'([^']+\.css)'\s*%\}\?v=(?!\{\{)([^\"'\s]+)")
 
 
+# 버전이 아예 안 붙은 정적 파일 — 브라우저가 예전 것을 계속 쓴다.
+# 고정값(?v=3)만 잡고 빠진 것은 안 잡던 시절에 21곳이 조용히 남아 있었고,
+# 그 때문에 CSS 를 고쳐 배포해도 사용자 화면이 그대로인 일이 실제로 있었다.
+_UNVERSIONED_STATIC = re.compile(
+    '(?:<link[^>]*href|<script[^>]*src)="'
+    r"(\{%\s*static\s+'([^']+\.(?:css|js))'\s*%\})"
+    '"')
+
+
 @register()
 def check_static_cache_busting(app_configs, **kwargs):
-    """CSS 링크에 고정 버전 문자열을 쓴 곳을 찾는다."""
+    """정적 파일 링크의 캐시 버전 — 고정값이거나 아예 없는 곳을 찾는다."""
     warnings = []
     for root in _template_dirs():
         for path in sorted(root.rglob('*.html')):
@@ -275,6 +284,15 @@ def check_static_cache_busting(app_configs, **kwargs):
                     hint='?v={{ STATIC_BUILD_DATE }} 로 바꾸세요. 고정값은 CSS 를 고쳐도 갈리지 않습니다.',
                     obj=str(path),
                     id='templates.W001',
+                ))
+            for m in _UNVERSIONED_STATIC.finditer(text):
+                line = text.count('\n', 0, m.start()) + 1
+                warnings.append(Warning(
+                    f'{path.name}:{line} {m.group(2)} 에 캐시 버전이 없습니다.',
+                    hint='뒤에 ?v={{ STATIC_BUILD_DATE }} 를 붙이세요. '
+                         '버전이 없으면 파일을 고쳐 배포해도 브라우저가 예전 것을 계속 씁니다.',
+                    obj=str(path),
+                    id='templates.W003',
                 ))
     return warnings
 

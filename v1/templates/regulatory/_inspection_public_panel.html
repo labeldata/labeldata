@@ -1,0 +1,47 @@
+{% comment %}
+  공개 수거검사 상세 — 내 정보를 아직 안 넣은 사용자가 전체 목록에서 고른 건.
+
+  내 매칭이 아니므로 '알림 사유' 도 조치도 없다. 원본 자료를 보여 주는 것이
+  전부다. 이 자리를 두는 이유는, 내 정보를 안 넣은 사람에게 이 화면이 빈
+  껍데기로 보이지 않게 하는 것이다.
+{% endcomment %}
+{# ── 공개 수거검사 상세 패널 ── #}
+        <div class="rd-wrap">
+          <div class="rd-hdr">
+            <div class="rd-hdr-top">
+              <span class="rh-badge rh-src-dom"><i class="bi bi-search me-1"></i>수거검사</span>
+              {% if selected_pub_insp.jdgmnt_cd_nm %}
+                <span class="rh-badge {% if '부적합' in selected_pub_insp.jdgmnt_cd_nm %}rh-risk-H{% else %}rh-risk-L{% endif %}">
+                  {{ selected_pub_insp.jdgmnt_cd_nm }}
+                </span>
+              {% else %}
+                <span class="rh-badge" style="background:#fff8e1;color:#f57f17;">검사중</span>
+              {% endif %}
+              <div class="ms-auto">
+                {% if selected_pub_insp.tkawydtm %}
+                <span class="rd-hdr-date">{{ selected_pub_insp.tkawydtm|slice:":4" }}.{{ selected_pub_insp.tkawydtm|slice:"4:6" }}.{{ selected_pub_insp.tkawydtm|slice:"6:8" }}<span class="rg-note"> (수거)</span></span>
+                {% endif %}
+                <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
+              </div>
+            </div>
+            <div class="rd-title">{{ selected_pub_insp.prdtnm|default:selected_pub_insp.bssh_nm }}</div>
+            <div class="rd-subtitle">
+              <b><i class="bi bi-building"></i> {{ selected_pub_insp.bssh_nm }}</b>
+              {% if selected_pub_insp.induty_cd_nm %}&nbsp;·&nbsp;{{ selected_pub_insp.induty_cd_nm }}{% endif %}
+            </div>
+          </div>
+
+          <details class="rd-raw-details" open>
+            <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 수거검사 상세 정보</summary>
+            <div class="rd-raw-body">
+              <table class="rd-raw-table">
+                {% if selected_pub_insp.tkawyprno %}<tr><td class="rd-raw-key">수거증번호</td><td class="rd-raw-val">{{ selected_pub_insp.tkawyprno }}</td></tr>{% endif %}
+                {% if selected_pub_insp.plan_titl %}<tr><td class="rd-raw-key">수거계획명</td><td class="rd-raw-val">{{ selected_pub_insp.plan_titl }}</td></tr>{% endif %}
+                {% if selected_pub_insp.tkawyspci_typecd_nm %}<tr><td class="rd-raw-key">검체구분</td><td class="rd-raw-val">{{ selected_pub_insp.tkawyspci_typecd_nm }}</td></tr>{% endif %}
+                {% if selected_pub_insp.site_addr %}<tr><td class="rd-raw-key">소재지</td><td class="rd-raw-val">{{ selected_pub_insp.site_addr }}</td></tr>{% endif %}
+                {% if selected_pub_insp.exc_instt_nm %}<tr><td class="rd-raw-key">수행기관</td><td class="rd-raw-val">{{ selected_pub_insp.exc_instt_nm }}</td></tr>{% endif %}
+                {% if selected_pub_insp.prdlst_report_no %}<tr><td class="rd-raw-key">품목보고번호</td><td class="rd-raw-val">{{ selected_pub_insp.prdlst_report_no }}</td></tr>{% endif %}
+              </table>
+            </div>
+          </details>
+        </div>

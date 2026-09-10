@@ -525,7 +525,9 @@ class 키워드_알림은_사용자의_것이다(TestCase):
 
         news = RegulatoryNews.objects.first()
         detail = self.client.get(f'/regulatory/?id={news.id}').content.decode()
-        self.assertIn('알림 키워드 매칭', detail)
+        # 세 종류가 한 구역에 산다 — 키워드는 그 안의 종류 줄로 나온다
+        self.assertIn('내 알림 사유', detail)
+        self.assertIn('rd-kind-badge--kw', detail)
         self.assertIn('이 키워드 삭제', detail)
 
     def test_수집_경로에서도_남는다(self):
@@ -960,6 +962,84 @@ class RegulatoryLayoutTests(TestCase):
         for qs in ('scope=mine', 'scope=others'):
             self.assertIn(f'href="?{qs}"', self.html)
 
+    def test_툴바_뼈대가_살아_있다(self):
+        """
+        통계 카드 규칙을 지우면서 '.reg-stats 부터 다음 주석까지' 를 통째로
+        잘랐는데, 그 사이에 툴바의 뼈대와 검색창·알림 설정 단추까지 들어 있었다.
+        그래서 검색창이 모양을 잃고 아래로 밀렸다 — 범위로 자른 값이다.
+        """
+        for rule in ('.reg-toolbar', '.reg-tb-row', '.reg-tb-right',
+                     '.rf-search-wrap', '.rs-search-inner', '.rs-settings-btn'):
+            self.assertIn(rule, self.css, f'{rule} 규칙이 없다')
+
+    def test_템플릿이_쓰는_클래스에_규칙이_있다(self):
+        """
+        범위로 CSS 를 자르면 엉뚱한 규칙이 함께 사라진다. 두 번 그랬다.
+        이 화면 템플릿이 쓰는 이름 중 어디에도 규칙이 없는 것을 잡는다.
+        (부트스트랩 아이콘·유틸리티는 이 저장소 밖에서 오므로 뺀다)
+        """
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        css = self.css
+        css += (base / 'static/css/list_common.css').read_text(encoding='utf-8')
+        css += (base / 'templates/label/_condition_panel.html').read_text(encoding='utf-8')
+        for extra in ('products_common.css', 'variables.css', 'style.css'):
+            path = base / 'static/css' / extra
+            if path.exists():
+                css += path.read_text(encoding='utf-8')
+
+        tpl = ''
+        for name in ('news_list', '_news_item', '_news_detail_panel',
+                     '_alert_settings_modal', '_inspection_detail_panel',
+                     '_inspection_public_panel', '_empty_detail_panel'):
+            tpl += (base / 'templates/regulatory' / f'{name}.html').read_text(encoding='utf-8')
+
+        names = set()
+        for m in re.finditer(r'class="([^"]*)"', tpl):
+            chunk = re.sub(r'\{%[^%]*%\}|\{\{[^}]*\}\}', ' ', m.group(1))
+            names.update(n for n in chunk.split() if n and not n.startswith('{'))
+
+        # 저장소 밖에서 오는 것 — 부트스트랩 아이콘·유틸리티
+        def outside(n):
+            return (n.startswith(('bi-', 'text-', 'btn-', 'form-', 'me-', 'ms-',
+                                  'mt-', 'mb-', 'd-', 'nav-', 'modal-', 'tab-'))
+                    or n in {'fade', 'small', 'spinner-border', 'up-alt', 'down-alt',
+                             'show', 'active', 'collapse', 'w-100'})
+
+        missing = sorted(n for n in names
+                         if not outside(n) and ('.' + n) not in css
+                         # JS 가 채우는 빈 그릇 · 상태 표시용 훅
+                         and n not in {'rd-raw-fields', 'reg-page--admin'})
+        self.assertEqual(missing, [], f'규칙 없는 클래스: {missing}')
+
+    def test_모두_읽음이_탭의_점을_지운다(self):
+        """
+        점을 id(vtabInspUnreadDot)로 찾고 있었는데, 탭이 <a> 로 바뀌면서 그 id 가
+        사라졌다. 눌러도 붉은 점이 그대로 남는다는 신고가 여기서 나왔다.
+        """
+        self.assertNotIn('vtabInspUnreadDot', self.tpl)
+        self.assertNotIn('vtabAdminUnreadDot', self.tpl)
+        # 자리로 찾는다
+        self.assertIn(".querySelector('.pv-tab--active .pv-tab-dot')", self.tpl)
+        self.assertIn(".querySelectorAll('.pv-tab-dot')", self.tpl)
+
+    def test_점이_활성_탭_안에_있다(self):
+        """자리로 찾으므로, 점은 그 탭 <a> 안에 있어야 한다."""
+        import re
+
+        from v1.regulatory.models import NewsProductMatch
+
+        news = RegulatoryNews.objects.filter(api_source='I2620').first()
+        NewsProductMatch.objects.filter(news=news).update(read_yn=False)
+        html = self.client.get('/regulatory/').content.decode('utf-8')
+        active = re.search(r'<a class="pv-tab pv-tab--active".*?</a>', html, re.S)
+        self.assertIsNotNone(active, '활성 탭을 못 찾았다')
+        self.assertIn('pv-tab-dot', active.group(0))
+
     def test_다른_목록_화면과_같은_부품을_쓴다(self):
         """
         list_common.css 머리말은 제품 조회·식품첨가물·부적합·처분이 같은 모양
@@ -1108,6 +1188,56 @@ class RegulatoryLayoutTests(TestCase):
         html = r.content.decode('utf-8')
         self.assertIn('<tr class="rs-item rs-item--insp', html)
         self.assertIn('rs-item--insp-unread', html)
+
+    def test_알림_사유가_한_구역이다(self):
+        """
+        제품 · 원료 · 키워드가 각각 제 카드로 쌓였다(머리 셋·건수 셋·안내 셋).
+        셋 다 답하는 질문은 하나다 — 왜 나한테 왔나. 머리를 셋 두면 그 질문에
+        세 번 답하는 꼴이고, 패널이 길어져 정작 '무엇을 할까' 가 화면 밖으로 밀린다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        panel = (Path(dj.BASE_DIR) / 'templates/regulatory/_news_detail_panel.html'
+                 ).read_text(encoding='utf-8')
+        for gone in ('영향받는 내 제품 <span class="rd-sec-cnt">',
+                     '원료 보관함 연관 원료 <span class="rd-sec-cnt">',
+                     '알림 키워드 매칭 <span class="rd-sec-cnt">'):
+            self.assertNotIn(gone, panel, gone)
+        self.assertIn('내 알림 사유', panel)
+        # 종류는 머리가 아니라 줄 하나로 가른다
+        for kind in ('rd-kind-badge--prod', 'rd-kind-badge--ing', 'rd-kind-badge--kw'):
+            self.assertIn(kind, panel, kind)
+
+    def test_한_파일이_다_들고_있지_않다(self):
+        """
+        1,700줄 한 파일은 머릿속에 안 들어온다. 고칠 자리를 찾는 데만 스크롤을
+        한참 내리고, 어디까지가 한 덩어리인지 눈으로 잡히지 않는다.
+        이 저장소는 이미 _news_item.html 처럼 조각을 나눠 쓴다 — 같은 방식이다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR) / 'templates/regulatory'
+        self.assertLess(len(self.tpl.splitlines()), 1200,
+                        'news_list.html 이 다시 커졌다')
+        for name in ('_alert_settings_modal.html', '_inspection_detail_panel.html',
+                     '_inspection_public_panel.html', '_empty_detail_panel.html'):
+            self.assertTrue((base / name).exists(), name)
+            self.assertIn(f'regulatory/{name}', self.tpl, name)
+
+    def test_정적_파일에_캐시_버전이_붙어_있다(self):
+        """
+        버전이 없으면 브라우저가 예전 파일을 계속 쓴다. 고쳐서 배포해도 사용자
+        화면은 그대로다 — 실제로 단추가 잘못된 모양으로 남아 있던 적이 있다.
+        """
+        from v1.common import checks
+
+        warnings = [w for w in checks.check_static_cache_busting(None)
+                    if w.id in ('templates.W001', 'templates.W003')]
+        self.assertEqual(warnings, [], [w.msg for w in warnings])
 
     def test_상세가_카드로_쌓인다(self):
         """

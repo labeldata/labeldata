@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="{% static 'css/auth_common.css' %}">
+    <link rel="stylesheet" href="{% static 'css/auth_common.css' %}?v={{ STATIC_BUILD_DATE }}">
     <style>
         /* signup.html 전용: disabled 버튼 */
         .g-btn-primary:disabled { opacity: .45; cursor: not-allowed; }

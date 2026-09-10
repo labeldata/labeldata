@@ -1,0 +1,133 @@
+{% comment %}
+  수거검사 상세 — 내 매칭(selected_insp).
+
+  부적합·행정처분 상세(_news_detail_panel.html)와 **같은 제목·같은 자리**를
+  쓴다. 세 탭이 모두 "왜 나한테 왔는가 → 그 이유를 끈다" 라는 같은 흐름을
+  갖는다는 것이 이 화면의 규칙이다(REGULATORY_ALERT_PIPELINE.md 4절).
+
+  갈래를 고르는 {% if %} 사슬은 news_list.html 에 남겨 뒀다 — 어느 자리에
+  무엇이 오는지는 그 파일에서 한눈에 보여야 한다.
+{% endcomment %}
+{# ── 수거검사 상세 패널 ── #}
+        <div class="rd-wrap">
+
+          {# ══ 헤더 ══ #}
+          <div class="rd-hdr">
+            <div class="rd-hdr-top">
+              {% if selected_insp.alert_phase == 2 %}
+                <span class="rh-badge rh-src-dom"><i class="bi bi-arrow-repeat me-1"></i>판정결과 변동</span>
+              {% else %}
+                <span class="rh-badge rh-src-dom"><i class="bi bi-search me-1"></i>수거검사</span>
+              {% endif %}
+              {% if selected_insp.inspection.jdgmnt_cd_nm %}
+                <span class="rh-badge {% if '부적합' in selected_insp.inspection.jdgmnt_cd_nm %}rh-risk-H{% else %}rh-risk-L{% endif %}">
+                  {{ selected_insp.inspection.jdgmnt_cd_nm }}
+                </span>
+              {% else %}
+                <span class="rh-badge" style="background:#fff8e1;color:#f57f17;">검사중</span>
+              {% endif %}
+              <div class="ms-auto">
+                {% if selected_insp.inspection.tkawydtm %}
+                <span class="rd-hdr-date">{{ selected_insp.inspection.tkawydtm|slice:":4" }}.{{ selected_insp.inspection.tkawydtm|slice:"4:6" }}.{{ selected_insp.inspection.tkawydtm|slice:"6:8" }}<span class="rg-note"> (수거)</span></span>
+                {% endif %}
+                <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
+              </div>
+            </div>
+            <div class="rd-title">{{ selected_insp.inspection.prdtnm|default:selected_insp.inspection.bssh_nm }}</div>
+            <div class="rd-subtitle">
+              <b><i class="bi bi-building"></i> {{ selected_insp.inspection.bssh_nm }}</b>
+              {% if selected_insp.inspection.induty_cd_nm %}&nbsp;·&nbsp;{{ selected_insp.inspection.induty_cd_nm }}{% endif %}
+            </div>
+          </div>
+
+          {# ══ 판정변동 강조 박스 ══ #}
+          {% if selected_insp.alert_phase == 2 and selected_insp.prev_judgment %}
+          <div class="rd-insp-change-box">
+            <span class="rd-insp-change-label">판정 변동</span>
+            <span class="rd-insp-change-val">{{ selected_insp.prev_judgment }} → {{ selected_insp.inspection.jdgmnt_cd_nm }}</span>
+          </div>
+          {% endif %}
+
+          {# ══ 원본 수집 데이터 (접기) ══ #}
+          <details class="rd-raw-details">
+            <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 수거검사 상세 정보</summary>
+            <div class="rd-raw-body">
+              <table class="rd-raw-table">
+                {% if selected_insp.inspection.tkawyprno %}<tr><td class="rd-raw-key">수거증번호</td><td class="rd-raw-val">{{ selected_insp.inspection.tkawyprno }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.plan_titl %}<tr><td class="rd-raw-key">수거계획명</td><td class="rd-raw-val">{{ selected_insp.inspection.plan_titl }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.tkawyspci_typecd_nm %}<tr><td class="rd-raw-key">검체구분</td><td class="rd-raw-val">{{ selected_insp.inspection.tkawyspci_typecd_nm }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.site_addr %}<tr><td class="rd-raw-key">소재지</td><td class="rd-raw-val">{{ selected_insp.inspection.site_addr }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.exc_instt_nm %}<tr><td class="rd-raw-key">수행기관</td><td class="rd-raw-val">{{ selected_insp.inspection.exc_instt_nm }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.prdlst_report_no %}<tr><td class="rd-raw-key">품목보고번호</td><td class="rd-raw-val">{{ selected_insp.inspection.prdlst_report_no }}</td></tr>{% endif %}
+              </table>
+            </div>
+          </details>
+
+          {% comment %}
+            ══ 알림 사유 ═════════════════════════════════════════════════
+            부적합·행정처분 탭의 상세와 같은 제목·같은 자리다. 세 탭이 모두
+            "왜 나한테 왔는가 → 그 이유를 끈다" 라는 같은 흐름을 갖는다.
+
+            수거검사 매칭은 품목보고번호·인허가번호·업소명 셋 중 하나로만
+            생긴다. 그중 오탐이 잦은 것은 업소명이다 — 회사명이 짧으면
+            ('삼립') 남의 업체('○○삼립식품')까지 걸린다. 그래서 끌 수 있는
+            것도 업소명이고, 내 제품 번호가 맞아 걸린 건은 끄는 것이 아니라
+            '해당 없음' 으로 지우는 것이 맞다.
+          {% endcomment %}
+          <div class="rd-sec">
+            <div class="rd-sec-hdr">
+              <i class="bi bi-link-45deg text-primary"></i>
+              알림 사유
+              <span class="rd-sec-note">내 정보와 이렇게 맞아 걸렸습니다</span>
+            </div>
+            <div class="rd-sec-body">
+              <div class="rd-why">
+                <span class="rd-why-label">알림 사유</span>
+                {% if selected_insp.match_reason == 'label_no' %}
+                  <span class="rd-why-kw" title="수거검사 쪽 값">품목보고번호</span>
+                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
+                  <span class="rd-why-mine" title="내가 등록한 제품">{{ selected_insp.label.prdlst_nm|default:"내 제품" }}</span>
+                {% elif selected_insp.match_reason == 'license_no' %}
+                  <span class="rd-why-kw" title="수거검사 쪽 값">{{ selected_insp.inspection.prdlst_report_no|default:"품목보고번호" }}</span>
+                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
+                  <span class="rd-why-mine" title="내 정보의 인허가번호">인허가번호</span>
+                {% else %}
+                  <span class="rd-why-kw" title="수거검사 업소명">{{ selected_insp.inspection.bssh_nm|default:"업소명" }}{% if selected_insp.inspection.bssh_nm %}
+                    <button type="button" class="rd-why-mute-x"
+                            onclick="muteAlert('company', '{{ selected_insp.inspection.bssh_nm|escapejs }}')"
+                            title="업소 '{{ selected_insp.inspection.bssh_nm }}' 로 걸리는 수거검사 알림을 앞으로 받지 않습니다"
+                            aria-label="이 업소 알림 끄기"><i class="bi bi-bell-slash"></i></button>
+                  {% endif %}</span>
+                  <i class="bi bi-arrow-left-right rd-why-arrow"></i>
+                  <span class="rd-why-mine" title="내 정보의 회사명">회사명</span>
+                {% endif %}
+              </div>
+              {% if selected_insp.matched_value %}
+              <div class="rd-why">
+                <span class="rd-why-label">맞은 값</span>
+                <code class="rd-insp-matched-code">{{ selected_insp.matched_value }}</code>
+              </div>
+              {% endif %}
+              {% if selected_insp.match_reason != 'label_no' %}
+              <div class="rd-why-hint">
+                <i class="bi bi-info-circle"></i>
+                이 업소가 내 업체가 아니라면 배지의 종 단추로 끄거나,
+                <button type="button" class="rd-why-link" onclick="openAlertSettings('insp')">내 정보를 고쳐</button>
+                더 정확히 맞추세요.
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          {# ══ 액션 ══ #}
+          <div class="rd-insp-actions">
+            <div class="rd-sec-body">
+              <button type="button" class="rd-insp-dismiss-btn"
+                      onclick="inspDismiss({{ selected_insp.id }})"
+                      title="이 건만 내 목록에서 지웁니다 (같은 업소의 다음 건은 계속 옵니다)">
+                <i class="bi bi-x-circle"></i> 해당 없음 (이 건만 삭제)
+              </button>
+            </div>
+          </div>
+
+        </div>

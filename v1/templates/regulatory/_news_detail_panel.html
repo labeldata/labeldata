@@ -249,15 +249,33 @@
   </details>
   {% endif %}
 
-  {# ══ 내 제품 매칭 섹션 ══ #}
-  {% if matches %}
+  {% comment %}
+    ══ 내 알림 사유 ═══════════════════════════════════════════════════════
+    제품 · 원료 · 키워드가 한 구역에 함께 산다.
+
+    예전에는 셋이 각각 제 카드로 쌓였다(머리 셋, 건수 셋, 안내 문구 셋).
+    그런데 셋 다 답하는 질문은 하나다 — **왜 나한테 왔나.** 머리를 셋 두면
+    그 질문에 세 번 답하는 꼴이고, 패널이 그만큼 길어져 정작 '무엇을 할까'
+    (아래 조치 단추)가 화면 밖으로 밀린다.
+
+    머리는 하나로 두고 종류는 줄 하나로 가른다. 항목의 속은 셋이 서로 다르다 —
+    제품은 위해도와 조치, 원료는 쓰이는 제품 목록, 키워드는 등록한 규칙.
+    같은 것을 억지로 맞추지 않는다.
+  {% endcomment %}
+  {% if matches or ing_matches or kw_logs %}
   <div class="rd-sec">
     <div class="rd-sec-hdr">
       <i class="bi bi-exclamation-triangle-fill text-danger"></i>
-      영향받는 내 제품 <span class="rd-sec-cnt">{{ matches|length }}건</span>
+      내 알림 사유
       <span class="rd-sec-note"><i class="bi bi-bell-slash"></i>배지의 종 단추로 그 원인의 알림을 끕니다</span>
     </div>
     <div class="rd-sec-body">
+
+    {% if matches %}
+    <div class="rd-kind">
+      <span class="rd-kind-badge rd-kind-badge--prod">영향받는 내 제품</span>
+      <span class="rd-kind-n">{{ matches|length }}건</span>
+    </div>
     {% for m in matches %}
     <div class="rd-item" id="match-{{ m.id }}">
       <div class="rd-item-head">
@@ -343,20 +361,14 @@
       </div>
     </div>
     {% endfor %}
-    </div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {# ══ 원료 보관함 단독 매칭 ══ #}
-  {% if ing_matches %}
-  <div class="rd-sec">
-    <div class="rd-sec-hdr">
-      <i class="bi bi-box-seam" style="color:#f9a825;"></i>
-      원료 보관함 연관 원료 <span class="rd-sec-cnt">{{ ing_matches|length }}건</span>
-      <span class="rd-sec-sub">BOM 미연결</span>
-      <span class="rd-sec-note"><i class="bi bi-bell-slash"></i>배지의 종 단추로 그 원인의 알림을 끕니다</span>
+    {% if ing_matches %}
+    <div class="rd-kind">
+      <span class="rd-kind-badge rd-kind-badge--ing">원료 보관함</span>
+      <span class="rd-kind-n">{{ ing_matches|length }}건</span>
+      <span class="rd-kind-sub">BOM 미연결</span>
     </div>
-    <div class="rd-sec-body">
     {% for im in ing_matches %}
     <div class="rd-item" id="ing-match-{{ im.id }}" style="border-color:#ffd54f;">
       <div class="rd-item-head">
@@ -419,26 +431,19 @@
       </div>
     </div>
     {% endfor %}
-    </div>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {% comment %}
-    ══ 키워드 알림 매칭 ═══════════════════════════════════════════════════
-    이 알림을 부른 것은 **사용자가 직접 등록한 키워드**다. 그런데 예전에는
-    무엇이 걸렸는지만 보여 주고 끝이라, "이 알림 그만 받고 싶다" 는 사람은
-    알림 설정 모달을 열어 키워드 목록에서 같은 말을 눈으로 찾아야 했다.
-    등록한 지 오래됐거나 비슷한 키워드가 여럿이면 어느 것을 지워야 할지
-    알 수 없다 — 여기서 바로 지운다.
-  {% endcomment %}
-  {% if kw_logs %}
-  <div class="rd-sec rd-sec--kw">
-    <div class="rd-sec-hdr">
-      <i class="bi bi-bell-fill" style="color:#9c27b0;"></i>
-      알림 키워드 매칭 <span class="rd-sec-cnt">{{ kw_logs|length }}건</span>
-      <span class="rd-sec-note">내가 등록한 키워드 때문에 온 알림입니다</span>
+    {% comment %}
+      키워드 — 이 알림을 부른 것은 **사용자가 직접 등록한 것**이다.
+      예전에는 무엇이 걸렸는지만 보여 주고 끝이라, 그만 받고 싶은 사람은 설정
+      모달을 열어 목록에서 같은 말을 눈으로 찾아야 했다. 여기서 바로 지운다.
+    {% endcomment %}
+    {% if kw_logs %}
+    <div class="rd-kind">
+      <span class="rd-kind-badge rd-kind-badge--kw">알림 키워드</span>
+      <span class="rd-kind-n">{{ kw_logs|length }}건</span>
+      <span class="rd-kind-sub">내가 등록한 키워드</span>
     </div>
-    <div class="rd-sec-body">
     {% for kw in kw_logs %}
     <div class="rd-kw-match-item" id="kw-log-rule-{{ kw.rule_id|default:0 }}">
       <span class="rd-kw-cat rd-kw-cat-{{ kw.category|lower }}">
@@ -462,6 +467,8 @@
       {% endif %}
     </div>
     {% endfor %}
+    {% endif %}
+
     </div>
   </div>
   {% endif %}

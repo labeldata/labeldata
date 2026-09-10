@@ -12,7 +12,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/regulatory.css' %}">
+<link rel="stylesheet" href="{% static 'css/regulatory.css' %}?v={{ STATIC_BUILD_DATE }}">
 <style>
 /* 목차가 topbar 드롭다운보다 아래에 머물도록 z-index 낮춤 */
 .profile-toc-col .sticky-top { z-index: 10; }

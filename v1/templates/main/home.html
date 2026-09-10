@@ -14,8 +14,8 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-<link rel="stylesheet" href="{% static 'css/label_creation.css' %}">
-<link rel="stylesheet" href="{% static 'css/label_preview.css' %}">
+<link rel="stylesheet" href="{% static 'css/label_creation.css' %}?v={{ STATIC_BUILD_DATE }}">
+<link rel="stylesheet" href="{% static 'css/label_preview.css' %}?v={{ STATIC_BUILD_DATE }}">
 <style>
 /* --- 전체 페이지 스크롤 방지 --- */
 html, body {
@@ -1079,7 +1079,7 @@ html, body {
 <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<script src="{% static 'js/label/constants.js' %}"></script>
+<script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
 <script>
 // 국가 목록을 JavaScript에서 사용할 수 있도록 전역 변수로 설정
@@ -1090,7 +1090,7 @@ window.countryListForBold = [
 ];
 </script>
 
-<script src="{% static 'js/home_demo.js' %}"></script>
+<script src="{% static 'js/home_demo.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
 {% if current_label %}
 <script>
