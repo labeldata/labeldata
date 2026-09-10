@@ -818,3 +818,133 @@ def backfill_inspection_on_label_save(sender, instance, created, update_fields, 
     except Exception:
         import logging
         logging.getLogger(__name__).exception('[I0460 소급] MyLabel 트리거 오류')
+
+
+class PublicFoodNutrition(models.Model):
+    """
+    식약처 식품영양성분DB 적재본 (data.go.kr FoodNtrCpntDbInfo02).
+
+    **정답이 아니라 기본값이다.** 여기 있는 밀가루는 "일반적인 밀가루"이지
+    "우리가 쓰는 그 밀가루"가 아니다. 원료 영양성분의 출처 우선순위는
+
+        사내 시험성적서 > 공급업체 Spec > 이 표 > 유사 원료 추정
+
+    이고, 이 표가 하는 일은 **빈 칸을 미리 채워 두는 것**이다. 사람이 덮어쓰면
+    그 값이 이긴다.
+
+    성분 이름은 API 의 AMT_NUM 번호가 아니라 **우리 이름**으로 저장한다
+    (nutrition_calc·constants 가 쓰는 것과 같은 이름). 번호를 우리 이름으로
+    옮기는 일은 적재 한 곳에서만 일어나야 한다 — 화면과 계산이 저마다 번호를
+    풀면 한 곳만 밀려도 알 수 없다. 매핑은 services/mfds_nutrition.py 에 있다.
+
+    원문(raw)을 통째로 남긴다. 157 개 성분 중 20 여 개만 컬럼으로 꺼냈는데,
+    아미노산·지방산이 필요해지는 날 API 를 다시 639 번 부르지 않기 위해서다.
+    """
+
+    BASIS_G = 'g'
+    BASIS_ML = 'mL'
+    BASIS_CHOICES = [(BASIS_G, '100g 기준'), (BASIS_ML, '100mL 기준')]
+
+    VERIFY_PASS = 'pass'
+    VERIFY_FAIL = 'fail'
+    VERIFY_SKIP = 'skip'
+    VERIFY_CHOICES = [
+        (VERIFY_PASS, '검산 통과'),
+        (VERIFY_FAIL, '검산 어긋남'),
+        (VERIFY_SKIP, '잴 수 없음'),
+    ]
+
+    # ── 식별 ────────────────────────────────────────────────────────────
+    food_cd = models.CharField(max_length=40, unique=True, verbose_name='식품코드')
+    food_nm_kr = models.CharField(max_length=300, verbose_name='식품명', db_index=True)
+    db_grp_nm = models.CharField(max_length=30, null=True, blank=True, db_index=True,
+                                 verbose_name='데이터구분명',
+                                 help_text='가공식품 / 음식 / 원재료성')
+    db_class_nm = models.CharField(max_length=30, null=True, blank=True,
+                                   verbose_name='품목대표·상용제품')
+    food_cat1_nm = models.CharField(max_length=100, null=True, blank=True,
+                                    verbose_name='식품대분류명')
+
+    # ── 조인 키 ─────────────────────────────────────────────────────────
+    # 가공식품 행에는 표본 1,500 건에서 100 % 채워져 있었다. MyIngredient 도
+    # 같은 번호를 들고 있으므로, 사 오는 원료는 이름이 아니라 이 번호로 붙는다.
+    # 숫자가 아닌 값('2020_DNSP_04044')은 빈 문자열로 두어 조인에서 뺀다.
+    item_report_no = models.CharField(max_length=30, null=True, blank=True, db_index=True,
+                                      verbose_name='품목제조보고번호')
+    maker_nm = models.CharField(max_length=200, null=True, blank=True, verbose_name='업체명')
+    imp_yn = models.CharField(max_length=10, null=True, blank=True, verbose_name='수입여부')
+    nation_nm = models.CharField(max_length=100, null=True, blank=True, verbose_name='원산지국명')
+
+    # ── 기준량 ──────────────────────────────────────────────────────────
+    # 100 g 만 오는 것이 아니다. 표본의 19 % 가 100 mL 였다. 부피 기준은 비중을
+    # 모르면 중량 배합에 쓸 수 없으므로 단위를 그대로 남기고 자동 채움에서 뺀다.
+    basis_amount = models.FloatField(null=True, blank=True, verbose_name='기준량')
+    basis_unit = models.CharField(max_length=5, null=True, blank=True, choices=BASIS_CHOICES,
+                                  verbose_name='기준 단위',
+                                  help_text='비면 원본 기준량을 읽지 못한 행')
+
+    # ── 성분 (기준량당) ─────────────────────────────────────────────────
+    calories = models.FloatField(null=True, blank=True, verbose_name='에너지(kcal)')
+    proteins = models.FloatField(null=True, blank=True, verbose_name='단백질(g)')
+    fats = models.FloatField(null=True, blank=True, verbose_name='지방(g)')
+    carbohydrates = models.FloatField(null=True, blank=True, verbose_name='탄수화물(g)')
+    sugars = models.FloatField(null=True, blank=True, verbose_name='당류(g)')
+    dietary_fiber = models.FloatField(null=True, blank=True, verbose_name='식이섬유(g)')
+    sugar_alcohols = models.FloatField(null=True, blank=True, verbose_name='당알콜(g)')
+    natriums = models.FloatField(null=True, blank=True, verbose_name='나트륨(mg)')
+    cholesterols = models.FloatField(null=True, blank=True, verbose_name='콜레스테롤(mg)')
+    saturated_fats = models.FloatField(null=True, blank=True, verbose_name='포화지방산(g)')
+    trans_fats = models.FloatField(null=True, blank=True, verbose_name='트랜스지방산(g)')
+    calcium = models.FloatField(null=True, blank=True, verbose_name='칼슘(mg)')
+    iron = models.FloatField(null=True, blank=True, verbose_name='철(mg)')
+    phosphorus = models.FloatField(null=True, blank=True, verbose_name='인(mg)')
+    potassium = models.FloatField(null=True, blank=True, verbose_name='칼륨(mg)')
+    magnesium = models.FloatField(null=True, blank=True, verbose_name='마그네슘(mg)')
+    selenium = models.FloatField(null=True, blank=True, verbose_name='셀레늄(μg)')
+    zinc = models.FloatField(null=True, blank=True, verbose_name='아연(mg)')
+    moisture = models.FloatField(null=True, blank=True, verbose_name='수분(g)',
+                                 help_text='수율 검산의 근거 — 표시 성분은 아니다')
+    ash = models.FloatField(null=True, blank=True, verbose_name='회분(g)')
+    refuse_rate = models.FloatField(null=True, blank=True, verbose_name='폐기율(%)')
+
+    # ── 신뢰도·출처 ─────────────────────────────────────────────────────
+    # 등급을 새로 발명하지 않는다. 원본이 이미 '분석'과 '계산'을 가르고 있다.
+    crt_mth_nm = models.CharField(max_length=30, null=True, blank=True, db_index=True,
+                                  verbose_name='데이터생성방법명')
+    sub_ref_name = models.CharField(max_length=200, null=True, blank=True, verbose_name='출처명')
+    research_ymd = models.CharField(max_length=20, null=True, blank=True,
+                                    verbose_name='데이터생성일자',
+                                    help_text='"3년 경과" 같은 오래됨 경고에 쓴다')
+    update_date = models.CharField(max_length=20, null=True, blank=True, verbose_name='데이터수정일자')
+
+    # ── 검산 ────────────────────────────────────────────────────────────
+    # AMT_NUM 번호를 하나 밀려 읽어도 예외가 나지 않는다. 그래서 적재할 때마다
+    # 질량 합과 열량 재계산으로 스스로 재고, 그 결과를 행에 남긴다.
+    verify_status = models.CharField(max_length=10, default=VERIFY_SKIP, choices=VERIFY_CHOICES,
+                                     db_index=True, verbose_name='검산 결과')
+    verify_note = models.CharField(max_length=200, null=True, blank=True, verbose_name='검산 사유')
+
+    raw = models.JSONField(null=True, blank=True, verbose_name='원문',
+                           help_text='꺼내지 않은 성분 130여 종이 여기 남아 있다')
+    fetched_at = models.DateTimeField(auto_now=True, verbose_name='적재일시')
+
+    class Meta:
+        db_table = 'public_food_nutrition'
+        verbose_name = '식약처 영양성분'
+        verbose_name_plural = '식약처 영양성분'
+        indexes = [
+            models.Index(fields=['db_grp_nm', 'verify_status']),
+        ]
+
+    def __str__(self):
+        return '%s (%s)' % (self.food_nm_kr, self.food_cd)
+
+    @property
+    def usable_for_recipe(self):
+        """
+        배합 자동 채움에 쓸 수 있는 행인가.
+
+        중량(g) 기준이어야 하고, 검산에서 어긋나지 않아야 한다. 'skip'(잴 수
+        없음)은 막지 않는다 — 원본에 빈 칸이 많아 못 잰 것이지 틀린 것이 아니다.
+        """
+        return self.basis_unit == self.BASIS_G and self.verify_status != self.VERIFY_FAIL
