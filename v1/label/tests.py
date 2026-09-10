@@ -13625,3 +13625,129 @@ class 영양성분_탭에_배합에서_계산이_있다(TestCase):
         # 막힌 가지에서 setGridNutritionData 를 부르지 않는다
         blocked = h[h.index('if (d.blocking'):h.index('var values = d.values')]
         self.assertNotIn('setGridNutritionData', blocked)
+
+
+class 배합_표의_행마다_입력_단추가_있다(TestCase):
+    """
+    상세 창(알레르기·GMO·표시명 기준·영양성분)은 **알레르기·GMO 칸을 눌렀을
+    때만** 열렸다. 그 칸을 눌러야 한다는 걸 아는 사람에게만 있는 기능이었다.
+
+    줄마다 눈에 보이는 단추를 둔다. 칸(columns)이 아니라 **행 머리**에 두는
+    것이 핵심이다 — 표의 머리글은 엑셀 붙여넣기 양식이기도 해서, 칸을 더하면
+    사용자가 쓰던 엑셀이 어긋난다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyLabel
+        self.user = User.objects.create_user(username='bomui', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='식빵')
+
+    def html(self):
+        return self.client.get(
+            '/bom/label/%d/workspace/' % self.label.my_label_id
+        ).content.decode('utf-8')
+
+    def test_행_머리에_단추를_그린다(self):
+        h = self.html()
+        self.assertIn('bom-rowbtn', h)
+        self.assertIn('rowHeaders: function', h)
+
+    def test_엑셀_양식은_건드리지_않는다(self):
+        """
+        머리글에 칸을 더하면 사용자가 쓰던 엑셀 양식이 어긋난다.
+        단추는 행 머리에 있어야 한다.
+        """
+        h = self.html()
+        headers = h[h.index('BOM_SHEET_HEADERS'):h.index('BOM_ALL_COLUMNS')]
+        self.assertNotIn('bom-rowbtn', headers)
+        self.assertNotIn('영양성분', headers)
+
+    def test_단추는_기존_상세_경로를_탄다(self):
+        """새 경로를 만들면 칸을 눌렀을 때와 둘이 언젠가 어긋난다."""
+        h = self.html()
+        handler = h[h.index('function bindRowButtons'):h.index('const PICKER_PROPS')]
+        self.assertIn('updateContextPanel', handler)
+
+    def test_상세_창에_영양성분_줄이_있다(self):
+        h = self.html()
+        self.assertIn('id="rowdetail-nutrition"', h)
+        self.assertIn('fillRowNutrition', h)
+
+    def test_영양성분은_그_줄에서_고치지_않는다(self):
+        """
+        원료에 붙는 값이라 원료 상세에서 한 번 정한다. 여기서 또 고치게 하면
+        같은 값을 두 자리에서 만지게 된다.
+        """
+        h = self.html()
+        panel = h[h.index('id="rowdetail-nutrition"') - 900:
+                  h.index('id="rowdetail-nutrition"') + 200]
+        self.assertIn('원료 상세에서 정합니다', panel)
+
+
+class 고를_것이_없으면_묻지_않는다(TestCase):
+    """
+    실서버 첫 점검에서 이렇게 나왔다.
+
+        원료 884 개 · 보고번호로 찾을 수 있는 것 65 개 · **정해 둔 원료 0 개**
+        배합이 있는 제품 20 개 · **계산되는 제품 0 개**
+
+    보고번호가 맞으면 사람이 고를 것이 없다 — 같은 번호는 같은 품목이다.
+    그런데도 원료 상세를 하나씩 열어 눌러야 저장되니, 아무도 안 누르면
+    기능이 통째로 잠들어 있다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient, PublicFoodNutrition
+
+        self.user = User.objects.create_user(username='autolink', password='x')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='HK피자치즈', delete_YN='N',
+            prdlst_report_no='19990262011322')
+        self.row = PublicFoodNutrition.objects.create(
+            food_cd='A1', food_nm_kr='HK피자치즈', basis_unit='g', basis_amount=100.0,
+            item_report_no='19990262011322', calories=310.0, proteins=20.0,
+            crt_mth_nm='수집')
+
+    def run_cmd(self, **kw):
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('link_ingredient_nutrition', stdout=out, **kw)
+        return out.getvalue()
+
+    def test_보고번호가_맞으면_자동으로_붙인다(self):
+        self.run_cmd()
+        nut = self.ing.nutrition
+        self.assertEqual(nut.calories, 310.0)
+        self.assertEqual(nut.source_kind, 'report_no')
+        self.assertEqual(nut.public_row_id, self.row.id)
+
+    def test_사람이_고른_것은_아니므로_고른_사람이_없다(self):
+        self.run_cmd()
+        self.assertIsNone(self.ing.nutrition.picked_by)
+
+    def test_dry_run_은_저장하지_않는다(self):
+        from v1.label.models import MyIngredientNutrition
+        out = self.run_cmd(dry_run=True)
+        self.assertIn('저장하지 않았다', out)
+        self.assertFalse(MyIngredientNutrition.objects.exists())
+
+    def test_사람이_정한_값을_덮지_않는다(self):
+        """성적서를 넣었거나 후보를 고른 것을 자동 판단으로 지우면 안 된다."""
+        from v1.label.models import MyIngredientNutrition
+        MyIngredientNutrition.objects.create(
+            ingredient=self.ing, source_kind='spec_ocr', calories=999.0)
+        self.run_cmd()
+        self.ing.nutrition.refresh_from_db()
+        self.assertEqual(self.ing.nutrition.calories, 999.0)
+
+    def test_부피_기준은_붙이지_않는다(self):
+        """비중을 모르면 중량 배합에 못 쓴다."""
+        self.row.basis_unit = 'mL'
+        self.row.save()
+        self.run_cmd()
+        from v1.label.models import MyIngredientNutrition
+        self.assertFalse(MyIngredientNutrition.objects.exists())
