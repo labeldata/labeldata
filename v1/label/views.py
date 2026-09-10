@@ -22,7 +22,7 @@ from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
 from django.db.models import IntegerField, Max, Q
 from django.db.models.functions import Cast, Substr
 from django.utils.functional import cached_property
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse # [추가] URL 생성을 위해 import
 from django.utils import timezone  # 추가
@@ -1422,6 +1422,24 @@ def my_ingredient_detail(request, ingredient_id=None):
     if current_ingredient_id:
         # user_id는 request.user 또는 None도 허용 (공용 원료 지원)
         ingredient = get_object_or_404(MyIngredient, my_ingredient_id=current_ingredient_id)
+        # 남의 원료는 열지도 못한다.
+        #
+        # 주인을 안 보고 id 로만 꺼내고 있었다. 그런데 저장 쪽은 막판에
+        # `new_ingredient.user_id = request.user` 를 한다 — 그래서 id 만 알면
+        # **남의 원료를 통째로 가져올 수 있었다.** 실제로 이랬다.
+        #
+        #     B 가 A 의 원료를 POST  ->  success: True
+        #     이름   'B 가 덮어씀'
+        #     주인   b@b.com          (원래 a@a.com)
+        #
+        # 게다가 그 뒤의 BOM 동기화가 A 의 제품 줄까지 새 값으로 덮어썼다.
+        #
+        # 없는 것처럼 답한다(403 이 아니라 404). 403 은 "그 번호는 있다" 를
+        # 알려 주는 셈이라, 번호를 훑어 남의 원료 목록을 그릴 수 있다.
+        #
+        # 공용 원료(user_id=None)는 그대로 둔다 — 여럿이 함께 보는 것이다.
+        if ingredient.user_id is not None and ingredient.user_id != request.user:
+            raise Http404('내 원료가 아닙니다.')
         mode = 'edit'
     else:
         ingredient = MyIngredient(user_id=request.user, delete_YN='N')
@@ -1503,9 +1521,14 @@ def my_ingredient_detail(request, ingredient_id=None):
             return redirect('label:my_ingredient_detail', ingredient_id=new_ingredient.my_ingredient_id)
         else:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                # 폼 에러를 문자열로 반환
-                errors = {field: str(error) for field, error in form.errors.items()}
-                return JsonResponse({'success': False, 'errors': errors, 'message': '입력값 오류'})
+                # 어느 칸이 왜 막혔는지 칸 이름으로 돌려준다. 화면이 그 칸에
+                # 붙여 보여 준다 — 구석의 단추만 빨개지면 무엇을 고쳐야 하는지
+                # 알 수 없다.
+                errors = {field: [str(m) for m in msgs]
+                          for field, msgs in form.errors.items()}
+                first = next(iter(errors.values()), ['입력값 오류'])[0]
+                return JsonResponse({'success': False, 'errors': errors,
+                                     'error': first, 'message': first})
     else:
         form = MyIngredientsForm(instance=ingredient)
 
@@ -1513,6 +1536,11 @@ def my_ingredient_detail(request, ingredient_id=None):
         'ingredient': ingredient,
         'form': form,
         'mode': mode,
+        # 공용 원료는 여럿이 함께 쓰므로 한 사람이 고칠 수 없다. 화면이 그
+        # 사실을 **미리** 말해야 한다 — 지금까지는 칸을 다 열어 두고 저장
+        # 단추도 파랗게 둔 채, 다 고치고 누른 뒤에야 거절했다. 고친 내용은
+        # 그대로 날아갔다.
+        'read_only': mode == 'edit' and ingredient.user_id is None,
         'food_types': list(FoodType.objects.all().values('food_type', 'food_group').order_by('food_type')),
         # 농수축산물(1만 건)은 여기서 내려보내지 않는다 — food_type_options API 로 검색한다.
         'food_additives': list(FoodAdditive.objects.all().values('name_kr')),

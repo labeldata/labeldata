@@ -461,6 +461,59 @@ function handleDeleteIngredientPartial(ingredientId) {
     });
 }
 
+/* 저장 단추의 한 가지 상태를 한 자리에서 그린다.
+ *
+ * 여섯 군데가 제각기 `saveBtn.className = 'btn btn-danger'` 로 통째로
+ * 덮어쓰고 있었다. 이 단추의 진짜 옷은 `panel-btn primary` 라 **한 번
+ * 저장하면 모양이 바뀌었고**, 안의 <span id="ingSaveLabel"> 도 함께
+ * 사라져서 '저장 안 됨' 표시가 그 뒤로 안 켜졌다.
+ *
+ * 옷은 그대로 두고 상태 class 와 글자만 바꾼다. */
+function setSaveBtn(state, text) {
+    const btn = document.getElementById('ingSaveBtn');
+    if (!btn) return;
+    btn.classList.remove('is-busy', 'is-ok', 'is-bad');
+    if (state) btn.classList.add('is-' + state);
+    btn.disabled = (state === 'busy');
+    const icon = {busy: 'bi-hourglass-split', ok: 'bi-check-lg',
+                  bad: 'bi-exclamation-triangle'}[state] || 'bi-check-lg';
+    btn.innerHTML = '<i class="bi ' + icon + '"></i> <span id="ingSaveLabel"></span>';
+    document.getElementById('ingSaveLabel').textContent = text || '저장';
+}
+
+/* 쉬는 상태로. 아직 안 남은 값이 있으면 단추가 다시 그렇게 말한다 —
+ * 저장을 한 번 눌렀다는 이유로 '저장 안 됨' 이 지워지면 안 된다. */
+function resetSaveBtn() {
+    setSaveBtn('', '저장');
+    if (typeof window.setIngredientDirty === 'function') {
+        // 현재 dirty 값을 그대로 다시 칠하게 한다
+        const label = document.getElementById('ingSaveLabel');
+        const btn = document.getElementById('ingSaveBtn');
+        if (btn && label && btn.classList.contains('is-dirty')) {
+            label.textContent = '저장 안 됨 — 누르세요';
+        }
+    }
+}
+
+/* 막힌 칸에 그 자리에서 말한다. 구석의 단추만 빨개지면 무엇을 고쳐야
+ * 하는지 알 수 없다. */
+function showFieldError(name, message) {
+    clearFieldErrors();
+    const input = document.querySelector('[name="' + name + '"]');
+    if (!input) return;
+    input.classList.add('is-invalid');
+    const note = document.createElement('div');
+    note.className = 'field-error';
+    note.textContent = message;
+    (input.parentNode || document.body).appendChild(note);
+    input.focus();
+}
+
+function clearFieldErrors() {
+    document.querySelectorAll('.field-error').forEach(el => el.remove());
+    document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+}
+
 // 폼 저장 함수 (검색 조건 유지, 테이블 컬럼 순서 맞춤)
 function saveMyIngredient() {
     const my_ingredient_id_elem = document.getElementById("my_ingredient_id");
@@ -489,27 +542,18 @@ function saveMyIngredient() {
     // 저장 버튼 비활성화 및 로딩 표시
     const saveBtn = document.querySelector('button[type="submit"][form="ingredientForm"]');
     if (saveBtn) {
-        saveBtn.disabled = true;
-        saveBtn.className = 'btn btn-secondary';
-        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
+        setSaveBtn('busy', '저장중…');
     }
 
     // 원재료명 필수값 체크
     const prdlst_nm = formData.get('prdlst_nm')?.trim();
     if (!prdlst_nm) {
-        if (saveBtn) {
-            saveBtn.disabled = false;
-            saveBtn.className = 'btn btn-danger';
-            saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>원재료명 필수';
-            
-            setTimeout(() => {
-                saveBtn.className = 'btn btn-primary';
-                saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
-            }, 3000);
-        }
-        document.getElementById('prdlst_nm').focus();
+        setSaveBtn('bad', '원재료명을 입력하세요');
+        setTimeout(resetSaveBtn, 3000);
+        showFieldError('prdlst_nm', '원재료명을 입력하세요. 이름이 없으면 배합·자동감지·영양성분에서 이 원료를 찾을 수 없습니다.');
         return;
     }
+    clearFieldErrors();
 
     // 원재료명 중복 체크 (신규 등록 시에만)
     if (!my_ingredient_id && prdlst_nm) {
@@ -526,9 +570,7 @@ function saveMyIngredient() {
             if (data.exists) {
                 if (!confirm('동일한 이름의 원료가 이미 존재합니다. 그래도 저장하시겠습니까?')) {
                     if (saveBtn) {
-                        saveBtn.disabled = false;
-                        saveBtn.className = 'btn btn-primary';
-                        saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
+                        resetSaveBtn();
                     }
                     return;
                 } else {
@@ -540,14 +582,8 @@ function saveMyIngredient() {
         })
         .catch(() => {
             if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.className = 'btn btn-danger';
-                saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>중복체크 오류';
-                
-                setTimeout(() => {
-                    saveBtn.className = 'btn btn-primary';
-                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
-                }, 3000);
+                setSaveBtn('bad', '중복 확인에 실패했습니다');
+                setTimeout(resetSaveBtn, 3000);
             }
         });
         return;
@@ -579,14 +615,8 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
         if (data.success) {
             // 저장 성공 버튼 피드백
             if (saveBtn) {
-                saveBtn.className = 'btn btn-success';
-                saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
-                
-                setTimeout(() => {
-                    saveBtn.disabled = false;
-                    saveBtn.className = 'btn btn-primary';
-                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
-                }, 1500);
+                setSaveBtn('ok', '저장했습니다');
+                setTimeout(resetSaveBtn, 1500);
             }
 
             // ── localStorage 동기화 알림 저장 ──────────────────────────
@@ -630,18 +660,16 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
                 
                 // 저장 성공 후 변경 감지 플래그 해제
                 if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
+                if (typeof window.setIngredientDirty === 'function') window.setIngredientDirty(false);
             }, 300);
         } else {
             // 저장 실패 버튼 피드백
             if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.className = 'btn btn-danger';
-                saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>저장실패: ' + (data.error || '알 수 없는 오류');
-                
-                setTimeout(() => {
-                    saveBtn.className = 'btn btn-primary';
-                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
-                }, 3000);
+                setSaveBtn('bad', data.error || '저장하지 못했습니다');
+                setTimeout(resetSaveBtn, 3000);
+                var fields = data.errors || {};
+                var first = Object.keys(fields)[0];
+                if (first) showFieldError(first, [].concat(fields[first])[0]);
             }
         }
     })
@@ -650,14 +678,8 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
         
         // 통신 오류 버튼 피드백
         if (saveBtn) {
-            saveBtn.disabled = false;
-            saveBtn.className = 'btn btn-danger';
-            saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>통신오류';
-            
-            setTimeout(() => {
-                saveBtn.className = 'btn btn-primary';
-                saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
-            }, 3000);
+            setSaveBtn('bad', '서버에 닿지 못했습니다');
+            setTimeout(resetSaveBtn, 3000);
         }
     });
 }

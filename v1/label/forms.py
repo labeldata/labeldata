@@ -157,3 +157,23 @@ class MyIngredientsForm(forms.ModelForm):
             'gmo': forms.TextInput(attrs={'class': 'form-control'}),
             'ingredient_display_name': forms.Textarea(attrs={'class': 'form-control'})  # 위젯 추가
         }
+
+
+    # 이름 없는 원료는 아무 데서도 쓸 수 없다.
+    #
+    # 모델이 null=True, blank=True 라 ModelForm 이 required=False 로 만들었고
+    # 화면의 빨간 별표는 아무것도 막지 않았다. 실제로 이랬다.
+    #
+    #     MyIngredientsForm({'prdlst_nm': ''}).is_valid()  ->  True
+    #
+    # 이름이 비면 배합 목록에 빈 줄로 뜨고, 알레르기 자동감지도 영양성분 후보
+    # 찾기도 읽을 글자가 없다. 화면(JS)에 검사가 하나 있었지만 그 길로 안
+    # 들어오면 그만이다 — 막는 자리는 여기여야 한다.
+    #
+    # 공백만 친 것도 이름이 아니다.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        f = self.fields['prdlst_nm']
+        f.required = True
+        f.strip = True
+        f.error_messages['required'] = '원재료명을 입력하세요.'

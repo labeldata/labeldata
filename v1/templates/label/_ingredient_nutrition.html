@@ -72,6 +72,19 @@
       });
   }
 
+  /* 이 구역만 **고르는 즉시 저장**된다. 나머지 칸은 [저장] 을 눌러야 남는다.
+     한 화면에서 규칙이 갈리면 사용자는 둘 중 하나를 반드시 틀리게 안다 —
+     "고쳤는데 안 남았다" 와 "안 고쳤는데 남았다" 가 둘 다 나온다.
+     그래서 저장된 순간을 그 자리에서 말한다. */
+  function flash(text) {
+    var el = document.getElementById('ingNutFlash');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('is-on');
+    clearTimeout(flash._t);
+    flash._t = setTimeout(function () { el.classList.remove('is-on'); }, 2600);
+  }
+
   function save(payload) {
     return fetch(box.dataset.saveUrl, {
       method: 'POST',
@@ -80,16 +93,29 @@
     }).then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.success) { alert(d.error || '저장하지 못했습니다'); return false; }
+        flash(payload.kind === 'clear' ? '지웠습니다' : '저장했습니다');
         return true;
       });
   }
 
-  function valuesLine(v) {
-    var out = [];
-    for (var i = 0; i < 5; i++) {
-      out.push(FIELDS[i][1] + ' ' + num(v[FIELDS[i][0]]));
-    }
-    return out.join(' · ');
+  /* 아홉 개를 다 보여 준다.
+     앞 다섯 개만 보이던 때는 나트륨이 아홉 번째라 잘렸다. 하필 나트륨이다 —
+     기여도 판정에서 가장 자주 막는 성분이고, 상한이 정제소금이라 배합비
+     0.05 % 만 돼도 표시값을 움직인다. "왜 아직 계산이 안 되지" 의 답이
+     화면에 없었던 셈이다.
+
+     빈 칸은 0 이 아니라 '–' 로 둔다. 무엇이 비었는지가 드러나야 한다. */
+  function valuesGrid(v) {
+    return '<div class="ing-nut-grid">'
+      + FIELDS.map(function (f) {
+          var val = v[f[0]];
+          var empty = (val === null || val === undefined || val === '');
+          return '<div class="ing-nut-cell' + (empty ? ' is-empty' : '') + '">'
+            + '<span class="ing-nut-k">' + esc(f[1]) + '</span>'
+            + '<span class="ing-nut-v">' + num(val) + '</span>'
+            + '</div>';
+        }).join('')
+      + '</div>';
   }
 
   function candRow(c, kind) {
@@ -143,7 +169,7 @@
         parts.push('<div class="ing-nut-why">'
           + '배합비가 작아 표시값을 바꾸지 못한다고 보고 값을 비워 둡니다.</div>');
       } else {
-        parts.push('<div class="ing-nut-values">' + valuesLine(c.values) + '</div>');
+        parts.push(valuesGrid(c.values));
       }
 
       parts.push('<div class="ing-nut-actions">'
@@ -195,6 +221,7 @@
     }
 
     parts.push(manualForm());
+    parts.push('<span id="ingNutFlash" class="ing-nut-flash" role="status"></span>');
     box.innerHTML = parts.join('');
   }
 
@@ -251,5 +278,52 @@
   });
 
   load();
+})();
+</script>
+
+{% comment %}
+  나머지 칸은 [저장] 을 눌러야 남는다.
+
+  영양성분만 즉시 저장되므로, 그 차이를 화면이 말하지 않으면 사용자는 둘 중
+  하나를 반드시 틀리게 안다. 값이 바뀌면 단추가 "아직 안 남았다" 고 말한다.
+
+  **끄는 것은 저장이 끝난 뒤여야 한다.** submit 에서 끄면, 서버가 되돌려보낸
+  경우(원재료명이 비었다든가)에도 꺼져 버려서 못 남은 것을 남았다고 말한다.
+  저장을 실제로 해내는 쪽(saveMyIngredient)이 window.setIngredientDirty(false)
+  를 부른다.
+{% endcomment %}
+<script>
+(function () {
+  var form = document.getElementById('ingredientForm');
+  if (!form) return;
+
+  var dirty = false;
+
+  /* 단추 속을 다시 그리는 자리가 있어(저장중·저장완료) 처음 잡아 둔 node 는
+     곧 떨어져 나간다. 쓸 때마다 다시 찾는다. */
+  function paint() {
+    var btn = document.getElementById('ingSaveBtn');
+    var label = document.getElementById('ingSaveLabel');
+    if (!btn || !label) return;
+    btn.classList.toggle('is-dirty', dirty);
+    label.textContent = dirty ? '저장 안 됨 — 누르세요' : '저장';
+  }
+
+  window.setIngredientDirty = function (on) {
+    dirty = !!on;
+    paint();
+  };
+
+  /* 영양성분 구역은 이 폼 밖이다(즉시 저장된다). 그 안의 입력이 이 표시를
+     켜면 "저장을 눌러야 한다" 는 거짓말이 된다. */
+  form.addEventListener('input', function () { window.setIngredientDirty(true); });
+  form.addEventListener('change', function () { window.setIngredientDirty(true); });
+
+  /* 안 남은 채로 나가려 하면 붙잡는다 */
+  window.addEventListener('beforeunload', function (ev) {
+    if (!dirty) return;
+    ev.preventDefault();
+    ev.returnValue = '';
+  });
 })();
 </script>

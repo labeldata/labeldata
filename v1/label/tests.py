@@ -13940,3 +13940,379 @@ class 실제_배합_원료_이름을_견딘다(TestCase):
     def test_무가당_무염도_같이_막는다(self):
         self.행('무가당 두유', 50.0)
         self.assertEqual(self.ncd.candidates('두유'), [])
+
+
+class 저장되는_것과_안_되는_것을_구별해_준다(TestCase):
+    """
+    원료 상세는 한 화면에서 저장 방식이 두 가지다.
+
+        영양성분   고르면 바로 저장   POST …/nutrition/save/
+        그 외 7칸  [저장] 눌러야 저장  form="ingredientForm"
+
+    화면이 그 차이를 말하지 않으면 사용자는 둘 중 하나를 반드시 틀리게 안다 —
+    "고쳤는데 안 남았다" 와 "안 고쳤는데 남았다" 가 둘 다 나온다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        self.user = User.objects.create_user(username='dirty', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='밀가루', delete_YN='N')
+
+    def html(self):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+
+    def test_영양성분은_저장된_순간을_말한다(self):
+        h = self.html()
+        self.assertIn('ingNutFlash', h)
+        self.assertIn('저장했습니다', h)
+
+    def test_나머지_칸은_아직_안_남았음을_드러낸다(self):
+        h = self.html()
+        self.assertIn('저장 안 됨', h)
+        self.assertIn('is-dirty', h)
+
+    def test_안_남은_채로_나가려_하면_붙잡는다(self):
+        h = self.html()
+        self.assertIn('beforeunload', h)
+
+    def test_영양성분_구역은_그_표시를_켜지_않는다(self):
+        """
+        영양성분은 이 폼 밖이고 즉시 저장된다. 그 입력이 '저장을 눌러야 한다'
+        를 켜면 거짓말이 된다 — 리스너를 form 에만 건다.
+        """
+        h = self.html()
+        js = h[h.index('var form = document.getElementById(\'ingredientForm\')'):]
+        for ev in ("input", "change"):
+            self.assertIn("form.addEventListener('%s'" % ev, js)
+            self.assertNotIn("document.addEventListener('%s'" % ev, js)
+
+
+class 나트륨이_화면에_보인다(TestCase):
+    """
+    정해진 값을 앞 다섯 개만 보여 주던 때는 나트륨이 아홉 번째라 잘렸다.
+    하필 나트륨이다 — 기여도 판정에서 가장 자주 막는 성분이고, 상한이
+    정제소금(39,340 mg/100g)이라 배합비 0.05 % 만 돼도 표시값을 움직인다.
+    "왜 아직 계산이 안 되지" 의 답이 화면에 없었던 셈이다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        self.user = User.objects.create_user(username='na', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='정제소금', delete_YN='N')
+
+    def test_아홉_성분을_모두_그린다(self):
+        h = self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+        js = h[h.index('function valuesGrid'):h.index('function candRow')]
+        # 다섯 개로 자르지 않는다
+        self.assertNotIn('i < 5', js)
+        self.assertIn('FIELDS.map', js)
+
+    def test_빈_칸은_0_이_아니라_대시로_둔다(self):
+        """무엇이 비었는지가 드러나야 한다."""
+        h = self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+        self.assertIn('is-empty', h)
+        self.assertIn('ndash', h)
+
+
+class 고를_일이_드문_것은_접어_둔다(TestCase):
+    """
+    알레르기 19 칩과 GMO 6 칩이 폼 세로의 37 % 를 쓰고 있었다. 둘 다 대개
+    "선택된 항목 없음" 인데도 늘 펼쳐져 있었다 — 고를 일이 드문 것이 가장 넓은
+    자리를 차지한 셈이고, 정작 필수인 원재료명은 한 줄이었다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        self.user = User.objects.create_user(username='fold', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='밀가루', delete_YN='N')
+
+    def html(self):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+
+    def test_칩은_접혀_있고_고르기로_편다(self):
+        h = self.html()
+        self.assertIn('ag-fold', h)
+        self.assertIn('data-fold="allergyBtnList"', h)
+        self.assertIn('data-fold="gmoBtnList"', h)
+
+    def test_부트스트랩_유틸리티를_함께_쓰지_않는다(self):
+        """
+        .d-flex 는 display:flex !important 라 접기를 이긴다. 실제로 칩이
+        그대로 보였다 — 배치는 .ag-fold 가 맡는다.
+        """
+        h = self.html()
+        for box in ('allergyBtnList', 'gmoBtnList'):
+            i = h.index('id="%s"' % box)
+            cls = h[i:i + 120]
+            self.assertNotIn('d-flex', cls, '%s 에 d-flex 가 남아 있다' % box)
+            self.assertIn('ag-fold', cls)
+
+    def test_자동감지와_전체선택은_접혀_있어도_보인다(self):
+        """접은 것은 칩뿐이다. 그 줄에서 할 수 있는 일은 그대로 보여야 한다."""
+        h = self.html()
+        head = h[h.index('id="allergyBtnList"') - 900:h.index('id="allergyBtnList"')]
+        self.assertIn('allergyAutoDetectBtn', head)
+        self.assertIn('allergyToggleBtn', head)
+
+
+class AllergenDetectRuleTests(TestCase):
+    """
+    '자동감지' 가 두 벌이다 — 화면과 서버가 다르게 판정한다.
+
+    이 시험은 고치지 않는다. **지금 어긋나 있다는 사실을 못 박아 둔다.**
+    한쪽으로 합칠 때 이 시험이 먼저 깨져서, 무엇이 달라졌는지 알려 준다.
+    """
+
+    def rules(self):
+        from v1.label.management.commands.check_allergen_detect import (
+            detect_both, detect_screen, detect_server)
+        return detect_screen, detect_server, detect_both
+
+    def test_한_글자_키워드가_긴_이름_속에_숨어_있을_때(self):
+        screen, server, both = self.rules()
+        # 아밀라아제는 효소이고 당밀은 사탕수수 부산물이다. 둘 다 밀이 아니다.
+        # 서버는 목록에 적어 둔 것만 겨우 피한다. 화면은 낱말 경계를 보므로
+        # **목록이 없어도** 안 걸린다 — 이쪽이 낫다.
+        for word in ('아밀라아제', '당밀', '밀랍'):
+            self.assertNotIn('밀', screen(word), word)
+            self.assertNotIn('밀', server(word), word)
+        # 목록에 없는 것에서 서버만 헛짚는다. 가짜 친구는 하나씩 손으로
+        # 적는 목록이라 늘 뒤늦다.
+        self.assertIn('밀', server('현미밀크티'))
+        self.assertNotIn('밀', screen('현미밀크티'))
+        self.assertNotIn('밀', both('현미밀크티'))
+
+    def test_서버는_한_글자를_아무_데서나_잡는다(self):
+        screen, server, both = self.rules()
+        # '게' 가 '조개탕' 이 아니라 '보관하게' 같은 말꼬리에도 붙는다.
+        self.assertIn('게', server('실온에서 보관하게 두세요'))
+        self.assertNotIn('게', screen('실온에서 보관하게 두세요'))
+        self.assertNotIn('게', both('실온에서 보관하게 두세요'))
+        # 낱말로 적힌 것은 셋 다 잡는다 — 경계를 보느라 놓치면 안 된다
+        for fn in (screen, server, both):
+            self.assertIn('게', fn('꽃게, 새우'))
+
+    def test_안_들었다는_말을_들었다고_읽는다(self):
+        screen, server, both = self.rules()
+        # '노밀가루' 는 밀가루가 없다는 뜻인데 셋 다 밀로 읽는다.
+        # 실제 원료에 있던 이름이다. 아직 아무도 이것을 못 가린다.
+        for fn in (screen, server, both):
+            self.assertIn('밀', fn('노밀가루 쌀카스테라 프리믹스'))
+
+
+class IngredientNameRequiredTests(TestCase):
+    """
+    빨간 별표가 아무것도 막지 않았다.
+
+    모델이 `blank=True` 라 ModelForm 이 `required=False` 로 만들었고, 화면의
+    입력 칸에도 `required` 가 없었다. 화면 JS 에 검사가 하나 있었지만 그 길로
+    안 들어오면 그만이다 — 이름 없는 원료가 그대로 저장됐다.
+
+    이름이 비면 배합 목록에 빈 줄로 뜨고, 알레르기 자동감지도 영양성분 후보
+    찾기도 읽을 글자가 없다.
+    """
+
+    def test_이름_없이는_저장되지_않는다(self):
+        from v1.label.forms import MyIngredientsForm
+        for value in ('', '   ', None):
+            form = MyIngredientsForm({'prdlst_nm': value} if value is not None else {})
+            self.assertFalse(form.is_valid(), repr(value))
+            self.assertIn('prdlst_nm', form.errors)
+            self.assertIn('원재료명', str(form.errors['prdlst_nm']))
+
+    def test_이름이_있으면_저장된다(self):
+        from v1.label.forms import MyIngredientsForm
+        self.assertTrue(MyIngredientsForm({'prdlst_nm': '밀가루'}).is_valid())
+
+    def test_앞뒤_공백은_이름이_아니다(self):
+        """'  밀가루  ' 는 이름이다. 공백은 떼고 남긴다."""
+        from v1.label.forms import MyIngredientsForm
+        form = MyIngredientsForm({'prdlst_nm': '  밀가루  '})
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.cleaned_data['prdlst_nm'], '밀가루')
+
+    def test_브라우저도_막는다(self):
+        """폼만 막으면 다 친 뒤에야 알게 된다. 칸에 required 가 있어야 한다."""
+        import io
+        html = io.open('v1/templates/label/my_ingredient_detail_partial.html',
+                       encoding='utf-8').read()
+        at = html.index('id="prdlst_nm"')
+        tag = html[html.rindex('<input', 0, at):]
+        tag = tag[:tag.index('>') + 1]
+        self.assertIn('required', tag)
+
+
+class SaveButtonStateTests(TestCase):
+    """
+    단추의 옷을 통째로 갈아입히면 안의 글자 자리가 사라진다.
+
+    여섯 군데가 `saveBtn.className = 'btn btn-danger'` 로 덮어쓰고 있었다.
+    이 단추의 진짜 class 는 `panel-btn primary` 라 **한 번 저장하면 모양이
+    바뀌었고**, 안의 `<span id="ingSaveLabel">` 도 함께 사라져 '저장 안 됨'
+    표시가 그 뒤로 안 켜졌다.
+    """
+
+    def js(self):
+        import io
+        return io.open('v1/static/js/label/my_ingredient_detail_partial.js',
+                       encoding='utf-8').read()
+
+    def test_단추를_통째로_덮어쓰지_않는다(self):
+        js = self.js()
+        body = js[js.index('function setSaveBtn'):]
+        self.assertNotIn("saveBtn.className = 'btn", body)
+        self.assertNotIn('saveBtn.innerHTML', body)
+
+    def test_다시_그려도_글자_자리가_남는다(self):
+        js = self.js()
+        self.assertIn('id="ingSaveLabel"', js)
+
+    def test_저장이_끝난_뒤에_안_남았다는_표시를_끈다(self):
+        """
+        submit 에서 끄면 서버가 되돌려보낸 경우에도 꺼져서, 못 남은 것을
+        남았다고 말한다.
+        """
+        import io
+        js = self.js()
+        self.assertIn('window.setIngredientDirty(false)', js)
+        tpl = io.open('v1/templates/label/_ingredient_nutrition.html',
+                      encoding='utf-8').read()
+        script = tpl[tpl.index('window.setIngredientDirty'):]
+        self.assertNotIn("addEventListener('submit'", script)
+
+    def test_막힌_칸에_그_자리에서_말한다(self):
+        js = self.js()
+        self.assertIn('showFieldError', js)
+        self.assertIn('data.errors', js)
+
+
+class 남의_원료는_열리지_않는다(TestCase):
+    """
+    주인을 안 보고 id 로만 꺼내고 있었다. 저장 쪽은 막판에
+    `new_ingredient.user_id = request.user` 를 하므로, **id 만 알면 남의
+    원료를 통째로 가져올 수 있었다.**
+
+        B 가 A 의 원료를 POST  ->  success: True
+        이름   'B 가 덮어씀'
+        주인   b@b.com          (원래 a@a.com)
+
+    그 뒤의 BOM 동기화가 A 의 제품 줄까지 새 값으로 덮어썼다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from v1.label.models import MyIngredient
+        U = get_user_model()
+        self.a = U.objects.create_user(username='a@a.com', email='a@a.com', password='x')
+        self.b = U.objects.create_user(username='b@b.com', email='b@b.com', password='x')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.a, prdlst_nm='A의 밀가루', delete_YN='N')
+        self.pub = MyIngredient.objects.create(
+            user_id=None, prdlst_nm='공용 설탕', delete_YN='N')
+        self.url = '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id
+
+    def test_남의_것은_보이지_않는다(self):
+        self.client.force_login(self.b)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_남의_것은_가져갈_수_없다(self):
+        self.client.force_login(self.b)
+        resp = self.client.post(
+            self.url, {'my_ingredient_id': self.ing.my_ingredient_id,
+                       'prdlst_nm': 'B가 덮어씀'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(resp.status_code, 404)
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.prdlst_nm, 'A의 밀가루')
+        self.assertEqual(self.ing.user_id, self.a)
+
+    def test_없는_것처럼_답한다(self):
+        """403 은 '그 번호는 있다' 를 알려 주는 셈이라 번호를 훑을 수 있다."""
+        self.client.force_login(self.b)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertNotEqual(self.client.get(self.url).status_code, 403)
+
+    def test_제_것과_공용은_그대로_열린다(self):
+        self.client.force_login(self.a)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertEqual(self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.pub.my_ingredient_id
+        ).status_code, 200)
+
+
+class 못_고치는_것은_고칠_수_있는_척하지_않는다(TestCase):
+    """
+    공용 원료는 서버가 거절하는데 화면은 칸을 다 열어 두고 저장 단추도
+    파랗게 뒀다. 사용자는 다 고치고 누른 뒤에야 알았고, 고친 내용은 그대로
+    날아갔다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from v1.label.models import MyIngredient
+        U = get_user_model()
+        self.u = U.objects.create_user(username='a@a.com', email='a@a.com', password='x')
+        self.client.force_login(self.u)
+        self.pub = MyIngredient.objects.create(
+            user_id=None, prdlst_nm='공용 설탕', delete_YN='N')
+        self.mine = MyIngredient.objects.create(
+            user_id=self.u, prdlst_nm='내 밀가루', delete_YN='N')
+
+    def html(self, ing):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % ing.my_ingredient_id
+        ).content.decode()
+
+    def test_공용_원료는_미리_말하고_잠근다(self):
+        h = self.html(self.pub)
+        self.assertIn('공용 원료', h)
+        self.assertIn('<fieldset disabled', h)
+
+    def test_공용_원료에는_저장_단추가_없다(self):
+        """누를 수 없는 단추를 두면 누르게 된다."""
+        h = self.html(self.pub)
+        self.assertNotIn('id="ingSaveBtn"', h)
+        self.assertNotIn('id="deleteBtn"', h)
+
+    def test_내_원료는_그대로_고칠_수_있다(self):
+        h = self.html(self.mine)
+        self.assertNotIn('<fieldset disabled', h)
+        self.assertIn('id="ingSaveBtn"', h)
+
+
+class 언제_할_수_있는지_말한다(TestCase):
+    """
+    등록 화면에는 영양성분 줄이 아예 없었다. 저장 전에는 원료 id 가 없어
+    붙일 자리가 없는 것이 맞다 — 그러니 없앨 것이 아니라 **언제 할 수
+    있는지** 말해야 한다. 없으면 사용자는 "여기서 넣는 게 아닌가 보다" 로
+    끝내고 다시 안 온다. 배합 계산이 막히는 원인이 정확히 이것이다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        U = get_user_model()
+        self.client.force_login(
+            U.objects.create_user(username='a@a.com', email='a@a.com', password='x'))
+
+    def test_등록_화면은_저장한_뒤에_할_수_있다고_말한다(self):
+        h = self.client.get('/label/my-ingredient-detail/').content.decode()
+        self.assertIn('저장하면 여기서 영양성분을 정할 수 있습니다', h)
+        # 아직 붙일 자리는 없다 — 말만 하고 칸은 안 만든다
+        self.assertNotIn('id="ingNutrition"', h)

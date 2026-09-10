@@ -316,6 +316,73 @@
   /* 직접 찾기 — 추린 후보가 늘 맞지는 않아서 사람이 아는 이름으로 뒤진다 */
   .ing-nut-search { display: flex; gap: 6px; margin-top: 8px; }
   .ing-nut-search input { max-width: 300px; }
+
+  /* 아홉 성분을 한눈에. 앞 다섯 개만 보여 주던 때는 나트륨이 잘렸다 —
+     하필 기여도 판정에서 가장 자주 막는 성분이다. */
+  .ing-nut-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 2px 10px; margin-top: 4px;
+  }
+  .ing-nut-cell { display: flex; justify-content: space-between; gap: 6px;
+                  font-size: .78rem; padding: 1px 0; }
+  .ing-nut-k { color: #6b7280; }
+  .ing-nut-v { color: #202124; font-variant-numeric: tabular-nums; }
+  .ing-nut-cell.is-empty .ing-nut-v { color: #b9bfc7; }
+
+  /* 이 구역만 고르는 즉시 저장된다. 그 사실을 그 자리에서 말한다. */
+  .ing-nut-flash {
+    display: inline-block; margin-left: 8px; font-size: .76rem;
+    color: #137333; opacity: 0; transition: opacity .18s;
+  }
+  .ing-nut-flash.is-on { opacity: 1; }
+
+  /* 공용 원료는 고칠 수 없다. 다 고치고 누른 뒤에 거절하지 말고 미리 말한다. */
+  .ing-readonly-note {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-bottom: 10px; padding: 9px 12px;
+    background: #FFF8E1; border: 1px solid #F0D48A; border-radius: 6px;
+    font-size: .82rem; color: #6B4E00; line-height: 1.5;
+  }
+  .ing-readonly-note i { margin-top: 2px; }
+  .ing-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  .ing-fieldset:disabled .nutrition-table { opacity: .72; }
+
+  /* 새 원료에는 영양성분 칸이 아예 없었다 — 언제 할 수 있는지 말한다. */
+  .ing-nut-later { font-size: .8rem; color: #5f6368; }
+
+  /* 별표가 아무것도 막지 않았다.
+     모델이 blank=True 라 ModelForm 이 required=False 로 만들었고, 이 칸에도
+     required 가 없어 브라우저조차 안 막았다 — 이름 없는 원료가 그대로
+     저장됐다. 이제 셋이 다 막는다: 브라우저 · 화면 검사 · 폼. */
+  #ingredientForm .is-invalid {
+    border-color: #C5221F;
+    box-shadow: 0 0 0 .12rem rgba(197, 34, 31, .16);
+  }
+  .field-error {
+    margin-top: 4px; font-size: .76rem; color: #C5221F;
+  }
+
+  /* 저장 단추의 상태. 옷(panel-btn primary)은 그대로 두고 색만 바꾼다 —
+     통째로 갈아입히면 단추 모양이 변하고 안의 글자 자리가 사라진다. */
+  #ingSaveBtn.is-busy { background: #6b7280; border-color: #6b7280; }
+  #ingSaveBtn.is-ok   { background: #1E8E3E; border-color: #1E8E3E; }
+  #ingSaveBtn.is-bad  { background: #C5221F; border-color: #C5221F; }
+
+  /* 나머지 칸은 [저장] 을 눌러야 남는다 — 값이 바뀌면 단추가 그렇게 말한다. */
+  #ingSaveBtn.is-dirty {
+    background: #a35400; border-color: #a35400;
+  }
+
+  /* 알레르기 19 칩 · GMO 6 칩이 세로의 37 % 를 쓰고 있었다. 둘 다 대개
+     "선택된 항목 없음" 인데도 늘 펼쳐져 있었다 — 고를 일이 드문 것이 가장
+     넓은 자리를 차지한 셈이다. 평소에는 접고, [고르기] 를 눌러야 편다.
+     배합(BOM) 화면의 상세 창이 이미 그 방식이라 두 화면의 몸짓이 같아진다. */
+  /* 부트스트랩의 .d-flex 는 display:flex !important 라 접기를 이긴다.
+     유틸리티를 걷고 배치를 여기서 맡는다. */
+  .ag-fold { display: none; }
+  .ag-fold.is-open {
+    display: flex; flex-wrap: wrap; gap: .25rem;
+  }
 </style>
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
@@ -331,8 +398,10 @@
         </h5>
         <div class="panel-actions">
             <button type="button" class="panel-btn" id="closeBtn">입력 초기화</button>
+            {% if not read_only %}
             {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="panel-btn danger" id="deleteBtn"><i class="bi bi-trash"></i> 삭제</button>{% endif %}
-            <button type="submit" form="ingredientForm" class="panel-btn primary"><i class="bi bi-check-lg"></i> 저장</button>
+            <button type="submit" form="ingredientForm" class="panel-btn primary" id="ingSaveBtn"><i class="bi bi-check-lg"></i> <span id="ingSaveLabel">저장</span></button>
+            {% endif %}
         </div>
     </div>
 
@@ -341,7 +410,20 @@
             {% csrf_token %}
             <!-- 숨겨진 원료 ID 필드 추가 -->
             <input type="hidden" id="my_ingredient_id" name="my_ingredient_id" value="{{ ingredient.my_ingredient_id|default:'' }}">
-            
+
+            {% if read_only %}
+            <div class="ing-readonly-note">
+                <i class="bi bi-lock-fill"></i>
+                <span><strong>공용 원료</strong>입니다. 여럿이 함께 쓰는 값이라 여기서는
+                      볼 수만 있습니다. 고쳐 쓰려면 <strong>내 원료로 새로 등록</strong>하세요.</span>
+            </div>
+            {% endif %}
+
+            {% comment %}
+              disabled 한 fieldset 은 그 안의 입력과 단추를 모두 잠근다.
+              칸마다 따로 붙이면 언젠가 하나가 빠진다.
+            {% endcomment %}
+            <fieldset {% if read_only %}disabled{% endif %} class="ing-fieldset">
             <table class="nutrition-table">
                 <tbody>
                     <!-- 1행: 식품 구분 (라디오 버튼) -->
@@ -383,7 +465,7 @@
                     <tr>
                         <th style="width: 120px;">원재료명 <span class="text-danger">*</span></th>
                         <td style="width: 60%;">
-                            <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}" placeholder="예: 밀가루">
+                            <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}" placeholder="예: 밀가루" required>
                         </td>
                         <th style="width: 120px;">식품유형</th>
                         <td style="width: auto;">
@@ -433,10 +515,11 @@
                                         <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyAutoDetectBtn" title="원재료명으로 알레르기 자동감지">
                                             <i class="fas fa-sync-alt"></i> 자동감지
                                         </button>
+                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="allergyBtnList">고르기</button>
                                         <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyToggleBtn">전체선택</button>
                                     </div>
                                 </div>
-                                <div id="allergyBtnList" class="d-flex flex-wrap gap-1 mb-1">
+                                <div id="allergyBtnList" class="mb-1 ag-fold">
                                     {% for allergen in allergen_list %}
                                     <button type="button" class="btn btn-outline-primary allergy-btn" data-allergen="{{ allergen }}">{{ allergen }}</button>
                                     {% endfor %}
@@ -452,9 +535,10 @@
                             <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div id="gmoSelectedDisplay" class="selected-display">선택된 항목 없음</div>
+                                    <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="gmoBtnList">고르기</button>
                                     <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="gmoToggleBtn">전체선택</button>
                                 </div>
-                                <div id="gmoBtnList" class="d-flex flex-wrap gap-1 mb-1">
+                                <div id="gmoBtnList" class="mb-1 ag-fold">
                                     {% for gmo in gmo_list %}
                                     <button type="button" class="btn btn-sm btn-outline-primary gmo-btn" data-gmo="{{ gmo }}">{{ gmo }}</button>
                                     {% endfor %}
@@ -476,6 +560,25 @@
                       새 원료(mode=create)에는 감춘다. 저장 전에는 원료 id 가
                       없어 붙일 자리가 없다.
                     {% endcomment %}
+                    {% if mode == 'create' %}
+                    {% comment %}
+                      등록 화면에는 이 줄이 아예 없었다. 사용자는 "영양성분은
+                      여기서 넣는 게 아닌가 보다" 로 끝내고 다시 안 왔다 —
+                      배합 계산이 막히는 원인이 정확히 이것이다.
+                      저장 전에는 원료 id 가 없어 붙일 자리가 없는 것이 맞으니,
+                      없앨 것이 아니라 **언제 할 수 있는지** 말한다.
+                    {% endcomment %}
+                    <tr>
+                        <th>영양성분</th>
+                        <td colspan="3">
+                            <span class="ing-nut-later">
+                                <i class="bi bi-info-circle"></i>
+                                저장하면 여기서 영양성분을 정할 수 있습니다.
+                                배합으로 영양성분표를 산출하려면 이 값이 있어야 합니다.
+                            </span>
+                        </td>
+                    </tr>
+                    {% endif %}
                     {% if mode == 'edit' and ingredient.user_id %}
                     <tr>
                         <th>영양성분
@@ -493,11 +596,36 @@
                     {% endif %}
                 </tbody>
             </table>
+            </fieldset>
         </form>
     </div>
 </div>
 
 {% if mode == 'edit' and ingredient.user_id %}{% include 'label/_ingredient_nutrition.html' %}{% endif %}
+
+{% comment %}
+  알레르기·GMO 칩 펼치기. 고른 것이 있으면 처음부터 펴 둔다 — 무엇을 골랐는지
+  보려고 한 번 더 누르게 하지 않는다.
+{% endcomment %}
+<script>
+(function () {
+  function chosen(id) {
+    var box = document.getElementById(id);
+    if (!box) return false;
+    return !!box.querySelector('.btn-primary, .active, .selected');
+  }
+  document.querySelectorAll('.ag-fold-btn').forEach(function (btn) {
+    var id = btn.dataset.fold;
+    var box = document.getElementById(id);
+    if (!box) return;
+    if (chosen(id)) { box.classList.add('is-open'); btn.textContent = '접기'; }
+    btn.addEventListener('click', function () {
+      var open = box.classList.toggle('is-open');
+      btn.textContent = open ? '접기' : '고르기';
+    });
+  });
+})();
+</script>
 
 {{ food_types|json_script:"food-types-data" }}
 {{ food_additives|json_script:"food-additives-data" }}
