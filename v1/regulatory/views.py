@@ -256,19 +256,23 @@ def news_list(request):
     if cond_statuses and not status:
         status = cond_statuses[0] if len(cond_statuses) == 1 else ''
 
-    # 카테고리 체크박스 (cats_sent 센티넬로 명시적 제출 여부 판별)
-    # 조건 패널의 '분야' 가 우선이고, 없으면 기존 cat 파라미터를 쓴다
+    # ── 분야(카테고리) ──────────────────────────────────────────────────
+    # 조건 패널의 '분야' 에서만 온다. 안 고르면 전부 본다.
+    #
+    # 예전에는 툴바에 '분야' 체크박스가 있었고 cats_sent=1 이 "체크박스를 실제로
+    # 제출했다" 는 표시였다 — 아무것도 안 고른 채 제출하면 아무 분야도 안 본다는
+    # 뜻이라 목록이 비는 것이 맞았다. 그 체크박스는 조건 패널로 옮겨 가며 화면
+    # 에서 사라졌는데 hidden 센티넬만 남았다. 그래서 폼을 거치는 조작(기간 단추·
+    # 검색·조건 제출)을 하는 순간 "아무 분야도 안 고름" 이 되어 목록이 통째로
+    # 비었다. 껍데기를 걷어냈다.
     cond_cats = news_search.picked(conditions, 'cat')
-    cats_submitted = bool(cond_cats) or 'cats_sent' in request.GET
-    if cond_cats:
-        cats = cond_cats + (['I0460'] if 'I0460' in request.GET.getlist('cat') else [])
-    else:
-        cats = request.GET.getlist('cat') if 'cats_sent' in request.GET else _ALL_CAT_KEYS
-
-    # 수거검사 탭 여부 (I0460이 cats에 포함되면 수거검사 목록 표시)
-    show_inspection = 'I0460' in cats
-    # 일반 cat 필터는 I0460 제외하고 처리
+    cats_submitted = bool(cond_cats)
+    cats = cond_cats or _ALL_CAT_KEYS
+    # 일반 cat 필터는 I0460(수거검사) 제외하고 처리 — 그쪽은 별도 모델이다
     regular_cats = [c for c in cats if c != 'I0460']
+    if not regular_cats:
+        # 분야를 골랐는데 수거검사 하나뿐이면, 뉴스 쪽은 볼 것이 없다
+        regular_cats = []
 
     # 대표 날짜 _eff = Greatest(COALESCE(event_date, collected_date), collected_date)
     # = event_date 가 있으면 max(event_date, collected_date), 없으면 collected_date.
@@ -480,8 +484,22 @@ def news_list(request):
         else:
             news_item.saol_location = ''
 
-    # 미조치 건수 — 전 기간 기준 (사이드바·홈 배지와 동일한 selectors 규칙)
-    no_action_count = len(match_ctx['no_action'])
+    # 미조치 건수 — **지금 탭 범위**로 센다.
+    # 같은 줄의 전체·내 알림·일반이 모두 탭 범위 숫자라, 여기만 두 탭을 합쳐
+    # 세면 눌렀을 때 그만큼 안 나온다("10건이라는데 목록엔 없다").
+    _no_action_ids = match_ctx['no_action']
+    if _no_action_ids:
+        _tab_admin_q = Q(api_source__in=ADMIN_API_SOURCES)
+        _scoped = RegulatoryNews.objects.filter(id__in=_no_action_ids)
+        # active_tab 은 아직 정해지기 전이다(수거검사 상세 선택 여부를 봐야 한다).
+        # 여기서 필요한 것은 부적합/행정처분 갈래뿐이라 tab 을 그대로 쓴다.
+        if tab == TAB_ADMIN:
+            _scoped = _scoped.filter(_tab_admin_q)
+        elif tab in ('', TAB_INSP_NEWS):
+            _scoped = _scoped.exclude(_tab_admin_q)
+        no_action_count = _scoped.count()
+    else:
+        no_action_count = 0
 
     # 카테고리별 건수 (api_source 기반, 전체 DB 기준 — 필터 드로어 표시용)
     # 전체 테이블 GROUP BY 라 매 요청마다 돌리면 비싸다(로컬 4,750건에서 16ms).
@@ -851,7 +869,7 @@ def news_list(request):
         'saol_site_url':      saol_site_url,
         'alert_rules':        unique_alert_rules,
         'alert_mutes':        alert_mutes,
-        'show_inspection':    show_inspection,
+        'show_inspection':    active_tab == TAB_INSPECTION,
         'inspection_list':    inspection_list,
         'insp_page_obj':      insp_page_obj,
         'insp_paginator':     insp_paginator,

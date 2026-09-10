@@ -327,9 +327,11 @@ class 탭마다_모두_읽음(TestCase):
 
         self._post('all')
         self.assertEqual(RegulatoryMatchAction.objects.filter(user=self.user).count(), 0)
-        # 미조치 건수는 그대로 — 아직 아무것도 처리하지 않았으므로
-        r = self.client.get('/regulatory/')
-        self.assertEqual(r.context['no_action_count'], 2)
+        # 미조치 건수는 그대로 — 아직 아무것도 처리하지 않았으므로.
+        # 숫자는 **지금 탭 범위**다(같은 줄의 전체·내 알림과 같은 기준).
+        self.assertEqual(self.client.get('/regulatory/').context['no_action_count'], 1)
+        self.assertEqual(
+            self.client.get('/regulatory/?tab=admin').context['no_action_count'], 1)
 
     def test_수거검사_탭도_같은_주소를_쓴다(self):
         from v1.regulatory.models import InspectionMatch, InspectionResult
@@ -962,6 +964,42 @@ class RegulatoryLayoutTests(TestCase):
         for qs in ('scope=mine', 'scope=others'):
             self.assertIn(f'href="?{qs}"', self.html)
 
+    def test_툴바가_한_줄이다(self):
+        """
+        기간 · 모두 읽음 · 상세 조건 · 검색 · 알림 설정이 한 줄에 있다.
+        예전에는 두 줄이었고, 위 줄에 검색과 알림 설정만 오른쪽에 덩그러니
+        붙어 아래 줄이 비었다시피 했다 — 탭 바까지 세면 위쪽 세 줄이 조작이었다.
+        """
+        self.assertEqual(self.tpl.count('<div class="reg-tb-row">'), 1)
+        row = self.tpl[self.tpl.index('<div class="reg-tb-row">'):]
+        row = row[:row.index('{# ── 상세 조건 서랍 ── #}')]
+        for part in ('reg-chips--news', 'reg-chips--insp',
+                     'rf-search-wrap', 'rs-settings-btn'):
+            self.assertIn(part, row, f'{part} 가 그 한 줄에 없다')
+
+    def test_탭에_따라_갈리는_것은_칩_묶음이다(self):
+        """
+        줄 전체를 갈아 끼우면 검색창과 알림 설정이 탭마다 위아래로 움직인다.
+        갈리는 것은 그 줄 안의 묶음뿐이다.
+        """
+        self.assertNotIn('reg-tb-row--news', self.tpl)
+        self.assertNotIn('reg-tb-row--insp', self.tpl)
+        self.assertNotIn('.reg-tb-row--', self.css)
+
+    def test_감추는_규칙이_공용_규칙에_지지_않는다(self):
+        """
+        공용 .pv-chip-group 은 list_common.css 에서 display:flex 를 주고, 그
+        파일이 regulatory.css 보다 나중에 실린다. 클래스 하나끼리는 나중에
+        실린 쪽이 이기므로, 같은 무게로 적으면 감추기가 진다 — 실제로 부적합
+        탭에서 수거검사 칩이 함께 보였다.
+        """
+        self.assertIn('.pv-chip-group.reg-chips--insp', self.css)
+        self.assertIn('#regPage.reg-page--insp .pv-chip-group.reg-chips--news', self.css)
+        # 실을 순서도 그대로여야 한다 (regulatory.css 가 먼저)
+        i_reg = self.tpl.index("css/regulatory.css")
+        i_common = self.tpl.index("css/list_common.css")
+        self.assertLess(i_reg, i_common, 'CSS 싣는 순서가 바뀌었다')
+
     def test_툴바_뼈대가_살아_있다(self):
         """
         통계 카드 규칙을 지우면서 '.reg-stats 부터 다음 주석까지' 를 통째로
@@ -1319,6 +1357,87 @@ class RegulatoryLayoutTests(TestCase):
         for source in (self.tpl, panel):
             self.assertIn(".querySelector('.rs-status-cell')", source)
             self.assertNotIn('.badge-status-no', source)
+
+
+class 폼을_거쳐도_목록이_비지_않는다(TestCase):
+    """
+    기간 단추 하나만 눌러도 목록이 통째로 비었다.
+
+    예전에는 툴바에 '분야' 체크박스가 있었고 cats_sent=1 이 "체크박스를 실제로
+    제출했다" 는 표시였다 — 아무것도 안 고른 채 제출하면 아무 분야도 안 본다는
+    뜻이라 목록이 비는 것이 맞았다.
+
+    그 체크박스는 조건 패널의 '분야' 로 옮겨 가며 화면에서 사라졌는데, hidden
+    으로 남은 cats_sent=1 은 그대로였다. 그래서 폼을 거치는 조작(기간 단추·
+    검색·조건 제출)을 하는 순간 "아무 분야도 안 고름" 이 되어 전체 0 · 부적합 0 ·
+    행정처분 0 이 됐다. 미조치 숫자는 목록과 무관하게 세는 값이라 혼자 남았고,
+    "미조치 10건이라는데 목록엔 없다" 로 나타났다.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='cats', password='x')
+        self.client.force_login(self.user)
+        for i in range(3):
+            RegulatoryNews.objects.create(
+                external_id=f'c-insp{i}', api_source='I2620', source='domestic',
+                product_name=f'부적합 {i}', collected_date='2026-08-01')
+        RegulatoryNews.objects.create(
+            external_id='c-admin', api_source='I0470', source='domestic',
+            product_name='행정처분', collected_date='2026-08-01')
+
+    def test_기간_단추를_눌러도_목록이_남는다(self):
+        """폼 제출이 곧 '아무 분야도 안 고름' 이 되면 안 된다."""
+        r = self.client.get('/regulatory/', {'days': 'all', 'risk': '', 'status': ''})
+        self.assertEqual(r.context['tab_insp_total'], 3)
+        self.assertEqual(r.context['tab_admin_total'], 1)
+
+    def test_예전_주소로_들어와도_목록이_남는다(self):
+        """
+        사고를 낸 바로 그 주소다. 즐겨찾기나 뒤로 가기로 cats_sent=1 이 붙은
+        주소를 다시 여는 사람이 있다 — 그때도 목록이 비면 안 된다.
+        (지금은 뷰가 이 값을 아예 보지 않는다)
+        """
+        r = self.client.get('/regulatory/', {'cats_sent': '1', 'days': 'all'})
+        self.assertEqual(r.context['tab_insp_total'], 3)
+        self.assertEqual(r.context['tab_admin_total'], 1)
+        self.assertEqual(r.context['paginator'].count, 3)
+
+    def test_센티넬이_남아_있지_않다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tpl = (Path(dj.BASE_DIR) / 'templates/regulatory/news_list.html'
+               ).read_text(encoding='utf-8')
+        self.assertNotIn('cats_sent', tpl)
+
+    def test_분야를_고르면_그것만_본다(self):
+        """조건 패널의 '분야' 는 그대로 동작해야 한다."""
+        r = self.client.get('/regulatory/', {'f': 'cat', 'v': 'admin'})
+        self.assertEqual(r.context['tab_admin_total'], 1)
+        self.assertEqual(r.context['tab_insp_total'], 0)
+
+    def test_미조치_숫자와_목록이_맞는다(self):
+        """
+        "미조치 10건이라는데 눌러 보면 없다" 가 이 시험이 막는 것이다.
+        숫자는 지금 탭 범위로 세고, 누르면 그 숫자만큼 나와야 한다.
+        """
+        from v1.label.models import MyLabel
+        from v1.regulatory.models import NewsProductMatch
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                       prdlst_nm='내 제품')
+        for news in RegulatoryNews.objects.filter(api_source='I2620'):
+            NewsProductMatch.objects.create(news=news, product=label,
+                                            match_score=90, risk_score=50)
+
+        r = self.client.get('/regulatory/')
+        n = r.context['no_action_count']
+        self.assertEqual(n, 3)
+
+        r2 = self.client.get('/regulatory/', {'f': 'status', 'v': 'no_action'})
+        self.assertEqual(r2.context['paginator'].count, n)
 
 
 class 탭_상태는_서버가_그린다(TestCase):

@@ -902,9 +902,18 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
    부적합·처분은 '무엇을 거를지'(범위·기간·미조치), 수거검사는 '무엇을 할지'
    (전체 읽음·선택 삭제)라 컨트롤이 겹치지 않는다. 한 줄에 다 두면 절반이 늘
    회색으로 죽어 있다. */
-.reg-tb-row--insp                                        { display: none; }
-#regPage.reg-page--insp .reg-tb-row--news                { display: none !important; }
-#regPage.reg-page--insp .reg-tb-row--insp                { display: flex; }
+/* 탭에 따라 갈아 끼우는 것은 '줄' 이 아니라 그 줄 안의 **칩 묶음**이다.
+   줄 전체를 갈아 끼우면 검색창과 알림 설정이 탭마다 위아래로 움직인다.
+
+   선택자에 .pv-chip-group 을 함께 적는 이유: 그 공용 규칙이
+   list_common.css 에서 display:flex 를 주는데, 그 파일이 이 파일보다 나중에
+   실린다. 클래스 하나끼리는 나중에 실린 쪽이 이기므로 감추기가 진다 —
+   실제로 부적합 탭에서 수거검사 칩이 함께 보였다. */
+.pv-chip-group.reg-chips--insp                              { display: none; }
+#regPage.reg-page--insp .pv-chip-group.reg-chips--news      { display: none; }
+#regPage.reg-page--insp .pv-chip-group.reg-chips--insp      { display: flex; }
+/* 칩 묶음이 줄에서 남는 폭을 쓰고, 검색·알림 설정은 오른쪽에 붙는다 */
+.reg-tb-row > .pv-chip-group                                { flex: 1 1 auto; min-width: 0; }
 /* 수거검사에는 상세 조건이 걸리지 않는다 (뉴스 전용 카탈로그다) */
 #regPage.reg-page--insp .reg-cond-drawer                 { display: none !important; }
 
