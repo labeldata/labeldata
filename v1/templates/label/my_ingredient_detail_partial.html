@@ -336,6 +336,20 @@
   }
   .ing-nut-flash.is-on { opacity: 1; }
 
+  /* 공용 원료는 고칠 수 없다. 다 고치고 누른 뒤에 거절하지 말고 미리 말한다. */
+  .ing-readonly-note {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-bottom: 10px; padding: 9px 12px;
+    background: #FFF8E1; border: 1px solid #F0D48A; border-radius: 6px;
+    font-size: .82rem; color: #6B4E00; line-height: 1.5;
+  }
+  .ing-readonly-note i { margin-top: 2px; }
+  .ing-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  .ing-fieldset:disabled .nutrition-table { opacity: .72; }
+
+  /* 새 원료에는 영양성분 칸이 아예 없었다 — 언제 할 수 있는지 말한다. */
+  .ing-nut-later { font-size: .8rem; color: #5f6368; }
+
   /* 별표가 아무것도 막지 않았다.
      모델이 blank=True 라 ModelForm 이 required=False 로 만들었고, 이 칸에도
      required 가 없어 브라우저조차 안 막았다 — 이름 없는 원료가 그대로
@@ -384,8 +398,10 @@
         </h5>
         <div class="panel-actions">
             <button type="button" class="panel-btn" id="closeBtn">입력 초기화</button>
+            {% if not read_only %}
             {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="panel-btn danger" id="deleteBtn"><i class="bi bi-trash"></i> 삭제</button>{% endif %}
             <button type="submit" form="ingredientForm" class="panel-btn primary" id="ingSaveBtn"><i class="bi bi-check-lg"></i> <span id="ingSaveLabel">저장</span></button>
+            {% endif %}
         </div>
     </div>
 
@@ -394,7 +410,20 @@
             {% csrf_token %}
             <!-- 숨겨진 원료 ID 필드 추가 -->
             <input type="hidden" id="my_ingredient_id" name="my_ingredient_id" value="{{ ingredient.my_ingredient_id|default:'' }}">
-            
+
+            {% if read_only %}
+            <div class="ing-readonly-note">
+                <i class="bi bi-lock-fill"></i>
+                <span><strong>공용 원료</strong>입니다. 여럿이 함께 쓰는 값이라 여기서는
+                      볼 수만 있습니다. 고쳐 쓰려면 <strong>내 원료로 새로 등록</strong>하세요.</span>
+            </div>
+            {% endif %}
+
+            {% comment %}
+              disabled 한 fieldset 은 그 안의 입력과 단추를 모두 잠근다.
+              칸마다 따로 붙이면 언젠가 하나가 빠진다.
+            {% endcomment %}
+            <fieldset {% if read_only %}disabled{% endif %} class="ing-fieldset">
             <table class="nutrition-table">
                 <tbody>
                     <!-- 1행: 식품 구분 (라디오 버튼) -->
@@ -531,6 +560,25 @@
                       새 원료(mode=create)에는 감춘다. 저장 전에는 원료 id 가
                       없어 붙일 자리가 없다.
                     {% endcomment %}
+                    {% if mode == 'create' %}
+                    {% comment %}
+                      등록 화면에는 이 줄이 아예 없었다. 사용자는 "영양성분은
+                      여기서 넣는 게 아닌가 보다" 로 끝내고 다시 안 왔다 —
+                      배합 계산이 막히는 원인이 정확히 이것이다.
+                      저장 전에는 원료 id 가 없어 붙일 자리가 없는 것이 맞으니,
+                      없앨 것이 아니라 **언제 할 수 있는지** 말한다.
+                    {% endcomment %}
+                    <tr>
+                        <th>영양성분</th>
+                        <td colspan="3">
+                            <span class="ing-nut-later">
+                                <i class="bi bi-info-circle"></i>
+                                저장하면 여기서 영양성분을 정할 수 있습니다.
+                                배합으로 영양성분표를 산출하려면 이 값이 있어야 합니다.
+                            </span>
+                        </td>
+                    </tr>
+                    {% endif %}
                     {% if mode == 'edit' and ingredient.user_id %}
                     <tr>
                         <th>영양성분
@@ -548,6 +596,7 @@
                     {% endif %}
                 </tbody>
             </table>
+            </fieldset>
         </form>
     </div>
 </div>

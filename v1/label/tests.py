@@ -14201,3 +14201,118 @@ class SaveButtonStateTests(TestCase):
         js = self.js()
         self.assertIn('showFieldError', js)
         self.assertIn('data.errors', js)
+
+
+class 남의_원료는_열리지_않는다(TestCase):
+    """
+    주인을 안 보고 id 로만 꺼내고 있었다. 저장 쪽은 막판에
+    `new_ingredient.user_id = request.user` 를 하므로, **id 만 알면 남의
+    원료를 통째로 가져올 수 있었다.**
+
+        B 가 A 의 원료를 POST  ->  success: True
+        이름   'B 가 덮어씀'
+        주인   b@b.com          (원래 a@a.com)
+
+    그 뒤의 BOM 동기화가 A 의 제품 줄까지 새 값으로 덮어썼다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from v1.label.models import MyIngredient
+        U = get_user_model()
+        self.a = U.objects.create_user(username='a@a.com', email='a@a.com', password='x')
+        self.b = U.objects.create_user(username='b@b.com', email='b@b.com', password='x')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.a, prdlst_nm='A의 밀가루', delete_YN='N')
+        self.pub = MyIngredient.objects.create(
+            user_id=None, prdlst_nm='공용 설탕', delete_YN='N')
+        self.url = '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id
+
+    def test_남의_것은_보이지_않는다(self):
+        self.client.force_login(self.b)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_남의_것은_가져갈_수_없다(self):
+        self.client.force_login(self.b)
+        resp = self.client.post(
+            self.url, {'my_ingredient_id': self.ing.my_ingredient_id,
+                       'prdlst_nm': 'B가 덮어씀'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(resp.status_code, 404)
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.prdlst_nm, 'A의 밀가루')
+        self.assertEqual(self.ing.user_id, self.a)
+
+    def test_없는_것처럼_답한다(self):
+        """403 은 '그 번호는 있다' 를 알려 주는 셈이라 번호를 훑을 수 있다."""
+        self.client.force_login(self.b)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertNotEqual(self.client.get(self.url).status_code, 403)
+
+    def test_제_것과_공용은_그대로_열린다(self):
+        self.client.force_login(self.a)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertEqual(self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.pub.my_ingredient_id
+        ).status_code, 200)
+
+
+class 못_고치는_것은_고칠_수_있는_척하지_않는다(TestCase):
+    """
+    공용 원료는 서버가 거절하는데 화면은 칸을 다 열어 두고 저장 단추도
+    파랗게 뒀다. 사용자는 다 고치고 누른 뒤에야 알았고, 고친 내용은 그대로
+    날아갔다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from v1.label.models import MyIngredient
+        U = get_user_model()
+        self.u = U.objects.create_user(username='a@a.com', email='a@a.com', password='x')
+        self.client.force_login(self.u)
+        self.pub = MyIngredient.objects.create(
+            user_id=None, prdlst_nm='공용 설탕', delete_YN='N')
+        self.mine = MyIngredient.objects.create(
+            user_id=self.u, prdlst_nm='내 밀가루', delete_YN='N')
+
+    def html(self, ing):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % ing.my_ingredient_id
+        ).content.decode()
+
+    def test_공용_원료는_미리_말하고_잠근다(self):
+        h = self.html(self.pub)
+        self.assertIn('공용 원료', h)
+        self.assertIn('<fieldset disabled', h)
+
+    def test_공용_원료에는_저장_단추가_없다(self):
+        """누를 수 없는 단추를 두면 누르게 된다."""
+        h = self.html(self.pub)
+        self.assertNotIn('id="ingSaveBtn"', h)
+        self.assertNotIn('id="deleteBtn"', h)
+
+    def test_내_원료는_그대로_고칠_수_있다(self):
+        h = self.html(self.mine)
+        self.assertNotIn('<fieldset disabled', h)
+        self.assertIn('id="ingSaveBtn"', h)
+
+
+class 언제_할_수_있는지_말한다(TestCase):
+    """
+    등록 화면에는 영양성분 줄이 아예 없었다. 저장 전에는 원료 id 가 없어
+    붙일 자리가 없는 것이 맞다 — 그러니 없앨 것이 아니라 **언제 할 수
+    있는지** 말해야 한다. 없으면 사용자는 "여기서 넣는 게 아닌가 보다" 로
+    끝내고 다시 안 온다. 배합 계산이 막히는 원인이 정확히 이것이다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        U = get_user_model()
+        self.client.force_login(
+            U.objects.create_user(username='a@a.com', email='a@a.com', password='x'))
+
+    def test_등록_화면은_저장한_뒤에_할_수_있다고_말한다(self):
+        h = self.client.get('/label/my-ingredient-detail/').content.decode()
+        self.assertIn('저장하면 여기서 영양성분을 정할 수 있습니다', h)
+        # 아직 붙일 자리는 없다 — 말만 하고 칸은 안 만든다
+        self.assertNotIn('id="ingNutrition"', h)
