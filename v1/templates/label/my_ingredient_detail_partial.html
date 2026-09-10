@@ -262,6 +262,56 @@
   .regulation-card-buttons {
     margin-top: 8px;
   }
+
+  /* ── 영양성분 구역 ─────────────────────────────────────────────────
+     새 컴포넌트를 만들지 않는다. 이 화면이 이미 쓰는 결(작은 글씨·연한
+     테두리·표 안의 칸)을 따른다. */
+  .ing-nut-help { font-size: .7rem; color: #8a93a8; cursor: help; }
+
+  .ing-nut-state {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: .82rem;
+  }
+  .ing-nut-grade {
+    display: inline-block; min-width: 20px; text-align: center;
+    font-weight: 700; font-size: .72rem; border-radius: 3px; padding: 1px 5px;
+  }
+  .ing-nut-grade.g-A { background: #e6f4ea; color: #137333; }
+  .ing-nut-grade.g-B { background: #e8f0fe; color: #1967d2; }
+  .ing-nut-grade.g-C { background: #f1f3f4; color: #5f6368; }
+  .ing-nut-grade.g-none { background: #fef7e0; color: #a35400; }
+
+  .ing-nut-values { color: #374060; }
+  .ing-nut-why    { color: #80868b; font-size: .74rem; }
+
+  /* 후보 목록 — 값이 갈리는 것을 눈으로 보고 고르는 자리다.
+     그래서 열량·지방을 이름 옆에 바로 붙인다. */
+  .ing-nut-cands { border: 1px solid #e8eaed; border-radius: 6px; margin-top: 6px; }
+  .ing-nut-cand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px; font-size: .8rem; cursor: pointer;
+    border-bottom: 1px solid #f1f3f4;
+  }
+  .ing-nut-cand:last-child { border-bottom: none; }
+  .ing-nut-cand:hover      { background: #f8f9fa; }
+  .ing-nut-cand-name { flex: 1 1 auto; min-width: 0;
+                       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ing-nut-cand-num  { flex: 0 0 auto; color: #202124; font-variant-numeric: tabular-nums; }
+  .ing-nut-cand-why  { flex: 0 0 auto; color: #80868b; font-size: .72rem; }
+
+  .ing-nut-warn {
+    background: #fef7e0; color: #a35400; border-radius: 4px;
+    padding: 5px 9px; font-size: .76rem; margin-top: 6px;
+  }
+  .ing-nut-actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .ing-nut-manual  { margin-top: 8px; display: none; }
+  .ing-nut-manual table { width: 100%; }
+  .ing-nut-manual th {
+    font-weight: 500; font-size: .76rem; color: #5f6368;
+    padding: 2px 6px 2px 0; white-space: nowrap; background: none; border: none;
+  }
+  .ing-nut-manual td { padding: 2px 8px 2px 0; border: none; }
+  .ing-nut-manual input { width: 84px; }
 </style>
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
@@ -409,11 +459,41 @@
                             </div>
                         </td>
                     </tr>
+
+                    {% comment %}
+                      영양성분 — 배합으로 영양성분표를 만들려면 원료마다 이 값이
+                      있어야 한다. 여기서 한 번 정해 두면 이 원료를 쓰는 모든
+                      배합이 그 값을 쓴다.
+
+                      **자동으로 정하지 않는다.** '버터' 는 식약처 DB 에 동명이
+                      열두 건이고 열량이 164 ~ 761 kcal 로 갈린다. 이름이 완전히
+                      같아 기계가 못 고른다 — 후보만 내놓고 사람이 고른다.
+
+                      새 원료(mode=create)에는 감춘다. 저장 전에는 원료 id 가
+                      없어 붙일 자리가 없다.
+                    {% endcomment %}
+                    {% if mode == 'edit' and ingredient.user_id %}
+                    <tr>
+                        <th>영양성분
+                            <span class="ing-nut-help"
+                                  title="배합으로 영양성분표를 산출할 때 쓰는 100g 당 값입니다.&#10;품목보고번호가 식약처 DB 와 맞으면 자동으로 찾고, 아니면 후보 중에서 고릅니다.">?</span>
+                        </th>
+                        <td colspan="3">
+                            <div id="ingNutrition"
+                                 data-url="{% url 'label:my_ingredient_nutrition' ingredient_id=ingredient.my_ingredient_id %}"
+                                 data-save-url="{% url 'label:my_ingredient_nutrition_save' ingredient_id=ingredient.my_ingredient_id %}">
+                                <div class="ing-nut-loading text-muted small">불러오는 중…</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </form>
     </div>
 </div>
+
+{% if mode == 'edit' and ingredient.user_id %}{% include 'label/_ingredient_nutrition.html' %}{% endif %}
 
 {{ food_types|json_script:"food-types-data" }}
 {{ food_additives|json_script:"food-additives-data" }}

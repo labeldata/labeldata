@@ -16,7 +16,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -12897,3 +12897,731 @@ class 규정표는_화면에_박아_두지_않는다(TestCase):
         self.assertNotIn('window.REGULATIONS', js)
         self.assertNotIn('window.REGULATIONS', self.preview)
         self.assertIn('window.PREVIEW_REGULATIONS', js)
+
+
+class 모르는_원료가_표시값을_바꾸는가(SimpleTestCase):
+    """
+    향료 0.05 % 의 영양성분을 몰라도 영양성분표는 만들 수 있다 — 그것을
+    증명해서 묻지 않는 것이 nutrition_contrib 의 일이다.
+
+    이 시험이 지키는 것은 **판정 방식**이다. 정적 임계값으로 돌아가면
+    반올림 경계에서 조용히 틀린 표가 나온다.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_contrib as nc
+        self.nc = nc
+
+    def 배합(self, **override):
+        """
+        표시 성분 아홉이 다 찬 배합. 빈 칸을 두면 안 된다 — 0 인 성분에
+        아주 작은 값이 더해지면 '0' 이 '1g 미만' 으로 바뀌는 것이 **맞는**
+        판정이라, 성분을 빠뜨린 시험은 엔진이 아니라 시험을 탓해야 한다.
+        """
+        base = {'calories': 300.0, 'carbohydrates': 45.0, 'sugars': 12.0,
+                'proteins': 8.0, 'fats': 10.0, 'saturated_fats': 4.0,
+                'trans_fats': 0.3, 'cholesterols': 25.0, 'natriums': 100.0}
+        base.update(override)
+        return base
+
+    # ── 판정 방식 ────────────────────────────────────────────────────────
+
+    def test_반올림_폭보다_작은_기여도_경계에서는_표시를_바꾼다(self):
+        """
+        정적 임계값이 왜 틀리는지를 못으로 박아 둔다.
+
+        열량 반올림 폭은 5 kcal 이다. 그런데 기여 0.6 kcal 가 287 을 285 에서
+        290 으로 옮긴다 — 폭보다 작다고 안전하다고 하면 안 된다.
+        """
+        from v1.label.services.nutrition_calc import display_value
+
+        self.assertEqual(display_value('calories', 287.0), '285')
+        self.assertEqual(display_value('calories', 287.6), '290')
+
+        # 그 상황을 assess 가 blocking 으로 잡아야 한다.
+        # 배합비 0.0667 % 면 최대 기여가 900 × 0.000667 = 0.6 kcal 이다.
+        r = self.nc.assess({'calories': 287.0}, [0.0667])
+        self.assertIn('calories', r['blocking'])
+
+    def test_같은_배합비라도_아는_값이_다르면_판정이_다르다(self):
+        """판정은 원료가 아니라 배합에 붙는다. 원료에 '안전'을 새기면 안 된다."""
+        경계 = self.nc.assess({'calories': 287.0}, [0.0667])
+        여유 = self.nc.assess({'calories': 100.0}, [0.0667])
+        self.assertIn('calories', 경계['blocking'])
+        self.assertIn('calories', 여유['safe'])
+
+    # ── 향료는 대체로 몰라도 된다 ────────────────────────────────────────
+
+    def test_향료_한_방울은_표시를_못_바꾼다(self):
+        """0.05 % 면 최악의 원료여도 열량 0.45 kcal 다."""
+        r = self.nc.assess(self.배합(), [0.05])
+        for field in ('calories', 'fats', 'proteins'):
+            self.assertIn(field, r['safe'], '%s 가 blocking 으로 잡혔다' % field)
+
+    # ── 나트륨은 예외다 ──────────────────────────────────────────────────
+
+    def test_나트륨은_아주_적게_넣어도_걸린다(self):
+        """
+        정제소금은 100 g 에 나트륨이 39,340 mg 이다. 0.05 % 만 들어와도
+        19.7 mg 이라 반올림 폭(5 mg)을 훌쩍 넘는다. '부원료니까 무시' 를
+        성분과 무관하게 적용하면 나트륨에서 틀린다.
+        """
+        r = self.nc.assess({'natriums': 100.0}, [0.05])
+        self.assertIn('natriums', r['blocking'])
+
+    def test_나트륨_상한은_정제소금이다(self):
+        self.assertAlmostEqual(self.nc.NUTRIENT_MAX['natriums'][0], 39340.0, places=0)
+        self.assertEqual(self.nc.NUTRIENT_MAX['natriums'][1], 'physical')
+
+    # ── 모르는 것과 아닌 것은 다르다 ─────────────────────────────────────
+
+    def test_배합비를_모르면_안전하다고_하지_않는다(self):
+        """배합비가 비면 0 으로 메우지 않는다 — 잴 수 없는 것이다."""
+        r = self.nc.assess(self.배합(), [None])
+        self.assertFalse(r['assessable'])
+        self.assertIn('calories', r['blocking'])
+        self.assertEqual(r['detail']['calories']['reason'], '배합비를 모르는 원료가 있다')
+
+    def test_배합비를_모르면_최대기여도_None_이다(self):
+        self.assertIsNone(self.nc.max_contribution('calories', None))
+        self.assertIsNone(self.nc.max_contribution('calories', ''))
+
+    # ── 여럿이 모이면 걸린다 ─────────────────────────────────────────────
+
+    def test_향료_하나는_괜찮아도_스무_개면_걸릴_수_있다(self):
+        one = self.nc.assess(self.배합(), [0.05])
+        many = self.nc.assess(self.배합(), [0.05] * 20)
+        self.assertIn('calories', one['safe'])
+        self.assertIn('calories', many['blocking'])
+
+    def test_원료가_아니라_성분_단위로_알려준다(self):
+        """
+        "이 원료를 알아야 하는가" 로 물으면 나트륨 때문에 거의 다 '알아야 함'
+        이 된다. 향료 0.05 % 도 정제소금이라면 19.7 mg 이라 걸리기 때문이다.
+
+        그런데 같은 향료가 열량·지방에서는 안전하다. 규격서 한 장을 통째로
+        구하는 대신 숫자 하나만 넣으면 되도록, 판정을 성분에 붙인다.
+        """
+        need = self.nc.needed_fields(self.배합(), [('향료', 0.05), ('소금', 1.5)])
+
+        # 아홉 중 둘만 남는다. 포화지방은 표시 폭이 0.1 g 이라 0.05 g 기여에도
+        # 4.0 → 4.1 로 움직이고, 나트륨은 정제소금 상한 때문에 걸린다.
+        self.assertEqual(need['향료'], ['saturated_fats', 'natriums'])
+        self.assertIn('natriums', need['소금'])
+        self.assertIn('calories', need['소금'])           # 1.5 % 면 열량도 걸린다
+        self.assertGreater(len(need['소금']), len(need['향료']))
+
+    def test_아주_적게_들어가면_아무것도_안_물어도_된다(self):
+        need = self.nc.needed_fields(self.배합(), [('향료', 0.005)])
+        self.assertEqual(need['향료'], [])
+
+    # ── 근거를 남긴다 ────────────────────────────────────────────────────
+
+    def test_판정_근거를_함께_돌려준다(self):
+        """화면이 '왜 몰라도 되는지' 를 말할 수 있어야 한다."""
+        d = self.nc.assess(self.배합(), [0.05])['detail']['calories']
+        self.assertEqual(d['low'], d['high'])
+        self.assertAlmostEqual(d['max_extra'], 0.45, places=4)
+        self.assertEqual(d['bound'], 'physical')
+
+    def test_콜레스테롤_상한은_가정이라고_밝힌다(self):
+        """
+        순 콜레스테롤 100 g 은 식품 원료로 의미가 없어 실용 상한을 쓴다.
+        가정을 쓴 자리는 가정이라고 말해야 화면에서 설명할 수 있다.
+        """
+        self.assertEqual(self.nc.NUTRIENT_MAX['cholesterols'][1], 'practical')
+        d = self.nc.assess(self.배합(), [0.05])['detail']['cholesterols']
+        self.assertEqual(d['bound'], 'practical')
+
+
+class 배합으로_영양성분을_낸다(SimpleTestCase):
+    """
+    nutrition_recipe 는 **계산값까지만** 만든다. 오차·반올림은 그 뒤 단계다.
+
+    이 시험이 지키는 것은 셋이다 — 계산값에서 멈추는가, 열량을 계수로 다시
+    세는가, 모르는 원료를 0 으로 세지 않는가.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_recipe as nr
+        self.nr = nr
+
+    def 원료(self, name, ratio, **vals):
+        base = {f: None for f in self.nr.SUM_FIELDS}
+        base.update(vals)
+        return {'name': name, 'ratio': ratio, 'values': base, 'why': ''}
+
+    def 모르는원료(self, name, ratio, why='영양성분을 등록하지 않았다'):
+        return {'name': name, 'ratio': ratio, 'values': None, 'why': why}
+
+    # ── 기본 계산 ────────────────────────────────────────────────────────
+
+    def test_배합비만큼_섞어_100g당_값을_낸다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 50.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+            self.원료('설탕', 50.0, carbohydrates=99.8, proteins=0.0, fats=0.0),
+        ])
+        # 71×0.5 + 99.8×0.5 = 85.4
+        self.assertAlmostEqual(r['values']['carbohydrates'], 85.4, places=3)
+        self.assertAlmostEqual(r['values']['proteins'], 5.0, places=3)
+        self.assertEqual(r['ratio_total'], 100.0)
+        self.assertEqual(r['warnings'], [])
+
+    def test_열량은_원료_열량_합이_아니라_계수로_다시_센다(self):
+        """
+        규정이 열량을 계수로 정의한다. 원료 열량을 그냥 더하면 표 안에서
+        열량과 탄단지가 서로 맞지 않게 된다.
+        """
+        r = self.nr.calculate([
+            self.원료('가루', 100.0, calories=999.0,
+                     carbohydrates=50.0, proteins=10.0, fats=1.0),
+        ])
+        # 50×4 + 10×4 + 1×9 = 249 — 원료가 적어 낸 999 가 아니다
+        self.assertAlmostEqual(r['values']['calories'], 249.0, places=3)
+
+    def test_열량이_크게_벌어지면_원료_데이터를_의심하라고_알린다(self):
+        r = self.nr.calculate([
+            self.원료('가루', 100.0, calories=999.0,
+                     carbohydrates=50.0, proteins=10.0, fats=1.0),
+        ])
+        self.assertTrue(any('벌어진다' in w for w in r['warnings']), r['warnings'])
+
+    def test_식이섬유와_당알콜은_탄수화물에서_빼고_센다(self):
+        """CALORIE_FACTORS 가 정한 계수를 그대로 따라야 한다."""
+        r = self.nr.calculate([
+            self.원료('가루', 100.0, carbohydrates=50.0, proteins=0.0, fats=0.0,
+                     dietary_fiber=20.0, sugar_alcohols=10.0),
+        ])
+        # (50-20-10)×4 + 20×2 + 10×2.4 = 80 + 40 + 24 = 144
+        self.assertAlmostEqual(r['values']['calories'], 144.0, places=3)
+
+    # ── 모르는 것과 아닌 것 ──────────────────────────────────────────────
+
+    def test_모르는_원료를_0으로_세지_않는다(self):
+        """0 으로 두면 합계가 조용히 낮아진다. 그것은 '없다' 가 아니다."""
+        r = self.nr.calculate([
+            self.원료('밀가루', 99.95, carbohydrates=71.0, proteins=10.0, fats=1.0),
+            self.모르는원료('향료', 0.05),
+        ])
+        self.assertEqual(len(r['unknown']), 1)
+        self.assertEqual(r['unknown'][0]['name'], '향료')
+        self.assertAlmostEqual(r['known_ratio'], 99.95, places=3)
+
+    def test_아무도_주지_않은_성분은_0이_아니라_None_이다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 100.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+        ])
+        self.assertIsNone(r['values']['natriums'])
+        self.assertIsNone(r['values']['cholesterols'])
+
+    def test_모르는_향료가_표시를_흔드는지_판정한다(self):
+        """엔진이 붙어 있어야 '무엇을 물어야 하는가' 가 나온다."""
+        r = self.nr.calculate([
+            self.원료('밀가루', 99.95, carbohydrates=71.0, proteins=10.0, fats=1.0,
+                     sugars=1.0, saturated_fats=0.2, trans_fats=0.0,
+                     cholesterols=0.0, natriums=2.0),
+            self.모르는원료('향료', 0.05),
+        ])
+        self.assertIn('향료', r['needed'])
+        # 아홉을 다 묻지는 않는다
+        self.assertLess(len(r['needed']['향료']), 9)
+
+    # ── 배합비가 수상할 때 ───────────────────────────────────────────────
+
+    def test_배합비_합계가_100이_아니면_알린다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 80.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+        ])
+        self.assertTrue(any('배합비 합계' in w for w in r['warnings']), r['warnings'])
+
+    def test_배합비가_비면_더하지_않고_알린다(self):
+        r = self.nr.calculate([
+            self.원료('밀가루', 100.0, carbohydrates=71.0, proteins=10.0, fats=1.0),
+            self.원료('이름만있는것', None, carbohydrates=50.0),
+        ])
+        self.assertTrue(any('배합비가 빈 줄' in w for w in r['warnings']), r['warnings'])
+        self.assertAlmostEqual(r['values']['carbohydrates'], 71.0, places=3)
+
+    # ── 아직 안 한 것 ────────────────────────────────────────────────────
+
+    def test_수율은_아직_붙이지_않았다(self):
+        """자리만 잡아 두었다. 조용히 1.0 으로 넘어가면 안 된다."""
+        with self.assertRaises(NotImplementedError):
+            self.nr.apply_yield({}, 100.0, 85.0)
+
+
+class 원료에_붙일_행은_사람이_고른다(TestCase):
+    """
+    '버터' 는 동명 항목이 열두 건이고 열량이 164 ~ 761 kcal 로 갈린다. 이름이
+    완전히 같아 어떤 유사도로도 못 가른다 — 그래서 후보만 내놓고 사람이 고른다.
+
+    이 시험이 지키는 것은 **이름 척도**다. token_set_ratio 로 돌아가면 순위가
+    통째로 무너진다.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_candidates as ncd
+        self.ncd = ncd
+
+    def 행(self, name, calories, method='수집', ref='식품의약품안전처',
+          ymd='2024-01-01', status='skip'):
+        from v1.label.models import PublicFoodNutrition
+        return PublicFoodNutrition.objects.create(
+            food_cd='T%s' % name + str(calories), food_nm_kr=name,
+            basis_unit='g', basis_amount=100.0, calories=calories,
+            crt_mth_nm=method, sub_ref_name=ref, research_ymd=ymd,
+            verify_status=status)
+
+    # ── 이름 척도 ────────────────────────────────────────────────────────
+
+    def test_부분집합에_만점을_주는_척도를_쓰면_안_된다(self):
+        """
+        '사탕, 버터' 는 '버터' 를 품고 있어 token_set_ratio 로는 100 점이다.
+        그 척도로는 사탕이 버터보다 앞선다.
+        """
+        from rapidfuzz import fuzz
+        self.assertEqual(fuzz.token_set_ratio('버터', '사탕, 버터'), 100)
+        self.assertLess(self.ncd.name_score('버터', '사탕, 버터'), 70)
+        self.assertEqual(self.ncd.name_score('버터', '버터'), 100)
+
+    def test_군더더기가_붙은_이름은_점수가_깎인다(self):
+        self.assertLess(self.ncd.name_score('밀가루', '밀가루 0% 파프리카 쌀국수'),
+                        self.ncd.name_score('밀가루', '밀가루'))
+
+    def test_규격_꼬리를_떼고_견준다(self):
+        self.assertEqual(self.ncd.normalize('한라봉향 FAC-HMT4733012'), '한라봉향')
+        self.assertEqual(self.ncd.normalize('모카향 2111041'), '모카향')
+
+    # ── 순위 ─────────────────────────────────────────────────────────────
+
+    def test_이름이_같으면_분석값이_수집값보다_앞선다(self):
+        self.행('버터', 164.0, method='수집')
+        self.행('버터', 761.0, method='분석')
+        cs = self.ncd.candidates('버터')
+        self.assertEqual(cs[0]['row'].calories, 761.0)
+
+    def test_가점이_이름을_뒤집지_못한다(self):
+        """
+        이름이 먼저고 근거가 나중이다. 가점을 크게 주면 이름이 한참 뒤진
+        후보가 뒤집는다 — 처음에 그렇게 만들었다가 사탕이 1 위가 됐다.
+        """
+        self.행('버터', 750.0, method='수집', ref='식품의약품안전처')
+        self.행('사탕, 버터', 431.0, method='분석', ref="농진청('19)", ymd='2023-01-01')
+        cs = self.ncd.candidates('버터')
+        self.assertEqual(cs[0]['row'].food_nm_kr, '버터')
+
+    def test_브랜드가_앞에_붙어도_품목을_찾는다(self):
+        """
+        실제 원료명에는 브랜드가 붙는다('오늘좋은 생크림'). 전체 이름끼리만
+        견주면 브랜드가 점수를 지배한다.
+
+            '오늘좋은 생크림' vs '오늘좋은 생소면'   75 점
+            '오늘좋은 생크림' vs '생크림'            54 점
+
+        실제로 후보가 생소면·생칼국수·생와사비·두부로 나왔다 — 브랜드가 같은
+        다른 품목들이다. 뒷말로도 견줘야 제자리를 찾는다.
+        """
+        self.행('오늘좋은 생소면', 273.0)
+        self.행('오늘좋은 생칼국수', 271.0)
+        self.행('오늘좋은 두부', 100.0)
+        self.행('생크림', 368.0, method='분석')
+
+        cs = self.ncd.candidates('오늘좋은 생크림')
+        self.assertEqual(cs[0]['row'].food_nm_kr, '생크림')
+
+    def test_뒷말_조각만_만들고_앞말은_만들지_않는다(self):
+        """앞말(브랜드)로 견주면 다시 브랜드가 이긴다."""
+        v = self.ncd.variants('오늘좋은 생크림')
+        self.assertEqual(v[0], '오늘좋은 생크림')
+        self.assertIn('생크림', v)
+        self.assertNotIn('오늘좋은', v)
+
+    def test_정확히_같은_이름을_먼저_담는다(self):
+        """
+        후보 웅덩이를 800 개로 끊는다. 그래서 **담는 순서가 곧 정확도다.**
+
+        '버터' 는 이름에 그 두 글자가 든 행이 3,999 건이라, 아무렇게나 800 개를
+        담으면 정작 '버터' 라는 행이 안 들어와 1 위가 '땅콩버터' 가 된다.
+        실제로 그렇게 나왔었다.
+        """
+        for i in range(30):
+            self.행('땅콩버터%d' % i, 658.0)
+        self.행('버터', 761.0, method='분석')
+        cs = self.ncd.candidates('버터')
+        self.assertEqual(cs[0]['row'].food_nm_kr, '버터')
+
+    def test_후보_찾기가_화면에_쓸_만큼_빨라야_한다(self):
+        """
+        한 걸음으로 짜면 13 초가 걸렸다. raw(JSON) 칸 때문에 행이 무거워
+        LIKE 로 표 전체를 읽기 때문이다. id 만 먼저 뽑아 0.3 초로 줄였다.
+
+        이 시험은 그 구조가 무너지는 것을 막는다 — 조건을 SQL 에 도로 넣거나
+        id 두 걸음을 한 걸음으로 되돌리면 여기서 걸린다.
+        """
+        import time
+        for i in range(50):
+            self.행('버터%d' % i, 700.0)
+        started = time.time()
+        self.ncd.candidates('버터')
+        self.assertLess(time.time() - started, 3.0)
+
+    def test_부피_기준_행은_후보에서_뺀다(self):
+        """골라 봐야 중량 배합에 못 넣는다."""
+        from v1.label.models import PublicFoodNutrition
+        PublicFoodNutrition.objects.create(
+            food_cd='TML', food_nm_kr='우유', basis_unit='mL',
+            basis_amount=100.0, calories=60.0)
+        self.assertEqual(self.ncd.candidates('우유'), [])
+
+    # ── 이상값 경고 ──────────────────────────────────────────────────────
+
+    def test_후보끼리_두_배_넘게_갈리면_경고한다(self):
+        self.행('버터', 164.0)
+        self.행('버터', 761.0)
+        w = self.ncd.spread_warning(self.ncd.candidates('버터'))
+        self.assertIsNotNone(w)
+        self.assertIn('배 차이', w)
+
+    def test_고만고만하면_경고하지_않는다(self):
+        """경고가 흔하면 아무도 보지 않는다."""
+        self.행('물엿', 304.0)
+        self.행('물엿', 321.0)
+        self.assertIsNone(self.ncd.spread_warning(self.ncd.candidates('물엿')))
+
+
+class 배합_합계가_스스로_말이_되는가(SimpleTestCase):
+    """
+    원료를 잘못 골라도 그 행 자체는 멀쩡하다. 합계를 봐야 잡힌다 —
+    적재 때 AMT_NUM 을 검증한 그 검산을 여기서 다시 쓴다.
+    """
+
+    def setUp(self):
+        from v1.label.services import nutrition_recipe as nr
+        self.nr = nr
+
+    def test_질량_합이_크게_어긋나면_알린다(self):
+        values = {'moisture': 5.0, 'proteins': 10.0, 'fats': 5.0,
+                  'ash': 1.0, 'carbohydrates': 20.0}      # 합 41 g
+        w = self.nr.cross_check(values, known_ratio=100.0)
+        self.assertTrue(w and '질량 합' in w[0], w)
+
+    def test_흔들림_정도는_넘어간다(self):
+        """실제 식품은 ±10 g 쯤 흔들린다. 좁게 잡으면 멀쩡한 배합이 걸린다."""
+        values = {'moisture': 40.0, 'proteins': 10.0, 'fats': 5.0,
+                  'ash': 1.0, 'carbohydrates': 38.0}      # 합 94 g
+        self.assertEqual(self.nr.cross_check(values, known_ratio=100.0), [])
+
+    def test_못_재면_아무_말도_하지_않는다(self):
+        """수분·회분을 아는 원료는 드물다. 못 재는 것과 틀린 것은 다르다."""
+        values = {'moisture': None, 'proteins': 10.0, 'fats': 5.0,
+                  'ash': None, 'carbohydrates': 20.0}
+        self.assertEqual(self.nr.cross_check(values, known_ratio=100.0), [])
+
+
+class 원료_영양성분_API(TestCase):
+    """
+    원료 상세 화면이 부르는 두 주소. 후보를 보여 주고, 고른 것을 남긴다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient, PublicFoodNutrition
+
+        self.user = User.objects.create_user(username='ing', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='버터', delete_YN='N')
+        self.good = PublicFoodNutrition.objects.create(
+            food_cd='B1', food_nm_kr='버터', basis_unit='g', basis_amount=100.0,
+            calories=761.0, fats=82.04, carbohydrates=0.6, proteins=0.6,
+            crt_mth_nm='분석', sub_ref_name='식품의약품안전처', research_ymd='2014-12-31')
+        self.ml = PublicFoodNutrition.objects.create(
+            food_cd='B2', food_nm_kr='버터밀크', basis_unit='mL', basis_amount=100.0,
+            calories=60.0)
+
+    def url(self, save=False):
+        base = '/label/my-ingredient/%d/nutrition/' % self.ing.my_ingredient_id
+        return base + ('save/' if save else '')
+
+    def post(self, payload):
+        import json
+        return self.client.post(self.url(save=True), data=json.dumps(payload),
+                                content_type='application/json')
+
+    # ── 조회 ─────────────────────────────────────────────────────────────
+
+    def test_아직_정하지_않았으면_후보를_보여_준다(self):
+        r = self.client.get(self.url())
+        self.assertEqual(r.status_code, 200)
+        d = r.json()
+        self.assertIsNone(d['current'])
+        self.assertTrue(d['candidates'])
+        self.assertEqual(d['candidates'][0]['name'], '버터')
+        self.assertIn('분석', d['candidates'][0]['method'])
+
+    def test_보고번호가_맞으면_묻지_않고_찾아_준다(self):
+        self.ing.prdlst_report_no = '19990262011322'
+        self.ing.save()
+        self.good.item_report_no = '19990262011322'
+        self.good.save()
+
+        d = self.client.get(self.url()).json()
+        self.assertIsNotNone(d['auto'])
+        self.assertEqual(d['auto']['name'], '버터')
+        self.assertEqual(d['candidates'], [])   # 고를 것이 없다
+
+    # ── 고르기 ───────────────────────────────────────────────────────────
+
+    def test_고른_행의_값이_원료에_남는다(self):
+        r = self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['grade'], 'C')
+
+        self.ing.refresh_from_db()
+        nut = self.ing.nutrition
+        self.assertEqual(nut.calories, 761.0)
+        self.assertEqual(nut.public_row_id, self.good.id)
+        self.assertEqual(nut.picked_by, self.user)
+
+    def test_한_번_정하면_다시_묻지_않는다(self):
+        self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        d = self.client.get(self.url()).json()
+        self.assertIsNotNone(d['current'])
+        self.assertEqual(d['candidates'], [])
+
+    def test_다시_고르기를_누르면_후보를_새로_찾는다(self):
+        self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        d = self.client.get(self.url() + '?refresh=1').json()
+        self.assertTrue(d['candidates'])
+
+    def test_부피_기준은_고를_수_없다(self):
+        """비중을 모르면 중량 배합에 못 쓴다. 고르게 두면 조용히 틀린다."""
+        r = self.post({'kind': 'picked', 'public_row_id': self.ml.id})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('100mL', r.json()['error'])
+
+    # ── 직접 입력 ────────────────────────────────────────────────────────
+
+    def test_직접_입력한_값도_남는다(self):
+        r = self.post({'kind': 'manual', 'source_note': '업체 성적서 2026-01',
+                       'values': {'calories': '1,234', 'proteins': 5.5}})
+        self.assertEqual(r.status_code, 200)
+        nut = self.ing.nutrition
+        self.assertEqual(nut.calories, 1234.0)   # 쉼표를 읽는다
+        self.assertEqual(nut.source_note, '업체 성적서 2026-01')
+
+    def test_빈_값만_보내면_저장하지_않는다(self):
+        r = self.post({'kind': 'manual', 'values': {}})
+        self.assertEqual(r.status_code, 400)
+
+    def test_영향_없음은_값을_채우지_않는다(self):
+        """'0 이다' 가 아니라 '이 배합에서는 표시를 못 바꾼다' 이다."""
+        self.post({'kind': 'negligible'})
+        nut = self.ing.nutrition
+        self.assertIsNone(nut.calories)
+        self.assertEqual(nut.grade, '-')
+
+    def test_지우면_사라진다(self):
+        self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        self.post({'kind': 'clear'})
+        self.ing.refresh_from_db()
+        self.assertFalse(hasattr(self.ing, 'nutrition') and
+                         type(self.ing).nutrition.related.related_model.objects
+                         .filter(ingredient=self.ing).exists())
+
+    # ── 권한 ─────────────────────────────────────────────────────────────
+
+    def test_남의_원료는_만질_수_없다(self):
+        from django.contrib.auth.models import User
+        other = User.objects.create_user(username='other2', password='x')
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(self.url()).status_code, 403)
+        self.assertEqual(self.post({'kind': 'clear'}).status_code, 403)
+
+    def test_공용_원료는_한_사람이_정할_수_없다(self):
+        from v1.label.models import MyIngredient
+        pub = MyIngredient.objects.create(user_id=None, prdlst_nm='정제수', delete_YN='N')
+        r = self.client.get('/label/my-ingredient/%d/nutrition/' % pub.my_ingredient_id)
+        self.assertEqual(r.status_code, 403)
+
+
+class 원료_상세에_영양성분_구역이_있다(TestCase):
+    """
+    화면에 실제로 붙었는가. 자리(div)와 동작(script)이 함께 있어야 한다.
+
+    서버가 그리는 것과 스크립트가 하는 일을 갈라 둔다 — 자리는 서버가 놓고,
+    무엇이 정해졌는지는 스크립트가 서버에 물어 그린다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+
+        self.user = User.objects.create_user(username='screen', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='버터', delete_YN='N')
+
+    def get(self, ingredient_id):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+    def test_영양성분_자리와_동작이_함께_그려진다(self):
+        html = self.get(self.ing.my_ingredient_id).content.decode('utf-8')
+        self.assertIn('id="ingNutrition"', html)
+        self.assertIn('/nutrition/', html)          # 조회 주소
+        self.assertIn('/nutrition/save/', html)     # 저장 주소
+        self.assertIn('ing-nut-cand', html)         # 후보 그리는 코드
+
+    def test_새_원료에는_그리지_않는다(self):
+        """
+        저장 전에는 원료 id 가 없어 붙일 자리가 없다. 그려 두면 주소가
+        비어 있는 단추가 생긴다.
+        """
+        html = self.client.get(
+            '/label/my-ingredient-detail/',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+        self.assertNotIn('id="ingNutrition"', html)
+
+    def test_공용_원료에는_그리지_않는다(self):
+        """여럿이 함께 쓰는 원료를 한 사람이 정하면 안 된다."""
+        from v1.label.models import MyIngredient
+        pub = MyIngredient.objects.create(user_id=None, prdlst_nm='정제수', delete_YN='N')
+        html = self.get(pub.my_ingredient_id).content.decode('utf-8')
+        self.assertNotIn('id="ingNutrition"', html)
+
+
+class 배합_탭이_영양성분_계산을_말한다(TestCase):
+    """
+    bom_calculate_nutrition 은 오래 더미였다(전부 0 을 돌려주고
+    '# TODO: 원재료별 영양성분 DB에서 조회 후 계산'). 그 자리를 채운다.
+
+    보여 주는 것은 둘이다 — **계산이 되는가**, **무엇이 막고 있는가**.
+    값 자체는 영양성분 탭이 본다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyIngredient, MyIngredientNutrition, MyLabel
+
+        self.user = User.objects.create_user(username='bomnut', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='식빵')
+
+        def ingredient(name, ratio, **vals):
+            ing = MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm=name, delete_YN='N')
+            if vals:
+                MyIngredientNutrition.objects.create(
+                    ingredient=ing, source_kind='manual', **vals)
+            return ProductBOM.objects.create(
+                parent_label=self.label, ingredient_name=name,
+                source_ingredient=ing, usage_ratio=ratio, active_yn=True)
+
+        self.ingredient = ingredient
+
+    def get(self):
+        return self.client.get(
+            '/bom/api/label/%d/nutrition/' % self.label.my_label_id).json()
+
+    def test_영양성분을_아는_원료만_있으면_계산된다(self):
+        self.ingredient('밀가루', 100, calories=333.0, carbohydrates=71.0,
+                        proteins=10.0, fats=1.0, sugars=1.0, saturated_fats=0.2,
+                        trans_fats=0.0, cholesterols=0.0, natriums=2.0)
+        d = self.get()
+        self.assertTrue(d['success'])
+        self.assertEqual(d['blocking'], [])
+        self.assertAlmostEqual(d['ratio_total'], 100.0, places=3)
+        # 열량은 원료가 적어 낸 333 이 아니라 탄단지로 다시 센 값이다
+        self.assertAlmostEqual(d['values']['calories'], 71 * 4 + 10 * 4 + 1 * 9, places=3)
+
+    def test_모르는_원료가_있으면_무엇이_막는지_말한다(self):
+        self.ingredient('밀가루', 99.95, calories=333.0, carbohydrates=71.0,
+                        proteins=10.0, fats=1.0, sugars=1.0, saturated_fats=0.2,
+                        trans_fats=0.0, cholesterols=0.0, natriums=2.0)
+        self.ingredient('향료', 0.05)
+        d = self.get()
+        self.assertTrue(d['blocking'])
+        # 아홉을 다 묻지 않는다 — 향료가 못 바꾸는 성분은 빼고 말한다
+        self.assertLess(len(d['needed']['향료']), 9)
+
+    def test_원료로_바로_갈_수_있게_id_를_준다(self):
+        """무엇이 막는지 알려 주고 고치러 갈 길이 없으면 소용이 없다."""
+        self.ingredient('향료', 0.05)
+        d = self.get()
+        self.assertTrue(d['rows'][0]['ingredient_id'])
+
+    def test_배합비가_비면_합계에_넣지_않고_알린다(self):
+        self.ingredient('밀가루', None, calories=333.0, carbohydrates=71.0,
+                        proteins=10.0, fats=1.0)
+        d = self.get()
+        self.assertEqual(d['ratio_total'], 0.0)
+        self.assertTrue(any('배합비가 빈 줄' in w for w in d['warnings']))
+
+    def test_저장_전_배합비로도_계산한다(self):
+        """표를 고치는 중에 결과를 보려면 저장을 기다리게 할 수 없다."""
+        import json
+        row = self.ingredient('밀가루', 50, calories=333.0, carbohydrates=71.0,
+                              proteins=10.0, fats=1.0)
+        d = self.client.post(
+            '/bom/api/label/%d/nutrition/' % self.label.my_label_id,
+            data=json.dumps({'items': [{'bom_id': row.bom_id, 'usage_ratio': 100}]}),
+            content_type='application/json').json()
+        self.assertAlmostEqual(d['ratio_total'], 100.0, places=3)
+
+    def test_남의_배합은_볼_수_없다(self):
+        from django.contrib.auth.models import User
+        self.ingredient('밀가루', 100)
+        self.client.force_login(User.objects.create_user(username='nope', password='x'))
+        r = self.client.get('/bom/api/label/%d/nutrition/' % self.label.my_label_id)
+        self.assertEqual(r.status_code, 404)
+
+
+class 영양성분_탭에_배합에서_계산이_있다(TestCase):
+    """
+    '이론치 계산' 은 이름뿐이었다 — 무엇으로 계산했는지 근거 칸에 글로 적을
+    뿐 시스템이 계산하지 않았다. 그 자리를 배합 계산에 잇는다.
+
+    단추가 하는 일은 **계산값 칸을 채우는 것뿐**이다. 오차·반올림·적용값은
+    이 화면의 기존 흐름이 그대로 맡는다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyLabel
+
+        self.user = User.objects.create_user(username='nuttab', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='식빵')
+
+    def html(self):
+        return self.client.get(
+            '/products/labels/%d/nutrition/' % self.label.my_label_id
+        ).content.decode('utf-8')
+
+    def test_단추와_동작이_함께_그려진다(self):
+        h = self.html()
+        self.assertIn('id="fromBomBtn"', h)
+        self.assertIn('API_BOM_NUTRITION_URL', h)
+        self.assertIn('setGridNutritionData', h)
+
+    def test_배합_계산_주소는_서버가_준다(self):
+        """화면이 주소를 지어내면 라우팅이 바뀔 때 조용히 깨진다."""
+        h = self.html()
+        self.assertIn('/bom/api/label/%d/nutrition/' % self.label.my_label_id, h)
+
+    def test_이론치를_고를_때만_보인다(self):
+        """성적서 자리에 배합 계산 단추가 있으면 어느 값인지 헷갈린다."""
+        h = self.html()
+        self.assertIn("id=\"fromBomItem\"", h)
+        self.assertIn("fromBom.style.display = theory ? '' : 'none'", h)
+
+    def test_막히면_값을_채우지_않는다(self):
+        """빈 것을 0 으로 채우면 그럴듯하고 틀린 표가 만들어진다."""
+        h = self.html()
+        self.assertIn('아직 계산할 수 없습니다', h)
+        # 막힌 가지에서 setGridNutritionData 를 부르지 않는다
+        blocked = h[h.index('if (d.blocking'):h.index('var values = d.values')]
+        self.assertNotIn('setGridNutritionData', blocked)

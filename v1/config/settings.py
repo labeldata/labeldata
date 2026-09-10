@@ -405,6 +405,12 @@ FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
 FOODSAFETY_IMPORT_SERVICE_ID  = config('FOODSAFETY_IMPORT_SERVICE_ID',  default='I2620')
 FOODSAFETY_DOMESTIC_SERVICE_ID = config('FOODSAFETY_DOMESTIC_SERVICE_ID', default='I0030')
 
+# 식약처 식품영양성분DB (data.go.kr, 개발계정)
+# https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02
+# 값은 **URL 인코딩된 채로** 둔다 — requests 의 params 로 넘기면 % 가 다시
+# 인코딩돼 인증이 깨지므로, 적재 커맨드가 쿼리스트링에 직접 붙인다.
+MFDS_NUTRITION_API_KEY = config('MFDS_NUTRITION_API_KEY', default='')
+
 # RapidFuzz 매칭 임계값 (0~100, 기본 72)
 REGULATORY_MATCH_THRESHOLD = config('REGULATORY_MATCH_THRESHOLD', default=72, cast=int)
 

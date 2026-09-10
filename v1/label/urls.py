@@ -1,4 +1,4 @@
-from django.urls import path
+﻿from django.urls import path
 from . import views
 from . import views_ocr_lab
 
@@ -61,6 +61,12 @@ urlpatterns = [
     path('my-ingredient-detail/<int:ingredient_id>/', views.my_ingredient_detail, name='my_ingredient_detail'),
     path('my-ingredient-detail/', views.my_ingredient_detail, name='my_ingredient_create'),
     path('delete-my-ingredient/<int:ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
+
+    # 내 원료의 영양성분 — 후보 조회와 확정
+    path('my-ingredient/<int:ingredient_id>/nutrition/',
+         views.my_ingredient_nutrition_api, name='my_ingredient_nutrition'),
+    path('my-ingredient/<int:ingredient_id>/nutrition/save/',
+         views.my_ingredient_nutrition_save, name='my_ingredient_nutrition_save'),
     path('bulk-delete-my-ingredients/', views.bulk_delete_my_ingredients, name='bulk_delete_my_ingredients'),
     # 같은 원료가 여러 벌 쌓인 것 — 찾아 보여 주고, 사용자가 고른 한 벌로 합친다
     path('my-ingredients/columns/', views.ingredient_columns_save, name='ingredient_columns_save'),
