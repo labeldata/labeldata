@@ -316,6 +316,41 @@
   /* 직접 찾기 — 추린 후보가 늘 맞지는 않아서 사람이 아는 이름으로 뒤진다 */
   .ing-nut-search { display: flex; gap: 6px; margin-top: 8px; }
   .ing-nut-search input { max-width: 300px; }
+
+  /* 아홉 성분을 한눈에. 앞 다섯 개만 보여 주던 때는 나트륨이 잘렸다 —
+     하필 기여도 판정에서 가장 자주 막는 성분이다. */
+  .ing-nut-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 2px 10px; margin-top: 4px;
+  }
+  .ing-nut-cell { display: flex; justify-content: space-between; gap: 6px;
+                  font-size: .78rem; padding: 1px 0; }
+  .ing-nut-k { color: #6b7280; }
+  .ing-nut-v { color: #202124; font-variant-numeric: tabular-nums; }
+  .ing-nut-cell.is-empty .ing-nut-v { color: #b9bfc7; }
+
+  /* 이 구역만 고르는 즉시 저장된다. 그 사실을 그 자리에서 말한다. */
+  .ing-nut-flash {
+    display: inline-block; margin-left: 8px; font-size: .76rem;
+    color: #137333; opacity: 0; transition: opacity .18s;
+  }
+  .ing-nut-flash.is-on { opacity: 1; }
+
+  /* 나머지 칸은 [저장] 을 눌러야 남는다 — 값이 바뀌면 단추가 그렇게 말한다. */
+  #ingSaveBtn.is-dirty {
+    background: #a35400; border-color: #a35400;
+  }
+
+  /* 알레르기 19 칩 · GMO 6 칩이 세로의 37 % 를 쓰고 있었다. 둘 다 대개
+     "선택된 항목 없음" 인데도 늘 펼쳐져 있었다 — 고를 일이 드문 것이 가장
+     넓은 자리를 차지한 셈이다. 평소에는 접고, [고르기] 를 눌러야 편다.
+     배합(BOM) 화면의 상세 창이 이미 그 방식이라 두 화면의 몸짓이 같아진다. */
+  /* 부트스트랩의 .d-flex 는 display:flex !important 라 접기를 이긴다.
+     유틸리티를 걷고 배치를 여기서 맡는다. */
+  .ag-fold { display: none; }
+  .ag-fold.is-open {
+    display: flex; flex-wrap: wrap; gap: .25rem;
+  }
 </style>
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
@@ -332,7 +367,7 @@
         <div class="panel-actions">
             <button type="button" class="panel-btn" id="closeBtn">입력 초기화</button>
             {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="panel-btn danger" id="deleteBtn"><i class="bi bi-trash"></i> 삭제</button>{% endif %}
-            <button type="submit" form="ingredientForm" class="panel-btn primary"><i class="bi bi-check-lg"></i> 저장</button>
+            <button type="submit" form="ingredientForm" class="panel-btn primary" id="ingSaveBtn"><i class="bi bi-check-lg"></i> <span id="ingSaveLabel">저장</span></button>
         </div>
     </div>
 
@@ -433,10 +468,11 @@
                                         <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyAutoDetectBtn" title="원재료명으로 알레르기 자동감지">
                                             <i class="fas fa-sync-alt"></i> 자동감지
                                         </button>
+                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="allergyBtnList">고르기</button>
                                         <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyToggleBtn">전체선택</button>
                                     </div>
                                 </div>
-                                <div id="allergyBtnList" class="d-flex flex-wrap gap-1 mb-1">
+                                <div id="allergyBtnList" class="mb-1 ag-fold">
                                     {% for allergen in allergen_list %}
                                     <button type="button" class="btn btn-outline-primary allergy-btn" data-allergen="{{ allergen }}">{{ allergen }}</button>
                                     {% endfor %}
@@ -452,9 +488,10 @@
                             <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div id="gmoSelectedDisplay" class="selected-display">선택된 항목 없음</div>
+                                    <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="gmoBtnList">고르기</button>
                                     <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="gmoToggleBtn">전체선택</button>
                                 </div>
-                                <div id="gmoBtnList" class="d-flex flex-wrap gap-1 mb-1">
+                                <div id="gmoBtnList" class="mb-1 ag-fold">
                                     {% for gmo in gmo_list %}
                                     <button type="button" class="btn btn-sm btn-outline-primary gmo-btn" data-gmo="{{ gmo }}">{{ gmo }}</button>
                                     {% endfor %}
@@ -498,6 +535,30 @@
 </div>
 
 {% if mode == 'edit' and ingredient.user_id %}{% include 'label/_ingredient_nutrition.html' %}{% endif %}
+
+{% comment %}
+  알레르기·GMO 칩 펼치기. 고른 것이 있으면 처음부터 펴 둔다 — 무엇을 골랐는지
+  보려고 한 번 더 누르게 하지 않는다.
+{% endcomment %}
+<script>
+(function () {
+  function chosen(id) {
+    var box = document.getElementById(id);
+    if (!box) return false;
+    return !!box.querySelector('.btn-primary, .active, .selected');
+  }
+  document.querySelectorAll('.ag-fold-btn').forEach(function (btn) {
+    var id = btn.dataset.fold;
+    var box = document.getElementById(id);
+    if (!box) return;
+    if (chosen(id)) { box.classList.add('is-open'); btn.textContent = '접기'; }
+    btn.addEventListener('click', function () {
+      var open = box.classList.toggle('is-open');
+      btn.textContent = open ? '접기' : '고르기';
+    });
+  });
+})();
+</script>
 
 {{ food_types|json_script:"food-types-data" }}
 {{ food_additives|json_script:"food-additives-data" }}

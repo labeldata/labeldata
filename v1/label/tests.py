@@ -13940,3 +13940,132 @@ class 실제_배합_원료_이름을_견딘다(TestCase):
     def test_무가당_무염도_같이_막는다(self):
         self.행('무가당 두유', 50.0)
         self.assertEqual(self.ncd.candidates('두유'), [])
+
+
+class 저장되는_것과_안_되는_것을_구별해_준다(TestCase):
+    """
+    원료 상세는 한 화면에서 저장 방식이 두 가지다.
+
+        영양성분   고르면 바로 저장   POST …/nutrition/save/
+        그 외 7칸  [저장] 눌러야 저장  form="ingredientForm"
+
+    화면이 그 차이를 말하지 않으면 사용자는 둘 중 하나를 반드시 틀리게 안다 —
+    "고쳤는데 안 남았다" 와 "안 고쳤는데 남았다" 가 둘 다 나온다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        self.user = User.objects.create_user(username='dirty', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='밀가루', delete_YN='N')
+
+    def html(self):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+
+    def test_영양성분은_저장된_순간을_말한다(self):
+        h = self.html()
+        self.assertIn('ingNutFlash', h)
+        self.assertIn('저장했습니다', h)
+
+    def test_나머지_칸은_아직_안_남았음을_드러낸다(self):
+        h = self.html()
+        self.assertIn('저장 안 됨', h)
+        self.assertIn('is-dirty', h)
+
+    def test_안_남은_채로_나가려_하면_붙잡는다(self):
+        h = self.html()
+        self.assertIn('beforeunload', h)
+
+    def test_영양성분_구역은_그_표시를_켜지_않는다(self):
+        """
+        영양성분은 이 폼 밖이고 즉시 저장된다. 그 입력이 '저장을 눌러야 한다'
+        를 켜면 거짓말이 된다 — 리스너를 form 에만 건다.
+        """
+        h = self.html()
+        js = h[h.index('var form = document.getElementById(\'ingredientForm\')'):]
+        self.assertIn("form.addEventListener('input', mark)", js)
+        self.assertNotIn("document.addEventListener('input', mark)", js)
+
+
+class 나트륨이_화면에_보인다(TestCase):
+    """
+    정해진 값을 앞 다섯 개만 보여 주던 때는 나트륨이 아홉 번째라 잘렸다.
+    하필 나트륨이다 — 기여도 판정에서 가장 자주 막는 성분이고, 상한이
+    정제소금(39,340 mg/100g)이라 배합비 0.05 % 만 돼도 표시값을 움직인다.
+    "왜 아직 계산이 안 되지" 의 답이 화면에 없었던 셈이다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        self.user = User.objects.create_user(username='na', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='정제소금', delete_YN='N')
+
+    def test_아홉_성분을_모두_그린다(self):
+        h = self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+        js = h[h.index('function valuesGrid'):h.index('function candRow')]
+        # 다섯 개로 자르지 않는다
+        self.assertNotIn('i < 5', js)
+        self.assertIn('FIELDS.map', js)
+
+    def test_빈_칸은_0_이_아니라_대시로_둔다(self):
+        """무엇이 비었는지가 드러나야 한다."""
+        h = self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+        self.assertIn('is-empty', h)
+        self.assertIn('ndash', h)
+
+
+class 고를_일이_드문_것은_접어_둔다(TestCase):
+    """
+    알레르기 19 칩과 GMO 6 칩이 폼 세로의 37 % 를 쓰고 있었다. 둘 다 대개
+    "선택된 항목 없음" 인데도 늘 펼쳐져 있었다 — 고를 일이 드문 것이 가장 넓은
+    자리를 차지한 셈이고, 정작 필수인 원재료명은 한 줄이었다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        self.user = User.objects.create_user(username='fold', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='밀가루', delete_YN='N')
+
+    def html(self):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % self.ing.my_ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+
+    def test_칩은_접혀_있고_고르기로_편다(self):
+        h = self.html()
+        self.assertIn('ag-fold', h)
+        self.assertIn('data-fold="allergyBtnList"', h)
+        self.assertIn('data-fold="gmoBtnList"', h)
+
+    def test_부트스트랩_유틸리티를_함께_쓰지_않는다(self):
+        """
+        .d-flex 는 display:flex !important 라 접기를 이긴다. 실제로 칩이
+        그대로 보였다 — 배치는 .ag-fold 가 맡는다.
+        """
+        h = self.html()
+        for box in ('allergyBtnList', 'gmoBtnList'):
+            i = h.index('id="%s"' % box)
+            cls = h[i:i + 120]
+            self.assertNotIn('d-flex', cls, '%s 에 d-flex 가 남아 있다' % box)
+            self.assertIn('ag-fold', cls)
+
+    def test_자동감지와_전체선택은_접혀_있어도_보인다(self):
+        """접은 것은 칩뿐이다. 그 줄에서 할 수 있는 일은 그대로 보여야 한다."""
+        h = self.html()
+        head = h[h.index('id="allergyBtnList"') - 900:h.index('id="allergyBtnList"')]
+        self.assertIn('allergyAutoDetectBtn', head)
+        self.assertIn('allergyToggleBtn', head)
