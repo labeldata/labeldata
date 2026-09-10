@@ -1,0 +1,107 @@
+{% comment %}
+  '배합에서 계산' 단추의 동작.
+
+  이 화면의 흐름은 이미 세 걸음이다 — 계산값 → 오차 → 적용값. 이 단추가 하는
+  일은 **첫 걸음의 값을 채우는 것뿐**이다. 배합 쪽에서 오차까지 물려 오면 여기서
+  다시 물려 두 번 곱해진다(계산기가 겪은 사고가 그것이다: 309 를 두 번 저장해
+  475 가 되고 731 이 됐다).
+
+  계산이 막히면 값을 채우지 않고 **왜 막혔는지**를 말한다. 빈 값을 0 으로 채워
+  넣으면 그럴듯하고 틀린 표가 만들어진다.
+
+  탭이 iframe 으로 갈려 있어 배합 탭에서 고친 것이 여기로 자동으로 오지 않는다.
+  그래서 단추를 누를 때마다 **서버에 다시 묻는다** — 화면에 값을 들고 있다가
+  쓰면 배합을 고친 뒤에도 옛 값을 넣게 된다.
+{% endcomment %}
+<script>
+(function () {
+  var btn = document.getElementById('fromBomBtn');
+  if (!btn || typeof API_BOM_NUTRITION_URL === 'undefined') return;
+
+  var LABEL = {
+    calories: '열량', carbohydrates: '탄수화물', sugars: '당류',
+    proteins: '단백질', fats: '지방', saturated_fats: '포화지방',
+    trans_fats: '트랜스지방', cholesterols: '콜레스테롤', natriums: '나트륨'
+  };
+
+  function note(text, warn) {
+    var el = document.getElementById('calcNote');
+    if (!el) { if (warn) alert(text); return; }
+    el.textContent = text;
+    el.classList.toggle('is-warn', !!warn);
+    el.style.display = text ? '' : 'none';
+  }
+
+  function names(fields) {
+    return (fields || []).map(function (f) { return LABEL[f] || f; }).join('·');
+  }
+
+  // 소수점이 길게 붙은 계산값을 표에 그대로 넣으면 칸이 넘친다.
+  // 반올림이 아니라 **자리 정리**다 — 표시 반올림은 뒤 단계가 한다.
+  function trim(v) {
+    if (v === null || v === undefined || v === '') return '';
+    var n = Number(v);
+    if (!isFinite(n)) return '';
+    return String(Math.round(n * 10000) / 10000);
+  }
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    note('배합을 읽는 중…', false);
+
+    fetch(API_BOM_NUTRITION_URL, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) { throw new Error('배합을 읽지 못했습니다'); }
+
+        if (!d.rows || !d.rows.length) {
+          note('배합에 원료가 없습니다. 배합 탭에서 원료를 넣어 주세요.', true);
+          return;
+        }
+
+        if (d.blocking && d.blocking.length) {
+          // 값을 채우지 않는다. 빈 것을 0 으로 채우면 그럴듯하고 틀린 표가 된다.
+          var todo = [];
+          var needed = d.needed || {};
+          (d.rows || []).forEach(function (r) {
+            if ((needed[r.name] || []).length) { todo.push(r.name); }
+          });
+          note('아직 계산할 수 없습니다 — ' + names(d.blocking) + '이(가) 막힙니다. '
+             + (todo.length ? '배합 탭에서 ' + todo.slice(0, 3).join(', ')
+                 + (todo.length > 3 ? ' 외 ' + (todo.length - 3) + '건' : '')
+                 + ' 의 영양성분을 정해 주세요.' : ''), true);
+          return;
+        }
+
+        var values = d.values || {};
+        var filled = {};
+        Object.keys(LABEL).forEach(function (f) {
+          if (values[f] !== null && values[f] !== undefined) {
+            filled[f] = trim(values[f]);
+          }
+        });
+
+        setGridNutritionData(filled);          // 계산값 칸만 채운다
+        if (typeof refreshApplied === 'function') refreshApplied();
+        if (typeof calculateAndPreview === 'function') calculateAndPreview();
+
+        // 무엇으로 냈는지를 값과 함께 남긴다 — 이론치 표는 그 자체가 감사 대상이다
+        var noteEl = document.getElementById('nutrition_source_note');
+        if (noteEl && !noteEl.value.trim()) {
+          var today = new Date().toISOString().slice(0, 10);
+          noteEl.value = '배합 산출 · 원료 ' + d.rows.length + '건 · ' + today;
+        }
+
+        var msg = '배합에서 계산했습니다 (원료 ' + d.rows.length + '건';
+        if (d.ratio_total) { msg += ' · 배합비 ' + Number(d.ratio_total).toFixed(2) + '%'; }
+        msg += '). 저장하려면 저장 단추를 누르세요.';
+        note(msg + (d.warnings && d.warnings.length ? ' ⚠ ' + d.warnings.join(' ') : ''),
+             !!(d.warnings && d.warnings.length));
+      })
+      .catch(function (e) {
+        note(e.message || '배합을 읽지 못했습니다', true);
+      })
+      .finally(function () { btn.disabled = false; });
+  });
+})();
+</script>

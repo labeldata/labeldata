@@ -13577,3 +13577,51 @@ class 배합_탭이_영양성분_계산을_말한다(TestCase):
         self.client.force_login(User.objects.create_user(username='nope', password='x'))
         r = self.client.get('/bom/api/label/%d/nutrition/' % self.label.my_label_id)
         self.assertEqual(r.status_code, 404)
+
+
+class 영양성분_탭에_배합에서_계산이_있다(TestCase):
+    """
+    '이론치 계산' 은 이름뿐이었다 — 무엇으로 계산했는지 근거 칸에 글로 적을
+    뿐 시스템이 계산하지 않았다. 그 자리를 배합 계산에 잇는다.
+
+    단추가 하는 일은 **계산값 칸을 채우는 것뿐**이다. 오차·반올림·적용값은
+    이 화면의 기존 흐름이 그대로 맡는다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyLabel
+
+        self.user = User.objects.create_user(username='nuttab', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='식빵')
+
+    def html(self):
+        return self.client.get(
+            '/products/labels/%d/nutrition/' % self.label.my_label_id
+        ).content.decode('utf-8')
+
+    def test_단추와_동작이_함께_그려진다(self):
+        h = self.html()
+        self.assertIn('id="fromBomBtn"', h)
+        self.assertIn('API_BOM_NUTRITION_URL', h)
+        self.assertIn('setGridNutritionData', h)
+
+    def test_배합_계산_주소는_서버가_준다(self):
+        """화면이 주소를 지어내면 라우팅이 바뀔 때 조용히 깨진다."""
+        h = self.html()
+        self.assertIn('/bom/api/label/%d/nutrition/' % self.label.my_label_id, h)
+
+    def test_이론치를_고를_때만_보인다(self):
+        """성적서 자리에 배합 계산 단추가 있으면 어느 값인지 헷갈린다."""
+        h = self.html()
+        self.assertIn("id=\"fromBomItem\"", h)
+        self.assertIn("fromBom.style.display = theory ? '' : 'none'", h)
+
+    def test_막히면_값을_채우지_않는다(self):
+        """빈 것을 0 으로 채우면 그럴듯하고 틀린 표가 만들어진다."""
+        h = self.html()
+        self.assertIn('아직 계산할 수 없습니다', h)
+        # 막힌 가지에서 setGridNutritionData 를 부르지 않는다
+        blocked = h[h.index('if (d.blocking'):h.index('var values = d.values')]
+        self.assertNotIn('setGridNutritionData', blocked)

@@ -96,6 +96,22 @@
                         <option value="lab">공인기관 성적서</option>
                         <option value="theory">이론치 계산</option>
                     </select>
+                    {% comment %}
+                      배합에서 계산 — '이론치 계산' 을 골랐을 때만 나온다.
+                      성적서 값을 넣는 자리에 배합 계산 단추가 있으면, 어느
+                      값이 표에 들어간 것인지 사람이 헷갈린다.
+
+                      누르면 **계산값 칸만** 채운다. 오차·반올림·적용값은
+                      그대로 이 화면의 기존 흐름이 맡는다 — 배합 쪽에서 오차를
+                      한 번 더 물리면 두 번 곱해진다.
+                    {% endcomment %}
+                    <span class="cfg-item" id="fromBomItem" style="display:none;">
+                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                id="fromBomBtn"
+                                title="배합(BOM)의 원료와 배합비로 100g 당 계산값을 냅니다">
+                            <i class="bi bi-calculator"></i> 배합에서 계산
+                        </button>
+                    </span>
                     <span class="cfg-item" id="toleranceItem" style="display:none;">
                         <label class="cfg-label" for="nutrition_tolerance">허용오차</label>
                         <input type="text" class="form-control form-control-sm cfg-num-sm" id="nutrition_tolerance" value="15">
@@ -255,6 +271,7 @@
 const LABEL_ID_TEMPLATE = '{{ LABEL_ID }}';
 const CAN_EDIT = {{ can_edit|yesno:'true,false' }};
 const API_NUTRITION_LOAD_URL = '{% url "products:nutrition_data_api" LABEL_ID %}';
+const API_BOM_NUTRITION_URL = '{% url "bom:bom_calculate_nutrition" label_id=LABEL_ID %}';
 const API_NUTRITION_SAVE_URL = '{% url "products:nutrition_save_api" LABEL_ID %}';
 
 // LABEL_ID 파싱
@@ -939,9 +956,13 @@ function bindCalcSource() {
     const source = document.getElementById('nutrition_source');
     const tolerance = document.getElementById('toleranceItem');
     const noteRow = document.getElementById('sourceNoteRow');
+    const fromBom = document.getElementById('fromBomItem');
     function paint() {
         const theory = source.value === 'theory';
         if (tolerance) tolerance.style.display = theory ? '' : 'none';
+        /* 성적서 값을 넣는 자리에 배합 계산 단추가 있으면, 어느 값이 표에
+           들어간 것인지 사람이 헷갈린다. */
+        if (fromBom) fromBom.style.display = theory ? '' : 'none';
         if (noteRow) noteRow.style.display = source.value ? '' : 'none';
     }
     if (source) { source.addEventListener('change', paint); paint(); }
@@ -1107,6 +1128,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(syncOffNote, 2000);
 })();
 </script>
+
+{% include 'products/_nutrition_from_bom.html' %}
 
 </body>
 </html>
