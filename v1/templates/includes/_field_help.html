@@ -1,0 +1,106 @@
+{% comment %}
+  칸 옆의 [?] — 그 칸이 **무엇에 쓰이는지** 말한다.
+
+  한 번 include 하면 그 화면의 모든 [?] 가 이 규칙을 쓴다. 칸마다는 이렇게
+  적는다.
+
+      <span class="fhelp" tabindex="0" role="button" aria-label="설명">?
+        <span class="fhelp-p" role="tooltip">
+          <b>품목보고번호가 있으면</b>
+          <i>[불러오기]</i> 로 …
+        </span>
+      </span>
+
+  왜 title= 을 안 쓰나
+  ───────────────────
+  이 화면들은 지금까지 native `title` 을 썼다. 그런데 title 은 손가락으로는
+  **아예 안 열린다** — 태블릿으로 라벨을 만드는 사람에게는 없는 기능이다.
+  줄바꿈도 브라우저마다 다르고, 굵게·목록 같은 것이 안 된다. 설명이 두 줄을
+  넘는 순간 한 덩어리 글이 되어 안 읽힌다.
+
+  그래서 셋을 다 받는다 — 마우스는 올리면, 키보드는 Tab 으로, 손가락은
+  눌러서. 누르면 **고정**되므로 읽는 동안 사라지지 않는다.
+
+  부트스트랩 툴팁을 안 쓴 이유는 이 저장소가 그것을 거의 안 쓰기 때문이다
+  (전체에서 한 군데). 여기만 쓰기 시작하면 초기화 코드가 화면마다 흩어진다.
+{% endcomment %}
+<style>
+  .fhelp {
+    position: relative; display: inline-flex; align-items: center;
+    justify-content: center; width: 15px; height: 15px; margin-left: 5px;
+    border: 1px solid #c3c9d4; border-radius: 50%;
+    font-size: .66rem; font-weight: 600; line-height: 1;
+    color: #6b7280; background: #fff; cursor: help; user-select: none;
+    vertical-align: middle;
+  }
+  .fhelp:hover, .fhelp:focus-visible, .fhelp.is-on {
+    border-color: #1A73E8; color: #1A73E8; outline: none;
+  }
+
+  .fhelp-p {
+    position: absolute; z-index: 1080; left: 0; top: calc(100% + 7px);
+    display: none; width: max-content; max-width: min(330px, 78vw);
+    padding: 9px 11px; text-align: left;
+    background: #fff; color: #3c4043;
+    border: 1px solid #d8dde5; border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(16, 24, 40, .13);
+    font-size: .78rem; font-weight: 400; line-height: 1.55;
+    cursor: auto; white-space: normal;
+  }
+  .fhelp:hover .fhelp-p, .fhelp:focus-within .fhelp-p,
+  .fhelp.is-on .fhelp-p { display: block; }
+
+  /* 오른쪽 끝의 [?] 는 설명이 화면 밖으로 나간다 — 그때만 왼쪽으로 편다 */
+  .fhelp.to-left .fhelp-p { left: auto; right: 0; }
+
+  .fhelp-p b { display: block; margin-bottom: 3px; color: #202124; font-weight: 600; }
+  .fhelp-p strong { font-weight: 600; color: #202124; }
+  .fhelp-p i { font-style: normal; color: #1A73E8; font-weight: 500; }
+  .fhelp-p em {
+    display: block; margin-top: 5px; padding-top: 5px;
+    border-top: 1px dashed #e4e8ee;
+    font-style: normal; color: #6b7280; font-size: .74rem;
+  }
+</style>
+<script>
+(function () {
+  if (window.__fhelpReady) return;      // 화면에 두 번 include 돼도 한 번만
+  window.__fhelpReady = true;
+
+  function closeAll(except) {
+    document.querySelectorAll('.fhelp.is-on').forEach(function (el) {
+      if (el !== except) el.classList.remove('is-on');
+    });
+  }
+
+  document.addEventListener('click', function (ev) {
+    var chip = ev.target.closest ? ev.target.closest('.fhelp') : null;
+
+    /* 설명 안을 눌렀을 때는 닫지 않는다 — 글을 긁어 복사할 수 있어야 한다 */
+    if (chip && ev.target.closest('.fhelp-p')) return;
+
+    if (!chip) { closeAll(null); return; }
+    closeAll(chip);
+    chip.classList.toggle('is-on');
+
+    /* 오른쪽 끝에서는 설명이 화면 밖으로 나간다. 열 때 재 보고 방향을 정한다 —
+       미리 정해 두면 창 크기가 바뀔 때 틀린다. */
+    chip.classList.remove('to-left');
+    var p = chip.querySelector('.fhelp-p');
+    if (p && p.getBoundingClientRect().right > window.innerWidth - 8) {
+      chip.classList.add('to-left');
+    }
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { closeAll(null); return; }
+    /* Tab 으로 닿았을 때도 열 수 있어야 한다 */
+    if ((ev.key === 'Enter' || ev.key === ' ') &&
+        document.activeElement &&
+        document.activeElement.classList.contains('fhelp')) {
+      ev.preventDefault();
+      document.activeElement.click();
+    }
+  });
+})();
+</script>
