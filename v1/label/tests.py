@@ -13210,6 +13210,32 @@ class 원료에_붙일_행은_사람이_고른다(TestCase):
         cs = self.ncd.candidates('버터')
         self.assertEqual(cs[0]['row'].food_nm_kr, '버터')
 
+    def test_브랜드가_앞에_붙어도_품목을_찾는다(self):
+        """
+        실제 원료명에는 브랜드가 붙는다('오늘좋은 생크림'). 전체 이름끼리만
+        견주면 브랜드가 점수를 지배한다.
+
+            '오늘좋은 생크림' vs '오늘좋은 생소면'   75 점
+            '오늘좋은 생크림' vs '생크림'            54 점
+
+        실제로 후보가 생소면·생칼국수·생와사비·두부로 나왔다 — 브랜드가 같은
+        다른 품목들이다. 뒷말로도 견줘야 제자리를 찾는다.
+        """
+        self.행('오늘좋은 생소면', 273.0)
+        self.행('오늘좋은 생칼국수', 271.0)
+        self.행('오늘좋은 두부', 100.0)
+        self.행('생크림', 368.0, method='분석')
+
+        cs = self.ncd.candidates('오늘좋은 생크림')
+        self.assertEqual(cs[0]['row'].food_nm_kr, '생크림')
+
+    def test_뒷말_조각만_만들고_앞말은_만들지_않는다(self):
+        """앞말(브랜드)로 견주면 다시 브랜드가 이긴다."""
+        v = self.ncd.variants('오늘좋은 생크림')
+        self.assertEqual(v[0], '오늘좋은 생크림')
+        self.assertIn('생크림', v)
+        self.assertNotIn('오늘좋은', v)
+
     def test_정확히_같은_이름을_먼저_담는다(self):
         """
         후보 웅덩이를 800 개로 끊는다. 그래서 **담는 순서가 곧 정확도다.**
@@ -13290,3 +13316,177 @@ class 배합_합계가_스스로_말이_되는가(SimpleTestCase):
         values = {'moisture': None, 'proteins': 10.0, 'fats': 5.0,
                   'ash': None, 'carbohydrates': 20.0}
         self.assertEqual(self.nr.cross_check(values, known_ratio=100.0), [])
+
+
+class 원료_영양성분_API(TestCase):
+    """
+    원료 상세 화면이 부르는 두 주소. 후보를 보여 주고, 고른 것을 남긴다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient, PublicFoodNutrition
+
+        self.user = User.objects.create_user(username='ing', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='버터', delete_YN='N')
+        self.good = PublicFoodNutrition.objects.create(
+            food_cd='B1', food_nm_kr='버터', basis_unit='g', basis_amount=100.0,
+            calories=761.0, fats=82.04, carbohydrates=0.6, proteins=0.6,
+            crt_mth_nm='분석', sub_ref_name='식품의약품안전처', research_ymd='2014-12-31')
+        self.ml = PublicFoodNutrition.objects.create(
+            food_cd='B2', food_nm_kr='버터밀크', basis_unit='mL', basis_amount=100.0,
+            calories=60.0)
+
+    def url(self, save=False):
+        base = '/label/my-ingredient/%d/nutrition/' % self.ing.my_ingredient_id
+        return base + ('save/' if save else '')
+
+    def post(self, payload):
+        import json
+        return self.client.post(self.url(save=True), data=json.dumps(payload),
+                                content_type='application/json')
+
+    # ── 조회 ─────────────────────────────────────────────────────────────
+
+    def test_아직_정하지_않았으면_후보를_보여_준다(self):
+        r = self.client.get(self.url())
+        self.assertEqual(r.status_code, 200)
+        d = r.json()
+        self.assertIsNone(d['current'])
+        self.assertTrue(d['candidates'])
+        self.assertEqual(d['candidates'][0]['name'], '버터')
+        self.assertIn('분석', d['candidates'][0]['method'])
+
+    def test_보고번호가_맞으면_묻지_않고_찾아_준다(self):
+        self.ing.prdlst_report_no = '19990262011322'
+        self.ing.save()
+        self.good.item_report_no = '19990262011322'
+        self.good.save()
+
+        d = self.client.get(self.url()).json()
+        self.assertIsNotNone(d['auto'])
+        self.assertEqual(d['auto']['name'], '버터')
+        self.assertEqual(d['candidates'], [])   # 고를 것이 없다
+
+    # ── 고르기 ───────────────────────────────────────────────────────────
+
+    def test_고른_행의_값이_원료에_남는다(self):
+        r = self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['grade'], 'C')
+
+        self.ing.refresh_from_db()
+        nut = self.ing.nutrition
+        self.assertEqual(nut.calories, 761.0)
+        self.assertEqual(nut.public_row_id, self.good.id)
+        self.assertEqual(nut.picked_by, self.user)
+
+    def test_한_번_정하면_다시_묻지_않는다(self):
+        self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        d = self.client.get(self.url()).json()
+        self.assertIsNotNone(d['current'])
+        self.assertEqual(d['candidates'], [])
+
+    def test_다시_고르기를_누르면_후보를_새로_찾는다(self):
+        self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        d = self.client.get(self.url() + '?refresh=1').json()
+        self.assertTrue(d['candidates'])
+
+    def test_부피_기준은_고를_수_없다(self):
+        """비중을 모르면 중량 배합에 못 쓴다. 고르게 두면 조용히 틀린다."""
+        r = self.post({'kind': 'picked', 'public_row_id': self.ml.id})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('100mL', r.json()['error'])
+
+    # ── 직접 입력 ────────────────────────────────────────────────────────
+
+    def test_직접_입력한_값도_남는다(self):
+        r = self.post({'kind': 'manual', 'source_note': '업체 성적서 2026-01',
+                       'values': {'calories': '1,234', 'proteins': 5.5}})
+        self.assertEqual(r.status_code, 200)
+        nut = self.ing.nutrition
+        self.assertEqual(nut.calories, 1234.0)   # 쉼표를 읽는다
+        self.assertEqual(nut.source_note, '업체 성적서 2026-01')
+
+    def test_빈_값만_보내면_저장하지_않는다(self):
+        r = self.post({'kind': 'manual', 'values': {}})
+        self.assertEqual(r.status_code, 400)
+
+    def test_영향_없음은_값을_채우지_않는다(self):
+        """'0 이다' 가 아니라 '이 배합에서는 표시를 못 바꾼다' 이다."""
+        self.post({'kind': 'negligible'})
+        nut = self.ing.nutrition
+        self.assertIsNone(nut.calories)
+        self.assertEqual(nut.grade, '-')
+
+    def test_지우면_사라진다(self):
+        self.post({'kind': 'picked', 'public_row_id': self.good.id})
+        self.post({'kind': 'clear'})
+        self.ing.refresh_from_db()
+        self.assertFalse(hasattr(self.ing, 'nutrition') and
+                         type(self.ing).nutrition.related.related_model.objects
+                         .filter(ingredient=self.ing).exists())
+
+    # ── 권한 ─────────────────────────────────────────────────────────────
+
+    def test_남의_원료는_만질_수_없다(self):
+        from django.contrib.auth.models import User
+        other = User.objects.create_user(username='other2', password='x')
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(self.url()).status_code, 403)
+        self.assertEqual(self.post({'kind': 'clear'}).status_code, 403)
+
+    def test_공용_원료는_한_사람이_정할_수_없다(self):
+        from v1.label.models import MyIngredient
+        pub = MyIngredient.objects.create(user_id=None, prdlst_nm='정제수', delete_YN='N')
+        r = self.client.get('/label/my-ingredient/%d/nutrition/' % pub.my_ingredient_id)
+        self.assertEqual(r.status_code, 403)
+
+
+class 원료_상세에_영양성분_구역이_있다(TestCase):
+    """
+    화면에 실제로 붙었는가. 자리(div)와 동작(script)이 함께 있어야 한다.
+
+    서버가 그리는 것과 스크립트가 하는 일을 갈라 둔다 — 자리는 서버가 놓고,
+    무엇이 정해졌는지는 스크립트가 서버에 물어 그린다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+
+        self.user = User.objects.create_user(username='screen', password='x')
+        self.client.force_login(self.user)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='버터', delete_YN='N')
+
+    def get(self, ingredient_id):
+        return self.client.get(
+            '/label/my-ingredient-detail/%d/' % ingredient_id,
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+    def test_영양성분_자리와_동작이_함께_그려진다(self):
+        html = self.get(self.ing.my_ingredient_id).content.decode('utf-8')
+        self.assertIn('id="ingNutrition"', html)
+        self.assertIn('/nutrition/', html)          # 조회 주소
+        self.assertIn('/nutrition/save/', html)     # 저장 주소
+        self.assertIn('ing-nut-cand', html)         # 후보 그리는 코드
+
+    def test_새_원료에는_그리지_않는다(self):
+        """
+        저장 전에는 원료 id 가 없어 붙일 자리가 없다. 그려 두면 주소가
+        비어 있는 단추가 생긴다.
+        """
+        html = self.client.get(
+            '/label/my-ingredient-detail/',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode('utf-8')
+        self.assertNotIn('id="ingNutrition"', html)
+
+    def test_공용_원료에는_그리지_않는다(self):
+        """여럿이 함께 쓰는 원료를 한 사람이 정하면 안 된다."""
+        from v1.label.models import MyIngredient
+        pub = MyIngredient.objects.create(user_id=None, prdlst_nm='정제수', delete_YN='N')
+        html = self.get(pub.my_ingredient_id).content.decode('utf-8')
+        self.assertNotIn('id="ingNutrition"', html)

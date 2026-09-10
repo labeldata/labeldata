@@ -1,0 +1,211 @@
+{% comment %}
+  원료 영양성분 구역의 동작.
+
+  **서버가 상태를 정하고 여기서는 그리기만 한다.** 무엇이 정해졌는지, 무엇을
+  고를 수 있는지는 전부 서버가 판단한 결과다(label:my_ingredient_nutrition).
+  화면이 스스로 판단하면 서버와 두 벌이 되고, 언젠가 서로 다른 말을 한다.
+
+  후보를 자동으로 고르지 않는다. '버터' 는 식약처 DB 에 동명이 열두 건이고
+  열량이 164 ~ 761 kcal 로 갈린다 — 이름으로는 기계가 못 가른다. 값을 나란히
+  보여 주고 사람이 집게 한다.
+{% endcomment %}
+<script>
+(function () {
+  var box = document.getElementById('ingNutrition');
+  if (!box) return;
+
+  // 표시 아홉. 직접 입력 칸도 이 순서를 따른다.
+  var FIELDS = [
+    ['calories', '열량', 'kcal'], ['carbohydrates', '탄수화물', 'g'],
+    ['sugars', '당류', 'g'], ['proteins', '단백질', 'g'],
+    ['fats', '지방', 'g'], ['saturated_fats', '포화지방', 'g'],
+    ['trans_fats', '트랜스지방', 'g'], ['cholesterols', '콜레스테롤', 'mg'],
+    ['natriums', '나트륨', 'mg']
+  ];
+
+  function esc(t) {
+    return String(t === null || t === undefined ? '' : t).replace(
+      /[&<>"']/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;',
+                '"': '&quot;', "'": '&#39;'}[c];
+      });
+  }
+
+  // 값이 없는 칸은 0 이 아니라 '–' 다. 모르는 것과 없는 것은 다르다.
+  function num(v) {
+    return (v === null || v === undefined || v === '') ? '&ndash;' : esc(v);
+  }
+
+  function csrf() {
+    var el = document.querySelector('[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+  }
+
+  function load(refresh) {
+    box.innerHTML = '<div class="ing-nut-why">불러오는 중…</div>';
+    fetch(box.dataset.url + (refresh ? '?refresh=1' : ''),
+          {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) { throw new Error(d.error || '불러오지 못했습니다'); }
+        render(d);
+      })
+      .catch(function (e) {
+        box.innerHTML = '<div class="ing-nut-why">' + esc(e.message) + '</div>';
+      });
+  }
+
+  function save(payload) {
+    return fetch(box.dataset.saveUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify(payload)
+    }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.success) { alert(d.error || '저장하지 못했습니다'); return false; }
+        return true;
+      });
+  }
+
+  function valuesLine(v) {
+    var out = [];
+    for (var i = 0; i < 5; i++) {
+      out.push(FIELDS[i][1] + ' ' + num(v[FIELDS[i][0]]));
+    }
+    return out.join(' · ');
+  }
+
+  function candRow(c, kind) {
+    var maker = c.maker
+      ? ' <span class="ing-nut-cand-why">' + esc(c.maker) + '</span>' : '';
+    var why = esc(c.method || '') + (c.year ? ' · ' + esc(c.year) : '');
+    return '<div class="ing-nut-cand" data-kind="' + kind + '" data-id="' + c.id + '">'
+      + '<span class="ing-nut-cand-name">' + esc(c.name) + maker + '</span>'
+      + '<span class="ing-nut-cand-num">' + num(c.calories) + ' kcal</span>'
+      + '<span class="ing-nut-cand-num">지방 ' + num(c.fats) + '</span>'
+      + '<span class="ing-nut-cand-why">' + why + '</span>'
+      + '</div>';
+  }
+
+  function manualForm() {
+    var cells = FIELDS.map(function (f) {
+      return '<th>' + esc(f[1]) + '</th>'
+        + '<td><input type="text" class="form-control form-control-sm"'
+        + ' data-f="' + f[0] + '" placeholder="' + esc(f[2]) + '"></td>';
+    });
+    var rows = '';
+    for (var i = 0; i < cells.length; i += 3) {
+      rows += '<tr>' + cells.slice(i, i + 3).join('') + '</tr>';
+    }
+    return '<div class="ing-nut-manual" id="ingNutManual">'
+      + '<table><tbody>' + rows + '</tbody></table>'
+      + '<div class="ing-nut-actions">'
+      + '<input type="text" class="form-control form-control-sm" id="ingNutNote"'
+      + ' placeholder="근거 (예: 업체 성적서 2026-01-15)" style="max-width:280px">'
+      + '<button type="button" class="panel-btn primary" data-act="manual-save">저장</button>'
+      + '</div></div>';
+  }
+
+  function render(d) {
+    var parts = [];
+
+    if (d.current) {
+      var c = d.current;
+      var g = c.grade === '-' ? 'g-none' : 'g-' + c.grade;
+      parts.push('<div class="ing-nut-state">'
+        + '<span class="ing-nut-grade ' + g + '">' + esc(c.grade) + '</span>'
+        + '<span>' + esc(c.source_label) + '</span>'
+        + (c.public_row
+            ? '<span class="ing-nut-why">' + esc(c.public_row.name) + '</span>' : '')
+        + (c.source_note
+            ? '<span class="ing-nut-why">' + esc(c.source_note) + '</span>' : '')
+        + '</div>');
+
+      if (c.source_kind === 'negligible') {
+        // 값을 채우지 않는다 — '0 이다' 가 아니라 '표시를 못 바꾼다' 이다
+        parts.push('<div class="ing-nut-why">'
+          + '배합비가 작아 표시값을 바꾸지 못한다고 보고 값을 비워 둡니다.</div>');
+      } else {
+        parts.push('<div class="ing-nut-values">' + valuesLine(c.values) + '</div>');
+      }
+
+      parts.push('<div class="ing-nut-actions">'
+        + '<button type="button" class="panel-btn" data-act="refresh">다시 고르기</button>'
+        + '<button type="button" class="panel-btn" data-act="manual">직접 입력</button>'
+        + '<button type="button" class="panel-btn danger" data-act="clear">지우기</button>'
+        + '</div>');
+    } else {
+      if (d.auto) {
+        parts.push('<div class="ing-nut-state">'
+          + '<span class="ing-nut-grade g-B">B</span>'
+          + '<span>품목보고번호가 맞는 자료를 찾았습니다</span></div>');
+        parts.push('<div class="ing-nut-cands">'
+          + candRow(d.auto, 'report_no') + '</div>');
+      } else if (d.candidates && d.candidates.length) {
+        parts.push('<div class="ing-nut-why">'
+          + '이 이름으로 찾은 후보입니다. 값을 보고 고르세요.</div>');
+        parts.push('<div class="ing-nut-cands">'
+          + d.candidates.map(function (c) { return candRow(c, 'picked'); }).join('')
+          + '</div>');
+      } else {
+        parts.push('<div class="ing-nut-why">'
+          + '식약처 자료에서 맞는 것을 찾지 못했습니다. 직접 넣어 주세요.</div>');
+      }
+
+      if (d.warning) {
+        parts.push('<div class="ing-nut-warn">' + esc(d.warning) + '</div>');
+      }
+
+      parts.push('<div class="ing-nut-actions">'
+        + '<button type="button" class="panel-btn" data-act="manual">직접 입력</button>'
+        + '<button type="button" class="panel-btn" data-act="negligible"'
+        + ' title="배합비가 아주 작아 표시값을 바꾸지 못하는 원료입니다">'
+        + '영향 없음으로 두기</button>'
+        + '</div>');
+    }
+
+    parts.push(manualForm());
+    box.innerHTML = parts.join('');
+  }
+
+  box.addEventListener('click', function (ev) {
+    var cnd = ev.target.closest('.ing-nut-cand');
+    if (cnd) {
+      save({kind: cnd.dataset.kind, public_row_id: Number(cnd.dataset.id)})
+        .then(function (ok) { if (ok) { load(); } });
+      return;
+    }
+
+    var btn = ev.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.dataset.act;
+
+    if (act === 'refresh') { load(true); return; }
+
+    if (act === 'clear' || act === 'negligible') {
+      save({kind: act === 'clear' ? 'clear' : 'negligible'})
+        .then(function (ok) { if (ok) { load(); } });
+      return;
+    }
+
+    if (act === 'manual') {
+      var f = document.getElementById('ingNutManual');
+      if (f) { f.style.display = (f.style.display === 'block') ? 'none' : 'block'; }
+      return;
+    }
+
+    if (act === 'manual-save') {
+      var values = {};
+      box.querySelectorAll('#ingNutManual input[data-f]').forEach(function (el) {
+        if (el.value.trim()) { values[el.dataset.f] = el.value.trim(); }
+      });
+      var noteEl = document.getElementById('ingNutNote');
+      save({kind: 'manual', values: values,
+            source_note: noteEl ? noteEl.value : ''})
+        .then(function (ok) { if (ok) { load(); } });
+    }
+  });
+
+  load();
+})();
+</script>

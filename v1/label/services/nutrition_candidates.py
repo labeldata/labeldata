@@ -79,6 +79,36 @@ def normalize(name):
     return _SPACE.sub(' ', text).lower()
 
 
+def variants(key):
+    """
+    견줄 이름을 여러 벌 만든다. **한국어 원료명은 뒷말이 품목을 말한다.**
+
+    실제 원료명에는 브랜드가 앞에 붙는다('오늘좋은 생크림'). 전체 이름끼리만
+    견주면 브랜드가 점수를 지배해 엉뚱한 것이 올라온다.
+
+        '오늘좋은 생크림' vs '오늘좋은 생소면'   75 점
+        '오늘좋은 생크림' vs '생크림'            54 점
+
+    실제로 이 원료의 후보가 생소면·생칼국수·생와사비·두부로 나왔다. 브랜드가
+    같은 다른 품목들이다.
+
+    그래서 뒤에서부터 잘라 낸 조각도 함께 견준다. '생크림' 으로 견주면
+    제자리를 찾는다. 앞말(브랜드)만 남는 조각은 만들지 않는다 — 그것으로
+    견주면 다시 브랜드가 이긴다.
+    """
+    key = (key or '').strip()
+    if not key:
+        return []
+    out = [key]
+    parts = key.split()
+    # 뒤에서부터 한 토막씩 (['가','나','다'] → '나 다', '다')
+    for i in range(1, len(parts)):
+        tail = ' '.join(parts[i:])
+        if len(tail) >= _MIN_TOKEN:
+            out.append(tail)
+    return out
+
+
 def name_score(query_key, row_name):
     """
     이름이 얼마나 같은가. **군더더기를 깎는 척도를 쓴다.**
@@ -95,9 +125,16 @@ def name_score(query_key, row_name):
 
     ratio 와 token_sort_ratio 는 둘 다 길이를 셈에 넣는다. 어순이 뒤바뀐
     이름을 놓치지 않도록 둘 중 큰 값을 쓴다.
+
+    query_key 는 한 벌이 아니라 여러 벌이 올 수 있다(variants). 브랜드가 앞에
+    붙은 이름은 뒷말로 견줘야 제자리를 찾기 때문이다.
     """
-    a, b = query_key, normalize(row_name)
-    return max(fuzz.ratio(a, b), fuzz.token_sort_ratio(a, b))
+    keys = query_key if isinstance(query_key, (list, tuple)) else [query_key]
+    b = normalize(row_name)
+    best = 0
+    for a in keys:
+        best = max(best, fuzz.ratio(a, b), fuzz.token_sort_ratio(a, b))
+    return best
 
 
 def _rank_score(row, name_pts):
@@ -178,16 +215,21 @@ def _pool(key):
     담으면 정작 '버터' 라는 행이 안 들어와 1 위가 '땅콩버터' 가 된다.
     그래서 정확 일치 → 앞부분 일치 → 부분 일치 순으로 채운다.
     """
-    tokens = [t for t in key.split() if len(t) >= _MIN_TOKEN] or [key]
+    keys = variants(key)
 
     contains_q = Q()
-    for t in tokens:
-        contains_q |= Q(food_nm_kr__contains=t)
+    for k in keys:
+        contains_q |= Q(food_nm_kr__contains=k)
+
+    conds = []
+    for k in keys:                                # 짧은 뒷말일수록 나중에
+        conds.append(Q(food_nm_kr=k))             # 정확히 같은 이름
+    for k in keys:
+        conds.append(Q(food_nm_kr__startswith=k))  # 앞부분이 같은 이름
+    conds.append(contains_q)                       # 어딘가에 든 이름
 
     ids, seen = [], set()
-    for cond in (Q(food_nm_kr=key),               # 정확히 같은 이름
-                 Q(food_nm_kr__startswith=key),   # 앞부분이 같은 이름
-                 contains_q):                     # 어딘가에 든 이름
+    for cond in conds:
         if len(ids) >= _POOL_CAP:
             break
         room = _POOL_CAP - len(ids)
@@ -220,6 +262,7 @@ def candidates(name, limit=TOP_N):
         return []
 
     pool = _pool(key)
+    keys = variants(key)
 
     scored = []
     for row in pool:
@@ -232,7 +275,7 @@ def candidates(name, limit=TOP_N):
         if row.verify_status == PublicFoodNutrition.VERIFY_FAIL:
             continue
 
-        ns = name_score(key, row.food_nm_kr)
+        ns = name_score(keys, row.food_nm_kr)
         if ns < _NAME_CUTOFF:
             continue
         scored.append({'row': row, 'name_score': ns,

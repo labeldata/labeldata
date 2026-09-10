@@ -5264,3 +5264,189 @@ def phrase_update_api(request, phrase_id):
     return JsonResponse({'success': True, 'id': phrase.my_phrase_id,
                          'name': phrase.my_phrase_name,
                          'content': phrase.comment_content})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 내 원료의 영양성분 — 후보를 보여 주고, 사람이 고른 것을 남긴다
+#
+# 배합으로 영양성분표를 만들려면 원료마다 영양성분이 있어야 하는데 MyIngredient
+# 에는 그 칸이 없었다. 채우는 길은 셋이다.
+#
+#   ① 품목제조보고번호가 식약처 DB 와 맞으면 자동으로 붙인다 (묻지 않는다)
+#   ② 안 맞으면 이름으로 추린 후보를 보여 주고 **사람이 고른다**
+#   ③ 그래도 없으면 직접 입력하거나 성적서 값을 넣는다
+#
+# ②를 자동 확정하지 않는 이유는 '버터' 가 동명 열두 건에 164~761 kcal 이기
+# 때문이다. 이름이 완전히 같아 어떤 유사도로도 못 가른다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+NUTRITION_INPUT_FIELDS = (
+    'calories', 'carbohydrates', 'sugars', 'proteins', 'fats',
+    'saturated_fats', 'trans_fats', 'cholesterols', 'natriums',
+    'dietary_fiber', 'sugar_alcohols', 'moisture', 'ash',
+)
+
+
+def _ingredient_for_nutrition(request, ingredient_id):
+    """
+    영양성분을 만질 수 있는 원료인가. (원료, 오류응답) 을 돌려준다.
+
+    공용 원료(user_id=None)는 여럿이 함께 쓰므로 한 사람이 값을 정하면 안 된다.
+    """
+    ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id)
+    if ingredient.user_id is None:
+        return None, JsonResponse(
+            {'success': False, 'error': '공용 원료의 영양성분은 바꿀 수 없습니다.'}, status=403)
+    if ingredient.user_id != request.user:
+        return None, JsonResponse(
+            {'success': False, 'error': '내 원료가 아닙니다.'}, status=403)
+    return ingredient, None
+
+
+def _row_brief(row):
+    """후보 한 줄을 화면이 쓸 모양으로."""
+    return {
+        'id': row.id,
+        'name': row.food_nm_kr,
+        'group': row.db_grp_nm,
+        'maker': row.maker_nm,
+        'calories': row.calories,
+        'carbohydrates': row.carbohydrates,
+        'proteins': row.proteins,
+        'fats': row.fats,
+        'natriums': row.natriums,
+        'method': row.crt_mth_nm,
+        'source': row.sub_ref_name,
+        'year': (row.research_ymd or '')[:4],
+    }
+
+
+@login_required
+def my_ingredient_nutrition_api(request, ingredient_id):
+    """
+    GET — 이 원료의 영양성분 상태와 후보.
+
+    돌려주는 것
+        current     이미 정해 둔 값 (없으면 None)
+        auto        보고번호로 찾은 행 (아직 확정 전)
+        candidates  이름으로 추린 후보
+        warning     후보끼리 값이 크게 갈릴 때
+    """
+    from v1.label.services import nutrition_candidates as ncd
+
+    ingredient, err = _ingredient_for_nutrition(request, ingredient_id)
+    if err:
+        return err
+
+    current = None
+    saved = getattr(ingredient, 'nutrition', None)
+    if saved is not None:
+        current = {
+            'source_kind': saved.source_kind,
+            'source_label': saved.get_source_kind_display(),
+            'grade': saved.grade,
+            'source_note': saved.source_note or '',
+            'public_row': _row_brief(saved.public_row) if saved.public_row_id else None,
+            'values': {f: getattr(saved, f) for f in NUTRITION_INPUT_FIELDS},
+        }
+
+    # 이미 정해 뒀으면 후보를 다시 찾지 않는다 — 0.3 초라도 헛일이다.
+    # '다시 고르기' 를 누르면 refresh=1 로 다시 부른다.
+    if current and request.GET.get('refresh') != '1':
+        return JsonResponse({'success': True, 'current': current,
+                             'auto': None, 'candidates': [], 'warning': None})
+
+    found = ncd.for_ingredient(ingredient)
+    return JsonResponse({
+        'success': True,
+        'current': current,
+        'auto': _row_brief(found['auto']) if found['auto'] is not None else None,
+        'candidates': [dict(_row_brief(c['row']), reason=c['reason'],
+                            name_score=c['name_score']) for c in found['candidates']],
+        'warning': found['warning'],
+    })
+
+
+@login_required
+@require_POST
+def my_ingredient_nutrition_save(request, ingredient_id):
+    """
+    POST — 고른 결과를 남긴다.
+
+    body {"kind": "picked" | "report_no" | "manual" | "negligible" | "clear",
+          "public_row_id": 123,            # picked / report_no
+          "values": {...},                 # manual
+          "source_note": "..."}
+
+    값보다 출처가 중요하다. 이론치로 만든 표는 그 자체가 감사 대상이라,
+    "이 숫자가 어디서 왔는가" 가 값과 함께 남아야 한다.
+    """
+    from django.utils import timezone
+
+    from v1.label.models import MyIngredientNutrition, PublicFoodNutrition
+    from v1.label.services import nutrition_candidates as ncd
+    # 숫자 읽는 규칙은 계산 쪽과 한 벌이어야 한다 — 쉼표 섞인 값도 여기서 걸러진다
+    from v1.label.services.nutrition_calc import _number
+
+    ingredient, err = _ingredient_for_nutrition(request, ingredient_id)
+    if err:
+        return err
+
+    try:
+        body = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    kind = (body.get('kind') or '').strip()
+
+    if kind == 'clear':
+        MyIngredientNutrition.objects.filter(ingredient=ingredient).delete()
+        return JsonResponse({'success': True, 'cleared': True})
+
+    fields = {
+        'source_kind': kind,
+        'source_note': (body.get('source_note') or '').strip()[:300] or None,
+        'picked_by': request.user,
+        'picked_at': timezone.now(),
+        'public_row': None,
+    }
+
+    if kind in (MyIngredientNutrition.SOURCE_PICKED,
+                MyIngredientNutrition.SOURCE_REPORT_NO):
+        try:
+            row = PublicFoodNutrition.objects.get(pk=body.get('public_row_id'))
+        except (PublicFoodNutrition.DoesNotExist, TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': '고른 행을 찾을 수 없습니다.'},
+                                status=404)
+        if row.basis_unit != PublicFoodNutrition.BASIS_G:
+            # 부피 기준은 비중을 모르면 중량 배합에 못 쓴다. 고르게 두면
+            # 계산에서 조용히 틀린다.
+            return JsonResponse(
+                {'success': False,
+                 'error': '부피(100mL) 기준 자료라 배합 계산에 쓸 수 없습니다.'}, status=400)
+        fields['public_row'] = row
+        fields.update(ncd.row_values(row, NUTRITION_INPUT_FIELDS))
+
+    elif kind == MyIngredientNutrition.SOURCE_MANUAL:
+        values = body.get('values') or {}
+        for f in NUTRITION_INPUT_FIELDS:
+            fields[f] = _number(values.get(f))
+        if all(fields[f] is None for f in NUTRITION_INPUT_FIELDS):
+            return JsonResponse({'success': False, 'error': '값을 하나도 넣지 않았습니다.'},
+                                status=400)
+
+    elif kind == MyIngredientNutrition.SOURCE_NEGLIGIBLE:
+        # 값은 비운다. "0 이다" 가 아니라 "이 배합에서는 표시를 못 바꾼다" 이므로
+        # 숫자를 채워 넣으면 안 된다.
+        for f in NUTRITION_INPUT_FIELDS:
+            fields[f] = None
+
+    else:
+        return JsonResponse({'success': False, 'error': '알 수 없는 저장 방식'}, status=400)
+
+    saved, _created = MyIngredientNutrition.objects.update_or_create(
+        ingredient=ingredient, defaults=fields)
+    log_user_activity(request, 'ingredient', 'ingredient_nutrition_set', ingredient_id)
+
+    return JsonResponse({'success': True, 'grade': saved.grade,
+                         'source_label': saved.get_source_kind_display()})
