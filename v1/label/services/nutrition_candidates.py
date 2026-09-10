@@ -50,6 +50,20 @@ from v1.label.models import PublicFoodNutrition
 _TAIL = re.compile(r'[\s\-_/]*[A-Za-z0-9][A-Za-z0-9\-_]*\d{3,}[A-Za-z0-9\-_]*\s*$')
 _SPACE = re.compile(r'\s+')
 
+# 괄호 안의 부연. 원료명에는 원산지·조성이 이렇게 붙는다.
+#
+#     밀가루[밀/미국산, 호주산]      후보 없음   ← 괄호째 견주니 못 찾았다
+#     밀가루                       밀가루 333   ← 같은 물건인데
+#     Citric acid (acid)          후보 없음
+#     마스카포네 치즈 (10kg)         (10kg 은 포장 단위다)
+#
+# 안쪽을 통째로 뗀다. 양쪽(우리 이름·DB 이름)에 같은 규칙을 쓰므로 한쪽만
+# 깎여 어긋나는 일은 없다.
+_PARENS = re.compile(r'[\(\[（【][^\)\]）】]*[\)\]）】]')
+
+# 뒤에 붙는 원산지. '전란액/국산' 의 '/국산' 같은 것.
+_ORIGIN_TAIL = re.compile(r'/\s*[가-힣A-Za-z]{1,10}\s*$')
+
 # 후보를 몇 개까지 보여 줄 것인가. 많으면 고르는 일이 도로 일이 된다.
 TOP_N = 5
 
@@ -61,16 +75,34 @@ _MIN_TOKEN = 2
 # ('설탕' vs '설탕_백설탕' 이 50 점이다 — 이건 붙어야 하는 짝이다).
 _NAME_CUTOFF = 45
 
+# 뜻을 뒤집는 말. 이 말이 붙은 행은 그 원료가 **들어 있지 않다는** 뜻이다.
+#
+#     '아질산나트륨' 을 찾았더니 '아질산나트륨 무첨가 잠봉' 이 1 위로 왔다.
+#     이름은 가장 비슷한데 가리키는 것은 정반대다.
+#
+# 찾는 말에 이 표현이 없는데 후보에만 있으면 후보에서 뺀다. 사람이 '무첨가'
+# 로 검색했다면 그건 정말 그 제품을 찾는 것이므로 막지 않는다.
+_NEGATIONS = ('무첨가', '무가당', '무염', '불검출', '제로', 'free', '0%')
+
 # 열량이 이 배 이상 벌어지는 후보가 섞여 있으면 경고한다.
 # 버터가 4.6 배였고, 생크림 1.3 · 물엿 1.1 · 밀가루 1.0 은 조용하다.
 SPREAD_WARN = 2.0
 
 
 def normalize(name):
-    """규격 꼬리를 떼고 견줄 수 있는 모양으로."""
+    """규격 꼬리와 괄호 부연을 떼고 견줄 수 있는 모양으로."""
     text = (name or '').strip()
     if not text:
         return ''
+
+    # 괄호 부연을 먼저 뗀다. 떼고 나면 빈 문자열이 되는 이름
+    # (예: '(무표기)')은 원래 것을 쓴다 — 지우고 나면 견줄 것이 없다.
+    stripped = _PARENS.sub(' ', text).strip()
+    if stripped:
+        text = stripped
+
+    text = _ORIGIN_TAIL.sub('', text).strip() or text
+
     for _ in range(3):
         stripped = _TAIL.sub('', text).strip()
         if stripped == text or not stripped:
@@ -276,6 +308,9 @@ def candidates(name, limit=TOP_N):
         if row.verify_status == PublicFoodNutrition.VERIFY_FAIL:
             continue
 
+        if _negates(key, row.food_nm_kr):
+            continue
+
         ns = name_score(keys, row.food_nm_kr)
         if ns < _NAME_CUTOFF:
             continue
@@ -284,6 +319,18 @@ def candidates(name, limit=TOP_N):
 
     scored.sort(key=lambda c: -c['rank_score'])
     return scored[:limit]
+
+
+def _negates(query_key, row_name):
+    """
+    후보 이름이 찾는 것을 **부정하고** 있는가.
+
+    '아질산나트륨' 의 1 위가 '아질산나트륨 무첨가 잠봉' 이었다. 그 행의 값은
+    아질산나트륨의 값이 아니라, 그것을 넣지 않은 햄의 값이다. 이름이 가장
+    비슷해서 1 위가 됐다 — 유사도는 뜻을 모른다.
+    """
+    low = (row_name or '').lower()
+    return any(n in low and n not in query_key for n in _NEGATIONS)
 
 
 def spread_warning(cands):
