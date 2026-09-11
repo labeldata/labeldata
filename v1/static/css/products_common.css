@@ -1710,3 +1710,50 @@ html.v2-max .v2-max-exit { display: flex; }
     #v2Saved { transition: opacity .16s ease-out; transform: translate(-50%, -50%); }
     #v2Saved.saved-show { transform: translate(-50%, -50%); }
 }
+
+/* -------------------------
+   시안 대조 — 수치가 다른 것 · 근거 없는 문구
+
+   항목끼리 견주는 것만으로는 두 가지를 놓친다.
+     ① 글은 같은데 **숫자가 다른 것** — 읽으면 같아 보여 가장 위험하다
+     ② 시안에만 있는 문구 — 우리가 칸을 두지 않은 자리에 얹힌 글
+   ------------------------- */
+.cmp-group-num > .cmp-group-title { color: var(--ez-danger, #c5221f); }
+.cmp-group-extra > .cmp-group-title { color: var(--ez-warning, #e67700); }
+
+.cmp-num-list { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px; }
+.cmp-num {
+    padding: 8px 10px;
+    background: var(--ez-danger-bg, #fce8e6);
+    border-radius: 6px;
+}
+.cmp-num-name { font-size: 12px; font-weight: 600; color: var(--v2-text, #202124); }
+.cmp-num-pairs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.cmp-num-pair {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 13px; font-variant-numeric: tabular-nums;
+    color: var(--v2-text, #202124);
+}
+.cmp-num-pair i { font-size: 11px; color: var(--v2-text-sub, #5f6368); }
+.cmp-num-them { color: var(--ez-danger, #c5221f); }
+/* 어느 자리에서 갈렸는지 보이도록 문장도 함께 둔다 */
+.cmp-num-full {
+    display: flex; flex-direction: column; gap: 1px;
+    margin-top: 5px; font-size: 11.5px; color: var(--v2-text-sub, #5f6368);
+    word-break: break-all;
+}
+
+.cmp-extra-note {
+    padding: 4px 0 6px;
+    font-size: 11.5px; color: var(--v2-text-sub, #5f6368);
+}
+.cmp-extra-list { display: flex; flex-direction: column; gap: 4px; padding-bottom: 2px; }
+.cmp-extra {
+    display: flex; align-items: flex-start; gap: 6px;
+    padding: 7px 10px;
+    background: var(--ez-warning-bg, #fef7e0);
+    border-radius: 6px;
+    font-size: 12.5px; color: var(--v2-text, #202124);
+    word-break: break-all;
+}
+.cmp-extra i { margin-top: 2px; color: var(--ez-warning, #e67700); flex-shrink: 0; }

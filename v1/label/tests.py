@@ -15936,3 +15936,107 @@ class 높이는_재서_쓴다(TestCase):
         """잘못 잰 값으로 못 박느니 원래대로 두는 편이 낫다."""
         b = self.body()
         self.assertIn('core.offsetHeight > 0', b)
+
+
+class 시안에서_읽은_모든_글자를_견준다(TestCase):
+    """
+    시안 대조는 **우리가 아는 칸끼리만** 견주고 있었다(FIELD_MAP 29 칸).
+    그러면 둘을 놓친다.
+
+        ① 글은 같은데 **숫자가 다른 것**
+             내 표시사항   총 내용량 139g (318kcal)
+             시안          총 내용량 130g (318kcal)
+           읽으면 같아 보이는데 인쇄물의 수치가 틀렸다. 가장 나쁜 종류다.
+
+        ② 시안에만 있는 문구
+           수상 내역, 이벤트 안내, 다른 제품에서 복사해 온 문장.
+           **근거 없이 인쇄되는 것이 위험하다.**
+    """
+
+    def js(self):
+        import io
+        return io.open('v1/static/js/products/basic_info_ocr.js',
+                       encoding='utf-8').read()
+
+    def test_판독기가_나머지_글자를_돌려준다(self):
+        import io
+        src = io.open('v1/label/services/ocr_service.py', encoding='utf-8').read()
+        self.assertIn('extra_texts', src)
+        self.assertIn('"extra_texts": []', src)
+
+    def test_그_칸이_판독_전체를_깨뜨리지_않는다(self):
+        """
+        extra_texts 는 {value, confidence} 가 아니라 글 목록이다. 다듬는
+        단계들은 칸마다 그 모양을 가정한다 — 빼 뒀다가 끝에 다시 붙인다.
+        """
+        import io
+        src = io.open('v1/label/services/ocr_service.py', encoding='utf-8').read()
+        self.assertIn("result.pop('extra_texts', None)", src)
+        self.assertIn("result['extra_texts'] = extra_texts", src)
+
+    def test_판독기가_준_것을_믿지_않는다(self):
+        from v1.label.services.ocr_service import _extra_texts
+        self.assertEqual(_extra_texts(None), [])
+        self.assertEqual(_extra_texts('글자'), [])          # 목록이 아니다
+        self.assertEqual(_extra_texts(['', 'X', None]), [])  # 너무 짧다
+
+    def test_같은_문구는_한_번만(self):
+        """같은 문구가 여러 면에서 읽히는 일이 흔하다."""
+        from v1.label.services.ocr_service import _extra_texts
+        self.assertEqual(
+            _extra_texts(['3년 연속 대상 수상', '3년연속 대상수상', '사은품 증정']),
+            ['3년 연속 대상 수상', '사은품 증정'])
+
+    def test_너무_많으면_끊는다(self):
+        from v1.label.services.ocr_service import _extra_texts
+        self.assertEqual(len(_extra_texts(['문구%d' % i for i in range(80)])), 40)
+
+    def test_숫자만_따로_견준다(self):
+        js = self.js()
+        self.assertIn('function numberDiff', js)
+        self.assertIn('function numbersIn', js)
+
+    def test_숫자_개수가_다르면_숫자_문제가_아니다(self):
+        """짝을 지을 수 없다. 그건 '글이 다르다' 이고 항목 대조가 이미 말한다."""
+        js = self.js()
+        body = js[js.index('function numberDiff'):]
+        body = body[:body.index('\n  }')]
+        self.assertIn('a.length !== b.length', body)
+
+    def test_같은_것을_두_줄로_적지_않는다(self):
+        """글까지 다르면 '확인할 항목' 으로 이미 남는다."""
+        js = self.js()
+        at = js.index('numDiff.push(')
+        self.assertIn("grade === 'same' || grade === 'spacing'", js[at:at + 600])
+
+    def test_원본에_있으면_세우지_않는다(self):
+        """우리 칸이 다를 뿐 근거는 있는 것이다."""
+        js = self.js()
+        body = js[js.index('function groundlessTexts'):]
+        body = body[:body.index('\n  }')]
+        self.assertIn('labelHaystack()', body)
+        self.assertIn('hay.indexOf(key)', body)
+
+    def test_길면_앞_절반이라도_본다(self):
+        """우리가 덜 읽었을 뿐일 수 있다."""
+        js = self.js()
+        body = js[js.index('function groundlessTexts'):]
+        body = body[:body.index('\n  }')]
+        self.assertIn('key.slice(0, Math.floor(key.length / 2))', body)
+
+    def test_틀렸다고_말하지_않는다(self):
+        """
+        우리가 칸을 안 둔 정당한 표시일 수 있다(인증 마크 문구, 바코드 아래
+        안내). 사람이 보라고 모아 줄 뿐이다.
+        """
+        js = self.js()
+        self.assertIn('추가 표시사항 — 근거 확인 필요', js)
+        self.assertIn('근거가 있는 표시인지', js)
+
+    def test_확인할_것을_한_수로_센다(self):
+        """
+        항목이 같아도 수치가 다르거나 근거 없는 문구가 있으면 "확인할 항목이
+        없습니다" 는 거짓말이 된다.
+        """
+        js = self.js()
+        self.assertIn('var toCheck = diff.length + numDiff.length + groundlessCount', js)

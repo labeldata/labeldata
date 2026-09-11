@@ -852,11 +852,88 @@
    * 다른 것부터 위에 놓는다. 같은 것 열여섯 줄을 지나야 다른 두 줄이 나오면
    * 대조하는 뜻이 없다.
    */
+
+  /* ── 숫자가 다른가 ────────────────────────────────────────────────
+   *
+   * 항목끼리 견주는 것만으로는 **수치가 틀린 것**을 놓친다. 한 칸 안에 글과
+   * 숫자가 섞여 있으면 글이 같다는 이유로 "비슷함" 으로 묻히기 때문이다.
+   *
+   *     내 표시사항   총 내용량 139g (318kcal)
+   *     시안          총 내용량 130g (318kcal)
+   *
+   * 이런 것이 가장 나쁘다 — 읽으면 같아 보이는데 인쇄물의 수치가 틀렸다.
+   * 숫자만 따로 뽑아 짝지어 견준다.
+   * ───────────────────────────────────────────────────────────────── */
+  function numbersIn(text) {
+    var out = [];
+    String(text || '').replace(/\d+(?:[.,]\d+)?/g, function (m) {
+      out.push(m.replace(/,/g, ''));
+      return m;
+    });
+    return out;
+  }
+
+  function numberDiff(mine, theirs) {
+    var a = numbersIn(mine), b = numbersIn(theirs);
+    if (!a.length || !b.length) return null;
+    /* 개수가 다르면 짝을 지을 수 없다. "숫자가 다르다" 가 아니라 "글이
+       다르다" 이고, 그건 항목 대조가 이미 말한다. */
+    if (a.length !== b.length) return null;
+    var bad = [];
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) bad.push({mine: a[i], design: b[i]});
+    }
+    return bad.length ? bad : null;
+  }
+
+  /* ── 원본에 없는 글자 ─────────────────────────────────────────────
+   *
+   * 인쇄물에는 우리가 칸을 두지 않은 문구가 얹힌다 — 수상 내역, 이벤트 안내,
+   * 다른 제품에서 복사해 온 문장. **근거 없이 인쇄되는 것이 위험하다.**
+   *
+   * 판독기가 모아 준 글(extra_texts)을 표시사항 **전체 글**과 견준다. 어딘가에
+   * 들어 있으면 근거가 있는 것이다 — 우리 칸이 다를 뿐이다. 아무 데도 없으면
+   * "근거 확인 필요" 로 세운다.
+   *
+   * **없다고 틀렸다는 말은 하지 않는다.** 우리가 칸을 안 둔 정당한 표시일 수
+   * 있다(인증 마크 문구, 바코드 아래 안내). 사람이 보라고 모아 줄 뿐이다.
+   * ───────────────────────────────────────────────────────────────── */
+  function squeeze(text) {
+    return String(text || '').replace(/\s+/g, '').toLowerCase();
+  }
+
+  function labelHaystack() {
+    var bits = [];
+    Object.keys(FIELD_MAP).forEach(function (field) {
+      var el = document.getElementById(FIELD_MAP[field].id);
+      if (el && el.value) bits.push(el.value);
+    });
+    return squeeze(bits.join(' '));
+  }
+
+  function groundlessTexts(data) {
+    var extras = (data && data.extra_texts) || [];
+    if (!extras.length) return [];
+    var hay = labelHaystack();
+    return extras.filter(function (text) {
+      var key = squeeze(text);
+      if (!key) return false;
+      if (hay.indexOf(key) >= 0) return false;
+      /* 긴 문구는 통째로 안 맞을 수 있다 — 앞 절반이라도 들어 있으면
+         근거가 있는 것으로 본다. 우리가 덜 읽었을 뿐일 수 있다. */
+      if (key.length >= 12 && hay.indexOf(key.slice(0, Math.floor(key.length / 2))) >= 0) {
+        return false;
+      }
+      return true;
+    });
+  }
+
   function showCompare(modalEl, body, data, photoFile, apiMatch) {
     var diff = [];        // 정말 다른 것 — 사람이 봐야 한다
     var minor = [];       // 띄어쓰기만 다른 것 — 접어 둔다
     var same = [];
     var record = [];      // 문서함에 남길 것 — 화면 HTML 이 아니라 값 자체다
+    var numDiff = [];     // 글은 같은데 숫자가 다른 것
 
     Object.keys(FIELD_MAP).forEach(function (field) {
       var item = data[field];
@@ -871,6 +948,21 @@
 
       var grade = compareGrade(mine, theirs);
       var html = compareRowHtml(field, item || {}, meta, grade);
+
+      /* 글은 같아 보여도 **숫자가 다르면** 따로 세운다. 같은 항목 뭉치에
+         묻히면 아무도 안 본다 — 인쇄물의 수치가 틀린 것이 가장 나쁘다. */
+      var nums = numberDiff(mine, theirs);
+      if (nums) {
+        numDiff.push({field: field, label: meta.label, mine: mine,
+                      design: theirs, pairs: nums});
+        /* 글까지 다르면 아래에서 '확인할 항목' 으로 이미 남긴다 — 문서함에
+           같은 것을 두 줄로 적지 않는다. 글은 같은데 숫자만 다른 것만
+           여기서 남긴다. 그게 아니면 기록에서 통째로 빠졌을 것이다. */
+        if (grade === 'same' || grade === 'spacing') {
+          record.push({field: field, label: meta.label, mine: mine,
+                       design: theirs, grade: 'number'});
+        }
+      }
 
       if (grade === 'same') {
         same.push(html);
@@ -891,6 +983,10 @@
 
     var tally = '';
     if (minor.length) tally += ' 띄어쓰기만 다른 것 ' + minor.length + '개는 아래에 접어 뒀습니다.';
+    if (numDiff.length) tally += ' 수치가 다른 항목 ' + numDiff.length + '개가 있습니다.';
+    if (groundlessTexts(data).length) {
+      tally += ' 시안에만 있는 문구 ' + groundlessTexts(data).length + '개를 모았습니다.';
+    }
 
     /*
      * 잘 못 읽은 것을 "다르다" 고 말하면 안 된다.
@@ -913,11 +1009,16 @@
         + '아래 결과는 그 상태로 견준 것입니다.</div>'
       : '';
 
+    /* 봐야 할 것을 **한 수로** 센다. 항목이 같아도 수치가 다르거나 근거 없는
+       문구가 얹혀 있으면 "확인할 항목이 없습니다" 는 거짓말이 된다. */
+    var groundlessCount = groundlessTexts(data).length;
+    var toCheck = diff.length + numDiff.length + groundlessCount;
+
     var summary = ''
-      + '<div class="cmp-summary ' + (diff.length ? 'cmp-summary-diff' : 'cmp-summary-ok') + '">'
-      + (diff.length
-          ? '<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>' + diff.length
-            + '개 항목을 확인하세요.</strong> 어느 쪽이 맞는지는 원본 자료를 보고 정합니다 — '
+      + '<div class="cmp-summary ' + (toCheck ? 'cmp-summary-diff' : 'cmp-summary-ok') + '">'
+      + (toCheck
+          ? '<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>' + toCheck
+            + '곳을 확인하세요.</strong> 어느 쪽이 맞는지는 원본 자료를 보고 정합니다 — '
             + '이 창은 값을 고치지 않습니다.' + tally
           : '<i class="bi bi-check-circle-fill me-1"></i><strong>확인할 항목이 없습니다.</strong> '
             + '시안과 표시사항이 같습니다.' + tally)
@@ -931,9 +1032,52 @@
         + '<div class="ocr-table">' + head + rows.join('') + '</div></details>';
     };
 
+    /* 숫자만 따로 짚어 준다. 어느 숫자가 어떻게 다른지 한 줄에 보인다. */
+    var numHtml = '';
+    if (numDiff.length) {
+      numHtml = '<details class="cmp-group cmp-group-num" open>'
+        + '<summary class="cmp-group-title">수치가 다릅니다 ' + numDiff.length + '</summary>'
+        + '<div class="cmp-num-list">'
+        + numDiff.map(function (n) {
+            return '<div class="cmp-num">'
+              + '<div class="cmp-num-name">' + esc(n.label) + '</div>'
+              + '<div class="cmp-num-pairs">'
+              + n.pairs.map(function (p) {
+                  return '<span class="cmp-num-pair"><b>' + esc(p.mine) + '</b>'
+                       + '<i class="bi bi-arrow-right"></i>'
+                       + '<b class="cmp-num-them">' + esc(p.design) + '</b></span>';
+                }).join('')
+              + '</div>'
+              + '<div class="cmp-num-full"><span>' + esc(n.mine) + '</span>'
+              + '<span class="cmp-num-them">' + esc(n.design) + '</span></div>'
+              + '</div>';
+          }).join('')
+        + '</div></details>';
+    }
+
+    /* 시안에만 있는 글. **틀렸다고 말하지 않는다** — 우리가 칸을 안 둔 정당한
+       표시일 수 있다. 근거를 확인하라고 모아 줄 뿐이다. */
+    var groundless = groundlessTexts(data);
+    var extraHtml = '';
+    if (groundless.length) {
+      extraHtml = '<details class="cmp-group cmp-group-extra" open>'
+        + '<summary class="cmp-group-title">추가 표시사항 — 근거 확인 필요 '
+        + groundless.length + '</summary>'
+        + '<div class="cmp-extra-note">표시사항 어디에도 없는 문구입니다. '
+        + '근거가 있는 표시인지, 다른 제품의 문구가 섞인 것인지 확인해 주세요.</div>'
+        + '<div class="cmp-extra-list">'
+        + groundless.map(function (t) {
+            return '<div class="cmp-extra"><i class="bi bi-question-circle"></i>'
+                 + '<span>' + esc(t) + '</span></div>';
+          }).join('')
+        + '</div></details>';
+    }
+
     var table = summary
       + advice
       + apiMatchHtml(apiMatch)
+      + numHtml
+      + extraHtml
       + group(diff, '확인할 항목', true)
       + group(minor, '띄어쓰기만 다른 항목', false)
       + group(same, '같은 항목', false);

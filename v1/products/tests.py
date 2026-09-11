@@ -1949,9 +1949,13 @@ class DesignCompareModeTests(TestCase):
         self.assertNotIn('ocr-value', block)     # 고칠 칸
         self.assertIn('cmp-theirs', block)
 
-    def test_반영_단추를_감춘다(self):
+    def compare_body(self):
+        """showCompare 한 덩이. 길이로 자르면 함수가 자랄 때마다 끊긴다."""
         head = self.ocr.index('function showCompare')
-        block = self.ocr[head:head + 6000]
+        return self.ocr[head:self.ocr.index(chr(10) + '  }', head)]
+
+    def test_반영_단추를_감춘다(self):
+        block = self.compare_body()
         self.assertIn("apply.style.display = 'none'", block)
         self.assertIn('값을 고치지 않습니다', block)
 
@@ -1973,8 +1977,7 @@ class DesignCompareModeTests(TestCase):
 
     def test_확인할_것부터_보여_준다(self):
         """같은 것 열여섯 줄을 지나야 다른 두 줄이 나오면 대조하는 뜻이 없다."""
-        head = self.ocr.index('function showCompare')
-        block = self.ocr[head:head + 5000]
+        block = self.compare_body()
         self.assertLess(block.index("'확인할 항목'"), block.index("'같은 항목'"))
 
     def test_띄어쓰기만_다른_것은_따로_센다(self):
