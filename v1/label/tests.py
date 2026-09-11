@@ -14605,3 +14605,93 @@ class 남의_원료는_지울_수도_없다(TestCase):
                      'delete_my_ingredient'):
             src = inspect.getsource(getattr(views, name))
             self.assertIn('user_id', src, name)
+
+
+class 남의_배합줄은_못_고친다(TestCase):
+    """
+    제품 쪽을 훑어 나온 것이다. 지금까지 중 가장 나쁘다.
+
+    `bom_save_api` 는 앞에서 **label 의 편집 권한**은 본다. 그런데 줄마다
+    딸려 오는 `bom_id` 는 화면이 보내는 값인데, **그것이 그 label 의 줄인지는
+    아무도 안 봤다.**
+
+        B 가 제 제품의 저장 API 를 부르면서 A 의 줄 번호를 보낸다
+
+        A 의 배합줄 이름   'B 가 덮어씀'
+        A 의 배합비        None          ← 조용히 날아갔다
+        그 줄이 붙은 제품   'A 제품'      ← 그대로 A 것이다
+        A 의 원료 이름     'B 가 덮어씀'  ← 매달린 원료까지 덮였다
+    """
+
+    def setUp(self):
+        import json
+
+        from django.contrib.auth import get_user_model
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyIngredient, MyLabel
+        self.json = json
+        U = get_user_model()
+        self.a = U.objects.create_user(username='a@a.com', email='a@a.com', password='x')
+        self.b = U.objects.create_user(username='b@b.com', email='b@b.com', password='x')
+        self.la = MyLabel.objects.create(user_id=self.a, my_label_name='A제품', delete_YN='N')
+        self.ia = MyIngredient.objects.create(
+            user_id=self.a, prdlst_nm='A의 설탕', delete_YN='N')
+        self.rowA = ProductBOM.objects.create(
+            parent_label=self.la, created_by=self.a, ingredient_name='A의 설탕',
+            source_ingredient=self.ia, usage_ratio=10, active_yn=True)
+        self.lb = MyLabel.objects.create(user_id=self.b, my_label_name='B제품', delete_YN='N')
+
+    def save_as_b(self, bom_id):
+        self.client.force_login(self.b)
+        return self.client.post(
+            '/bom/api/label/%d/save/' % self.lb.my_label_id,
+            data=self.json.dumps({'items': [{
+                'bom_id': bom_id, 'ingredient_name': 'B가 덮어씀',
+                'source_type': 'manual', 'usage_ratio': 99}]}),
+            content_type='application/json')
+
+    def test_남의_줄은_안_바뀐다(self):
+        self.save_as_b(self.rowA.bom_id)
+        self.rowA.refresh_from_db()
+        self.assertEqual(self.rowA.ingredient_name, 'A의 설탕')
+        self.assertEqual(float(self.rowA.usage_ratio), 10.0)
+
+    def test_그_줄에_매달린_원료도_안_바뀐다(self):
+        self.save_as_b(self.rowA.bom_id)
+        self.ia.refresh_from_db()
+        self.assertEqual(self.ia.prdlst_nm, 'A의 설탕')
+
+    def test_대신_제_제품에_새_줄이_생긴다(self):
+        """막는 것이 저장을 깨뜨리면 안 된다 — 흐름은 그대로여야 한다."""
+        from v1.bom.models import ProductBOM
+        resp = self.save_as_b(self.rowA.bom_id)
+        self.assertTrue(resp.json()['success'])
+        rows = ProductBOM.objects.filter(parent_label=self.lb, active_yn=True)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().ingredient_name, 'B가 덮어씀')
+
+    def test_제_줄은_그대로_고쳐진다(self):
+        from v1.bom.models import ProductBOM
+        mine = ProductBOM.objects.create(
+            parent_label=self.lb, created_by=self.b,
+            ingredient_name='B의 소금', usage_ratio=5, active_yn=True)
+        self.save_as_b(mine.bom_id)
+        mine.refresh_from_db()
+        self.assertEqual(mine.ingredient_name, 'B가 덮어씀')
+
+
+class 남의_라벨_이름은_보이지_않는다(TestCase):
+    """원료 목록 자체는 내 것만 나왔지만, 제목에 쓰는 라벨 이름은 안 걸렀다."""
+
+    def test_남의_라벨_id_로는_이름이_안_나온다(self):
+        from django.contrib.auth import get_user_model
+        from v1.label.models import MyLabel
+        U = get_user_model()
+        a = U.objects.create_user(username='a@a.com', email='a@a.com', password='x')
+        b = U.objects.create_user(username='b@b.com', email='b@b.com', password='x')
+        la = MyLabel.objects.create(user_id=a, my_label_name='A의 비밀제품', delete_YN='N')
+        self.client.force_login(b)
+        resp = self.client.get('/label/my-ingredient-list/',
+                               {'label_id': la.my_label_id})
+        if resp.status_code == 200:
+            self.assertNotIn('A의 비밀제품', resp.content.decode())

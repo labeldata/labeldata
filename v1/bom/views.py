@@ -548,7 +548,14 @@ def bom_save_api(request, label_id):
                 # 직접 입력 → 기존 BOM의 source_ingredient 재사용 또는 새로 생성
                 existing_mi = None
                 if bom_id:
-                    existing_bom = ProductBOM.objects.filter(bom_id=bom_id).first()
+                    # **이 제품의 줄인지 함께 본다.**
+                    #
+                    # bom_id 는 화면이 보내는 값이다. 앞에서 label 의 편집
+                    # 권한은 봤지만, 그 bom_id 가 그 label 의 줄인지는 아무도
+                    # 안 봤다. 그래서 남의 제품 줄 번호를 끼워 넣으면 그 줄에
+                    # 매달린 **남의 원료를 통째로 덮어썼다.**
+                    existing_bom = ProductBOM.objects.filter(
+                        bom_id=bom_id, parent_label=label).first()
                     if existing_bom:
                         existing_mi = existing_bom.source_ingredient
 
@@ -617,7 +624,19 @@ def bom_save_api(request, label_id):
             )
 
             if bom_id:
-                bom = ProductBOM.objects.filter(bom_id=bom_id).first()
+                # 남의 제품 줄은 못 고친다.
+                #
+                # 실제로 이랬다 — B 가 제 제품의 저장 API 를 부르면서 A 의 줄
+                # 번호를 보냈다.
+                #
+                #     A 의 배합줄 이름   'B 가 덮어씀'
+                #     A 의 배합비        None          ← 조용히 날아갔다
+                #     그 줄이 붙은 제품   'A 제품'      ← 그대로 A 것이다
+                #     A 의 원료 이름     'B 가 덮어씀'
+                #
+                # 못 찾으면 아래에서 이 제품의 새 줄로 만든다 — 흐름은 그대로다.
+                bom = ProductBOM.objects.filter(
+                    bom_id=bom_id, parent_label=label).first()
                 if bom:
                     for k, v in common_fields.items():
                         setattr(bom, k, v)
