@@ -897,6 +897,11 @@ function applyExtraFold() {
     plugin.showRows(ALL_NUTRIENTS.map((_, i) => i));
     if (hide.length) plugin.hideRows(hide);
     hot.render();
+    /* **줄을 감추면 표가 짧아진다.** 그런데 Handsontable 은 제가 쓰던 높이를
+       그대로 들고 있어서, 마지막 줄(나트륨)이 담는 칸 경계에 걸려 글자가
+       잘렸다 — #grid-container 가 overflow:hidden 이라 잘린 채로 보인다.
+       접거나 편 뒤에는 높이를 다시 재게 한다. */
+    try { hot.refreshDimensions(); } catch (e) { /* 아직 안 보이는 중일 수 있다 */ }
 
     const btn = document.getElementById('extraFoldBtn');
     if (btn) {

@@ -3375,6 +3375,9 @@ function markValidationOnTable(categories) {
         const numbers = byField[field].sort(function (a, b) { return a - b; });
         document.querySelectorAll(`[data-field-row="${field}"]`).forEach(function (row) {
             row.classList.add('pv-row-issue');
+            // 지적이 둘 이상인 줄은 더 굵게 긋는다 — 배지 하나만으로는
+            // "여기가 제일 급하다" 가 빽빽한 표에서 드러나지 않는다.
+            row.classList.toggle('pv-row-many', numbers.length > 1);
             // 배지는 항목명 칸에 붙인다. 2단 배치에서는 행이 아니라 칸이
             // data-field-row 를 가지므로 그 칸 자신이 될 수도 있다.
             const head = row.tagName === 'TH' ? row : row.querySelector('th');
@@ -3382,7 +3385,9 @@ function markValidationOnTable(categories) {
             const badge = document.createElement('span');
             badge.className = 'pv-issue-badge pv-issue-badge-link';
             badge.textContent = numbers.join(',');
-            badge.title = '누르면 이 지적의 내용을 봅니다';
+            badge.title = numbers.length > 1
+                ? '이 줄에 지적이 ' + numbers.length + '건 있습니다. 누르면 내용을 봅니다'
+                : '누르면 이 지적의 내용을 봅니다';
             badge.setAttribute('role', 'button');
             badge.tabIndex = 0;
             head.insertBefore(badge, head.firstChild);
