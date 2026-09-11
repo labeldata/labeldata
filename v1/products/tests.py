@@ -4809,10 +4809,21 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         return re.findall(r'data-sel="([^"]+)"', block.group(0))
 
     def test_두_화면이_각각_서너_걸음을_갖는다(self):
-        for name, html in (('제품 상세', self.product), ('원료 상세', self.ingredient)):
-            sels = self._steps(html)
-            self.assertGreaterEqual(len(sels), 3, name)
-            self.assertLessEqual(len(sels), 6, '%s: 여섯 걸음을 넘으면 투어다' % name)
+        """
+        여섯을 넘으면 투어다 — 한 번에 읽히는 분량이 그쯤이다.
+
+        제품 상세만 예외로 길다. 탭이 여섯이고 그 여섯이 저마다 다른 일을 해서,
+        "한 화면" 으로 세면 여섯 화면을 겹쳐 둔 것과 같다. 게다가 BOM·영양성분·
+        미리보기가 iframe 이라 안쪽을 못 가리키므로, 탭 단추 하나를 여러 걸음이
+        거듭 가리키며 그 안에서 할 일을 나눠 말한다.
+        """
+        sels = self._steps(self.ingredient)
+        self.assertGreaterEqual(len(sels), 3, '원료 상세')
+        self.assertLessEqual(len(sels), 6, '원료 상세: 여섯 걸음을 넘으면 투어다')
+
+        sels = self._steps(self.product)
+        self.assertGreaterEqual(len(sels), 12, '제품 상세: 탭마다 한 걸음은 있어야 한다')
+        self.assertLessEqual(len(sels), 20, '제품 상세: 이보다 길면 탭 설명이 아니다')
 
     def test_문구는_엔진이_아니라_화면에_있다(self):
         """
@@ -4843,8 +4854,13 @@ class 코치마크는_그_화면만_짚는다(TestCase):
 
         for sel in self._steps(self.product):
             if sel.startswith('[data-bs-target'):
-                # 탭 단추는 _WORKFLOW_STEPS 로 찍힌다. 이름이 거기 있어야 한다.
-                self.assertIn(sel[sel.index('#'):sel.rindex('&quot;')], tabs, sel)
+                # 네 단계 탭은 _WORKFLOW_STEPS 로 찍히고, 곁에 두는 문서함·권한은
+                # 화면이 직접 적는다. 둘 중 한쪽에는 있어야 한다.
+                target = sel[sel.index('#'):sel.rindex('&quot;')]
+                self.assertTrue(
+                    target in tabs
+                    or ('data-bs-target="%s"' % target) in self.product,
+                    sel)
                 continue
             mark = ('id="%s"' % sel[1:]) if sel.startswith('#') else ('class="%s' % sel[1:])
             self.assertTrue(mark in self.product or mark in self.basic, sel)
@@ -4908,17 +4924,59 @@ class 코치마크는_그_화면만_짚는다(TestCase):
             self.assertNotIn('ezCoach.start()', html)
         self.assertNotIn('ezCoachNavBtn', self.base())
 
-    def test_묻는_것이_둘이라_갈래도_둘이다(self):
+    def test_묻는_것이_셋이라_갈래도_셋이다(self):
         """
-        "이 서비스에 뭐가 있지" 와 "여기서 뭘 하지" 는 다른 물음이다. 하나로
-        두면 둘 다 못 한다 — 전체 투어는 지금 막힌 자리를 안 짚고, 화면별
-        안내는 처음 온 사람에게 이게 뭐 하는 서비스인지를 안 알려 준다.
+        하나로 두면 셋 다 못 한다.
+
+            전체 둘러보기  "이 서비스에 뭐가 있지?"    메뉴를 짚는다
+            핵심기능 보기  "그래서 뭘 할 수 있는데?"    기능을 말한다
+            이 화면 사용법 "여기서 뭘 해야 하지?"       이 화면을 짚는다
+
+        메뉴 소개로는 "BOM 은 엑셀에서 붙여 넣을 수 있다" 를 말할 자리가 없다 —
+        메뉴 이름을 읽어서는 알 수 없기 때문이다. 화면별 안내도 아니다. 그
+        화면에 가야만 보이는데, **가 볼 생각이 안 드는 것**이 문제다.
         """
         engine = self.engine
-        self.assertIn("usable('tour')", engine)
-        self.assertIn("usable('detail')", engine)
-        self.assertIn('메뉴 둘러보기', engine)
+        for scope in ('tour', 'core', 'detail'):
+            self.assertIn("usable('%s')" % scope, engine, scope)
+        self.assertIn('전체 둘러보기', engine)
+        self.assertIn('핵심기능 보기', engine)
         self.assertIn('이 화면 사용법', engine)
+
+    def test_가리킬_것이_없어도_말은_한다(self):
+        """
+        게시판에서 "BOM 은 엑셀에서 붙여 넣을 수 있습니다" 를 말하려면 가리킬
+        요소가 없다. 없는 자리를 억지로 가리키느니 말만 하는 편이 낫다.
+        """
+        engine = self.engine
+        self.assertIn('if (!step.el) {', engine)
+        # 0 크기 테두리에 큰 box-shadow 가 남으면 이상한 자국이 된다
+        self.assertIn("spot.style.display = 'none'", engine)
+        self.assertIn('if (step.el) {', engine)   # 화면 안으로 끌어오는 것도 막는다
+
+    def test_핵심기능이_탭을_가리킨다(self):
+        """
+        제품 상세에 있을 때는 탭 단추를 가리킨다. 선택자가 실제로 그 화면에
+        있어야 한다 — 틀리면 걸음이 조용히 사라진다.
+        """
+        base = self.base()
+        core = base[base.index('data-coach-scope="core"'):]
+        core = core[:core.index('</div>' + chr(10) + '    </div>')]
+        for tab in ('tab-bom', 'tab-nutrition', 'tab-label'):
+            self.assertIn("data-sel=\"[data-bs-target='#%s']\"" % tab, core, tab)
+            self.assertIn('#%s' % tab, self.product, tab)
+
+    def test_핵심기능에_탭별_주요_기능이_들어_있다(self):
+        """
+        사용자가 반드시 넣어 달라고 한 것들이다. 이것이 빠지면 "그래서 뭘 할
+        수 있는데" 에 답하지 못한다.
+        """
+        base = self.base()
+        core = base[base.index('data-coach-scope="core"'):]
+        core = core[:core.index('</div>' + chr(10) + '    </div>')]
+        for must in ('엑셀', '붙여 넣으면', '배합비로 산출',
+                     '디자인 조정', '문구 검증', '시안', '내보내기', '한 장'):
+            self.assertIn(must, core, must)
 
     def test_메뉴_둘러보기는_한_곳에만_적는다(self):
         """어느 화면에서나 같은 걸음이다. 화면마다 적으면 곧 갈라진다."""
@@ -4958,10 +5016,207 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         정작 걸음이 있는 화면에서도 안 누른다.
         """
         engine = self.engine
-        self.assertIn("var any = usable('tour') || usable('detail');", engine)
+        self.assertIn("var any = usable('tour') || usable('core') || usable('detail');", engine)
         self.assertIn('if (!any)', engine)
 
     def test_게스트에게도_보인다(self):
         """게스트는 둘러보러 온 사람이다 — 설명이 가장 필요한 쪽이다."""
         engine = self.engine
         self.assertNotIn('is_guest', engine)
+
+
+class 코치마크는_화면마다_제_것을_짚는다(TestCase):
+    """
+    걸음이 제품·원료 두 화면에만 있어서, 나머지 메뉴에서는 [?] 를 눌러도
+    "이 화면은 아직 안내가 없습니다" 만 떴다. 메뉴를 여덟 개 만들어 놓고
+    둘만 설명하면 나머지 여섯은 알아서 익히라는 말이 된다.
+
+    여기서 지키려는 것은 하나다 — **선택자가 그 화면에 실제로 있을 것.**
+    엔진은 가리킬 것이 없으면 그 걸음을 조용히 건너뛴다. 그래서 선택자를
+    잘못 적어도 화면은 멀쩡해 보이고, 걸음만 소리 없이 사라진다. 일부러
+    건너뛴 것과 오타를 눈으로는 구별할 수 없으므로 여기서 대조한다.
+    """
+
+    # 화면 → (걸음이 적힌 템플릿, 요소를 찾아도 되는 템플릿들)
+    #
+    # 제품 상세만 둘을 본다 — 기본 정보 탭은 include 로 들어오는 딴 파일이다.
+    화면들 = {
+        '제품 상세': ('products/product_detail.html',
+                   ('products/product_detail.html', 'products/_tab_basic_info.html')),
+        '원료 상세': ('label/my_ingredient_detail_partial.html',
+                   ('label/my_ingredient_detail_partial.html',)),
+        '원료 관리': ('label/my_ingredient_list_combined.html',
+                   ('label/my_ingredient_list_combined.html',)),
+        '제품 관리': ('products/product_explorer.html',
+                   ('products/product_explorer.html',)),
+        '제품 조회': ('label/food_item_list.html',
+                   ('label/food_item_list.html',)),
+        '식품첨가물 DB': ('label/food_additive_search.html',
+                      ('label/food_additive_search.html',)),
+        '공동 작업': ('products/sharing/inbox.html',
+                   ('products/sharing/inbox.html',)),
+        '연락처 관리': ('products/contacts.html',
+                    ('products/contacts.html',)),
+        '부적합·처분 알림': ('regulatory/news_list.html',
+                        ('regulatory/news_list.html',)),
+        '게시판': ('board/list.html', ('board/list.html',)),
+    }
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.base = Path(dj.BASE_DIR) / 'templates'
+        self._cache = {}
+
+    def _read(self, name):
+        if name not in self._cache:
+            self._cache[name] = (self.base / name).read_text(encoding='utf-8')
+        return self._cache[name]
+
+    def _block(self, name):
+        import re
+        html = self._read(name)
+        found = re.search('<div class="ezc-steps".*?' + chr(10) + '</div>', html, re.S)
+        self.assertIsNotNone(found, '%s 에 걸음 목록이 없다' % name)
+        return found.group(0)
+
+    def _steps(self, name):
+        import re
+        return re.findall(r'data-sel="([^"]+)"', self._block(name))
+
+    def _있는가(self, sel, html):
+        """
+        엔진은 querySelector 로 찾는다. 여기서 그 셋을 흉내 낸다 —
+        #아이디, .클래스, [속성="값"].
+
+        클래스는 문자열 포함으로 보면 안 된다. class="board-table-wrapper" 가
+        `.board-table` 로 잡혀 버려서, 정작 없는 선택자를 있다고 통과시킨다.
+        그래서 class 값을 공백으로 갈라 낱말로 맞춘다.
+        """
+        import re
+        if sel.startswith('#'):
+            return ('id="%s"' % sel[1:]) in html
+        if sel.startswith('.'):
+            want = sel[1:]
+            for attr in re.findall(r'class="([^"]*)"', html):
+                if want in attr.split():
+                    return True
+            return False
+        found = re.match(r'^\[([a-z-]+)=(?:&quot;|\')?([^\]\'&]+)(?:&quot;|\')?\]$', sel)
+        self.assertIsNotNone(found, '흉내 낼 수 없는 선택자다: %s' % sel)
+        attr, value = found.groups()
+        return ('%s="%s"' % (attr, value)) in html or \
+               ("%s='%s'" % (attr, value)) in html
+
+    def test_가리키는_것이_실제로_그_화면에_있다(self):
+        """
+        선택자가 틀리면 걸음이 조용히 사라진다 — 건너뛴 것과 구별이 안 된다.
+        """
+        from v1.products.views import _WORKFLOW_STEPS
+        탭들 = {'#' + tab for tab, _name, _hint in _WORKFLOW_STEPS}
+
+        for 화면, (걸음템플릿, 볼곳들) in self.화면들.items():
+            for sel in self._steps(걸음템플릿):
+                # 네 단계 탭 단추는 _WORKFLOW_STEPS 로 찍혀 나와서 화면에
+                # 글자 그대로 있지 않다.
+                if sel.startswith('[data-bs-target') and \
+                        sel[sel.index('#'):sel.rindex('&quot;')] in 탭들:
+                    continue
+                self.assertTrue(
+                    any(self._있는가(sel, self._read(곳)) for 곳 in 볼곳들),
+                    '%s: %s 를 가리키는데 그 화면에 없다' % (화면, sel))
+
+    def test_메뉴마다_걸음이_있다(self):
+        """
+        사이드바에 메뉴를 여덟 개 걸어 두고 둘만 설명하면, 나머지에서 [?] 를
+        누른 사람은 "안내가 없습니다" 를 보고 다시는 안 누른다.
+        """
+        for 화면, (걸음템플릿, _볼곳들) in self.화면들.items():
+            sels = self._steps(걸음템플릿)
+            self.assertGreaterEqual(len(sels), 3, '%s: 세 걸음은 있어야 한다' % 화면)
+
+    def test_걸음_이름이_겹치지_않는다(self):
+        """
+        본 것은 data-coach-key 로 기억한다. 두 화면이 같은 이름을 쓰면 한쪽을
+        본 것만으로 다른 쪽까지 본 것이 되어 권하기가 영영 안 뜬다.
+        """
+        import re
+        본것 = {}
+        for 화면, (걸음템플릿, _볼곳들) in self.화면들.items():
+            found = re.search(r'data-coach-key="([^"]+)"', self._block(걸음템플릿))
+            self.assertIsNotNone(found, '%s: 걸음 이름이 없다' % 화면)
+            key = found.group(1)
+            self.assertNotIn(key, 본것,
+                             '%s 와 %s 가 같은 이름을 쓴다: %s'
+                             % (화면, 본것.get(key), key))
+            본것[key] = 화면
+
+    def test_문구가_비어_있지_않다(self):
+        """
+        제목만 있고 본문이 없으면 상자가 한 줄짜리로 뜬다. 짚어 놓고 아무 말도
+        안 하는 셈이라 차라리 그 걸음이 없는 편이 낫다.
+        """
+        import re
+        for 화면, (걸음템플릿, _볼곳들) in self.화면들.items():
+            for title, body in re.findall(
+                    r'data-title="([^"]*)"\s*>(.*?)</div>',
+                    self._block(걸음템플릿), re.S):
+                self.assertTrue(title.strip(), '%s: 제목이 비었다' % 화면)
+                말 = re.sub(r'<[^>]+>', '', body).strip()
+                self.assertGreater(len(말), 20,
+                                   '%s: "%s" 에 할 말이 없다' % (화면, title))
+
+    def test_화면이_엔진을_들이지_않는다(self):
+        """엔진은 base_v2 에 한 번만 실린다. 화면이 또 include 하면 두 벌이 된다."""
+        for 화면, (걸음템플릿, _볼곳들) in self.화면들.items():
+            self.assertNotIn('includes/_coachmark.html',
+                             self._read(걸음템플릿), 화면)
+
+    def test_화면이_제_단추를_만들지_않는다(self):
+        """
+        도움말로 들어가는 자리는 오른쪽 아래 동그란 [?] 하나다. 화면마다 제
+        단추를 두면 같은 일을 하는 단추가 둘이 되어 어느 것을 눌러야 하는지
+        묻게 된다.
+        """
+        for 화면, (걸음템플릿, _볼곳들) in self.화면들.items():
+            self.assertNotIn('ezCoach.start(', self._read(걸음템플릿), 화면)
+
+    def test_여러_줄_주석은_comment_태그로_적는다(self):
+        """
+        {# #} 는 한 줄짜리다. 여러 줄에 걸치면 뒷줄이 그대로 화면에 인쇄된다 —
+        자체 검사(checks.py)가 잡는 그 사고다.
+        """
+        for 화면, (걸음템플릿, _볼곳들) in self.화면들.items():
+            앞 = self._read(걸음템플릿)
+            at = 앞.index('<div class="ezc-steps"')
+            머리 = 앞[max(0, at - 1200):at]
+            self.assertIn('{% comment %}', 머리,
+                          '%s: 왜 이 걸음인지 적어 두지 않았다' % 화면)
+
+    def test_탭마다_거기서_하는_일을_말한다(self):
+        """
+        BOM·영양성분·미리보기는 iframe 이라 안쪽 칸을 못 가리킨다. 그래서 탭
+        단추만 짚게 되는데, 그때 "BOM 탭입니다" 로 그치면 짚으나 마나다 —
+        탭 이름은 이미 화면에 적혀 있다.
+
+        가리킬 수 없으니 **말로는 더 구체적이어야 한다.** 그 탭에서 실제로
+        할 수 있는 일이 문구에 들어 있는지 여기서 확인한다. 없는 기능을 지어
+        쓰는 것도 이 목록이 막는다 — 넣으려면 먼저 코드에 있어야 한다.
+        """
+        block = self._block('products/product_detail.html')
+        해야할말 = [
+            ('BOM 붙여넣기', '붙여넣으면'),
+            ('BOM 머리글 인식', '머리글'),
+            ('BOM 행 자동 확장', '저절로 늘어납니다'),
+            ('영양성분 자동 계산', '배합비'),
+            ('영양성분 기여도', '못 움직이는 원료는 비어 있어도'),
+            ('검증 표 설정', '자간'),
+            ('검증 항목 순서', '항목 순서'),
+            ('검증 분리배출마크', '분리배출마크'),
+            ('1차 문구 검증', '번호가 달리고'),
+            ('2차 시안 대조', '올려 둔 시안'),
+            ('내보내기 PDF', '한 장'),
+            ('내보내기 문서함', '문서함에도 등록'),
+        ]
+        for 이름, 말 in 해야할말:
+            self.assertIn(말, block, '%s 을(를) 말하지 않는다' % 이름)

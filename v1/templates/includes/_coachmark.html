@@ -8,18 +8,27 @@
   그래서 한 걸음은 **화면의 한 요소를 가리키고 한 문장을 말하는 것**이다.
   다음·이전·그만두기뿐이고, 언제든 다시 열 수 있고, 끝까지 안 봐도 된다.
 
-  두 갈래다
+  세 갈래다
   ─────────
-  묻는 것이 두 가지라 답도 둘이어야 한다.
+  묻는 것이 셋이라 답도 셋이어야 한다.
 
-      메뉴 둘러보기 (tour)    "이 서비스에 뭐가 있지?"   — 어느 화면에서나 같다
-      이 화면 사용법 (detail) "여기서 뭘 해야 하지?"     — 화면마다 다르다
+      전체 둘러보기 (tour)    "이 서비스에 뭐가 있지?"     메뉴를 짚는다
+      핵심기능 보기 (core)    "그래서 뭘 할 수 있는데?"     기능을 말한다
+      이 화면 사용법 (detail) "여기서 뭘 해야 하지?"       이 화면을 짚는다
 
-  하나로 두면 둘 다 못 한다. 전체 투어는 지금 막힌 자리를 안 짚고, 화면별
-  안내는 처음 온 사람에게 "그래서 이게 뭐 하는 서비스인데" 를 안 알려 준다.
+  하나로 두면 셋 다 못 한다. 메뉴 소개는 "엑셀에서 붙여 넣을 수 있다" 를 말할
+  자리가 없고, 화면별 안내는 처음 온 사람에게 이게 뭐 하는 서비스인지를 안
+  알려 준다.
 
-  tour 는 사이드바를 짚으므로 걸음을 base_v2 에 **한 번만** 적는다. detail 은
-  화면이 제 것을 적는다.
+  tour · core 는 어느 화면에서나 같으므로 base_v2 에 **한 번만** 적는다.
+  detail 은 화면이 제 것을 적는다.
+
+  가리킬 것이 없는 걸음
+  ────────────────────
+  core 는 다른 화면에 있는 기능을 말한다 — 게시판에서 "BOM 은 엑셀에서 붙여
+  넣을 수 있습니다" 를 말하려면 가리킬 요소가 없다. `data-sel` 을 안 적으면
+  **화면 가운데 카드**로만 뜬다. 가리킬 것이 있으면 가리키고, 없으면 말만
+  한다 — 없는 자리를 억지로 가리키느니 낫다.
 
   걸음은 화면이 적는다
   ────────────────────
@@ -198,10 +207,16 @@
     var root = holder(scope);
     if (!root) return [];
     var out = [];
-    Array.prototype.forEach.call(root.querySelectorAll('[data-sel]'), function (node) {
+    Array.prototype.forEach.call(root.children, function (node) {
+      var sel = node.getAttribute('data-sel');
       var el = null;
-      try { el = document.querySelector(node.getAttribute('data-sel')); } catch (e) { el = null; }
-      if (!shown(el)) return;           // 빈 곳은 가리키지 않는다 — 걸음을 뺀다
+      if (sel) {
+        try { el = document.querySelector(sel); } catch (e) { el = null; }
+        if (!shown(el)) return;         // 빈 곳은 가리키지 않는다 — 걸음을 뺀다
+      }
+      /* sel 이 없으면 가리키지 않고 말만 한다(가운데 카드). core 갈래가
+         다른 화면의 기능을 말할 때 쓴다 — 여기 없는 것을 억지로 가리키느니
+         낫다. */
       out.push({ el: el, title: node.getAttribute('data-title') || '', html: node.innerHTML });
     });
     return out;
@@ -210,6 +225,18 @@
   function place() {
     var step = steps[at];
     if (!step || !spot || !box) return;
+
+    /* 가리킬 것이 없는 걸음(core 가 다른 화면의 기능을 말할 때)은 **화면
+       가운데 카드**로 뜬다. 강조 테두리는 감춘다 — 0 크기로 두면 큰
+       box-shadow 가 한 점에서 퍼져 이상한 자국이 남는다. */
+    if (!step.el) {
+      spot.style.display = 'none';
+      box.style.left = Math.round((window.innerWidth - box.offsetWidth) / 2) + 'px';
+      box.style.top = Math.round((window.innerHeight - box.offsetHeight) / 2) + 'px';
+      return;
+    }
+    spot.style.display = '';
+
     var r = step.el.getBoundingClientRect();
     var pad = 6;
 
@@ -276,7 +303,9 @@
     /* 스크롤로 요소를 화면 가운데로 옮긴 뒤에 재야 한다. 옮기기 전 좌표로
        그리면 첫 프레임이 엉뚱한 자리에 뜬다. 부드럽게 움직이는 동안에도
        따라가야 해서 한 번 더 잰다. */
-    try { step.el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    if (step.el) {
+      try { step.el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    }
     place();
     setTimeout(place, 220);
   }
@@ -397,8 +426,12 @@
     menu.setAttribute('role', 'menu');
 
     if (usable('tour')) {
-      menu.appendChild(menuItem('메뉴 둘러보기', '어떤 메뉴가 무슨 일을 하는지',
+      menu.appendChild(menuItem('전체 둘러보기', '어떤 메뉴가 무슨 일을 하는지',
                                 function () { start('tour'); }));
+    }
+    if (usable('core')) {
+      menu.appendChild(menuItem('핵심기능 보기', '이 서비스로 무엇을 할 수 있는지',
+                                function () { start('core'); }));
     }
     if (usable('detail')) {
       menu.appendChild(menuItem('이 화면 사용법', '지금 보고 있는 화면을 짚어 드립니다',
@@ -416,7 +449,7 @@
   function mountFab() {
     /* 갈 곳이 하나도 없으면 단추를 안 띄운다. 눌러도 아무 일이 없는 단추를
        어느 화면에나 띄워 두면 곧 안 보게 된다. */
-    var any = usable('tour') || usable('detail');
+    var any = usable('tour') || usable('core') || usable('detail');
     if (!any) { if (fab) { fab.remove(); fab = null; } closeMenu(); return; }
     if (fab) return;
 
