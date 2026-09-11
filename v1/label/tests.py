@@ -14430,3 +14430,121 @@ class 칸_옆의_설명(TestCase):
 
         src = inspect.getsource(vs.check_food_type_known)
         self.assertIn('label.food_type', src)
+
+
+class 자동감지는_사람이_고른_것을_지우지_않는다(TestCase):
+    """
+    운영 데이터 622 개를 재 보고 나온 것이다.
+
+        Synthetic flavor 합성바닐라향   사람: 밀·알류·우유   감지: 없음
+        626538 비프향 향료제제           사람: 메밀·우유      감지: 없음
+        마가린                          사람: 대두·우유      감지: 없음
+
+    향료·제제·가공유지는 **이름 안에 키워드가 아예 없다.** 그런데 자동감지가
+    `selectedAllergens = Array.from(detectedAllergens)` 로 통째로 갈아치웠다 —
+    한 번 누르면 사람이 성적서 보고 넣은 값이 사라졌다. 알레르기는 놓치면
+    리콜이다.
+    """
+
+    def js(self):
+        import io
+        return io.open('v1/static/js/label/my_ingredient_detail_partial.js',
+                       encoding='utf-8').read()
+
+    def body(self):
+        js = self.js()
+        at = js.index('function autoDetectAllergensIngredient')
+        return js[at:js.index('\nfunction reportAllergyDetect')]
+
+    def test_통째로_갈아치우지_않는다(self):
+        self.assertNotIn('selectedAllergens = Array.from(detectedAllergens)',
+                         self.body())
+
+    def test_고른_것에_더한다(self):
+        body = self.body()
+        self.assertIn('const before = new Set(selectedAllergens)', body)
+        self.assertIn('selectedAllergens = Array.from(before)', body)
+
+    def test_무엇을_더했는지_말한다(self):
+        body = self.body()
+        self.assertIn('added', body)
+        self.assertIn('reportAllergyDetect', body)
+
+    def test_제품_화면과_같은_몸짓이_된다(self):
+        """제품 쪽은 이미 출처가 auto 인 것만 지우고 사람 것은 남겼다."""
+        import io
+        h = io.open('v1/templates/products/_tab_basic_info.html',
+                    encoding='utf-8').read()
+        at = h.index('window.detectAllergensProduct = function')
+        body = h[at:at + 1200]
+        self.assertIn("if (src === 'auto')", body)
+        self.assertIn('manual 유지', body)
+
+
+class 이름으로_알_수_없는_것은_그렇게_말한다(TestCase):
+    """
+    감지 결과가 비었다는 것과 알레르기가 없다는 것은 **전혀 다른 말**인데
+    화면은 똑같이 비어 보였다. 놓친 54 건이 거의 다 이 부류였다.
+    """
+
+    def js(self):
+        import io
+        return io.open('v1/static/js/label/my_ingredient_detail_partial.js',
+                       encoding='utf-8').read()
+
+    def test_이름에_답이_없는_원료를_안다(self):
+        js = self.js()
+        table = js[js.index('NAME_TELLS_NOTHING'):]
+        table = table[:table.index(']')]
+        # 운영에서 실제로 놓쳤던 부류들
+        for word in ('향료', '제제', '가공유지', '마가린', '쇼트닝',
+                     '유산균', '주정', '가공품'):
+            self.assertIn(word, table, word)
+
+    def test_성적서를_보라고_말한다(self):
+        js = self.js()
+        self.assertIn('이름만으로는 알 수 없습니다', js)
+        self.assertIn('성적서를 확인하세요', js)
+
+    def test_지우지_않는다는_사실도_말한다(self):
+        """'재감지' 를 눌러도 옛 값이 남는 것이 고장으로 보이면 안 된다."""
+        self.assertIn('고른 것은 지우지 않습니다', self.js())
+
+    def test_화면에_자리가_있다(self):
+        import io
+        h = io.open('v1/templates/label/my_ingredient_detail_partial.html',
+                    encoding='utf-8').read()
+        self.assertIn('id="allergyDetectNote"', h)
+        self.assertIn('.ag-note-warn', h)
+
+
+class 게이트는_등록_수가_아니라_기여도로_말한다(TestCase):
+    """
+    'N/M건 등록' 은 68 개를 다 채워야 하는 것으로 읽힌다. 운영에서 영양성분이
+    정해진 원료는 68 중 3 개(4 %)라, 그 말대로면 영영 계산이 안 된다.
+
+    실제 판정은 등록 수가 아니라 **기여도**다 — 배합비가 작아 표시값을 못
+    움직이는 원료는 비어 있어도 통과한다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/products/_bom_nutrition_summary.html',
+                       encoding='utf-8').read()
+
+    def test_등록_건수로_말하지_않는다(self):
+        self.assertNotIn("+ '건 등록'", self.tpl())
+        self.assertNotIn('영양성분을 다 채우면', self.tpl())
+
+    def test_막는_것의_수로_말한다(self):
+        h = self.tpl()
+        self.assertIn('건 막힘', h)
+        self.assertIn('표시값을 못 움직이는 원료는 비어 있어도 됩니다', h)
+
+    def test_판정은_여전히_서버가_한다(self):
+        """화면이 다시 판단하면 서버와 두 벌이 되고 언젠가 다른 말을 한다."""
+        from v1.label.services import nutrition_contrib as nc
+        self.assertTrue(hasattr(nc, 'needed_fields'))
+        h = self.tpl()
+        # 센 것은 서버가 준 needed 다
+        self.assertIn('need[r.name]', h)

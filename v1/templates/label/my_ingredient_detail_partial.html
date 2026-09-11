@@ -336,6 +336,23 @@
   }
   .ing-nut-flash.is-on { opacity: 1; }
 
+  /* 자동감지가 무엇을 했는지 그 자리에서 말한다.
+     감지는 **더하기만** 한다 — 운영 데이터 622 개를 재 보니, 향료·제제·
+     가공유지는 이름에 키워드가 아예 없어서 감지가 늘 비었다. 그 빈 결과가
+     사람이 성적서 보고 넣은 값을 덮고 있었다. */
+  .ag-note {
+    margin-top: 6px; font-size: .76rem; line-height: 1.6;
+  }
+  .ag-note span { display: block; }
+  .ag-note-add { color: #1E8E3E; font-weight: 500; }
+  .ag-note-dim { color: #80868b; }
+  .ag-note-warn {
+    margin-top: 4px; padding: 6px 9px;
+    background: #FFF8E1; border: 1px solid #F0D48A; border-radius: 5px;
+    color: #6B4E00;
+  }
+  .ag-note-warn strong { font-weight: 600; }
+
   /* 공용 원료는 고칠 수 없다. 다 고치고 누른 뒤에 거절하지 말고 미리 말한다. */
   .ing-readonly-note {
     display: flex; align-items: flex-start; gap: 8px;
@@ -525,6 +542,7 @@
                                     <button type="button" class="btn btn-outline-primary allergy-btn" data-allergen="{{ allergen }}">{{ allergen }}</button>
                                     {% endfor %}
                                 </div>
+                                <div id="allergyDetectNote" class="ag-note" style="display:none;"></div>
                                 <input type="hidden" name="allergens" id="allergy_info" value="{{ ingredient.allergens|default:'' }}">
                             </div>
                         </td>
