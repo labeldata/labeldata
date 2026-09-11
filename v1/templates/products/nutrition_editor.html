@@ -898,42 +898,24 @@ function applyExtraFold() {
     if (hide.length) plugin.hideRows(hide);
     hot.render();
 
-    /* **접었을 때는 담는 칸을 내용에 맞춘다.**
+    /* **접었으면 굴리지 않는다.**
      *
-     * #grid-container 는 flex:1 1 0 이라 남은 높이를 통째로 먹고, 표는
-     * height:'100%' 로 그것을 받는다. 25 줄일 때는 그래야 맞다 — 표가 제
-     * 안에서 굴러야 머리글이 붙어 있다.
+     * 세 번 틀렸다. refreshDimensions() 로, 그다음 `줄수 × 22` 로, 그다음
+     * 그려진 높이를 재서 못 박는 것으로. 셋 다 **표가 제 안에서 굴러야 한다**
+     * 는 전제를 지킨 채 높이를 맞추려 한 것이고, 그 전제가 있는 한 칸 높이와
+     * 표 높이가 어긋날 자리가 남는다 — 어긋난 만큼 마지막 줄이 잘린다.
      *
-     * 그런데 접어서 9 줄이 되면 이야기가 달라진다. 칸 높이와 표가 아는 높이가
-     * 어긋나면서 마지막 줄(나트륨)이 경계에 걸려 **글자가 잘렸다.**
-     * refreshDimensions() 로는 안 됐다 — 칸 자체가 여전히 '남은 높이' 이기
-     * 때문이다.
-     *
-     * 접었으면 굴릴 일이 없다. 칸을 **내용 높이**로 못 박으면 어긋날 자리가
-     * 사라진다. 펴면 원래대로 되돌린다. */
+     * 전제를 버린다. 25 줄일 때만 굴린다(머리글이 붙어 있어야 하니까).
+     * 접어서 9 줄이 되면 Handsontable 에게 height:'auto' 를 주고 칸도 내용만큼만
+     * 차지하게 둔다 — **높이를 정하는 곳이 한 군데**가 되므로 어긋날 자리가
+     * 사라진다. 담는 칸의 overflow:hidden 도 접었을 때는 걷는다(.is-folded).
+     */
     const box = document.getElementById('grid-container');
-    if (box) {
-        if (hide.length) {
-            /* **재서 쓴다. 셈하지 않는다.**
-             *
-             * 앞서 `줄수 × 22 + 머리글 30` 으로 셈했다가 또 잘렸다. rowHeights
-             * 는 우리가 바라는 값이고 실제로 그려진 높이가 아니다 — 테두리·
-             * 글꼴·줄바꿈이 붙으면 더 커진다. 짐작한 높이가 실제보다 작으면
-             * 마지막 줄(나트륨)이 그만큼 잘린다.
-             *
-             * 그려진 것을 그대로 잰다. 표가 아직 안 그려졌으면 아무것도 하지
-             * 않는다 — 잘못 잰 값으로 못 박느니 원래대로 두는 편이 낫다. */
-            const core = box.querySelector('.ht_master .htCore');
-            if (core && core.offsetHeight > 0) {
-                box.style.flex = '0 0 auto';
-                box.style.height = (core.offsetHeight + 4) + 'px';   // 테두리
-            }
-        } else {
-            box.style.flex = '';
-            box.style.height = '';
-        }
-    }
-    try { hot.refreshDimensions(); } catch (e) { /* 아직 안 보이는 중일 수 있다 */ }
+    const folded = hide.length > 0;
+    if (box) box.classList.toggle('is-folded', folded);
+    try {
+        hot.updateSettings({height: folded ? 'auto' : '100%'});
+    } catch (e) { /* 아직 안 보이는 중일 수 있다 */ }
 
     const btn = document.getElementById('extraFoldBtn');
     if (btn) {

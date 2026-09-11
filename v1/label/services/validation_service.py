@@ -684,6 +684,41 @@ def _format_amount(text, amount):
     return f'{amount:,.0f} {_amount_unit(text)}'
 
 
+def _printed_names(label) -> dict:
+    """
+    배합의 줄마다 **문구에 인쇄되는 이름.** {원료 id: 이름}
+
+    화면(bom_detail 의 generateBomSummary)이 쓰는 규칙과 같아야 한다 —
+    두 벌로 두면 어느 날 한쪽만 고쳐지고, 검증이 인쇄물에 없는 이름을 찾는다.
+
+        표시명 기준이 '원재료명'  ->  표시용 원료명(없으면 원재료명)
+        그 밖(기본 '식품유형')    ->  식품유형(없으면 표시용 원료명, 그다음 원재료명)
+    """
+    try:
+        from v1.bom.models import ProductBOM
+        rows = (ProductBOM.objects
+                .filter(parent_label=label, active_yn=True)
+                .exclude(source_ingredient__isnull=True)
+                .values_list('source_ingredient_id', 'summary_type',
+                             'food_type', 'raw_material_name', 'ingredient_name'))
+    except Exception:
+        logger.exception('원재료 순서 검사: 인쇄되는 이름을 읽지 못했다 (label=%s)',
+                         getattr(label, 'pk', None))
+        return {}
+
+    out = {}
+    for key, summary_type, food_type, raw_name, name in rows:
+        raw = (raw_name or '').strip()
+        base = raw or (name or '').strip()
+        if (summary_type or '').strip() == '원재료명':
+            shown = base
+        else:
+            shown = (food_type or '').strip() or base
+        if shown:
+            out[key] = shown
+    return out
+
+
 def _placeable(known, text):
     """
     문구에서 **자리를 하나로 확정할 수 있는** 원료만 남긴다.
@@ -756,7 +791,21 @@ def check_ingredient_order_by_ratio(label) -> list[dict]:
         relations = (label.ingredient_relations
                      .select_related('ingredient')
                      .order_by('relation_sequence'))
-        known = [(rel.ingredient.prdlst_nm, float(rel.ingredient_ratio))
+        # **문구에 인쇄된 이름으로 찾아야 한다.**
+        #
+        # 지금까지는 원료명(prdlst_nm)으로 문구를 뒤졌다. 그런데 요약은 기본이
+        # '식품유형 기준' 이라, 인쇄되는 것은 그 원료의 **식품유형**일 때가
+        # 많다. 이름이 서로 엇갈리면 남의 자리를 짚는다.
+        #
+        #     8 줄  원료명 '당류가공품'   식품유형 (없음)  -> 인쇄 '코로네초코필링'
+        #     12 줄 원료명 '커스타드'     식품유형 '당류가공품' -> 인쇄 '당류가공품'
+        #
+        #   문구에서 '당류가공품' 을 찾으면 12 줄의 자리가 나오는데, 배합비는
+        #   8 줄의 것(2.43%)을 쓴다. 그래서 없는 위반이 만들어졌다 —
+        #   운영에서 "허쉬미니…(0.88%)가 당류가공품(2.43%)보다 앞" 이 그것이다.
+        printed = _printed_names(label)
+        known = [(printed.get(rel.ingredient_id) or rel.ingredient.prdlst_nm,
+                  float(rel.ingredient_ratio))
                  for rel in relations
                  if rel.ingredient_ratio is not None and rel.ingredient.prdlst_nm]
     except Exception:
