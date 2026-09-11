@@ -1598,25 +1598,83 @@ async function changeStatus(newStatus, overrideReason, acknowledged) {
  */
 function showValidationBlock(newStatus, result) {
     const issues = result.issues || [];
-    const missing = issues.filter(function (i) { return i.category === 'required_missing'; });
-    const others  = issues.filter(function (i) { return i.category !== 'required_missing'; });
+    const unchecked = result.unchecked || [];
     const requiresReason = result.requires_reason !== false;
 
-    const item = function (i, cls) {
-        const sug = i.suggestion ? '<div class="vb-sug">' + escapeHtml(i.suggestion) + '</div>' : '';
-        return '<li class="' + cls + '"><div class="vb-msg">' + escapeHtml(i.message || '') + '</div>' + sug + '</li>';
+    /* 지적을 **심각도로** 가른다.
+     *
+     * 예전에는 required_missing 과 나머지, 둘뿐이었다. 그래서 지적 스무 건 중
+     * 진짜 막는 것이 세 건이어도 스무 건이 다 무겁게 보였고 — 곧 아무도 안
+     * 읽었다. 서버는 이미 `advisory` 로 "근거가 있으면 써도 되는 말" 과
+     * "규정 위반" 을 가르고 있었다. 화면만 안 쓰고 있었다.
+     *
+     * 그리고 `unchecked` 는 **자료가 없어 판정 자체를 못 한** 항목이다.
+     * 식품유형 소분류가 비면 그 유형의 의무 표시사항이 통째로 빠진다.
+     * 통과가 아니라 **안 본 것**이므로 따로 세운다. */
+    const groups = [
+        {key: 'missing', head: '비어 있는 필수 입력 항목', cls: 'vb-req',
+         rows: issues.filter(function (i) { return i.category === 'required_missing'; })},
+        {key: 'block', head: '규정에 어긋납니다', cls: 'vb-block',
+         rows: issues.filter(function (i) {
+             return i.category !== 'required_missing' && !i.advisory; })},
+        {key: 'advice', head: '근거가 있으면 쓸 수 있습니다', cls: 'vb-advice',
+         rows: issues.filter(function (i) {
+             return i.category !== 'required_missing' && i.advisory; })},
+        {key: 'unchecked', head: '검사하지 못했습니다', cls: 'vb-unchecked',
+         rows: unchecked}
+    ];
+
+    /* 지적에서 **그 칸으로** 간다.
+     *
+     * 서버는 `fields` 로 어느 칸인지 이미 보내고 있었다. 그런데 모달은 그걸
+     * 안 썼다 — 읽고, 닫고, 칸을 찾아 고치고, 다시 확정을 눌러야 했다.
+     * 지적이 열 건이면 이 왕복을 열 번 한다.
+     *
+     * 칸 id 규칙은 화면이 이미 쓰는 것과 같다(_DISPLAY_ITEM_ANCHORS) —
+     * 'field-' + 밑줄을 붙임표로. 예외 둘만 적는다. */
+    const ANCHOR_EXCEPTION = {
+        'rawmtrl_nm_display': 'field-rawmtrl-nm',
+        'rawmtrl_nm': 'field-rawmtrl-nm'
     };
+    const FIELD_TAB = { 'nutrition_text': 'tab-nutrition' };
+
+    function anchorOf(field) {
+        return ANCHOR_EXCEPTION[field] || ('field-' + String(field).replace(/_/g, '-'));
+    }
+
+    function reachable(i) {
+        const fields = i.fields || [];
+        for (let k = 0; k < fields.length; k++) {
+            if (FIELD_TAB[fields[k]] || document.getElementById(anchorOf(fields[k]))) {
+                return fields[k];
+            }
+        }
+        return null;
+    }
+
+    const item = function (i, cls) {
+        const sug = i.suggestion
+            ? '<div class="vb-sug">' + escapeHtml(i.suggestion) + '</div>' : '';
+        const field = reachable(i);
+        const go = field
+            ? '<button type="button" class="vb-go" data-field="' + escapeHtml(field) + '">'
+              + '고치러 가기 <i class="bi bi-arrow-right-short"></i></button>'
+            : '';
+        return '<li class="' + cls + '"><div class="vb-msg">'
+             + escapeHtml(i.message || '') + '</div>' + sug + go + '</li>';
+    };
+
     let html = '';
-    if (missing.length) {
-        html += '<li class="vb-head">비어 있는 필수 입력 항목 ' + missing.length + '건</li>';
-        html += missing.map(function (i) { return item(i, 'vb-req'); }).join('');
-    }
-    if (others.length) {
-        html += '<li class="vb-head">그 밖에 확인이 필요한 항목 ' + others.length + '건</li>';
-        html += others.map(function (i) { return item(i, ''); }).join('');
-    }
-    document.getElementById('vbList').innerHTML = html;
-    const count = result.issue_count || issues.length;
+    let count = 0;
+    groups.forEach(function (g) {
+        if (!g.rows.length) return;
+        count += g.rows.length;
+        html += '<li class="vb-head vb-head-' + g.key + '">'
+              + g.head + ' <span class="vb-n">' + g.rows.length + '건</span></li>';
+        html += g.rows.map(function (i) { return item(i, g.cls); }).join('');
+    });
+    const listEl = document.getElementById('vbList');
+    listEl.innerHTML = html;
 
     const titleEl   = document.getElementById('vbTitle');
     const leadEl    = document.getElementById('vbLead');
@@ -1626,20 +1684,57 @@ function showValidationBlock(newStatus, result) {
 
     reasonEl.value = '';
     reasonWrap.style.display = requiresReason ? '' : 'none';
+
+    /* 안내문은 **막는 것의 수**로 말한다. 조언과 검사 못 함까지 한 수로 세면
+     * "20건" 이 되어, 실제로 고쳐야 할 세 건이 묻힌다. */
+    const blocking = groups[0].rows.length + groups[1].rows.length;
     if (requiresReason) {
         titleEl.textContent = '승인 전 확인이 필요합니다';
-        leadEl.innerHTML = '표시사항 검증에서 <b class="text-dark">' + count + '건</b>이 확인됐습니다. '
-            + '이대로 승인하면 표시기준 위반이 될 수 있습니다.';
+        leadEl.innerHTML = (blocking
+            ? '고쳐야 할 것이 <b class="text-dark">' + blocking + '건</b> 있습니다. '
+              + '이대로 승인하면 표시기준 위반이 될 수 있습니다.'
+            : '고쳐야 할 것은 없습니다. 아래는 참고 사항입니다.');
         proceedEl.textContent = '사유 남기고 승인';
     } else {
         titleEl.textContent = '확정 전 확인해 주세요';
-        leadEl.innerHTML = '아래 <b class="text-dark">' + count + '건</b>이 채워지지 않았습니다. '
+        leadEl.innerHTML = '아래 <b class="text-dark">' + blocking + '건</b>이 채워지지 않았습니다. '
             + '그대로 확정하려면 "확인하고 계속"을 눌러주세요. '
             + '확정 사실과 함께 활동 로그에 남습니다.';
         proceedEl.textContent = '확인하고 계속';
     }
 
     const modal = new bootstrap.Modal(document.getElementById('validationBlockModal'));
+
+    /* 누르면 창을 닫고 그 칸으로 데려간다. 다른 탭에 있으면 탭부터 연다. */
+    listEl.onclick = function (ev) {
+        const btn = ev.target.closest('.vb-go');
+        if (!btn) return;
+        const field = btn.dataset.field;
+        modal.hide();
+
+        const tabId = FIELD_TAB[field];
+        if (tabId) {
+            const tabBtn = document.querySelector('[data-bs-target="#' + tabId + '"]');
+            if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+            return;
+        }
+        const el = document.getElementById(anchorOf(field));
+        if (!el) return;
+        // 기본 정보 탭에 있는 칸이라 그 탭을 먼저 연다
+        const pane = el.closest('.tab-pane');
+        if (pane && !pane.classList.contains('active')) {
+            const tabBtn = document.querySelector('[data-bs-target="#' + pane.id + '"]');
+            if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+        }
+        // 탭이 그려진 뒤에 옮긴다 — 숨은 칸은 자리를 모른다
+        setTimeout(function () {
+            el.scrollIntoView({behavior: 'smooth', block: 'center'});
+            el.classList.add('di-highlight');
+            setTimeout(function () { el.classList.remove('di-highlight'); }, 1200);
+            if (typeof el.focus === 'function') el.focus({preventScroll: true});
+        }, 160);
+    };
+
     proceedEl.onclick = function () {
         if (requiresReason) {
             const reason = reasonEl.value.trim();
@@ -3603,6 +3698,28 @@ function getCookie(name) {
   .vb-list li.vb-head:first-child { padding-top: 0; }
   /* 비어 있는 필수 항목은 "고쳐야 채워지는 칸"이라 나머지 지적과 구분한다 */
   .vb-list li.vb-req { border-left: 3px solid #c5221f; }
+
+  /* 심각도를 **색과 왼쪽 선**으로 가른다. 색은 의미다 —
+     빨강은 고쳐야 하는 것, 회색은 참고, 노랑은 아직 못 본 것. */
+  .vb-list li.vb-block    { border-left: 3px solid #c5221f; }
+  .vb-list li.vb-advice   { background: #fafafa; border-color: #e4e6e9;
+                            border-left: 3px solid #9aa0a6; }
+  .vb-list li.vb-unchecked{ background: #fffdf5; border-color: #f0e2b8;
+                            border-left: 3px solid #e0a800; }
+
+  .vb-n { font-weight: 400; color: #80868b; margin-left: 2px; }
+  .vb-head-advice, .vb-head-unchecked { color: #5f6368 !important; }
+
+  /* 지적에서 그 칸으로 가는 단추. 목록의 한 줄이 **할 수 있는 일**을 갖는다 —
+     예전에는 읽고 닫고 직접 찾아가야 했다. */
+  .vb-go {
+    display: inline-flex; align-items: center; gap: 1px;
+    margin-top: 6px; padding: 2px 8px 2px 9px;
+    background: #fff; border: 1px solid #d2d6dc; border-radius: 999px;
+    font-size: 11.5px; color: #1a73e8; cursor: pointer; line-height: 1.6;
+  }
+  .vb-go:hover { background: #e8f0fe; border-color: #1a73e8; }
+  .vb-go i { font-size: 14px; }
 
   /* 우측 패널의 표시 항목 — 240px 안에 18줄이 들어가야 해서 조밀하다 */
   .di-row {

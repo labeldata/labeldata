@@ -14824,3 +14824,114 @@ class 원본은_두_열량_규칙을_섞어_쓴다(TestCase):
                 'fats': 5.0, 'dietary_fiber': None, 'sugar_alcohols': None,
                 'moisture': 50.0, 'ash': 5.0}
         self.assertEqual(verify_row(vals, 100, 'g')[0], False)
+
+
+class 검증_지적은_심각도로_갈린다(TestCase):
+    """
+    예전에는 `required_missing` 과 나머지, 둘뿐이었다. 그래서 지적 스무 건 중
+    진짜 막는 것이 세 건이어도 **스무 건이 다 무겁게 보였고** — 곧 아무도 안
+    읽었다.
+
+    서버는 이미 `advisory` 로 "근거가 있으면 써도 되는 말" 과 "규정 위반" 을
+    가르고 있었다. 화면만 안 쓰고 있었다.
+    """
+
+    def js(self):
+        import io
+        h = io.open('v1/templates/products/product_detail.html', encoding='utf-8').read()
+        return h[h.index('function showValidationBlock'):h.index('function escapeHtml')]
+
+    def test_네_갈래로_나눈다(self):
+        js = self.js()
+        for head in ('비어 있는 필수 입력 항목', '규정에 어긋납니다',
+                     '근거가 있으면 쓸 수 있습니다', '검사하지 못했습니다'):
+            self.assertIn(head, js, head)
+
+    def test_안내문은_막는_것의_수로_말한다(self):
+        """
+        조언과 검사 못 함까지 한 수로 세면 '20건' 이 되어, 실제로 고쳐야 할
+        세 건이 묻힌다.
+        """
+        js = self.js()
+        self.assertIn('const blocking =', js)
+        self.assertIn('고쳐야 할 것이', js)
+
+    def test_검사_못_함은_지적이_아니다(self):
+        """`_unchecked` 는 자료가 없어 판정 자체를 못 한 것이다."""
+        from v1.label.services.validation_service import _unchecked
+        row = _unchecked('food_type_unknown', '자료 없음', '못 봤습니다')
+        self.assertEqual(row['kind'], 'unchecked')
+        self.assertTrue(row['advisory'])
+
+
+class 지적에서_그_칸으로_간다(TestCase):
+    """
+    서버는 `fields` 로 어느 칸인지 **이미 보내고 있었다.** 그런데 모달은 그걸
+    안 썼다 — 읽고, 닫고, 칸을 찾아 고치고, 다시 확정을 눌러야 했다. 지적이
+    열 건이면 이 왕복을 열 번 한다.
+    """
+
+    def js(self):
+        import io
+        h = io.open('v1/templates/products/product_detail.html', encoding='utf-8').read()
+        return h[h.index('function showValidationBlock'):h.index('function escapeHtml')]
+
+    def test_서버가_칸_이름을_보낸다(self):
+        from v1.label.services.validation_service import _issue
+        row = _issue('allergen', '메시지', fields=('allergens',))
+        self.assertEqual(row['fields'], ['allergens'])
+
+    def test_화면이_그것을_쓴다(self):
+        js = self.js()
+        self.assertIn('vb-go', js)
+        self.assertIn('i.fields', js)
+        self.assertIn('scrollIntoView', js)
+
+    def test_칸_id_규칙이_화면과_서버에서_같다(self):
+        """
+        서버의 _DISPLAY_ITEM_ANCHORS 와 같은 규칙이어야 한다 —
+        'field-' + 밑줄을 붙임표로, 예외는 따로.
+        """
+        import inspect
+
+        from v1.products import views
+        src = inspect.getsource(views)
+        self.assertIn("'field-' + field.replace('_', '-')", src)
+        js = self.js()
+        self.assertIn("'field-' + String(field).replace(/_/g, '-')", js)
+        # 예외도 같은 것을 안다
+        self.assertIn('rawmtrl_nm_display', js)
+        self.assertIn("'rawmtrl_nm_display': 'field-rawmtrl-nm'", src)
+
+    def test_다른_탭의_칸이면_탭부터_연다(self):
+        js = self.js()
+        self.assertIn('FIELD_TAB', js)
+        self.assertIn('tab-nutrition', js)
+        self.assertIn('bootstrap.Tab.getOrCreateInstance', js)
+
+
+class 막는_것과_보여_줄_것은_다르다(TestCase):
+    """
+    길을 막는 판정은 advisory 를 뺀다 — 권고로 사람을 세우지 않는다. 그런데
+    **화면에 보낼 때까지** 그것을 빼고 있어서, 창을 띄워 놓고도 근거가 있으면
+    쓸 수 있는 말과 아예 판정을 못 한 항목을 숨겼다.
+    """
+
+    def src(self):
+        import inspect
+
+        from v1.products import views
+        return inspect.getsource(views.product_update_status)
+
+    def test_판정은_여전히_advisory_를_뺀다(self):
+        src = self.src()
+        self.assertIn("if not i.get('advisory')", src)
+
+    def test_화면에는_다_보낸다(self):
+        src = self.src()
+        self.assertIn("'issues': _result.get('issues', _issues)", src)
+        self.assertIn("'unchecked':", src)
+
+    def test_이름을_붙여_보낸다(self):
+        """화면이 영어 키를 그대로 찍으면 안 된다."""
+        self.assertIn('_name_unchecked', self.src())

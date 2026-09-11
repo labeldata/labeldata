@@ -1820,6 +1820,8 @@ def product_update_status(request, product_id):
     validation_override = None
     if new_status == ProductMetadata.Status.CONFIRMED:
         from v1.label.services import validation_service as _vs
+        from v1.label.services.ai_validation_service import (
+            name_unchecked as _name_unchecked)
         try:
             _result = _vs.validate_label(label)
         except Exception:
@@ -1856,7 +1858,22 @@ def product_update_status(request, product_id):
                     # False 면 화면이 사유 입력 없이 "확인하고 계속"만 받는다
                     'requires_reason': _has_workflow_roles,
                     'issue_count': _result.get('issue_count', len(_issues)),
-                    'issues': _issues,
+                    # **막는 것과 보여 줄 것을 가른다.**
+                    #
+                    # 길을 막는 판정(_passed)은 위에서 이미 끝났고 거기서는
+                    # advisory 를 뺀다 — 권고로 사람을 세우지 않는다.
+                    #
+                    # 그런데 화면에 보낼 때까지 그것을 빼고 있었다. 그래서
+                    # 창을 띄워 놓고도 **근거가 있으면 쓸 수 있는 말**과
+                    # **자료가 없어 아예 판정을 못 한 항목**을 숨겼다.
+                    # 사용자는 그 둘을 다른 데서 볼 방법이 없다.
+                    #
+                    # 무엇이 막는지는 화면이 advisory 로 다시 가른다 —
+                    # 서버가 정한 그 값을 그대로 쓴다.
+                    'issues': _result.get('issues', _issues),
+                    # 화면이 영어 키를 찍지 않도록 이름을 붙인다 —
+                    # 검증 보고서(validate_label_server)와 같은 함수를 쓴다.
+                    'unchecked': _name_unchecked(_result.get('unchecked', [])),
                     'missing_required': _missing_names,
                 }, status=400)
 

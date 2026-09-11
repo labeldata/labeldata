@@ -124,6 +124,10 @@ _OWN_SIZED_BUTTONS = frozenset({
     'allergen-add-btn', 'allergen-chip', 'allergen-icon-btn',
     'allergen-selectall-btn', 'btn-apply', 'btn-storage-badge',
     'contacts-filter-btn', 'contacts-icon-btn', 'di-name', 'doc-ver-btn',
+    # 검증 지적 한 줄 안의 '고치러 가기'. di-name 과 같은 성격이다 — 목록의
+    # 한 줄 안에 들어가는 글자 크기의 표식이라 줄 높이가 크기를 정한다.
+    # 공용 단추를 넣으면 줄이 두 배로 높아져 지적 목록이 화면을 넘어간다.
+    'vb-go',
     # 배합 표의 행 머리 단추. 행 머리는 높이 22px·너비 54px 라 공용 단추가
     # 들어가지 않는다 — 표 자체가 정하는 크기다.
     'bom-rowbtn',
