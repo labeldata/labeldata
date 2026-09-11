@@ -1330,7 +1330,10 @@ def my_ingredient_list_combined(request):
         # 라벨명 가져오기
         label_name = None
         try:
-            label_obj = MyLabel.objects.get(my_label_id=label_id)
+            # 남의 라벨 이름까지 보여 줄 일은 없다. 목록 자체는 이미 내
+            # 원료만 나오지만, 이 이름은 안 걸러서 새고 있었다.
+            label_obj = MyLabel.objects.get(
+                my_label_id=label_id, user_id=request.user)
             label_name = label_obj.my_label_name
         except MyLabel.DoesNotExist:
             label_name = None
