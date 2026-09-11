@@ -191,6 +191,19 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
     기타표시사항 인증 표시(HACCP·유기농·비건 등), 상담 번호, 교환 장소,
                  홈페이지, 질소가스충전 표시
 
+extra_texts — **위 어느 칸에도 안 들어간 글자.**
+
+  시안 대조는 "우리가 아는 칸이 맞는가" 만으로는 부족하다. 인쇄물에는 우리가
+  칸을 두지 않은 문구가 얹힌다 — 수상 내역, 이벤트 안내, 바뀐 용량 표시,
+  다른 제품에서 복사해 온 문장. **그런 것이 근거 없이 인쇄되는 것이 위험하다.**
+
+  그래서 위 칸에 담지 못한 글자를 여기 모은다. 문장·구절 단위로, 읽은 그대로.
+  로고·디자인 장식·바코드 숫자는 넣지 않는다 — 글로 읽히는 표시 문구만.
+
+    ["3년 연속 대상 수상", "지금 구매하면 사은품 증정", "NEW 리뉴얼"]
+
+  아무것도 없으면 빈 목록([])으로 둔다. **지어내지 마라.**
+
 응답 규칙:
 - 텍스트가 명확하게 읽히면: {"value": "실제추출값", "confidence": "high"}
 - 글자는 보이는데 확신이 없으면: {"value": null, "confidence": "low", "candidates": ["가능한값1", "가능한값2"]}
@@ -226,7 +239,8 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
   "trans_fats": {"value": null, "confidence": "none"},
   "saturated_fats": {"value": null, "confidence": "none"},
   "cholesterols": {"value": null, "confidence": "none"},
-  "proteins": {"value": null, "confidence": "none"}
+  "proteins": {"value": null, "confidence": "none"},
+  "extra_texts": []
 }
 """
 
@@ -857,6 +871,35 @@ always=True 면 수상하지 않아도 읽는다. **사진을 읽는 모든 자�
         return data
 
 
+def _extra_texts(value):
+    """
+    시안에서 읽었지만 **어느 칸에도 안 들어간 글자.**
+
+    시안 대조는 "우리가 아는 칸이 맞는가" 만으로는 부족하다. 인쇄물에는 우리가
+    칸을 두지 않은 문구가 얹힌다 — 수상 내역, 이벤트 안내, 다른 제품에서
+    복사해 온 문장. **그런 것이 근거 없이 인쇄되는 것이 위험하다.**
+
+    판독기가 무엇을 돌려줄지 믿지 않는다. 글자가 아닌 것, 빈 것, 너무 짧은
+    것(한 글자짜리 기호)은 걸러 낸다. 같은 문구가 여러 면에서 읽히는 일도
+    흔하므로 한 번만 남긴다.
+    """
+    if not isinstance(value, (list, tuple)):
+        return []
+    out, seen = [], set()
+    for item in value:
+        text = str(item or '').strip()
+        if len(text) < 2:
+            continue
+        key = ''.join(text.split())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+        if len(out) >= 40:      # 한 화면에 읽을 수 있는 만큼
+            break
+    return out
+
+
 def _read_bytes(image_file):
     """
     대조에 쓸 원본 바이트. 필요할 때만 읽는다.
@@ -1192,6 +1235,12 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
+
+        # extra_texts 는 {value, confidence} 가 아니라 **글 목록**이다. 아래
+        # 다듬는 단계들은 칸마다 그 모양을 가정하므로, 빼 뒀다가 끝에 다시
+        # 붙인다 — 새 칸 하나 때문에 판독 전체가 실패하면 안 된다.
+        extra_texts = _extra_texts(result.pop('extra_texts', None))
+
         # 대조를 먼저. 아래 줄은 값을 일부러 바꾸는 단계다 (_grounded 주석 참고).
         # 원문 때문에 생긴 오독을 먼저 되돌린 뒤 대조한다 - 순서가 반대면
         # 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
@@ -1204,6 +1253,8 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
             always=verify_companies)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
+
+        result['extra_texts'] = extra_texts
 
         out = {"success": True, "data": result,
                "regions": [r['label'] for r in regions]}
