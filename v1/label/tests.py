@@ -14354,6 +14354,39 @@ class 칸_옆의_설명(TestCase):
         h = self.tpl('v1/templates/includes/_field_help.html')
         self.assertIn('__fhelpReady', h)
 
+    def test_어떤_상자에도_갇히지_않는다(self):
+        """
+        제품 기본정보의 알레르기 카드는 `overflow: hidden` 이라, absolute 로
+        띄운 설명을 **카드 테두리에서 잘랐다.** 마우스를 올려도 안 보였다.
+
+        그 카드 하나를 고칠 수도 있지만 overflow 를 쓰는 조상은 앞으로도
+        생긴다. fixed 로 띄워 조상과 무관하게 만든다.
+        """
+        h = self.tpl('v1/templates/includes/_field_help.html')
+        css = h[h.index('.fhelp-p {'):h.index('.fhelp-p b {')]
+        self.assertIn('position: fixed', css)
+        self.assertNotIn('position: absolute', css)
+        # fixed 는 좌표를 우리가 잡아야 한다
+        self.assertIn('getBoundingClientRect', h)
+
+    def test_자르는_조상이_실제로_있다(self):
+        """고친 이유가 사라지지 않았는지 본다 — 사라졌다면 이 시험이 알려 준다."""
+        h = self.tpl('v1/templates/products/_tab_basic_info.html')
+        root = h[h.index('.allergen-panel-root {'):]
+        root = root[:root.index('}')]
+        self.assertIn('overflow: hidden', root)
+
+    def test_고정해_둔_것은_스크롤을_따라간다(self):
+        """fixed 라 가만두면 화면에 붙박이처럼 남는다."""
+        h = self.tpl('v1/templates/includes/_field_help.html')
+        self.assertIn("addEventListener('scroll'", h)
+        self.assertIn("addEventListener('resize'", h)
+
+    def test_아래가_좁으면_위로_뒤집는다(self):
+        h = self.tpl('v1/templates/includes/_field_help.html')
+        self.assertIn('window.innerHeight', h)
+        self.assertIn('window.innerWidth', h)
+
     # ── 원료관리 ───────────────────────────────────────────────────
     def test_원료_화면이_조각을_부른다(self):
         h = self.tpl('v1/templates/label/my_ingredient_detail_partial.html')
@@ -14695,3 +14728,99 @@ class 남의_라벨_이름은_보이지_않는다(TestCase):
                                {'label_id': la.my_label_id})
         if resp.status_code == 200:
             self.assertNotIn('A의 비밀제품', resp.content.decode())
+
+
+class 후보는_서로_다른_이름이어야_한다(TestCase):
+    """
+    '땅콩' 을 찾으면 다섯 칸이 전부 '땅콩빵' 이었다. 이름이 '땅콩빵' 인 행이
+    DB 에 6 건 있어서다(같은 품목을 여러 해에 조사한 것).
+
+    고르는 사람에게 똑같은 글자 다섯 줄은 **선택지가 하나도 없는 것과 같다** —
+    무엇이 다른지 화면에 안 나오니 고를 근거가 없다.
+    """
+
+    def rows(self, names):
+        from v1.label.models import PublicFoodNutrition as P
+        for i, n in enumerate(names):
+            P.objects.create(
+                food_cd='X%04d' % i, food_nm_kr=n,
+                basis_amount=100, basis_unit=P.BASIS_G,
+                calories=300, carbohydrates=50, proteins=10, fats=5,
+                moisture=30, ash=5,
+                verify_status=P.VERIFY_SKIP, crt_mth_nm='수집')
+
+    def test_이름이_같아도_값이_갈리면_둘_다_남긴다(self):
+        """
+        '버터' 는 동명이 열두 건인데 열량이 164 ~ 761 kcal 로 갈린다 —
+        가공버터와 유지방버터가 같은 이름을 쓴다. 이름으로 접으면 그중
+        하나가 조용히 골라지고, **값이 갈린다는 사실 자체가 사라진다.**
+        모르는 것을 아는 척하게 만드는 접기다.
+        """
+        from v1.label.models import PublicFoodNutrition as P
+        from v1.label.services import nutrition_candidates as ncd
+        for i, cal in enumerate((164.0, 761.0)):
+            P.objects.create(
+                food_cd='B%d' % i, food_nm_kr='버터',
+                basis_amount=100, basis_unit=P.BASIS_G, calories=cal,
+                verify_status=P.VERIFY_SKIP, crt_mth_nm='수집')
+        got = ncd.candidates('버터', limit=5)
+        self.assertEqual(len(got), 2)
+        self.assertIsNotNone(ncd.spread_warning(got))
+
+    def test_같은_이름은_한_번만(self):
+        from v1.label.services import nutrition_candidates as ncd
+        self.rows(['땅콩빵'] * 6 + ['땅콩잼', '꿀땅콩'])
+        got = [c['row'].food_nm_kr for c in ncd.candidates('땅콩', limit=5)]
+        self.assertEqual(len(got), len(set(got)), got)
+        self.assertIn('땅콩빵', got)
+        self.assertIn('땅콩잼', got)
+
+    def test_칸이_남으면_다른_이름으로_채운다(self):
+        from v1.label.services import nutrition_candidates as ncd
+        self.rows(['땅콩빵'] * 6 + ['땅콩잼', '꿀땅콩', '맛땅콩', '땅콩장'])
+        got = [c['row'].food_nm_kr for c in ncd.candidates('땅콩', limit=5)]
+        self.assertEqual(len(got), 5)
+        self.assertEqual(len(set(got)), 5)
+
+
+class 원본은_두_열량_규칙을_섞어_쓴다(TestCase):
+    """
+    6 만 행을 재 보고 알았다.
+
+        표기 51.0  ->  규정 43.03 / 단순 51.23   이 행은 단순 4·4·9 다
+        표기 37.0  ->  규정 38.92 / 단순 44.92   이 행은 규정 계수다
+
+    어느 쪽으로 만든 행인지는 알 수 없다. 한 규칙으로만 재면 다른 규칙으로
+    만든 행이 억울하게 걸린다.
+
+        규정만      어긋남 894 (1.49 %)
+        단순만      어긋남 1110 (1.85 %)
+        둘 중 하나  어긋남 848 (1.41 %)
+    """
+
+    def test_단순_4_4_9_로_만든_행도_통과한다(self):
+        from v1.label.services.mfds_nutrition import verify_row
+        # 식이섬유가 많아 규정 계수로는 43 kcal 이지만 표기는 51 이다
+        vals = {'calories': 51.0, 'carbohydrates': 12.9, 'proteins': 0.3,
+                'fats': 0.1, 'dietary_fiber': 4.1, 'sugar_alcohols': None,
+                'moisture': 85.6, 'ash': 1.1}
+        self.assertEqual(verify_row(vals, 100, 'g')[0], True)
+
+    def test_규정_계수로_만든_행도_통과한다(self):
+        from v1.label.services.mfds_nutrition import verify_row
+        vals = {'calories': 37.0, 'carbohydrates': 8.0, 'proteins': 1.0,
+                'fats': 0.3, 'dietary_fiber': 3.0, 'sugar_alcohols': None,
+                'moisture': 88.0, 'ash': 1.0}
+        self.assertEqual(verify_row(vals, 100, 'g')[0], True)
+
+    def test_자릿수가_밀린_행은_여전히_잡는다(self):
+        """
+        이 검산이 잡으려는 것은 계수 다툼이 아니라 밀린 번호다. 그런 행은
+        두 규칙 모두에서 어긋난다 — 둘 다 받아도 놓치지 않는다.
+        """
+        from v1.label.services.mfds_nutrition import verify_row
+        # 번호가 밀리면 두 배씩 어긋난다 — 두 규칙 모두에서 걸린다
+        vals = {'calories': 283.0, 'carbohydrates': 30.0, 'proteins': 10.0,
+                'fats': 5.0, 'dietary_fiber': None, 'sugar_alcohols': None,
+                'moisture': 50.0, 'ash': 5.0}
+        self.assertEqual(verify_row(vals, 100, 'g')[0], False)
