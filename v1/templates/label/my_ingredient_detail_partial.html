@@ -416,15 +416,6 @@
             </button>
         </h5>
         <div class="panel-actions">
-            {% comment %}
-              [튜토리얼] 은 이 화면만 짚는다. 원료 등록에서 사람들이 실제로
-              막히는 자리는 셋이다 — 품목보고번호가 무엇을 해 주는지, 영양성분을
-              꼭 넣어야 하는지, 자동감지한 알레르기를 믿어도 되는지.
-            {% endcomment %}
-            <button type="button" class="panel-btn" id="ingCoachBtn"
-                    onclick="if (window.ezCoach) ezCoach.start();">
-                <i class="bi bi-question-circle"></i> 튜토리얼
-            </button>
             <button type="button" class="panel-btn" id="closeBtn">입력 초기화</button>
             {% if not read_only %}
             {% if mode == 'edit' and not is_guest %}<button type="button" class="panel-btn danger" id="deleteBtn"><i class="bi bi-trash"></i> 삭제</button>{% endif %}

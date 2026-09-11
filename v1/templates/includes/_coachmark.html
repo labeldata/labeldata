@@ -281,12 +281,44 @@
 
   window.ezCoach = { start: start, stop: stop, seen: seen };
 
+  /* 사이드바의 [튜토리얼] 은 **걸음이 있는 화면에서만** 드러난다.
+   *
+   * 사이드바는 어느 화면에나 있으므로, 그냥 두면 걸음을 아직 안 적은 화면
+   * (BOM·검증·문서함…)에서도 단추가 보인다. 눌러도 아무 일이 없는 단추를
+   * 늘 띄워 두면 사용자는 곧 그 단추를 안 보게 되고, 정작 걸음이 있는
+   * 화면에서도 안 누른다.
+   *
+   * 걸음이 있는지는 .ezc-steps 가 있는지로 안다 — 화면이 그것을 적어 두는
+   * 것이 이 엔진의 규약이다. */
+  function showNavButton() {
+    var btn = document.getElementById('ezCoachNavBtn');
+    if (!btn) return;
+    btn.hidden = !holder();
+  }
+
   /* 권하기는 화면이 다 그려진 뒤에 한다. 제품 상세는 탭·iframe 이 늦게
      자리를 잡아서, 바로 재면 아직 크기가 0 인 것이 많다. */
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(offer, 600); });
-  } else {
+  function ready() {
+    showNavButton();
     setTimeout(offer, 600);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ready);
+  } else {
+    ready();
+  }
+
+  /* 원료 상세는 목록에서 **부분만 갈아 끼운다**(AJAX). 그때 .ezc-steps 가
+     새로 들어오거나 사라지므로 단추도 따라가야 한다. 갈아 끼우는 자리를
+     일일이 찾아 부르게 하는 대신 여기서 지켜본다 — 부르는 곳을 하나라도
+     빠뜨리면 단추가 틀린 상태로 남는다. */
+  if (window.MutationObserver) {
+    var pending = null;
+    new MutationObserver(function () {
+      clearTimeout(pending);
+      pending = setTimeout(showNavButton, 120);
+    }).observe(document.body, {childList: true, subtree: true});
   }
 })();
 </script>

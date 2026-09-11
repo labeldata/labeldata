@@ -85,10 +85,37 @@
                 </a>
             </div>
 
-            <div class="px-2">
-                <a class="btn btn-white shadow-sm rounded-pill py-2 px-3 w-100 text-start border d-flex align-items-center gap-2" href="{% url 'products:product_create' %}">
+            {% comment %}
+              [튜토리얼] 을 여기 둔다.
+
+              처음에는 화면마다 머리에 붙였는데 **찾지 못했다.** 저장·삭제·공유
+              같은 **행동 단추들 사이**에 섞여 있었기 때문이다 — 도움을 찾는
+              눈이 가는 자리가 아니고, 그 줄은 이미 단추가 넷이었다.
+
+              사이드바는 **어느 화면에서나 같은 자리**다. 한 번 익히면 전부
+              통하고, 나중에 BOM·검증에 걸음을 더할 때 붙일 자리를 새로 고민할
+              필요도 없다.
+
+              '새로 만들기' 와 한 줄에 둔다. 세로로 쌓으면 메뉴가 한 줄 길어져
+              아래 항목이 그만큼 밀린다 — 둘 다 자주 쓰는 것도 아니다.
+              접힌 사이드바(nav-label 이 사라지는 상태)에서는 아이콘만 남는다.
+            {% endcomment %}
+            <div class="px-2 d-flex gap-2 align-items-stretch">
+                <a class="btn btn-white shadow-sm rounded-pill py-2 px-3 flex-grow-1 text-start border d-flex align-items-center gap-2" href="{% url 'products:product_create' %}">
                     <i class="bi bi-plus-lg text-primary" style="flex-shrink:0;"></i><span class="nav-label fw-medium">새로 만들기</span>
                 </a>
+                {% comment %}
+                  이 화면에 걸음이 없으면 스스로 숨는다(엔진이 .ezc-steps 를
+                  못 찾으면 hidden 을 붙인다). 눌러도 아무 일이 없는 단추를
+                  어느 화면에나 띄워 두면 곧 안 보게 된다.
+                {% endcomment %}
+                <button type="button" id="ezCoachNavBtn"
+                        class="btn btn-white shadow-sm rounded-pill py-2 px-3 border d-flex align-items-center justify-content-center flex-shrink-0"
+                        title="이 화면 사용법을 짚어 드립니다" hidden
+                        onclick="if (window.ezCoach) ezCoach.start();">
+                    <i class="bi bi-question-circle text-primary"></i>
+                    <span class="nav-label ms-2 fw-medium">튜토리얼</span>
+                </button>
             </div>
 
             <div class="nav flex-column v2-sidebar-nav">

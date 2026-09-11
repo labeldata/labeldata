@@ -4883,13 +4883,53 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         offer = offer[:offer.index('window.ezCoach =')]
         self.assertIsNone(re.search(r'^\s*start\(\);', offer, re.M))
 
+    def base(self):
+        import io
+        return io.open('v1/templates/base_v2.html', encoding='utf-8').read()
+
+    def test_들어가는_자리는_사이드바_한_곳이다(self):
+        """
+        처음에는 화면마다 머리에 붙였는데 **찾지 못했다.** 저장·삭제·공유 같은
+        행동 단추들 사이에 섞여 있었기 때문이다 — 도움을 찾는 눈이 가는 자리가
+        아니고, 그 줄은 이미 단추가 넷이었다.
+
+        사이드바는 어느 화면에서나 같은 자리다. 한 번 익히면 전부 통한다.
+        """
+        base = self.base()
+        self.assertIn('id="ezCoachNavBtn"', base)
+        self.assertIn('ezCoach.start()', base)
+        # 같은 일을 하는 단추가 둘이면 어느 것을 눌러야 하는지 묻게 된다
+        for html in (self.product, self.ingredient):
+            self.assertNotIn('ezCoach.start()', html)
+
+    def test_새로_만들기와_한_줄에_둔다(self):
+        """세로로 쌓으면 메뉴가 한 줄 길어져 아래 항목이 그만큼 밀린다."""
+        base = self.base()
+        at = base.index('id="ezCoachNavBtn"')
+        head = base.rindex('<div class="px-2', 0, at)
+        self.assertIn('d-flex', base[head:at])
+        self.assertIn('새로 만들기', base[head:at])
+
+    def test_걸음이_없는_화면에서는_숨는다(self):
+        """
+        사이드바는 어느 화면에나 있다. 그냥 두면 걸음을 아직 안 적은 화면에서도
+        단추가 보이고, 눌러도 아무 일이 없는 단추를 늘 띄워 두면 사용자는 곧 그
+        단추를 안 보게 된다.
+        """
+        base = self.base()
+        at = base.index('id="ezCoachNavBtn"')
+        self.assertIn('hidden', base[at:at + 400])
+        engine = self.engine
+        self.assertIn('function showNavButton', engine)
+        self.assertIn('btn.hidden = !holder()', engine)
+
+    def test_부분만_갈아_끼워도_따라간다(self):
+        """원료 상세는 목록에서 AJAX 로 갈아 끼운다 — 그때 걸음이 오간다."""
+        self.assertIn('MutationObserver', self.engine)
+
     def test_게스트에게도_보인다(self):
         """게스트는 둘러보러 온 사람이다 — 설명이 가장 필요한 쪽이다."""
-        for html, mark in ((self.product, 'id="productCoachBtn"'),
-                           (self.ingredient, 'id="ingCoachBtn"')):
-            head = html.rindex('{% if', 0, html.index(mark)) if '{% if' in html[:html.index(mark)] else 0
-            self.assertNotIn('is_guest', html[head:html.index(mark)])
-
-    def test_단추는_두_화면_모두에_있다(self):
-        for html in (self.product, self.ingredient):
-            self.assertIn('ezCoach.start()', html)
+        base = self.base()
+        at = base.index('id="ezCoachNavBtn"')
+        head = base.rindex('<div class="px-2', 0, at)
+        self.assertNotIn('is_guest', base[head:at])
