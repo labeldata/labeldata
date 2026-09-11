@@ -63,18 +63,48 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - rawmtrl_nm: 원재료명 항목의 내용 **전체**. 길어도 끊지 말고 끝까지 적는다.
     괄호와 대괄호 안의 하위 원료·원산지·함량을 모두 그대로 옮긴다.
     **다만 아래 allergens 에 해당하는 "○○ 함유" 문구는 여기서 뺀다**
-- allergens: 알레르기 유발물질 주의문구. 원재료명 아래나 옆에 **별도 칸**(대개
-    검은 바탕에 흰 글씨)으로 "알류(달걀), 우유, 대두, 밀 함유" 처럼 적힌다.
+- allergens: 알레르기 유발물질 표시. **이 제품에 들어 있는 것**을 밝히는 문구다.
     **적힌 그대로 옮긴다.** 맨 뒤의 "함유" 만 빼고 나머지는 손대지 마라.
-    - 괄호를 **빼지 마라.** "알류(달걀)" 을 "알류" 나 "달걀" 로 줄이면 안 된다.
+
+    ▶ 생김새로 찾지 마라. **문장의 끝으로 가른다.**
+
+        "… 함유"                      -> allergens   (들어 있다)
+        "…를 사용한 제품과 같은        -> cautions    (안 들어 있다.
+         제조시설에서 제조합니다"                      옆 공장 이야기다)
+        "… 혼입될 수 있습니다"        -> cautions
+
+      두 문구는 **생김새가 거의 같다** — 둘 다 알레르기 이름을 쉼표로 늘어놓는다.
+      길이로도 가르지 마라. 혼입 문구가 더 길 때가 많지만 늘 그렇지는 않다.
+
+    ▶ 자리도 고정이 아니다. 별도 칸(검은 바탕에 흰 글씨)일 때도 있고,
+      **원재료명 줄의 맨 끝에 가는 테두리 상자**로 붙어 있을 때도 많다.
+      원재료명 칸의 오른쪽 끝을 반드시 확인하라.
+
+    ▶ 되짚어 보기: allergens 에 넣으려는 이름이 **원재료명에 없으면** 거의 틀렸다.
+      혼입 문구를 잘못 집은 것이다.
+
+      실제로 틀린 예 — 이 라벨은
+
+          원재료명  … 돼지고기 95.36%/국산, 돼지지방/국산, 정제수, …
+                    [ 돼지고기, 쇠고기 함유 ]     <- 줄 끝의 작은 상자
+          주의사항  알류(달걀),우유,밀,메밀,땅콩,고등어,게,새우,복숭아,토마토,
+                    아황산류,호두,닭고기,오징어,조개류(굴,전복,홍합)를 사용한
+                    제품과 같은 시설에서 제조
+
+      allergens 는 **"돼지고기, 쇠고기"** 다. 주의사항의 긴 목록이 아니다 —
+      그 목록의 복숭아·토마토·오징어는 원재료명 어디에도 없다.
+
+    ▶ 괄호를 **빼지 마라.** "알류(달걀)" 을 "알류" 나 "달걀" 로 줄이면 안 된다.
       그 괄호가 무엇을 넣었는지 밝히는 부분이라 라벨에 그대로 인쇄된다.
-    - 이름을 바꾸지 마라. "알류" 라고 적혀 있으면 "달걀" 로 고치지 않는다.
-    같은 제조시설 문구(주의사항)는 여기가 아니라 cautions 다
+    ▶ 이름을 바꾸지 마라. "알류" 라고 적혀 있으면 "달걀" 로 고치지 않는다.
+    ▶ 함유 문구가 정말 없으면 none 이다. **주의사항에서 끌어오지 마라.**
 - ingredient_info: 특정성분 함량 (예: 홍삼농축액 30%)
 - frmlc_mtrqlt: 포장재질 (예: PET(용기, 리드지), PE(드레싱), PP, 종이)
 - pog_daycnt: 소비기한 / 유통기한 (예: 별도표기일까지, 제조일로부터 12개월)
-- cautions: 주의사항 칸의 내용 전체. 같은 제조시설 혼입 가능 문구,
-    섭취·보관 주의, 용기 팽창 주의 등
+- cautions: 주의사항 칸의 내용 전체. 섭취·보관 주의, 용기 팽창 주의 등.
+    **같은 제조시설 혼입 가능 문구는 여기다** — 알레르기 이름이 길게 늘어서
+    있어도 allergens 로 보내지 마라. 끝이 "제조" 나 "있습니다" 로 끝나면
+    혼입 문구이고, 여기 그대로 둔다.
 - additional_info: 위에 없는 기타 표시사항. **제품교환장소, 고객상담실/소비자상담실
     번호, 부정불량식품 신고번호, 질소가스충전 표시, 홈페이지 주소, 환경 문구** 등
     규정 항목에 해당하지 않는 문구를 줄바꿈으로 이어서 적는다
@@ -871,6 +901,56 @@ always=True 면 수상하지 않아도 읽는다. **사진을 읽는 모든 자�
         return data
 
 
+# 혼입 가능 문구의 꼬리. 이 말로 끝나면 **안 들어 있다**는 뜻이다.
+_CROSS_CONTAMINATION = (
+    '같은 시설', '같은 제조시설', '동일 시설', '동일한 시설',
+    '같은 라인', '동일 제조시설', '혼입될 수', '혼입 가능', '혼입가능',
+)
+
+
+def separate_cross_contamination(data):
+    """
+    알레르기 칸에 들어온 **혼입 가능 문구**를 주의사항으로 되돌린다.
+
+    프롬프트만으로는 막히지 않았다. 두 문구는 생김새가 거의 같기 때문이다 —
+    둘 다 알레르기 이름을 쉼표로 늘어놓는다.
+
+        알류(달걀), 우유, 대두, 밀 함유                    <- 들어 있다
+        알류(달걀),우유,밀,…,조개류(굴,전복,홍합)를        <- 안 들어 있다.
+        사용한 제품과 같은 시설에서 제조                       옆 공장 이야기다
+
+    운영에서 뒤엣것이 allergens 로 들어왔고, **진짜 알레르기 표시(돼지고기,
+    쇠고기 함유)는 통째로 사라졌다.** 없는 알레르기가 라벨에 인쇄되고 있는
+    것이 붙는 것보다 나쁘다 — 열네 가지를 다 적은 라벨은 아무 말도 안 한 것과
+    같다.
+
+    되돌리기만 한다. **진짜 값을 지어내지 않는다** — 못 읽은 것은 못 읽은
+    것이고, 사람이 채운다.
+    """
+    data = dict(data or {})
+    item = data.get('allergens')
+    if not isinstance(item, dict):
+        return data
+    text = str(item.get('value') or '')
+    if not text or not any(mark in text for mark in _CROSS_CONTAMINATION):
+        return data
+
+    logger.info('알레르기 칸의 혼입 문구를 주의사항으로 옮긴다: %s', text[:60])
+
+    data['allergens'] = {'value': None, 'confidence': 'none',
+                         'moved_to_cautions': True}
+
+    # 주의사항에 이미 같은 말이 있으면 두 번 적지 않는다
+    caution = data.get('cautions')
+    prev = str(caution.get('value') or '') if isinstance(caution, dict) else ''
+    key = ''.join(text.split())
+    if key and key not in ''.join(prev.split()):
+        merged = (prev + chr(10) + text).strip() if prev else text
+        data['cautions'] = {'value': merged,
+                            'confidence': (caution or {}).get('confidence') or 'high'}
+    return data
+
+
 def _extra_texts(value):
     """
     시안에서 읽었지만 **어느 칸에도 안 들어간 글자.**
@@ -1251,6 +1331,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         result = _companies_rechecked(
             client, model, [r['b64'] for r in regions], result,
             always=verify_companies)
+        result = separate_cross_contamination(result)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 

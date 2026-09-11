@@ -8841,7 +8841,8 @@ class AllergensStayAsPrintedTests(TestCase):
     def test_프롬프트가_그대로_옮기라고_말한다(self):
         src = _src('label/services/ocr_service.py')
         head = src.index('- allergens:')
-        block = src[head:head + 700]
+        # 길이로 자르지 않는다 — 설명이 자라면 끊긴다
+        block = src[head:src.index('- ingredient_info:', head)]
         self.assertIn('**적힌 그대로 옮긴다.**', block)
         self.assertIn('괄호를 **빼지 마라.**', block)
         self.assertIn('"알류(달걀)" 을 "알류" 나 "달걀" 로 줄이면 안 된다', block)
@@ -15781,47 +15782,6 @@ class 새로고침이_알림을_삼키지_않는다(TestCase):
                 self.fail('새로고침 앞의 success 스낵바가 남아 있다: ' + line.strip()[:60])
 
 
-class 접었을_때는_담는_칸을_내용에_맞춘다(TestCase):
-    """
-    #grid-container 는 flex:1 1 0 이라 남은 높이를 통째로 먹고, 표는
-    height:'100%' 로 그것을 받는다. 25 줄일 때는 그래야 맞다 — 표가 제 안에서
-    굴러야 머리글이 붙어 있다.
-
-    그런데 접어서 9 줄이 되면 칸 높이와 표가 아는 높이가 어긋나면서 마지막
-    줄(나트륨)이 경계에 걸려 **글자가 잘렸다.** refreshDimensions() 로는 안
-    됐다 — 칸 자체가 여전히 '남은 높이' 이기 때문이다.
-    """
-
-    def tpl(self):
-        import io
-        return io.open('v1/templates/products/nutrition_editor.html',
-                       encoding='utf-8').read()
-
-    def body(self):
-        h = self.tpl()
-        b = h[h.index('function applyExtraFold'):]
-        return b[:b.index('\n}')]
-
-    def test_접으면_높이를_못_박는다(self):
-        b = self.body()
-        self.assertIn("box.style.flex = '0 0 auto'", b)
-        self.assertIn('box.style.height =', b)
-
-    def test_펴면_되돌린다(self):
-        b = self.body()
-        self.assertIn("box.style.flex = ''", b)
-        self.assertIn("box.style.height = ''", b)
-
-    def test_셈하지_않고_잰다(self):
-        """
-        처음에는 `줄수 × 22 + 머리글 30` 으로 셈했다가 또 잘렸다. rowHeights 는
-        우리가 바라는 값이지 그려진 높이가 아니다.
-        """
-        b = self.body()
-        self.assertIn('offsetHeight', b)
-        self.assertNotIn('shown * ROW', b)
-
-
 class 검증이_보는_식품유형과_화면이_보여_주는_것이_같다(TestCase):
     """
     원산지 판정은 원료 보관함의 마스터(`MyIngredient.prdlst_dcnm`)를 봤는데,
@@ -15908,11 +15868,13 @@ class 저장했으면_어떻게든_말한다(TestCase):
         self.assertIn('showSaveStatusMsg()', h[at:at + 200])
 
 
-class 높이는_재서_쓴다(TestCase):
+class 높이를_손으로_정하지_않는다(TestCase):
     """
-    앞서 `줄수 × 22 + 머리글 30` 으로 셈했다가 **또 잘렸다.** rowHeights 는
-    우리가 바라는 값이고 실제로 그려진 높이가 아니다 — 테두리·글꼴·줄바꿈이
-    붙으면 더 커진다. 짐작한 높이가 실제보다 작으면 마지막 줄이 그만큼 잘린다.
+    나트륨이 세 번 잘렸다. 셈해도, 재서 못 박아도 잘렸다 — 셋 다 **표가 제
+    안에서 굴러야 한다**는 전제를 지킨 채 높이를 맞추려 한 것이다.
+
+    접었으면 굴릴 일이 없다. Handsontable 에게 맡기고 우리는 아무 숫자도
+    정하지 않는다.
     """
 
     def body(self):
@@ -15920,23 +15882,13 @@ class 높이는_재서_쓴다(TestCase):
         h = io.open('v1/templates/products/nutrition_editor.html',
                     encoding='utf-8').read()
         b = h[h.index('function applyExtraFold'):]
-        return b[:b.index('\n}')]
+        return b[:b.index(chr(10) + '}')]
 
-    def test_그려진_것을_잰다(self):
+    def test_숫자를_정하지_않는다(self):
         b = self.body()
-        self.assertIn("querySelector('.ht_master .htCore')", b)
-        self.assertIn('offsetHeight', b)
-
-    def test_셈하지_않는다(self):
-        b = self.body()
-        self.assertNotIn('shown * ROW', b)
+        self.assertNotIn('offsetHeight', b)
+        self.assertNotIn('box.style.height', b)
         self.assertNotIn('const ROW = 22', b)
-
-    def test_아직_안_그려졌으면_건드리지_않는다(self):
-        """잘못 잰 값으로 못 박느니 원래대로 두는 편이 낫다."""
-        b = self.body()
-        self.assertIn('core.offsetHeight > 0', b)
-
 
 class 시안에서_읽은_모든_글자를_견준다(TestCase):
     """
@@ -16040,3 +15992,161 @@ class 시안에서_읽은_모든_글자를_견준다(TestCase):
         """
         js = self.js()
         self.assertIn('var toCheck = diff.length + numDiff.length + groundlessCount', js)
+
+
+class 혼입_문구를_알레르기로_읽지_않는다(TestCase):
+    """
+    운영 라벨에서 이렇게 나왔다.
+
+        원재료명  … 돼지고기 95.36%/국산, 돼지지방/국산, 정제수, …
+                  [ 돼지고기, 쇠고기 함유 ]        <- 줄 끝의 작은 상자
+        주의사항  알류(달걀),우유,밀,메밀,땅콩,고등어,게,새우,복숭아,토마토,
+                  아황산류,호두,닭고기,오징어,조개류(굴,전복,홍합)를 사용한
+                  제품과 같은 시설에서 제조
+
+    판독기가 **주의사항의 긴 목록을 알레르기로 넣고, 진짜 표시(돼지고기,
+    쇠고기)는 통째로 잃었다.**
+
+    두 문구는 생김새가 거의 같다 — 둘 다 알레르기 이름을 쉼표로 늘어놓는다.
+    가르는 것은 **문장의 끝**이다.
+
+        "… 함유"                    들어 있다
+        "… 같은 시설에서 제조"      안 들어 있다. 옆 공장 이야기다
+
+    없는 알레르기가 인쇄되는 것이 빠지는 것보다 나쁘다 — 열네 가지를 다 적은
+    라벨은 아무 말도 안 한 것과 같다.
+    """
+
+    def f(self, data):
+        from v1.label.services.ocr_service import separate_cross_contamination
+        return separate_cross_contamination(data)
+
+    CROSS = ('알류(달걀),우유,밀,메밀,땅콩,고등어,게,새우,복숭아,토마토,'
+             '아황산류,호두,닭고기,오징어,조개류(굴,전복,홍합)를 사용한 '
+             '제품과 같은 시설에서 제조')
+
+    def test_혼입_문구는_알레르기에서_뺀다(self):
+        out = self.f({'allergens': {'value': self.CROSS, 'confidence': 'high'}})
+        self.assertIsNone(out['allergens']['value'])
+        self.assertEqual(out['allergens']['confidence'], 'none')
+
+    def test_주의사항으로_옮긴다(self):
+        """지우면 라벨에 있던 문구가 사라진다. 자리를 바꿀 뿐이다."""
+        out = self.f({'allergens': {'value': self.CROSS, 'confidence': 'high'},
+                      'cautions': {'value': '개봉 후 빨리 드십시오',
+                                   'confidence': 'high'}})
+        self.assertIn('개봉 후 빨리', out['cautions']['value'])
+        self.assertIn('같은 시설에서 제조', out['cautions']['value'])
+
+    def test_두_번_적지_않는다(self):
+        out = self.f({'allergens': {'value': self.CROSS, 'confidence': 'high'},
+                      'cautions': {'value': self.CROSS, 'confidence': 'high'}})
+        self.assertEqual(out['cautions']['value'].count('같은 시설에서 제조'), 1)
+
+    def test_진짜_알레르기는_건드리지_않는다(self):
+        out = self.f({'allergens': {'value': '돼지고기, 쇠고기',
+                                    'confidence': 'high'}})
+        self.assertEqual(out['allergens']['value'], '돼지고기, 쇠고기')
+
+    def test_값을_지어내지_않는다(self):
+        """못 읽은 것은 못 읽은 것이다. 사람이 채운다."""
+        out = self.f({'allergens': {'value': self.CROSS, 'confidence': 'high'}})
+        self.assertTrue(out['allergens'].get('moved_to_cautions'))
+        self.assertIsNone(out['allergens']['value'])
+
+    def test_여러_말투를_안다(self):
+        from v1.label.services.ocr_service import _CROSS_CONTAMINATION
+        for mark in ('같은 시설', '동일 시설', '혼입될 수', '같은 라인'):
+            self.assertIn(mark, _CROSS_CONTAMINATION)
+
+    def test_판독_흐름에_끼워져_있다(self):
+        import inspect
+
+        from v1.label.services import ocr_service
+        src = inspect.getsource(ocr_service)
+        self.assertIn('result = separate_cross_contamination(result)', src)
+
+    def test_프롬프트가_문장_끝으로_가르라고_말한다(self):
+        import io
+        src = io.open('v1/label/services/ocr_service.py', encoding='utf-8').read()
+        self.assertIn('문장의 끝으로 가른다', src)
+        self.assertIn('원재료명에 없으면** 거의 틀렸다', src)
+        self.assertIn('주의사항에서 끌어오지 마라', src)
+
+
+class 접었으면_굴리지_않는다(TestCase):
+    """
+    나트륨이 세 번 잘렸다. refreshDimensions() 로, `줄수 × 22` 로, 그려진
+    높이를 재서 못 박는 것으로 — **셋 다 표가 제 안에서 굴러야 한다는 전제를
+    지킨 채** 높이를 맞추려 한 것이다. 그 전제가 있는 한 칸 높이와 표 높이가
+    어긋날 자리가 남고, 어긋난 만큼 마지막 줄이 잘린다.
+
+    전제를 버린다. 접었으면 굴릴 일이 없으니 내용만큼만 차지하게 둔다 —
+    **높이를 정하는 곳이 한 군데**가 되므로 어긋날 자리가 사라진다.
+    """
+
+    def body(self):
+        import io
+        h = io.open('v1/templates/products/nutrition_editor.html',
+                    encoding='utf-8').read()
+        b = h[h.index('function applyExtraFold'):]
+        return b[:b.index('\n}')]
+
+    def test_접으면_auto_로_바꾼다(self):
+        b = self.body()
+        self.assertIn("height: folded ? 'auto' : '100%'", b)
+
+    def test_높이를_손으로_정하지_않는다(self):
+        b = self.body()
+        self.assertNotIn('box.style.height', b)
+        self.assertNotIn('offsetHeight', b)
+
+    def test_접었을_때는_자르지_않는다(self):
+        import io
+        css = io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
+        block = css[css.index('#grid-container.is-folded {'):]
+        block = block[:block.index('}')]
+        self.assertIn('overflow: visible', block)
+        self.assertIn('height: auto', block)
+
+
+class 인쇄되는_이름으로_순서를_본다(TestCase):
+    """
+    원재료 순서 검사는 **원료명**으로 문구를 뒤졌다. 그런데 요약은 기본이
+    '식품유형 기준' 이라 인쇄되는 것은 그 원료의 **식품유형**일 때가 많다.
+    이름이 엇갈리면 남의 자리를 짚는다.
+
+        8 줄   원료명 '당류가공품'  식품유형 (없음)      -> 인쇄 '코로네초코필링'
+        12 줄  원료명 '커스타드'    식품유형 '당류가공품' -> 인쇄 '당류가공품'
+
+    문구에서 '당류가공품' 을 찾으면 12 줄의 자리가 나오는데 배합비는 8 줄의
+    것(2.43%)을 쓴다. 그래서 없는 위반이 만들어졌다 — 운영에서
+    "허쉬미니…(0.88%)가 당류가공품(2.43%)보다 앞" 이 그것이다.
+    """
+
+    def test_화면과_같은_규칙을_쓴다(self):
+        import inspect
+
+        from v1.label.services import validation_service as vs
+        src = inspect.getsource(vs._printed_names)
+        self.assertIn("'원재료명'", src)
+        self.assertIn('food_type', src)
+        self.assertIn('raw_material_name', src)
+
+    def test_순서_검사가_그것을_쓴다(self):
+        import inspect
+
+        from v1.label.services import validation_service as vs
+        src = inspect.getsource(vs.check_ingredient_order_by_ratio)
+        self.assertIn('_printed_names(label)', src)
+
+    def test_배합을_못_읽어도_멈추지_않는다(self):
+        """배합을 못 읽는다고 순서 검사가 통째로 멈추면 안 된다."""
+        from v1.label.services.validation_service import _printed_names
+
+        class _Broken:
+            pk = 1
+
+            def __str__(self):
+                raise RuntimeError('읽을 수 없다')
+        self.assertEqual(_printed_names(_Broken()), {})

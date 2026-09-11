@@ -504,3 +504,21 @@ body {
   color: var(--v2-blue, #1a73e8);
   background: #f8fbff;
 }
+
+/* 접었을 때 — 굴리지 않는다.
+
+   #grid-container 는 남은 높이를 먹고(flex:1 1 0) 표가 그 안에서 구른다.
+   25 줄일 때는 그래야 머리글이 붙어 있다. 그런데 접어서 9 줄이 되면 굴릴
+   일이 없는데도 칸 높이와 표 높이가 어긋나 마지막 줄(나트륨)이 잘렸다.
+
+   접었으면 **내용만큼만** 차지하게 두고 자르지 않는다. 높이를 정하는 곳이
+   한 군데(내용)가 되므로 어긋날 자리가 사라진다. */
+#grid-container.is-folded {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+}
+#grid-container.is-folded #nutrition-grid { height: auto; }
+/* 가로는 여전히 넘칠 수 있다 — 그건 굴려야 한다 */
+#grid-container.is-folded .handsontable .wtHolder { overflow-x: auto; }
