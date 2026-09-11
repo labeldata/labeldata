@@ -11894,7 +11894,10 @@ class ValidationTabTests(TestCase):
     def test_안쪽_규정_검증_단추는_감춘다(self):
         """같은 일을 하는 단추가 위아래로 둘이면 어느 것이 무엇인지 모른다."""
         js = open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
-        head = js.index('window.parent !== window')
+        # 'window.parent !== window' 는 저장 알림에서도 쓴다 — 단추를 빼는
+        # 자리를 이름으로 집는다
+        head = js.index("getElementById('saveSettingsBtn');" + chr(10)
+                        + "        if (embeddedSave)")
         self.assertIn("getElementById('ruleValidationBtn')", js[head:head + 700])
 
     def test_검증이_미리보기_자리를_먹지_않는다(self):
@@ -15809,9 +15812,14 @@ class 접었을_때는_담는_칸을_내용에_맞춘다(TestCase):
         self.assertIn("box.style.flex = ''", b)
         self.assertIn("box.style.height = ''", b)
 
-    def test_줄_수로_센다(self):
+    def test_셈하지_않고_잰다(self):
+        """
+        처음에는 `줄수 × 22 + 머리글 30` 으로 셈했다가 또 잘렸다. rowHeights 는
+        우리가 바라는 값이지 그려진 높이가 아니다.
+        """
         b = self.body()
-        self.assertIn('ALL_NUTRIENTS.length - hide.length', b)
+        self.assertIn('offsetHeight', b)
+        self.assertNotIn('shown * ROW', b)
 
 
 class 검증이_보는_식품유형과_화면이_보여_주는_것이_같다(TestCase):
@@ -15855,6 +15863,79 @@ class 검증이_보는_식품유형과_화면이_보여_주는_것이_같다(Tes
         class _Broken:
             pk = 1
         self.assertEqual(_bom_food_types(_Broken()), {})
+
+
+class 저장했으면_어떻게든_말한다(TestCase):
+    """
+    검증 탭에서 저장을 눌러도 **반응이 없었다.**
+
+    미리보기 설정 저장은 성공하면 제 저장 단추를 깜빡이는 것이 전부였다.
+    그런데 탭 안에서는 그 단추를 빼 둔다 — 같은 일을 하는 단추가 위아래로
+    둘이면 어느 것을 눌러야 하는지 묻게 되기 때문이다. 그래서
+    `if (saveBtn)` 이 거짓이 되고 **그걸로 끝**이었다.
+
+        저장은 된다 · 화면은 아무 말도 안 한다 · 단추가 죽은 것으로 보인다
+    """
+
+    def js(self):
+        import io
+        return io.open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
+
+    def body(self):
+        js = self.js()
+        at = js.index("'/label/save_preview_settings/'")
+        return js[at:at + 2200]
+
+    def test_탭_안이면_바깥에_알린다(self):
+        b = self.body()
+        self.assertIn("type: 'previewSettingsSaved'", b)
+        self.assertIn('window.parent.postMessage', b)
+
+    def test_아무_데나_보내지_않는다(self):
+        b = self.body()
+        at = b.index('window.parent.postMessage')
+        self.assertIn('window.location.origin', b[at:at + 200])
+
+    def test_따로_연_창에서도_말한다(self):
+        b = self.body()
+        self.assertIn('window.showSaved', b)
+
+    def test_바깥이_그_말을_기다리고_있다(self):
+        import io
+        h = io.open('v1/templates/products/product_detail.html', encoding='utf-8').read()
+        self.assertIn("'previewSettingsSaved'", h)
+        at = h.index("'previewSettingsSaved'")
+        self.assertIn('showSaveStatusMsg()', h[at:at + 200])
+
+
+class 높이는_재서_쓴다(TestCase):
+    """
+    앞서 `줄수 × 22 + 머리글 30` 으로 셈했다가 **또 잘렸다.** rowHeights 는
+    우리가 바라는 값이고 실제로 그려진 높이가 아니다 — 테두리·글꼴·줄바꿈이
+    붙으면 더 커진다. 짐작한 높이가 실제보다 작으면 마지막 줄이 그만큼 잘린다.
+    """
+
+    def body(self):
+        import io
+        h = io.open('v1/templates/products/nutrition_editor.html',
+                    encoding='utf-8').read()
+        b = h[h.index('function applyExtraFold'):]
+        return b[:b.index('\n}')]
+
+    def test_그려진_것을_잰다(self):
+        b = self.body()
+        self.assertIn("querySelector('.ht_master .htCore')", b)
+        self.assertIn('offsetHeight', b)
+
+    def test_셈하지_않는다(self):
+        b = self.body()
+        self.assertNotIn('shown * ROW', b)
+        self.assertNotIn('const ROW = 22', b)
+
+    def test_아직_안_그려졌으면_건드리지_않는다(self):
+        """잘못 잰 값으로 못 박느니 원래대로 두는 편이 낫다."""
+        b = self.body()
+        self.assertIn('core.offsetHeight > 0', b)
 
 
 class 시안에서_읽은_모든_글자를_견준다(TestCase):
