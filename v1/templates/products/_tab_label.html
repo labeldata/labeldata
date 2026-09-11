@@ -197,6 +197,10 @@
 
     /* iframe → 부모 방향 postMessage 수신 */
     window.addEventListener('message', function(e) {
+        /* 우리 iframe 이 보낸 것만 받는다. 아래에서 받은 값으로 칸을 찾고
+           체크를 바꾼다 — 아무 창이나 보낼 수 있으면 안 된다. */
+        if (typeof window.sameOriginMessage === 'function'
+            && !window.sameOriginMessage(e)) return;
         if (!e.data) return;
 
         /* label_preview.js 가 requestPreviewData 를 보내면 previewCheckedFields 로 응답 */
@@ -209,17 +213,16 @@
            값은 미리보기에 없다 — 기본 정보 탭의 칸으로 데려간다. 오른쪽
            표시 항목 패널이 쓰는 이동 경로를 그대로 쓴다(di-highlight). */
         if (e.data.type === 'focusLabelField' && e.data.field) {
-            var anchor = e.data.field === 'rawmtrl_nm_display'
-                ? 'field-rawmtrl-nm'
-                : 'field-' + e.data.field.replace(/_/g, '-');
-            var infoTab = document.querySelector('[data-bs-target="#tab-info"]');
-            if (infoTab) bootstrap.Tab.getOrCreateInstance(infoTab).show();
-            var el = document.getElementById(anchor);
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                el.classList.add('di-highlight');
-                setTimeout(function () { el.classList.remove('di-highlight'); }, 1200);
-                if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+            /* **칸 id 규칙을 여기서 또 적지 않는다.**
+
+               이 자리는 그 규칙의 세 번째 사본이었다 — 서버의
+               _DISPLAY_ITEM_ANCHORS, 확정 전 모달, 그리고 여기. 예외가 하나
+               늘면 세 군데를 고쳐야 하고, 언젠가 한 곳이 빠진다.
+
+               바깥 문서(product_detail)가 가진 한 벌을 부른다. 영양성분처럼
+               다른 탭으로 보내야 하는 항목도 그쪽이 안다. */
+            if (typeof window.gotoLabelField === 'function') {
+                window.gotoLabelField(e.data.field);
             }
             return;
         }

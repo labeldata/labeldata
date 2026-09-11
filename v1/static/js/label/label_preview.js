@@ -3465,6 +3465,13 @@ function showAiValidationModal(result, useAi) {
     modal.addEventListener('click', function (e) {
         // 지적을 누르면 표의 그 줄로 데려간다. 창은 닫는다 — 표를 가리고
         // 있으면 데려가 봐야 보이지 않는다.
+        const edit = e.target.closest('.vr-edit');
+        if (edit) {
+            e.preventDefault();
+            bsModal.hide();
+            openFieldEditor(edit.dataset.edit);
+            return;
+        }
         const jump = e.target.closest('.vr-jump');
         if (!jump) return;
         e.preventDefault();
@@ -3503,6 +3510,14 @@ function vrProblemsHtml(problems) {
         const where = anchor
             ? `<button type="button" class="vr-jump vr-where-btn" data-jump="${anchor}">표의 <strong>${tableRowName(anchor)}</strong> 줄로</button>`
             : '';
+        /* 표의 줄로 데려가는 것만으로는 **고칠 수가 없다.** 이 표는 읽기
+           전용이고, 값을 넣는 칸은 바깥 창의 기본 정보 탭에 있다. 지금까지
+           사용자는 어디가 문제인지 본 다음, 창을 닫고 탭을 찾아 스스로
+           내려가야 했다. */
+        const editField = (row.fields || [])[0];
+        const edit = editField
+            ? `<button type="button" class="vr-edit vr-where-btn" data-edit="${editField}">고치러 가기 <i class="fas fa-arrow-right"></i></button>`
+            : '';
         /* 권고는 "고치면 좋다" 이지 "틀렸다" 가 아니다. 확정도 막지 않는다.
            같은 무게로 보이면 진짜 지적이 그 안에 묻힌다. */
         const tone = row.advisory ? 'vr-card-advisory' : 'vr-card-blocking';
@@ -3522,7 +3537,7 @@ function vrProblemsHtml(problems) {
             : '';
 
         return `<div class="vr-card ${tone}">
-                    <div class="vr-card-head">${tag}<span class="vr-card-name">${row.label}</span>${where}</div>
+                    <div class="vr-card-head">${tag}<span class="vr-card-name">${row.label}</span>${where}${edit}</div>
                     ${errors}${suggestions}${validationComparisonHtml(row.comparison)}${validationEvidenceHtml(row.evidence)}
                 </div>`;
     }).join('');
@@ -5200,7 +5215,10 @@ function openFieldEditor(field) {
         }
         return;
     }
-    target.postMessage({ type: 'focusLabelField', field: field }, '*');
+    /* 대상 출처를 '*' 로 두면 **끼어든 창에도 간다.** 우리 화면끼리 주고받는
+       말이라 우리 출처로 못 박는다 — 이 값은 그대로 칸으로 들어간다. */
+    target.postMessage({ type: 'focusLabelField', field: field },
+                       window.location.origin);
 }
 
 document.addEventListener('mouseover', function (e) {

@@ -14839,7 +14839,7 @@ class 검증_지적은_심각도로_갈린다(TestCase):
     def js(self):
         import io
         h = io.open('v1/templates/products/product_detail.html', encoding='utf-8').read()
-        return h[h.index('function showValidationBlock'):h.index('function escapeHtml')]
+        return h[h.index('window.VALIDATION_ANCHOR_EXCEPTION'):h.index('function escapeHtml')]
 
     def test_네_갈래로_나눈다(self):
         js = self.js()
@@ -14874,7 +14874,7 @@ class 지적에서_그_칸으로_간다(TestCase):
     def js(self):
         import io
         h = io.open('v1/templates/products/product_detail.html', encoding='utf-8').read()
-        return h[h.index('function showValidationBlock'):h.index('function escapeHtml')]
+        return h[h.index('window.VALIDATION_ANCHOR_EXCEPTION'):h.index('function escapeHtml')]
 
     def test_서버가_칸_이름을_보낸다(self):
         from v1.label.services.validation_service import _issue
@@ -15051,3 +15051,109 @@ class 줄을_접어도_값은_그대로다(TestCase):
         h = self.tpl()
         table = h[h.index('const ALL_NUTRIENTS'):h.index('const NUTRITION_COL_WIDTH')]
         self.assertEqual(table.count('required: true'), 9)
+
+
+class 표의_줄로_가는_것과_고치러_가는_것은_다르다(TestCase):
+    """
+    미리보기 iframe 안의 검증 결과는 지적을 누르면 **표의 그 줄로** 데려갔다.
+    그런데 그 표는 **읽기 전용**이다 — 어디가 문제인지는 보이지만 고칠 수가
+    없다. 값을 넣는 칸은 바깥 창의 기본 정보 탭에 있다.
+
+    통로는 새로 만들지 않았다. `openFieldEditor` 가 이미 있었고 그 말을
+    `focusLabelField` 라는 이름으로 보낸다 — 줄 도구의 [이 항목의 입력칸으로]
+    가 쓰던 길이다. 검증 결과 카드도 그 길을 쓴다.
+    """
+
+    def js(self):
+        import io
+        return io.open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
+
+    def outer(self):
+        import io
+        return io.open('v1/templates/products/product_detail.html',
+                       encoding='utf-8').read()
+
+    def tab(self):
+        import io
+        return io.open('v1/templates/products/_tab_label.html',
+                       encoding='utf-8').read()
+
+    def test_검증_카드에서_고치러_갈_수_있다(self):
+        js = self.js()
+        at = js.index('const edit = editField')
+        self.assertIn('vr-edit', js[at:at + 300])
+        self.assertIn('openFieldEditor(edit.dataset.edit)', js)
+
+    def test_통로를_새로_만들지_않았다(self):
+        """같은 일에 이름이 둘이면 어느 날 한쪽만 고쳐진다."""
+        js = self.js()
+        self.assertIn("type: 'focusLabelField'", js)
+        self.assertNotIn('labeldata:goto-field', js)
+        self.assertNotIn('labeldata:goto-field', self.outer())
+
+    def test_아무_데나_보내지_않는다(self):
+        """대상 출처를 '*' 로 두면 끼어든 창에도 간다."""
+        js = self.js()
+        body = js[js.index('function openFieldEditor'):]
+        body = body[:body.index(chr(10) + '}')]
+        self.assertIn('window.location.origin', body)
+        self.assertNotIn("}, '*')", body)
+
+    def test_받을_때도_출처를_본다(self):
+        """
+        받은 값으로 칸을 찾고 체크를 바꾼다 — 아무 창이나 보낼 수 있으면
+        안 된다.
+        """
+        tab = self.tab()
+        body = tab[tab.index("window.addEventListener('message'"):]
+        body = body[:body.index("if (!e.data) return;")]
+        self.assertIn('window.sameOriginMessage(e)', body)
+
+    def test_바깥_창의_모든_수신기가_출처를_본다(self):
+        h = self.outer()
+        self.assertEqual(h.count("window.addEventListener('message'"),
+                         h.count('window.sameOriginMessage('), )
+
+    def test_받은_글자를_칸에_그대로_쓰는_자리가_있다(self):
+        """
+        고친 까닭이다 — copyRawmtrlToBasicInfo 는 메시지의 글자를 원재료명
+        칸에 써 넣고, 그 글자는 라벨에 인쇄된다.
+        """
+        h = self.outer()
+        at = h.index("'copyRawmtrlToBasicInfo'")
+        head = h[h.rindex("window.addEventListener('message'", 0, at):at]
+        self.assertIn('window.sameOriginMessage(e)', head)
+
+
+class 칸으로_데려가는_길은_한_벌이다(TestCase):
+    """
+    확정 전 모달과 미리보기 iframe, 두 곳이 같은 일을 시킨다. 코드를 두 벌로
+    두면 어느 날 한쪽만 고쳐진다.
+    """
+
+    def outer(self):
+        import io
+        return io.open('v1/templates/products/product_detail.html',
+                       encoding='utf-8').read()
+
+    def test_공용_함수가_하나다(self):
+        h = self.outer()
+        self.assertEqual(h.count('window.gotoLabelField = function'), 1)
+        self.assertIn('window.gotoLabelField(btn.dataset.field)', h)
+
+    def test_확정_모달이_그_함수를_쓴다(self):
+        """모달 안에 이동 코드를 다시 적어 두지 않았다."""
+        h = self.outer()
+        body = h[h.index('listEl.onclick = function'):]
+        body = body[:body.index('\n    };')]
+        self.assertIn('window.gotoLabelField', body)
+        self.assertNotIn('scrollIntoView', body)
+
+    def test_칸_id_규칙은_여전히_서버와_같다(self):
+        import inspect
+
+        from v1.products import views
+        src = inspect.getsource(views)
+        h = self.outer()
+        self.assertIn("'field-' + field.replace('_', '-')", src)
+        self.assertIn("'field-' + String(field).replace(/_/g, '-')", h)
