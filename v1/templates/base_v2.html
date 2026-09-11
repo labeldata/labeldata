@@ -286,6 +286,36 @@
         _st = setTimeout(function () { el.classList.remove('saved-show'); }, 1400);
       };
 
+      /* **새로고침이 알림을 삼킨다.**
+       *
+       * 문서함은 저장한 뒤 곧바로 location.reload() 를 부른다. 알림이 뜨자마자
+       * 페이지가 새로 그려지므로 **아무도 못 본다** — 사용자에게는 저장이 안
+       * 된 것으로 보인다.
+       *
+       * 말을 새로고침 너머로 넘긴다. 저장하는 쪽은 showSavedAfterReload() 를
+       * 부르고 새로고침하면 되고, 새 페이지가 뜨면서 그 말을 대신 한다.
+       */
+      var SAVED_KEY = 'labeldata_saved_msg';
+
+      window.showSavedAfterReload = function(message) {
+        try { sessionStorage.setItem(SAVED_KEY, message || '저장했습니다'); }
+        catch (e) { /* 사생활 보호 모드 등 — 못 넘기면 그냥 넘어간다 */ }
+      };
+
+      // 새 페이지가 뜨면 넘겨받은 말을 한다
+      (function () {
+        var pending = null;
+        try {
+          pending = sessionStorage.getItem(SAVED_KEY);
+          if (pending) sessionStorage.removeItem(SAVED_KEY);
+        } catch (e) { pending = null; }
+        if (!pending) return;
+        // 화면이 자리를 잡은 뒤에 띄운다
+        window.addEventListener('load', function () {
+          setTimeout(function () { window.showSaved(pending); }, 120);
+        });
+      })();
+
       window.hideSnackbar = function() {
         var el = document.getElementById('v2Snackbar');
         if (el) el.classList.remove('snack-show','snack-error','snack-warning','snack-info');

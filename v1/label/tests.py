@@ -15731,3 +15731,127 @@ class 원산지_순위는_조문이_정한다(TestCase):
         self.assertIn('배합 비율의 순위와', src)
         self.assertIn('제3조', src)
         self.assertIn('당류가공품', src)
+
+
+class 새로고침이_알림을_삼키지_않는다(TestCase):
+    """
+    문서함은 저장한 뒤 곧바로 `location.reload()` 를 부른다. 알림이 뜨자마자
+    페이지가 새로 그려지므로 **아무도 못 본다** — 사용자에게는 저장이 안 된
+    것으로 보인다. 실제로 "저장 버튼을 눌러도 알림이 안 뜬다, 저장이 되는지
+    의문이다" 는 말이 나왔다.
+    """
+
+    def base(self):
+        import io
+        return io.open('v1/templates/base_v2.html', encoding='utf-8').read()
+
+    def docs(self):
+        import io
+        return io.open('v1/templates/products/_tab_documents.html',
+                       encoding='utf-8').read()
+
+    def test_말을_새로고침_너머로_넘긴다(self):
+        h = self.base()
+        self.assertIn('window.showSavedAfterReload', h)
+        self.assertIn('sessionStorage', h)
+
+    def test_새_페이지가_그_말을_대신_한다(self):
+        h = self.base()
+        block = h[h.index('var pending = null;'):]
+        block = block[:block.index('})();')]
+        self.assertIn('removeItem', block)      # 한 번만 말한다
+        self.assertIn('window.showSaved(pending)', block)
+
+    def test_못_넘겨도_화면이_죽지_않는다(self):
+        """사생활 보호 모드에서는 sessionStorage 접근 자체가 던진다."""
+        h = self.base()
+        fn = h[h.index('window.showSavedAfterReload'):]
+        fn = fn[:fn.index('};')]
+        self.assertIn('catch', fn)
+
+    def test_문서함이_그것을_쓴다(self):
+        h = self.docs()
+        self.assertIn('showSavedAfterReload', h)
+        # 새로고침에 삼켜지던 success 스낵바가 남아 있지 않다
+        for line in h.split(chr(10)):
+            if "showSnackbar(" in line and "'success'" in line:
+                self.fail('새로고침 앞의 success 스낵바가 남아 있다: ' + line.strip()[:60])
+
+
+class 접었을_때는_담는_칸을_내용에_맞춘다(TestCase):
+    """
+    #grid-container 는 flex:1 1 0 이라 남은 높이를 통째로 먹고, 표는
+    height:'100%' 로 그것을 받는다. 25 줄일 때는 그래야 맞다 — 표가 제 안에서
+    굴러야 머리글이 붙어 있다.
+
+    그런데 접어서 9 줄이 되면 칸 높이와 표가 아는 높이가 어긋나면서 마지막
+    줄(나트륨)이 경계에 걸려 **글자가 잘렸다.** refreshDimensions() 로는 안
+    됐다 — 칸 자체가 여전히 '남은 높이' 이기 때문이다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/products/nutrition_editor.html',
+                       encoding='utf-8').read()
+
+    def body(self):
+        h = self.tpl()
+        b = h[h.index('function applyExtraFold'):]
+        return b[:b.index('\n}')]
+
+    def test_접으면_높이를_못_박는다(self):
+        b = self.body()
+        self.assertIn("box.style.flex = '0 0 auto'", b)
+        self.assertIn('box.style.height =', b)
+
+    def test_펴면_되돌린다(self):
+        b = self.body()
+        self.assertIn("box.style.flex = ''", b)
+        self.assertIn("box.style.height = ''", b)
+
+    def test_줄_수로_센다(self):
+        b = self.body()
+        self.assertIn('ALL_NUTRIENTS.length - hide.length', b)
+
+
+class 검증이_보는_식품유형과_화면이_보여_주는_것이_같다(TestCase):
+    """
+    원산지 판정은 원료 보관함의 마스터(`MyIngredient.prdlst_dcnm`)를 봤는데,
+    배합 화면에서 사람이 고치는 것은 그 줄의 값(`ProductBOM.food_type`)이다.
+    운영에서 이렇게 나왔다.
+
+        배합 표의 마가린 식품유형   (비어 있음)
+        원료 마스터의 마가린        '설탕'      <- 잘못 저장된 값
+        검증                       "마가린(당류 — 식품유형이 '설탕')" 으로 제외
+
+    사용자는 배합 표를 보고 있으니 왜 당류로 빠졌는지 알 수가 없다. 게다가
+    **라벨은 배합으로 조립된다** — 그 표에 적힌 것이 이 제품에서의 값이다.
+    """
+
+    class _Ing:
+        my_ingredient_id = 1
+
+        def __init__(self, name, food_type=''):
+            self.prdlst_nm = name
+            self.prdlst_dcnm = food_type
+            self.food_category = ''
+
+    def test_배합에_적힌_것이_먼저다(self):
+        from v1.label.services.origin_scope import _is_excluded
+        ing = self._Ing('마가린', '설탕')          # 마스터가 잘못돼 있다
+        self.assertTrue(_is_excluded(ing)[0])       # 배합 값이 없으면 그대로 빠진다
+        self.assertFalse(_is_excluded(ing, '마가린')[0])   # 배합에 적혀 있으면 안 빠진다
+
+    def test_까닭에_실제로_본_값을_적는다(self):
+        from v1.label.services.origin_scope import _is_excluded
+        why = _is_excluded(self._Ing('커스타드', ''), '당류가공품')[1]
+        self.assertIn('당류가공품', why)
+        self.assertIn('식품유형', why)
+
+    def test_배합을_못_읽어도_판정은_한다(self):
+        """배합을 못 읽는다고 원산지 검사가 통째로 멈추면 안 된다."""
+        from v1.label.services.origin_scope import _bom_food_types
+
+        class _Broken:
+            pk = 1
+        self.assertEqual(_bom_food_types(_Broken()), {})
