@@ -1,18 +1,31 @@
 ﻿<!-- _tab_label.html: 표시사항 탭 – 미리보기 직접 임베드 -->
 <style>
-/* 이미 올려 둔 시안을 쓸지 묻는 작은 판.
+/* 이미 올려 둔 시안을 쓸지 묻는다.
 
-   2 차 검증을 한 번 하면 그 파일이 문서함에 남는데, 다음에 검증을 누르면
-   파일 고르기 창이 곧바로 열려서 있는 파일을 다시 찾아 와야 했다.
-   **저장된 시안이 실제로 있을 때만** 뜬다. */
+   처음에는 탭 안의 한 줄짜리 판으로 뒀다. 그런데 이 탭은 미리보기 iframe 이
+   남은 높이를 통째로 먹는 구조라(#lt-preview-frame { flex:1 1 0 }) 판이
+   눌렸다 — 머리글은 보이는데 **단추까지 닿지 않았다.** 실제로 "알려는 주는데
+   쓰는 방법이 없다" 는 말이 나왔다.
+
+   게다가 이 물음을 띄우는 [2차 검증] 단추는 **iframe 안**에 있다. 누른 자리와
+   물음이 뜨는 자리가 서로 다른 문서인 셈이라, 흐름 어딘가에 끼워 넣는 방식은
+   어느 쪽으로든 눌릴 수 있다.
+
+   화면 가운데에 띄운다. 어떤 상자에도 안 눌린다. */
 .ltdp {
-    margin: 8px 0;
-    padding: 12px 14px;
-    background: var(--ez-info-bg, #e8f0fe);
-    border: 1px solid var(--ez-info, #1a73e8);
-    border-radius: 8px;
+    position: fixed; inset: 0; z-index: 10002;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    background: rgba(32, 33, 36, .45);
 }
 .ltdp[hidden] { display: none; }
+.ltdp-card {
+    width: min(420px, 100%);
+    padding: 18px 20px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .3);
+}
 .ltdp-head {
     display: flex; align-items: center; gap: 6px;
     font-size: 13px; font-weight: 600; color: var(--ez-gray-900, #202124);
@@ -24,7 +37,7 @@
 .ltdp-meta {
     margin-top: 2px; font-size: 11.5px; color: var(--ez-gray-700, #5f6368);
 }
-.ltdp-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.ltdp-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
 
 #ltRoot {
     flex: 1 1 auto;
@@ -90,6 +103,7 @@
       고르기가 열린다 — 없는 선택지를 보여 주지 않는다.
     {% endcomment %}
     <div id="ltDesignPick" class="ltdp" hidden>
+      <div class="ltdp-card">
         <div class="ltdp-head"><i class="bi bi-archive"></i>이미 올려 둔 시안이 있습니다</div>
         <div class="ltdp-name"></div>
         <div class="ltdp-meta"></div>
@@ -100,7 +114,11 @@
             <button type="button" class="btn btn-light border v2-btn-sm" data-pick="new">
                 <i class="bi bi-upload"></i>다른 파일 첨부
             </button>
+            <button type="button" class="btn btn-link v2-btn-sm ms-auto" data-pick="cancel">
+                그만두기
+            </button>
         </div>
+      </div>
     </div>
     {% endif %}
     <div id="lt-loading">
@@ -342,9 +360,13 @@
 
         box.onclick = function (ev) {
             var btn = ev.target.closest('[data-pick]');
-            if (!btn) return;
+            /* 뒤 어둠을 눌러도 닫는다. 카드 안을 누른 것은 아니어야 한다 —
+               글자를 긁어 보다가 창이 닫히면 안 된다. */
+            var outside = !ev.target.closest('.ltdp-card');
+            if (!btn && !outside) return;
             box.hidden = true;
             box.onclick = null;
+            if (!btn || btn.dataset.pick === 'cancel') return;   // 아무것도 안 한다
             done(btn.dataset.pick === 'saved');
         };
     }

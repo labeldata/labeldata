@@ -14996,69 +14996,6 @@ class 영양성분_표는_입력과_결과를_가른다(TestCase):
         self.assertIn('적용값', headers)
 
 
-class 줄을_접어도_값은_그대로다(TestCase):
-    """
-    이 표의 값은 **라벨에 인쇄된다.** 번호가 한 칸 밀리면 나트륨 자리에
-    단백질이 들어가고, 아무도 모른 채 인쇄된다. 접기를 넣으면서 가장 조심한
-    자리다.
-    """
-
-    def tpl(self):
-        import io
-        return io.open('v1/templates/products/nutrition_editor.html',
-                       encoding='utf-8').read()
-
-    def test_줄을_덜어내지_않고_감추기만_한다(self):
-        """
-        trimRows 는 줄을 데이터에서 덜어내 번호를 민다. hiddenRows 는 그리지
-        않을 뿐 데이터는 그대로다.
-        """
-        h = self.tpl()
-        self.assertIn('hiddenRows: {', h)
-        # 설정만 본다 — 주석에서 왜 trim 을 안 쓰는지 설명하고 있다
-        conf = h[h.index('hot = new Handsontable('):h.index('applyExtraFold();')]
-        self.assertNotIn('trimRows:', conf)
-        self.assertNotIn("getPlugin('trimRows')", h)
-
-    def test_읽기는_물리_순서로_한다(self):
-        """getData() 는 화면 기준이라 접힌 줄에서 어긋날 수 있다."""
-        h = self.tpl()
-        for fn in ('function getGridNutritionInputs', 'function gridValues'):
-            body = h[h.index(fn):]
-            body = body[:body.index('\n}')]
-            self.assertIn('getSourceData()', body, fn)
-            self.assertNotIn('hot.getData()', body, fn)
-
-    def test_쓰기는_화면_번호로_옮긴다(self):
-        """setDataAtCell 은 화면 번호를 받는다."""
-        h = self.tpl()
-        self.assertIn('hot.toVisualRow(index)', h)
-        # 물리 번호를 그대로 쓰던 두 자리가 남아 있지 않다
-        self.assertNotIn("hot.setDataAtCell(index, 4,", h)
-        self.assertNotIn("changes.push([index, 3,", h)
-
-    def test_표시_의무는_절대_접지_않는다(self):
-        h = self.tpl()
-        body = h[h.index('function extraRowsToHide'):]
-        body = body[:body.index('\n}')]
-        self.assertIn('if (nutrient.required) return;', body)
-
-    def test_값이_든_줄도_접지_않는다(self):
-        """
-        넣어 둔 숫자가 화면에서 사라지면 지운 것으로 보이고, 다시 넣는다.
-        """
-        h = self.tpl()
-        body = h[h.index('function extraRowsToHide'):]
-        body = body[:body.index('\n}')]
-        self.assertIn('if (!filled) hide.push(index);', body)
-
-    def test_필수_영양성분은_아홉_개다(self):
-        """접는 기준이 이 플래그다 — 수가 달라지면 알아야 한다."""
-        h = self.tpl()
-        table = h[h.index('const ALL_NUTRIENTS'):h.index('const NUTRITION_COL_WIDTH')]
-        self.assertEqual(table.count('required: true'), 9)
-
-
 class 표의_줄로_가는_것과_고치러_가는_것은_다르다(TestCase):
     """
     미리보기 iframe 안의 검증 결과는 지적을 누르면 **표의 그 줄로** 데려갔다.
@@ -15351,35 +15288,6 @@ class 지난_게스트는_치운다(TestCase):
                          list(stale_guests(0).values_list('username', flat=True)))
 
 
-class 접기는_값을_불러온_뒤에_한다(TestCase):
-    """
-    처음 열면 25 줄이 다 보이는데 단추는 "16개 더 보기" 라고 말했다.
-
-    `hot.loadData()` 가 Handsontable 의 행 색인표를 **초기화**한다 — 접어 둔
-    것이 거기서 풀린다. 단추 글자는 그리기 전에 정해져서 그대로 남았다.
-
-    게다가 어느 줄을 접을지는 **값을 봐야 안다.** 값이 든 줄은 접지 않기로
-    했는데, 불러오기 전에는 전부 빈 줄로 보인다.
-    """
-
-    def tpl(self):
-        import io
-        return io.open('v1/templates/products/nutrition_editor.html',
-                       encoding='utf-8').read()
-
-    def test_불러온_뒤에_접는다(self):
-        h = self.tpl()
-        at = h.index('hot.loadData(data);')
-        self.assertIn('applyExtraFold();', h[at:at + 700])
-
-    def test_그리기_전에는_접지_않는다(self):
-        """값이 없으면 무엇을 접을지 판단할 수 없다."""
-        h = self.tpl()
-        # 표를 만드는 자리부터 칸 너비를 붙이는 자리까지가 '그리기 전' 이다
-        init = h[h.index('hot = new Handsontable('):h.index('attachSheetWidths')]
-        self.assertNotIn('applyExtraFold();', init)
-
-
 class 왜_제외됐는지_말한다(TestCase):
     """
     운영에서 "마가린(당류)" 로 제외된 적이 있다. 마가린은 당류가 아니다 —
@@ -15517,22 +15425,6 @@ class 지적이_여럿인_줄은_읽을_수_있어야_한다(TestCase):
         import io
         js = io.open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
         self.assertIn('건 있습니다', js)
-
-
-class 접은_뒤에는_높이를_다시_잰다(TestCase):
-    """
-    줄을 감추면 표가 짧아지는데 Handsontable 은 제가 쓰던 높이를 그대로 들고
-    있어서, 마지막 줄(나트륨)이 담는 칸 경계에 걸려 **글자가 잘렸다** —
-    #grid-container 가 overflow:hidden 이라 잘린 채로 보인다.
-    """
-
-    def test_refreshDimensions_를_부른다(self):
-        import io
-        h = io.open('v1/templates/products/nutrition_editor.html',
-                    encoding='utf-8').read()
-        body = h[h.index('function applyExtraFold'):]
-        body = body[:body.index('\n}')]
-        self.assertIn('refreshDimensions()', body)
 
 
 class 저장했다는_말은_눈에_닿는_자리에서_한다(TestCase):
@@ -15870,28 +15762,6 @@ class 저장했으면_어떻게든_말한다(TestCase):
         self.assertIn('showSaveStatusMsg()', h[at:at + 200])
 
 
-class 높이를_손으로_정하지_않는다(TestCase):
-    """
-    나트륨이 세 번 잘렸다. 셈해도, 재서 못 박아도 잘렸다 — 셋 다 **표가 제
-    안에서 굴러야 한다**는 전제를 지킨 채 높이를 맞추려 한 것이다.
-
-    접었으면 굴릴 일이 없다. Handsontable 에게 맡기고 우리는 아무 숫자도
-    정하지 않는다.
-    """
-
-    def body(self):
-        import io
-        h = io.open('v1/templates/products/nutrition_editor.html',
-                    encoding='utf-8').read()
-        b = h[h.index('function applyExtraFold'):]
-        return b[:b.index(chr(10) + '}')]
-
-    def test_숫자를_정하지_않는다(self):
-        b = self.body()
-        self.assertNotIn('offsetHeight', b)
-        self.assertNotIn('box.style.height', b)
-        self.assertNotIn('const ROW = 22', b)
-
 class 시안에서_읽은_모든_글자를_견준다(TestCase):
     """
     시안 대조는 **우리가 아는 칸끼리만** 견주고 있었다(FIELD_MAP 29 칸).
@@ -16076,42 +15946,6 @@ class 혼입_문구를_알레르기로_읽지_않는다(TestCase):
         self.assertIn('주의사항에서 끌어오지 마라', src)
 
 
-class 접었으면_굴리지_않는다(TestCase):
-    """
-    나트륨이 세 번 잘렸다. refreshDimensions() 로, `줄수 × 22` 로, 그려진
-    높이를 재서 못 박는 것으로 — **셋 다 표가 제 안에서 굴러야 한다는 전제를
-    지킨 채** 높이를 맞추려 한 것이다. 그 전제가 있는 한 칸 높이와 표 높이가
-    어긋날 자리가 남고, 어긋난 만큼 마지막 줄이 잘린다.
-
-    전제를 버린다. 접었으면 굴릴 일이 없으니 내용만큼만 차지하게 둔다 —
-    **높이를 정하는 곳이 한 군데**가 되므로 어긋날 자리가 사라진다.
-    """
-
-    def body(self):
-        import io
-        h = io.open('v1/templates/products/nutrition_editor.html',
-                    encoding='utf-8').read()
-        b = h[h.index('function applyExtraFold'):]
-        return b[:b.index('\n}')]
-
-    def test_접으면_auto_로_바꾼다(self):
-        b = self.body()
-        self.assertIn("height: folded ? 'auto' : '100%'", b)
-
-    def test_높이를_손으로_정하지_않는다(self):
-        b = self.body()
-        self.assertNotIn('box.style.height', b)
-        self.assertNotIn('offsetHeight', b)
-
-    def test_접었을_때는_자르지_않는다(self):
-        import io
-        css = io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
-        block = css[css.index('#grid-container.is-folded {'):]
-        block = block[:block.index('}')]
-        self.assertIn('overflow: visible', block)
-        self.assertIn('height: auto', block)
-
-
 class 인쇄되는_이름으로_순서를_본다(TestCase):
     """
     원재료 순서 검사는 **원료명**으로 문구를 뒤졌다. 그런데 요약은 기본이
@@ -16277,3 +16111,103 @@ class 올려_둔_시안을_다시_쓴다(TestCase):
         self.assertIn('data-pick="new"', tab)
         self.assertIn('이 시안으로 검증', tab)
         self.assertIn('다른 파일 첨부', tab)
+
+
+class 접기를_걷었다(TestCase):
+    """
+    표시 의무 9 줄만 남기고 나머지 16 줄을 접어 자리를 아끼려 했다. 그런데
+    접을 때마다 마지막 줄(나트륨)의 글자가 잘렸고, **네 번 고쳐서 네 번 다
+    잘렸다.**
+
+        ① refreshDimensions() 를 부른다         -> 잘림
+        ② 줄수 × 22 + 머리글 로 칸을 못 박는다   -> 잘림
+        ③ 그려진 높이를 재서 못 박는다           -> 잘림
+        ④ height:'auto' 로 맡기고 자르지 않는다  -> 잘림
+
+    네 번 다르게 고쳐서 네 번 다 같은 곳이 잘렸으면, 고치는 방법이 아니라
+    **접는다는 생각 자체가 이 표에 안 맞는 것**이다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/products/nutrition_editor.html',
+                       encoding='utf-8').read()
+
+    def test_접는_장치가_남아_있지_않다(self):
+        h = self.tpl()
+        for gone in ('hiddenRows', 'applyExtraFold', 'extraFoldBtn',
+                     'toggleExtraRows', 'extraRowsToHide'):
+            self.assertNotIn(gone + '(', h, gone)
+            self.assertNotIn('"' + gone + '"', h, gone)
+
+    def test_표는_제_안에서_구른다(self):
+        """머리글이 붙어 있으려면 그래야 한다. 25 줄이 그대로 있다."""
+        h = self.tpl()
+        conf = h[h.index('hot = new Handsontable('):h.index('attachSheetWidths')]
+        self.assertIn("height: '100%'", conf)
+
+    def test_왜_걷었는지_적어_둔다(self):
+        """
+        다음 사람이 "자리가 아까운데 왜 안 접지" 하고 같은 함정에 빠지지
+        않도록.
+        """
+        h = self.tpl()
+        self.assertIn('접기를 걷었다', h)
+        self.assertIn('네 번 다 같은 곳이 잘렸으면', h)
+
+    def test_자리는_다른_길로_아꼈다(self):
+        import io
+        css = io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
+        self.assertIn('.cfg-group--spec', css)
+        self.assertNotIn('is-folded', css)
+
+
+class 시안을_쓸지_묻는_창은_눌리지_않는다(TestCase):
+    """
+    처음에는 탭 안의 한 줄짜리 판으로 뒀다. 그런데 이 탭은 미리보기 iframe 이
+    남은 높이를 통째로 먹는 구조라 판이 눌렸다 — 머리글은 보이는데 **단추까지
+    닿지 않았다.** 실제로 "알려는 주는데 쓰는 방법이 없다" 는 말이 나왔다.
+
+    게다가 이 물음을 띄우는 [2차 검증] 단추는 **iframe 안**에 있다. 누른
+    자리와 물음이 뜨는 자리가 서로 다른 문서다.
+    """
+
+    def tab(self):
+        import io
+        return io.open('v1/templates/products/_tab_label.html',
+                       encoding='utf-8').read()
+
+    def test_화면_가운데에_띄운다(self):
+        tab = self.tab()
+        block = tab[tab.index('.ltdp {'):]
+        block = block[:block.index('}')]
+        self.assertIn('position: fixed', block)
+        self.assertIn('inset: 0', block)
+
+    def test_어느_상자에도_안_눌린다(self):
+        tab = self.tab()
+        self.assertIn('.ltdp-card', tab)
+        block = tab[tab.index('.ltdp {'):]
+        block = block[:block.index('}')]
+        self.assertIn('z-index', block)
+
+    def test_그만둘_수_있다(self):
+        """묻고 나서 빠져나갈 길이 없으면 갇힌다."""
+        tab = self.tab()
+        self.assertIn('data-pick="cancel"', tab)
+        body = tab[tab.index('box.onclick = function'):]
+        body = body[:body.index('\n        };')]
+        self.assertIn("btn.dataset.pick === 'cancel'", body)
+
+    def test_뒤를_눌러도_닫힌다(self):
+        tab = self.tab()
+        body = tab[tab.index('box.onclick = function'):]
+        body = body[:body.index('\n        };')]
+        self.assertIn(".closest('.ltdp-card')", body)
+
+    def test_글자를_긁어도_닫히지_않는다(self):
+        """카드 안을 누른 것은 '밖' 이 아니다."""
+        tab = self.tab()
+        body = tab[tab.index('box.onclick = function'):]
+        body = body[:body.index('\n        };')]
+        self.assertIn('if (!btn && !outside) return;', body)
