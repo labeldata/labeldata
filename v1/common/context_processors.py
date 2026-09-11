@@ -28,6 +28,19 @@ def _authenticated_user(request):
 def static_build_date(request):
     return {'STATIC_BUILD_DATE': getattr(settings, 'STATIC_BUILD_DATE', '')}
 
+
+def guest_flag(request):
+    """
+    둘러보는 사람인가 — 템플릿이 쓸 한 마디.
+
+    예전에는 템플릿마다 `{% if user.email == 'guest@labeasylabel.com' %}` 를
+    적었다. 게스트가 방문마다 다른 계정이 되면서 그 비교가 전부 거짓이 된다 —
+    그러면 게스트에게 삭제 단추가 생긴다. 판정은 한 곳(common.guest)에서만
+    한다.
+    """
+    from v1.common.guest import is_guest
+    return {'is_guest': is_guest(getattr(request, 'user', None))}
+
 def ui_mode(request):
     """UI 모드(V1/V2) 컨텍스트 프로세서.
     세션의 'ui_mode' 값('v1' 또는 'v2')을 읽어 템플릿에 제공합니다.

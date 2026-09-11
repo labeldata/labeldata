@@ -23,6 +23,8 @@ from django.db.models import IntegerField, Max, Q
 from django.db.models.functions import Cast, Substr
 from django.utils.functional import cached_property
 from django.http import Http404, HttpResponse, JsonResponse
+
+from v1.common.guest import is_guest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse # [추가] URL 생성을 위해 import
 from django.utils import timezone  # 추가
@@ -1719,7 +1721,7 @@ def save_ingredients_to_label(request, label_id):
 @csrf_exempt
 def delete_my_ingredient(request, ingredient_id):
     # 게스트 사용자는 삭제 불가
-    if request.user.username == 'guest@labeasylabel.com':
+    if is_guest(request.user):
         return JsonResponse({'success': False, 'error': '게스트 계정은 삭제 기능을 사용할 수 없습니다.'})
         
     if request.method == 'POST':
@@ -1763,7 +1765,7 @@ def delete_my_ingredient(request, ingredient_id):
 @login_required
 def bulk_delete_my_ingredients(request):
     """선택한 원료 일괄 삭제"""
-    if request.user.username == 'guest@labeasylabel.com':
+    if is_guest(request.user):
         return JsonResponse({'success': False, 'error': '게스트 계정은 삭제 기능을 사용할 수 없습니다.'})
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
@@ -2176,7 +2178,7 @@ def delete_label(request, label_id):
     POST 로만 받는다.
     """
     # 게스트 사용자는 삭제 불가
-    if request.user.username == 'guest@labeasylabel.com':
+    if is_guest(request.user):
         messages.error(request, '게스트 계정은 삭제 기능을 사용할 수 없습니다.')
         return redirect('label:my_label_list')
 
@@ -2226,7 +2228,7 @@ def bulk_copy_labels(request):
 @csrf_exempt
 def bulk_delete_labels(request):
     # 게스트 사용자는 삭제 불가
-    if request.user.username == 'guest@labeasylabel.com':
+    if is_guest(request.user):
         return JsonResponse({"success": False, "error": "게스트 계정은 삭제 기능을 사용할 수 없습니다."})
         
     if request.method == "POST":
@@ -5053,7 +5055,7 @@ def ingredient_merge_apply(request):
     """
     from v1.label.services.ingredient_merge import merge
 
-    if request.user.username == 'guest@labeasylabel.com':
+    if is_guest(request.user):
         return JsonResponse({'success': False,
                              'error': '게스트 계정은 사용할 수 없습니다.'}, status=403)
     try:

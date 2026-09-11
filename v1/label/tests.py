@@ -15157,3 +15157,189 @@ class 칸으로_데려가는_길은_한_벌이다(TestCase):
         h = self.outer()
         self.assertIn("'field-' + field.replace('_', '-')", src)
         self.assertIn("'field-' + String(field).replace(/_/g, '-')", h)
+
+
+class 둘러보는_사람에게는_저마다의_자리를_준다(TestCase):
+    """
+    게스트는 계정 하나였다. `guest@labeasylabel.com` 을 **모든 방문자가 같이
+    썼다.**
+
+        A 가 만든 제품을 B 가 본다
+        B 가 그 위에 덮어쓴다
+        지우는 것만 막혀 있어 쓰레기가 쌓인다
+
+    홍보를 하면 첫 화면이 **남의 실습 데이터**로 채워진다. 그리고 원료·배합의
+    소유권 검사를 아무리 촘촘히 해도 게스트끼리는 의미가 없다 — 같은 user 다.
+    """
+
+    def url(self):
+        from django.urls import reverse
+        return reverse('user_management:login')
+
+    def guest_client(self):
+        from django.test import Client
+        c = Client()
+        c.post(self.url(), {'guest_login': '1'})
+        return c
+
+    def test_방문마다_다른_계정이다(self):
+        from django.contrib.auth.models import User
+        self.guest_client()
+        self.guest_client()
+        names = set(User.objects.filter(username__startswith='guest_')
+                    .values_list('username', flat=True))
+        self.assertEqual(len(names), 2)
+
+    def test_서로의_것이_보이지_않는다(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        a, b = self.guest_client(), self.guest_client()
+        ua = User.objects.filter(username__startswith='guest_').order_by('id').first()
+        ing = MyIngredient.objects.create(
+            user_id=ua, prdlst_nm='A 게스트의 밀가루', delete_YN='N')
+        path = '/label/my-ingredient-detail/%d/' % ing.my_ingredient_id
+        self.assertEqual(b.get(path).status_code, 404)
+        self.assertEqual(a.get(path).status_code, 200)
+
+    def test_비밀번호로는_아무도_들어올_수_없다(self):
+        """
+        비밀번호가 있으면 그 값이 어딘가에 적히고, 적힌 것은 샌다. 로그인
+        자리에서 곧바로 login() 하므로 맞춰 볼 일이 없다.
+        """
+        from django.contrib.auth.models import User
+        self.guest_client()
+        g = User.objects.filter(username__startswith='guest_').first()
+        self.assertFalse(g.has_usable_password())
+
+    def test_보낼_주소가_없으므로_이메일을_비운다(self):
+        """주소가 있으면 메일이 나간다."""
+        from django.contrib.auth.models import User
+        self.guest_client()
+        g = User.objects.filter(username__startswith='guest_').first()
+        self.assertEqual(g.email, '')
+
+    def test_인증하라고_막지_않는다(self):
+        """보낼 주소가 없으니 인증할 수도 없다."""
+        from django.contrib.auth.models import User
+        self.guest_client()
+        g = User.objects.filter(username__startswith='guest_').first()
+        self.assertTrue(g.profile.email_verified_yn)
+
+    def test_옛_공용_계정도_게스트로_본다(self):
+        """
+        그 계정으로 들어와 있는 사람이 있을 수 있다. 판정이 바뀌면 그 사람에게
+        갑자기 삭제 단추가 생긴다.
+        """
+        from django.contrib.auth.models import User
+        from v1.common.guest import LEGACY_GUEST_EMAIL, is_guest
+        u = User.objects.create_user(username=LEGACY_GUEST_EMAIL,
+                                     email=LEGACY_GUEST_EMAIL, password='x')
+        self.assertTrue(is_guest(u))
+
+    def test_옛_공용_계정을_더는_내주지_않는다(self):
+        from django.contrib.auth.models import User
+
+        from v1.common.guest import LEGACY_GUEST_EMAIL
+        User.objects.create_user(username=LEGACY_GUEST_EMAIL,
+                                 email=LEGACY_GUEST_EMAIL, password='x')
+        c = self.guest_client()
+        self.assertTrue(User.objects.filter(username__startswith='guest_').exists())
+
+
+class 게스트_판정은_한_곳에서만_한다(TestCase):
+    """
+    예전에는 이메일 문자열이 뷰와 템플릿 **열다섯 곳**에 박혀 있었다. 게스트가
+    방문마다 다른 계정이 되면 그 비교가 전부 거짓이 된다 — 그러면 게스트에게
+    삭제 단추가 생긴다.
+    """
+
+    def test_코드에_문자열이_남아_있지_않다(self):
+        import io
+        import pathlib
+        found = []
+        for path in pathlib.Path('v1').rglob('*.py'):
+            if 'guest.py' in str(path) or 'tests.py' in str(path):
+                continue
+            if 'ensure_guest_user' in str(path) or 'purge_guests' in str(path):
+                continue
+            text = io.open(path, encoding='utf-8').read()
+            # 주석에서 "예전에는 이랬다" 고 적는 것은 센다는 뜻이 아니다.
+            # 판정으로 쓰는 자리만 본다.
+            for line in text.split(chr(10)):
+                bare = line.strip()
+                if bare.startswith('#') or bare.startswith('*'):
+                    continue
+                # 설명문에 옮겨 적은 템플릿 조각은 코드가 아니다
+                if '{%' in line or '{{' in line:
+                    continue
+                if "'guest@labeasylabel.com'" in line or '(guest@labeasylabel.com)' in line:
+                    if '==' in line or '!=' in line or 'filter(' in line:
+                        found.append('%s: %s' % (path, bare[:60]))
+        self.assertEqual(found, [], '판정을 common.guest 로 모아야 한다')
+
+    def test_템플릿에도_남아_있지_않다(self):
+        import io
+        import pathlib
+        found = [str(p) for p in pathlib.Path('v1/templates').rglob('*.html')
+                 if 'guest@labeasylabel.com' in io.open(p, encoding='utf-8').read()]
+        self.assertEqual(found, [])
+
+    def test_템플릿이_쓸_한_마디가_있다(self):
+        from django.test import RequestFactory
+
+        from v1.common.context_processors import guest_flag
+        req = RequestFactory().get('/')
+        req.user = None
+        self.assertIn('is_guest', guest_flag(req))
+
+
+class 지난_게스트는_치운다(TestCase):
+    """
+    방문마다 새 계정을 내주므로 그냥 두면 끝없이 쌓인다.
+    """
+
+    def test_기본은_미리보기다(self):
+        """계정을 지우는 일은 되돌릴 수 없다. 손이 한 번 더 가게 둔다."""
+        from io import StringIO
+
+        from django.contrib.auth.models import User
+        from django.core.management import call_command
+
+        from v1.common.guest import create_guest
+        g = create_guest()
+        User.objects.filter(pk=g.pk).update(
+            date_joined=g.date_joined - __import__('datetime').timedelta(days=3))
+        out = StringIO()
+        call_command('purge_guests', stdout=out)
+        self.assertIn('보여 주기만 했다', out.getvalue())
+        self.assertTrue(User.objects.filter(pk=g.pk).exists())
+
+    def test_apply_를_붙이면_지운다(self):
+        from io import StringIO
+
+        from django.contrib.auth.models import User
+        from django.core.management import call_command
+
+        from v1.common.guest import create_guest
+        g = create_guest()
+        User.objects.filter(pk=g.pk).update(
+            date_joined=g.date_joined - __import__('datetime').timedelta(days=3))
+        call_command('purge_guests', '--apply', stdout=StringIO())
+        self.assertFalse(User.objects.filter(pk=g.pk).exists())
+
+    def test_방금_온_사람은_안_치운다(self):
+        from io import StringIO
+
+        from django.contrib.auth.models import User
+        from django.core.management import call_command
+
+        from v1.common.guest import create_guest
+        g = create_guest()
+        call_command('purge_guests', '--apply', stdout=StringIO())
+        self.assertTrue(User.objects.filter(pk=g.pk).exists())
+
+    def test_옛_공용_계정은_건드리지_않는다(self):
+        """그 계정으로 들어와 있는 사람이 만든 것이 함께 사라진다."""
+        from v1.common.guest import LEGACY_GUEST_EMAIL, stale_guests
+        self.assertNotIn(LEGACY_GUEST_EMAIL,
+                         list(stale_guests(0).values_list('username', flat=True)))
