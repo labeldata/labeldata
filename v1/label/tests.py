@@ -10347,7 +10347,9 @@ class 설정을_성격별로_묶는다(TestCase):
     def test_세_묶음으로_나뉜다(self):
         self.assertIn('① 제품 규격', self.editor)
         self.assertIn('② 값의 출처', self.editor)
-        self.assertIn('class="cfg-group"', self.editor)
+        # 두 묶음은 하는 일이 달라 폭도 다르다(7:3) — 클래스가 붙었다
+        self.assertIn('cfg-group cfg-group--spec', self.editor)
+        self.assertIn('cfg-group cfg-group--source', self.editor)
         self.assertIn('.cfg-group {', self.css)
 
     def test_판정은_보는_쪽에_있다(self):
@@ -16150,3 +16152,128 @@ class 인쇄되는_이름으로_순서를_본다(TestCase):
             def __str__(self):
                 raise RuntimeError('읽을 수 없다')
         self.assertEqual(_printed_names(_Broken()), {})
+
+
+class 꼬리말이_없어도_혼입_목록을_안다(TestCase):
+    """
+    프롬프트를 고친 뒤에도 이렇게 읽혔다.
+
+        allergens  알류, 우유, 밀, 메밀, 대두, 땅콩, 고등어, 게, 새우,
+                   복숭아, 토마토, 아황산류, 호두, 닭고기, 오징어, 조개류
+
+    "…를 사용한 제품과 같은 시설에서 제조" 라는 **꼬리를 떼고 이름만** 가져온
+    것이라 꼬리말로는 못 잡는다. 두 가지를 함께 본다.
+
+      ① 수가 많다 — 한 제품이 여덟 가지 넘게 실제로 넣는 일은 드물다
+      ② 원재료명에 없다 — 넣었다면 거기 적혀 있어야 한다
+
+    **하나만으로는 안 된다.** 정말 여러 가지를 넣은 제품이 있고, 원재료명을
+    덜 읽었을 수도 있다.
+    """
+
+    RAW = ('돼지고기 95.36%/국산, 돼지지방/국산, 정제수, 정제소금/국산, '
+           '설탕, 스낵켈, 덱스트린, 혼합제제')
+    CROSS = ('알류, 우유, 밀, 메밀, 대두, 땅콩, 고등어, 게, 새우, 복숭아, '
+             '토마토, 아황산류, 호두, 닭고기, 오징어, 조개류')
+
+    def f(self, allergens, raw=None):
+        from v1.label.services.ocr_service import separate_cross_contamination
+        return separate_cross_contamination({
+            'allergens': {'value': allergens, 'confidence': 'high'},
+            'rawmtrl_nm': {'value': self.RAW if raw is None else raw,
+                           'confidence': 'high'},
+        })
+
+    def test_꼬리말이_없어도_잡는다(self):
+        self.assertIsNone(self.f(self.CROSS)['allergens']['value'])
+
+    def test_진짜_표시는_건드리지_않는다(self):
+        out = self.f('돼지고기, 쇠고기')
+        self.assertEqual(out['allergens']['value'], '돼지고기, 쇠고기')
+
+    def test_정말_여러_가지를_넣은_제품은_남긴다(self):
+        """수만 보고 자르면 종합선물세트 같은 제품이 통째로 지워진다."""
+        out = self.f('알류(달걀), 우유, 대두, 밀, 땅콩, 호두, 돼지고기, 닭고기',
+                     raw='밀가루, 전란액, 우유, 대두유, 땅콩분태, 호두, 돼지고기, 닭고기')
+        self.assertIsNotNone(out['allergens']['value'])
+
+    def test_원재료명을_못_읽었으면_판단하지_않는다(self):
+        """견줄 것이 없는데 지우면 우리가 덜 읽은 값을 벌주는 것이다."""
+        out = self.f(self.CROSS, raw='')
+        self.assertEqual(out['allergens']['value'], self.CROSS)
+
+    def test_키워드로도_이어_준다(self):
+        """'우유' 는 원재료명에 '유청' 으로 적혀 있을 수 있다."""
+        from v1.label.services.ocr_service import _looks_like_cross_list
+        raw = '밀가루, 유청, 전란액, 대두레시틴, 땅콩, 호두, 돈육, 계육'
+        names = '밀, 우유, 알류, 대두, 땅콩, 호두, 돼지고기, 닭고기'
+        self.assertFalse(_looks_like_cross_list(names, raw))
+
+
+class 두_묶음은_하는_일이_다르다(TestCase):
+    """
+    ① 제품 규격은 칸이 셋(단위량 + 단위 · 포장개수 · 1회 섭취참고량)이고
+    ② 값의 출처는 고르는 상자 하나다. 그런데 둘이 같은 폭을 쓰고 있어서
+    ① 이 네 줄로 접히고 그만큼 아래 표가 밀렸다.
+    """
+
+    def css(self):
+        import io
+        return io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
+
+    def test_폭을_일곱_대_셋으로_나눈다(self):
+        css = self.css()
+        self.assertIn('.cfg-group--spec   { flex: 7 1 340px; }', css)
+        self.assertIn('.cfg-group--source { flex: 3 1 170px; }', css)
+
+    def test_좁아지면_여전히_접힌다(self):
+        css = self.css()
+        block = css[css.index('.config-section {'):]
+        block = block[:block.index('}')]
+        self.assertIn('flex-wrap: wrap', block)
+
+
+class 올려_둔_시안을_다시_쓴다(TestCase):
+    """
+    2 차 검증을 한 번 하면 그 파일이 문서함에 남는다. 그런데 다음에 검증을
+    누르면 파일 고르기 창이 **곧바로** 열려서, 있는 파일을 다시 찾아 와야
+    했다 — 도안은 메일이나 메신저로 오가는 것이라 다시 찾기가 번거롭다.
+    """
+
+    def tab(self):
+        import io
+        return io.open('v1/templates/products/_tab_label.html',
+                       encoding='utf-8').read()
+
+    def test_마지막_시안을_알려_주는_길이_있다(self):
+        from django.urls import reverse
+        self.assertTrue(reverse('products:design_compare_latest',
+                                kwargs={'label_id': 1}))
+
+    def test_주인만_볼_수_있다(self):
+        import inspect
+
+        from v1.products import views
+        src = inspect.getsource(views.design_compare_latest)
+        self.assertIn('_resolve_editable_label(request, label_id)', src)
+
+    def test_없으면_묻지_않는다(self):
+        """없는 선택지를 보여 주지 않는다."""
+        tab = self.tab()
+        body = tab[tab.index('window.ltStartCompare = function'):]
+        body = body[:body.index('};')]
+        self.assertIn('if (!doc) { input.click(); return; }', body)
+
+    def test_못_물어보면_그냥_고른다(self):
+        """묻는 데 실패했다고 검증을 막으면 안 된다."""
+        tab = self.tab()
+        body = tab[tab.index('window.ltStartCompare = function'):]
+        body = body[:body.index('};')]
+        self.assertIn('.catch(function () { input.click(); })', body)
+
+    def test_두_길을_다_준다(self):
+        tab = self.tab()
+        self.assertIn('data-pick="saved"', tab)
+        self.assertIn('data-pick="new"', tab)
+        self.assertIn('이 시안으로 검증', tab)
+        self.assertIn('다른 파일 첨부', tab)

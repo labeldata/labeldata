@@ -6611,6 +6611,48 @@ def _resolve_editable_label(request, label_id):
     return get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
 
 
+
+@login_required
+@require_GET
+def design_compare_latest(request, label_id):
+    """
+    이 제품에 **마지막으로 올린 포장지 시안.**
+
+    2 차 검증을 한 번 하면 그 파일이 문서함에 남는다(design_compare_record).
+    그런데 다음에 검증을 누르면 파일 고르기 창이 곧바로 열렸다 — 이미 올려 둔
+    시안이 있는데도 사용자가 그 파일을 다시 찾아 와야 했다. 도안은 메일이나
+    메신저로 오가는 것이라 다시 찾기가 번거롭다.
+
+    무엇이 있는지 알려 주기만 한다. 고르는 것은 화면이 한다.
+    """
+    from v1.products.models import DocumentType, ProductDocument
+
+    label = _resolve_editable_label(request, label_id)
+
+    doc_type = DocumentType.objects.filter(type_name='포장지 시안').first()
+    if not doc_type:
+        return JsonResponse({'success': True, 'document': None})
+
+    doc = (ProductDocument.objects
+           .filter(label=label, document_type=doc_type, active_yn=True)
+           .order_by('-version', '-uploaded_datetime')
+           .first())
+    if not doc or not doc.file:
+        return JsonResponse({'success': True, 'document': None})
+
+    compare = (doc.metadata or {}).get('compare') or {}
+    return JsonResponse({'success': True, 'document': {
+        'id': doc.id,
+        'name': doc.original_filename or '',
+        'size': doc.file_size or 0,
+        'version': doc.version,
+        'uploaded_at': doc.uploaded_datetime.isoformat(timespec='seconds')
+                       if doc.uploaded_datetime else '',
+        'checked_at': compare.get('checked_at') or '',
+        'diff_count': compare.get('diff_count'),
+        'url': doc.file.url,
+    }})
+
 @login_required
 @require_POST
 def rawmtrl_to_bom_preview(request, label_id):
