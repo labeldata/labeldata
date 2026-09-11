@@ -602,6 +602,7 @@ class AiValidationFailureTests(TestCase):
         호출 하나가 30분까지 늘어난다.
         """
         import openai
+        from django.test import override_settings
 
         from v1.label.services import ai_validation_service as avs
 
@@ -611,8 +612,11 @@ class AiValidationFailureTests(TestCase):
             def __init__(self, **kw):
                 captured.update(kw)
 
-        with patch.object(openai, 'OpenAI', _Capture):
-            client, reason = avs.get_openai_client()
+        # 키 유무는 이 시험의 물음이 아니다. 개발 PC 에 .env 가 있으면 통과하고
+        # 없으면 not_configured 로 떨어지던 것을 못으로 박는다.
+        with override_settings(OPENAI_API_KEY='sk-test'):
+            with patch.object(openai, 'OpenAI', _Capture):
+                client, reason = avs.get_openai_client()
 
         self.assertEqual(reason, avs.REASON_OK)
         self.assertIsNotNone(captured.get('timeout'), '타임아웃이 지정돼야 한다')

@@ -4924,24 +4924,21 @@ class 코치마크는_그_화면만_짚는다(TestCase):
             self.assertNotIn('ezCoach.start()', html)
         self.assertNotIn('ezCoachNavBtn', self.base())
 
-    def test_묻는_것이_셋이라_갈래도_셋이다(self):
+    def test_묻는_것이_둘이라_갈래도_둘이다(self):
         """
-        하나로 두면 셋 다 못 한다.
-
-            전체 둘러보기  "이 서비스에 뭐가 있지?"    메뉴를 짚는다
-            핵심기능 보기  "그래서 뭘 할 수 있는데?"    기능을 말한다
-            이 화면 사용법 "여기서 뭘 해야 하지?"       이 화면을 짚는다
-
-        메뉴 소개로는 "BOM 은 엑셀에서 붙여 넣을 수 있다" 를 말할 자리가 없다 —
-        메뉴 이름을 읽어서는 알 수 없기 때문이다. 화면별 안내도 아니다. 그
-        화면에 가야만 보이는데, **가 볼 생각이 안 드는 것**이 문제다.
+        한때 셋이었다. 가운데에 '핵심기능 보기' 를 두어 "그래서 뭘 할 수
+        있는데" 에 답하게 했는데, **전체 둘러보기와 거의 같은 말을 하고
+        있었다** — 메뉴를 짚으면서 그 메뉴가 무슨 일을 하는지 말하면 그게 곧
+        기능 소개다.
         """
         engine = self.engine
-        for scope in ('tour', 'core', 'detail'):
+        for scope in ('tour', 'detail'):
             self.assertIn("usable('%s')" % scope, engine, scope)
         self.assertIn('전체 둘러보기', engine)
-        self.assertIn('핵심기능 보기', engine)
         self.assertIn('이 화면 사용법', engine)
+        # 한때 가운데에 '핵심기능 보기' 가 있었다 — 전체 둘러보기와 거의 같은
+        # 말을 하고 있어서 걷었다. 되살아나면 또 겹친다.
+        self.assertNotIn('핵심기능 보기', engine)
 
     def test_가리킬_것이_없어도_말은_한다(self):
         """
@@ -4953,35 +4950,6 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         # 0 크기 테두리에 큰 box-shadow 가 남으면 이상한 자국이 된다
         self.assertIn("spot.style.display = 'none'", engine)
         self.assertIn('if (step.el) {', engine)   # 화면 안으로 끌어오는 것도 막는다
-
-    def test_핵심기능이_메뉴를_가리키고_그리로_데려간다(self):
-        """
-        처음에는 제품 상세의 탭 단추를 가리키게 했다. 그런데 **그 화면에
-        있을 때만** 잡히고, 다른 화면에서는 말만 하게 된다 — "내용이 눈에 안
-        들어온다" 는 말이 그래서 나왔다.
-
-        어느 화면에서나 있는 **사이드바 메뉴**를 가리키고, 필요하면 그리로
-        옮겨 간다. 옮겨 간 뒤에는 그 자리에서 이어 간다.
-        """
-        base = self.base()
-        core = base[base.index('data-coach-scope="core"'):]
-        core = core[:core.index('</div>' + chr(10) + '    </div>')]
-        for nav in ('ingredients', 'products', 'regulatory'):
-            self.assertIn("data-sel=\"[data-nav='%s']\"" % nav, core, nav)
-            self.assertIn('data-nav="%s"' % nav, base, nav)
-        self.assertIn('data-go=', core)
-
-    def test_핵심기능에_탭별_주요_기능이_들어_있다(self):
-        """
-        사용자가 반드시 넣어 달라고 한 것들이다. 이것이 빠지면 "그래서 뭘 할
-        수 있는데" 에 답하지 못한다.
-        """
-        base = self.base()
-        core = base[base.index('data-coach-scope="core"'):]
-        core = core[:core.index('</div>' + chr(10) + '    </div>')]
-        for must in ('엑셀', '붙여 넣으면', '배합비로 산출',
-                     '디자인 조정', '문구 검증', '시안', '내보내기', '한 장'):
-            self.assertIn(must, core, must)
 
     def test_메뉴_둘러보기는_한_곳에만_적는다(self):
         """어느 화면에서나 같은 걸음이다. 화면마다 적으면 곧 갈라진다."""
@@ -5021,7 +4989,7 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         정작 걸음이 있는 화면에서도 안 누른다.
         """
         engine = self.engine
-        self.assertIn("var any = usable('tour') || usable('core') || usable('detail');", engine)
+        self.assertIn("var any = usable('tour') || usable('detail');", engine)
         self.assertIn('if (!any)', engine)
 
     def test_게스트에게도_보인다(self):
@@ -5352,12 +5320,6 @@ class 말만_하지_않고_데려간다(TestCase):
         engine = self.engine()
         at = engine.index('function takeResume')
         self.assertIn('removeItem', engine[at:at + 400])
-
-    def test_핵심기능이_갈_곳을_갖는다(self):
-        base = self.base()
-        core = base[base.index('data-coach-scope="core"'):]
-        core = core[:core.index('</div>' + chr(10) + '    </div>')]
-        self.assertIn('data-go=', core)
 
     def test_제품_상세_걸음이_제_탭을_연다(self):
         """
