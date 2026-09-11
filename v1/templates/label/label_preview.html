@@ -160,7 +160,8 @@
         <div class="lt-vpane is-on" id="ltPane1" role="tabpanel" aria-labelledby="ltVTab1">
           <p class="lt-vwhat">
             <b class="lt-vfor">이 화면의 표시사항</b>이 규정에 맞는지 봅니다.
-            빠진 항목·글자 크기·원산지 표시를 짚어 <b>오른쪽 표에 표시</b>합니다.
+            빠진 항목·글자 크기·원산지 표시를 짚어, <b>표시사항 표의 그 줄에
+            번호를 답니다</b>.
           </p>
           <div class="lt-vact">
             <button type="button" class="btn btn-primary lt-vbtn" id="ltFirstBtn">
@@ -2656,7 +2657,11 @@
             var tab = document.getElementById('ltVTab1');
             if (tab) tab.classList.add('is-done');
             var meta = document.getElementById('ltFirstMeta');
-            if (meta) meta.textContent = '검사했습니다 — 결과는 오른쪽 표에';
+            /* "결과는 오른쪽 표에" 라고 적어 뒀는데, 결과 창이 바로 그 표
+               위를 덮고 뜬다 — 무엇을 보라는 것인지 알 수가 없었다. 실제로
+               일어나는 일을 적는다: 지적한 줄에 번호가 달리고, 창을 닫으면
+               그 번호가 보인다(markValidationOnTable). */
+            if (meta) meta.textContent = '검사했습니다 — 지적한 줄에 번호를 달았습니다';
         });
     }
 

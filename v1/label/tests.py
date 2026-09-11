@@ -12645,7 +12645,7 @@ class 검증은_두_기능이_아니라_한_절차다(TestCase):
         self.assertEqual(self.html.count('class="lt-vfor"'), 2)
 
     def test_결과가_어디에_나오는지_말한다(self):
-        self.assertIn('오른쪽 표에 표시', self.html)
+        self.assertIn('표시사항 표의 그 줄에', self.html)
         self.assertIn('한 줄씩 대조', self.html)
 
     def test_단추가_단추로_보인다(self):
@@ -15343,3 +15343,88 @@ class 지난_게스트는_치운다(TestCase):
         from v1.common.guest import LEGACY_GUEST_EMAIL, stale_guests
         self.assertNotIn(LEGACY_GUEST_EMAIL,
                          list(stale_guests(0).values_list('username', flat=True)))
+
+
+class 접기는_값을_불러온_뒤에_한다(TestCase):
+    """
+    처음 열면 25 줄이 다 보이는데 단추는 "16개 더 보기" 라고 말했다.
+
+    `hot.loadData()` 가 Handsontable 의 행 색인표를 **초기화**한다 — 접어 둔
+    것이 거기서 풀린다. 단추 글자는 그리기 전에 정해져서 그대로 남았다.
+
+    게다가 어느 줄을 접을지는 **값을 봐야 안다.** 값이 든 줄은 접지 않기로
+    했는데, 불러오기 전에는 전부 빈 줄로 보인다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/products/nutrition_editor.html',
+                       encoding='utf-8').read()
+
+    def test_불러온_뒤에_접는다(self):
+        h = self.tpl()
+        at = h.index('hot.loadData(data);')
+        self.assertIn('applyExtraFold();', h[at:at + 700])
+
+    def test_그리기_전에는_접지_않는다(self):
+        """값이 없으면 무엇을 접을지 판단할 수 없다."""
+        h = self.tpl()
+        # 표를 만드는 자리부터 칸 너비를 붙이는 자리까지가 '그리기 전' 이다
+        init = h[h.index('hot = new Handsontable('):h.index('attachSheetWidths')]
+        self.assertNotIn('applyExtraFold();', init)
+
+
+class 왜_제외됐는지_말한다(TestCase):
+    """
+    운영에서 "마가린(당류)" 로 제외된 적이 있다. 마가린은 당류가 아니다 —
+    그 원료의 **식품유형**이 당류로 적혀 있었던 것인데, 화면에는 '당류' 세
+    글자만 나가서 왜 빠졌는지 알 길이 없었다.
+    """
+
+    class _Ing:
+        def __init__(self, name, food_type='', category=''):
+            self.prdlst_nm = name
+            self.prdlst_dcnm = food_type
+            self.food_category = category
+
+    def test_이름이_당류면_이름만으로_충분하다(self):
+        from v1.label.services.origin_scope import _is_excluded
+        out, why = _is_excluded(self._Ing('설탕'))
+        self.assertTrue(out)
+        self.assertEqual(why, '당류')
+
+    def test_식품유형_때문이면_그_값을_보여_준다(self):
+        from v1.label.services.origin_scope import _is_excluded
+        out, why = _is_excluded(self._Ing('마가린', food_type='기타당류'))
+        self.assertTrue(out)
+        self.assertIn('식품유형', why)
+        self.assertIn('기타당류', why)
+
+    def test_당류가_아니면_빠지지_않는다(self):
+        from v1.label.services.origin_scope import _is_excluded
+        self.assertEqual(_is_excluded(self._Ing('마가린', food_type='마가린'))[0],
+                         False)
+
+
+class 검사_결과가_어디에_생기는지_말한다(TestCase):
+    """
+    "결과는 오른쪽 표에" 라고 적어 뒀는데, **결과 창이 바로 그 표 위를 덮고
+    뜬다** — 무엇을 보라는 것인지 알 수가 없었다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/label/label_preview.html',
+                       encoding='utf-8').read()
+
+    def test_오른쪽이라고_말하지_않는다(self):
+        """주석에서 "예전에는 이랬다" 고 적는 것은 세지 않는다."""
+        h = self.tpl()
+        shown = [ln for ln in h.split(chr(10))
+                 if '오른쪽 표에' in ln and not ln.strip().startswith(('/*', '*', '//'))]
+        self.assertEqual(shown, [])
+
+    def test_실제로_일어나는_일을_적는다(self):
+        h = self.tpl()
+        self.assertIn('번호를 답니다', h)
+        self.assertIn('번호를 달았습니다', h)

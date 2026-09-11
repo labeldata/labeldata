@@ -63,8 +63,19 @@ def _is_excluded(ingredient) -> tuple[bool, str]:
     if any(_norm(w) in name for w in _ALCOHOL):
         return True, '주정'
     for sugar in _SUGARS:
-        if _norm(sugar) and (_norm(sugar) == name or _norm(sugar) == food_type):
+        if not _norm(sugar):
+            continue
+        # **무엇이 걸렸는지 말한다.**
+        #
+        # 운영에서 "마가린(당류)" 로 제외된 적이 있다. 마가린은 당류가 아니다 —
+        # 그 원료의 **식품유형**이 당류로 적혀 있었던 것인데, 화면에는 '당류'
+        # 세 글자만 나가서 왜 빠졌는지 알 길이 없었다. 사용자는 고칠 자리를
+        # 찾지 못한다.
+        if _norm(sugar) == name:
             return True, '당류'
+        if _norm(sugar) == food_type:
+            return True, "당류 — 식품유형이 '%s'" % (
+                getattr(ingredient, 'prdlst_dcnm', '') or '').strip()
     return False, ''
 
 
