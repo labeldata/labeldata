@@ -5220,3 +5220,45 @@ class 코치마크는_화면마다_제_것을_짚는다(TestCase):
         ]
         for 이름, 말 in 해야할말:
             self.assertIn(말, block, '%s 을(를) 말하지 않는다' % 이름)
+
+
+class 갈래를_적어_둔다(TestCase):
+    """
+    엔진은 `data-coach-scope` 를 안 적으면 detail 로 본다. 옛 화면이 갑자기
+    멈추지 않게 하는 그물인데, 한때 **모든 화면이 그 기본값에 기대고 있었다.**
+
+    그러면 왜 detail 인지가 코드에 안 남고, 명시하는 쪽이 오히려 이상해 보인다.
+    그물은 쓰는 방법이 아니다.
+    """
+
+    SCREENS = (
+        'v1/templates/products/product_detail.html',
+        'v1/templates/label/my_ingredient_detail_partial.html',
+        'v1/templates/label/my_ingredient_list_combined.html',
+        'v1/templates/products/product_explorer.html',
+        'v1/templates/label/food_item_list.html',
+        'v1/templates/label/food_additive_search.html',
+        'v1/templates/products/sharing/inbox.html',
+        'v1/templates/products/contacts.html',
+        'v1/templates/regulatory/news_list.html',
+        'v1/templates/board/list.html',
+    )
+
+    def test_화면마다_detail_이라고_적는다(self):
+        import io
+        for path in self.SCREENS:
+            text = io.open(path, encoding='utf-8').read()
+            at = text.index('class="ezc-steps"')
+            head = text[at:at + 160]
+            self.assertIn('data-coach-scope="detail"', head, path)
+
+    def test_그물은_남겨_둔다(self):
+        """
+        지우면 옛 화면이 조용히 멈춘다 — 걸음이 하나도 안 잡혀 단추부터
+        안 뜨고, 그건 "안내가 없는 화면" 과 구별이 안 된다.
+        """
+        import io
+        engine = io.open('v1/templates/includes/_coachmark.html',
+                         encoding='utf-8').read()
+        self.assertIn("var want = scope || 'detail';", engine)
+        self.assertIn("all[i].getAttribute('data-coach-scope') || 'detail'", engine)
