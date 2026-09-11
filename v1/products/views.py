@@ -6629,7 +6629,11 @@ def design_compare_latest(request, label_id):
 
     label = _resolve_editable_label(request, label_id)
 
-    doc_type = DocumentType.objects.filter(type_name='포장지 시안').first()
+    # **`type_code` 로 찾는다.** 저장하는 쪽(design_compare_record)이 그 값으로
+    # get_or_create 하기 때문이다. 처음에 `type_name='포장지 시안'` 으로 찾았는데,
+    # 이름은 관리자가 바꿀 수 있는 값이라 한 글자만 달라도 못 찾는다 — 그러면
+    # 파일이 멀쩡히 있는데도 늘 "없음" 이 되고, 묻는 창이 영영 안 뜬다.
+    doc_type = DocumentType.objects.filter(type_code='DESIGN_PROOF').first()
     if not doc_type:
         return JsonResponse({'success': True, 'document': None})
 
@@ -6642,7 +6646,7 @@ def design_compare_latest(request, label_id):
 
     compare = (doc.metadata or {}).get('compare') or {}
     return JsonResponse({'success': True, 'document': {
-        'id': doc.id,
+        'id': doc.document_id,
         'name': doc.original_filename or '',
         'size': doc.file_size or 0,
         'version': doc.version,

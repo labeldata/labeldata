@@ -16084,6 +16084,39 @@ class 올려_둔_시안을_다시_쓴다(TestCase):
         self.assertTrue(reverse('products:design_compare_latest',
                                 kwargs={'label_id': 1}))
 
+    def test_저장한_쪽과_같은_열쇠로_찾는다(self):
+        """
+        저장은 `type_code='DESIGN_PROOF'` 로 하는데 읽기를 `type_name='포장지
+        시안'` 으로 했다. 이름은 관리자가 바꿀 수 있는 값이라 한 글자만 달라도
+        못 찾는다 — 파일이 멀쩡히 있는데 늘 "없음" 이 되고, 묻는 창이 영영
+        안 뜬다. 실제로 그랬다.
+        """
+        import inspect
+
+        from v1.products import views
+        read = inspect.getsource(views.design_compare_latest)
+        write = inspect.getsource(views.design_compare_record)
+        self.assertIn("type_code='DESIGN_PROOF'", read)
+        self.assertIn("type_code='DESIGN_PROOF'", write)
+        # 주석에서 "예전에는 이랬다" 고 적는 것은 세지 않는다
+        code = [ln for ln in read.split(chr(10))
+                if "type_name='포장지 시안'" in ln and not ln.strip().startswith('#')]
+        self.assertEqual(code, [])
+
+    def test_실제로_있는_칸을_읽는다(self):
+        """
+        ProductDocument 의 기본키는 `document_id` 다. `doc.id` 로 읽어 터졌고,
+        그 바람에 500 이 나서 화면은 그냥 파일 고르기로 떨어졌다.
+        """
+        from v1.products.models import ProductDocument
+        self.assertTrue(ProductDocument._meta.pk.name == 'document_id')
+        import inspect
+
+        from v1.products import views
+        src = inspect.getsource(views.design_compare_latest)
+        self.assertIn('doc.document_id', src)
+        self.assertNotIn('doc.id,', src)
+
     def test_주인만_볼_수_있다(self):
         import inspect
 
