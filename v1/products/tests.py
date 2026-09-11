@@ -4954,17 +4954,22 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         self.assertIn("spot.style.display = 'none'", engine)
         self.assertIn('if (step.el) {', engine)   # 화면 안으로 끌어오는 것도 막는다
 
-    def test_핵심기능이_탭을_가리킨다(self):
+    def test_핵심기능이_메뉴를_가리키고_그리로_데려간다(self):
         """
-        제품 상세에 있을 때는 탭 단추를 가리킨다. 선택자가 실제로 그 화면에
-        있어야 한다 — 틀리면 걸음이 조용히 사라진다.
+        처음에는 제품 상세의 탭 단추를 가리키게 했다. 그런데 **그 화면에
+        있을 때만** 잡히고, 다른 화면에서는 말만 하게 된다 — "내용이 눈에 안
+        들어온다" 는 말이 그래서 나왔다.
+
+        어느 화면에서나 있는 **사이드바 메뉴**를 가리키고, 필요하면 그리로
+        옮겨 간다. 옮겨 간 뒤에는 그 자리에서 이어 간다.
         """
         base = self.base()
         core = base[base.index('data-coach-scope="core"'):]
         core = core[:core.index('</div>' + chr(10) + '    </div>')]
-        for tab in ('tab-bom', 'tab-nutrition', 'tab-label'):
-            self.assertIn("data-sel=\"[data-bs-target='#%s']\"" % tab, core, tab)
-            self.assertIn('#%s' % tab, self.product, tab)
+        for nav in ('ingredients', 'products', 'regulatory'):
+            self.assertIn("data-sel=\"[data-nav='%s']\"" % nav, core, nav)
+            self.assertIn('data-nav="%s"' % nav, base, nav)
+        self.assertIn('data-go=', core)
 
     def test_핵심기능에_탭별_주요_기능이_들어_있다(self):
         """
@@ -5262,3 +5267,132 @@ class 갈래를_적어_둔다(TestCase):
                          encoding='utf-8').read()
         self.assertIn("var want = scope || 'detail';", engine)
         self.assertIn("all[i].getAttribute('data-coach-scope') || 'detail'", engine)
+
+
+class 틀_안에서는_돌지_않는다(TestCase):
+    """
+    BOM 탭에 **도움말 단추가 둘** 나타났다. 위치도 살짝 어긋나 보였다.
+
+    제품 상세의 BOM 탭은 `bom_detail.html` 을 iframe 으로 띄우는데, 그 문서가
+    `base_v2` 를 상속한다 — 그래서 엔진이 **한 벌 더** 돌았다. 바깥 단추와
+    안쪽 단추가 겹쳐 둘로 보이고, 안쪽 것은 **iframe 좌표계**라 자리도
+    어긋난다.
+
+    도움말은 사람이 보고 있는 **바깥 창**의 일이다.
+    """
+
+    def engine(self):
+        import io
+        return io.open('v1/templates/includes/_coachmark.html',
+                       encoding='utf-8').read()
+
+    def test_틀_안이면_아무것도_안_한다(self):
+        engine = self.engine()
+        self.assertIn('if (window.self !== window.top) return;', engine)
+
+    def test_바깥을_못_읽어도_안_돈다(self):
+        """출처가 다르면 접근 자체가 던진다 — 남의 사이트에 끼워진 것이다."""
+        engine = self.engine()
+        at = engine.index('if (window.self !== window.top) return;')
+        self.assertIn('catch', engine[at:at + 200])
+
+    def test_그_까닭이_실제로_있다(self):
+        """고친 이유가 사라지지 않았는지 본다."""
+        import io
+        bom = io.open('v1/templates/products/bom_detail.html', encoding='utf-8').read()
+        self.assertIn("{% extends 'base_v2.html' %}", bom)
+
+
+class 말만_하지_않고_데려간다(TestCase):
+    """
+    '핵심기능 보기' 는 처음에 가운데 카드로 **말만** 했다. 그랬더니 "내용이
+    눈에 안 들어온다" 는 말이 나왔다 — 당연하다. 기능을 글로 읽는 것과 그
+    화면을 보는 것은 다른 일이고, 이 물건은 원래 **가리켜서** 말하는 것이다.
+    """
+
+    def engine(self):
+        import io
+        return io.open('v1/templates/includes/_coachmark.html',
+                       encoding='utf-8').read()
+
+    def base(self):
+        import io
+        return io.open('v1/templates/base_v2.html', encoding='utf-8').read()
+
+    def product(self):
+        import io
+        return io.open('v1/templates/products/product_detail.html',
+                       encoding='utf-8').read()
+
+    def test_다른_화면으로_옮겨_간다(self):
+        engine = self.engine()
+        self.assertIn("step.go && step.go !== location.pathname", engine)
+        self.assertIn('location.href = step.go', engine)
+
+    def test_옮겨_간_뒤_그_자리에서_이어_간다(self):
+        """화면이 새로 뜨므로 어디까지 갔는지를 남겨야 한다."""
+        engine = self.engine()
+        self.assertIn('function saveResume', engine)
+        self.assertIn('function takeResume', engine)
+        self.assertIn('start(back.scope, back.at)', engine)
+
+    def test_브라우저를_닫으면_사라진다(self):
+        """
+        다음에 열었을 때 하던 튜토리얼이 되살아나면 놀란다. localStorage 가
+        아니라 sessionStorage 다.
+        """
+        engine = self.engine()
+        at = engine.index('function saveResume')
+        body = engine[at:at + 400]
+        self.assertIn('sessionStorage', body)
+        self.assertNotIn('localStorage', body)
+
+    def test_한_번만_쓴다(self):
+        """지우지 않으면 새로고침할 때마다 튜토리얼이 다시 열린다."""
+        engine = self.engine()
+        at = engine.index('function takeResume')
+        self.assertIn('removeItem', engine[at:at + 400])
+
+    def test_핵심기능이_갈_곳을_갖는다(self):
+        base = self.base()
+        core = base[base.index('data-coach-scope="core"'):]
+        core = core[:core.index('</div>' + chr(10) + '    </div>')]
+        self.assertIn('data-go=', core)
+
+    def test_제품_상세_걸음이_제_탭을_연다(self):
+        """
+        탭 단추만 가리키면 기본 정보를 배경에 둔 채 "BOM 은 …" 이라고 말하게
+        되어 무슨 말인지 눈에 안 들어온다.
+        """
+        html = self.product()
+        self.assertEqual(html.count('data-tab="tab-'), 10)
+        engine = self.engine()
+        self.assertIn("document.querySelector('[data-bs-target=\"#' + step.tab + '\"]')",
+                      engine)
+
+    def test_탭이_자리를_잡은_뒤에_그린다(self):
+        """바로 재면 크기가 0 이라 걸음이 조용히 빠진다."""
+        engine = self.engine()
+        at = engine.index('if (step && step.tab) {')
+        self.assertIn('setTimeout(draw', engine[at:at + 500])
+
+
+class 네비_순서는_튜토리얼_차례와_같다(TestCase):
+    """
+    둘러보기가 "제품 조회" 를 짚는데 사이드바에서는 그것이 다섯 번째면, 보는
+    사람의 눈이 오르내린다. 순서가 같아야 따라가진다.
+    """
+
+    def test_사이드바와_둘러보기가_같은_차례다(self):
+        import io
+        import re
+        base = io.open('v1/templates/base_v2.html', encoding='utf-8').read()
+
+        nav = re.findall(r'data-nav="([a-z]+)"', base)
+        tour = base[base.index('data-coach-scope="tour"'):]
+        tour = tour[:tour.index('</div>' + chr(10) + '    </div>')]
+        steps = re.findall(r"data-sel=\"\[data-nav='([a-z]+)'\]\"", tour)
+
+        self.assertEqual(nav, steps)
+        self.assertEqual(nav, ['products', 'ingredients', 'lookup', 'additives',
+                               'collab', 'contacts', 'regulatory', 'board'])
