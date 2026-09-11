@@ -4839,7 +4839,9 @@ class 코치마크는_그_화면만_짚는다(TestCase):
 
     def test_가리킬_것이_없으면_그_걸음을_건너뛴다(self):
         """새 원료에는 영양성분 칸이 아직 없다. 빈 곳을 가리키면 안 된다."""
-        self.assertIn('if (!shown(el)) return;', self.engine)
+        # 다만 탭을 적어 둔 걸음은 빼지 않는다 — 그 탭을 열면 보이기 때문이다
+        self.assertIn('if (sel && !tab) {', self.engine)
+        self.assertIn('if (!shown(now)) return;', self.engine)
         self.assertIn('r.width > 0 && r.height > 0', self.engine)
         # 새 원료에 없는 그 칸이 실제로 걸음에 들어 있다 — 건너뛰기가 도는 자리
         self.assertIn('#ingNutrition', self._steps(self.ingredient))
@@ -4946,10 +4948,10 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         요소가 없다. 없는 자리를 억지로 가리키느니 말만 하는 편이 낫다.
         """
         engine = self.engine
-        self.assertIn('if (!step.el) {', engine)
+        self.assertIn('if (!el) {', engine)
         # 0 크기 테두리에 큰 box-shadow 가 남으면 이상한 자국이 된다
         self.assertIn("spot.style.display = 'none'", engine)
-        self.assertIn('if (step.el) {', engine)   # 화면 안으로 끌어오는 것도 막는다
+        self.assertIn('if (seat) {', engine)      # 화면 안으로 끌어오는 것도 막는다
 
     def test_메뉴_둘러보기는_한_곳에만_적는다(self):
         """어느 화면에서나 같은 걸음이다. 화면마다 적으면 곧 갈라진다."""
@@ -5180,13 +5182,13 @@ class 코치마크는_화면마다_제_것을_짚는다(TestCase):
         해야할말 = [
             ('BOM 붙여넣기', '붙여넣으면'),
             ('BOM 머리글 인식', '머리글'),
-            ('BOM 행 자동 확장', '저절로 늘어납니다'),
+            ('BOM 행 자동 확장', '자동으로 추가됩니다'),
             ('영양성분 자동 계산', '배합비'),
-            ('영양성분 기여도', '못 움직이는 원료는 비어 있어도'),
+            ('영양성분 기여도', '영향을 주지 않는 원료는 비어 있어도'),
             ('검증 표 설정', '자간'),
             ('검증 항목 순서', '항목 순서'),
             ('검증 분리배출마크', '분리배출마크'),
-            ('1차 문구 검증', '번호가 달리고'),
+            ('1차 문구 검증', '번호가 붙고'),
             ('2차 시안 대조', '올려 둔 시안'),
             ('내보내기 PDF', '한 장'),
             ('내보내기 문서함', '문서함에도 등록'),
@@ -5327,10 +5329,31 @@ class 말만_하지_않고_데려간다(TestCase):
         되어 무슨 말인지 눈에 안 들어온다.
         """
         html = self.product()
-        self.assertEqual(html.count('data-tab="tab-'), 10)
+        # **모든** 걸음이 제 탭을 적는다. 기본 정보 걸음까지 적어야 BOM 탭에서
+        # 튜토리얼을 열어도 같은 열일곱 걸음이 나온다 — 예전에는 기본 정보
+        # 걸음이 안 보인다는 이유로 잘려 나가 열 걸음만 나왔다.
+        block = html[html.index('class="ezc-steps"'):]
+        block = block[:block.index('</div>' + chr(10) + '</div>')]
+        self.assertEqual(block.count('data-title='), block.count('data-tab="tab-'))
+        self.assertIn('data-tab="tab-info"', block)
         engine = self.engine()
         self.assertIn("document.querySelector('[data-bs-target=\"#' + step.tab + '\"]')",
                       engine)
+
+    def test_어느_탭에서_열어도_같은_걸음이_나온다(self):
+        """
+        기본 정보에서 열면 열일곱, BOM 에서 열면 열이 나왔다. 같은 화면인데
+        묻는 자리에 따라 안내가 달라졌다.
+
+        까닭은 걸음을 모을 때 지금 안 보이는 요소를 잘라 낸 것이었다. 탭 속
+        요소는 그 탭을 열면 보이므로 잘라 낼 것이 아니다. 이제 자리는 **그릴
+        때** 찾는다.
+        """
+        engine = self.engine()
+        self.assertIn('function target(step)', engine)
+        # 모을 때가 아니라 그릴 때 찾는다
+        self.assertNotIn('step.el', engine)
+        self.assertIn('var el = target(step);', engine)
 
     def test_탭이_자리를_잡은_뒤에_그린다(self):
         """바로 재면 크기가 0 이라 걸음이 조용히 빠진다."""

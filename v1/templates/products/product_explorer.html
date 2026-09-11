@@ -525,26 +525,25 @@ document.addEventListener('DOMContentLoaded', function() {
   곧바로 그 탭으로 가는 문이라는 것을 모르면 제품을 열고 다시 탭을 찾는다.
 {% endcomment %}
 <div class="ezc-steps" data-coach-scope="detail" data-coach-key="product-explorer" hidden>
-  <div data-sel="#stat-all" data-title="여기는 어디까지 했는지 보는 자리입니다">
+  <div data-sel="#stat-all" data-title="제품별 진행 상황을 확인하는 자리입니다">
     라벨 하나가 제품 하나입니다. 카드를 누르면 그 조건으로 목록이 좁혀집니다 —
     <strong>만료 임박</strong>은 문서함에 넣어 둔 서류의 유효기간이 다가온 제품입니다.
   </div>
-  <div data-sel="[data-filter=&quot;COLLAB&quot;]" data-title="내 제품과 남의 제품이 섞여 있습니다">
-    <strong>참여 중</strong>은 남이 나에게 공유한 제품입니다. 내 권한에 따라 할 수 있는 일이 다르고,
-    지워도 내 것이 아니라 공유가 끊길 뿐입니다.
+  <div data-sel="[data-filter=&quot;COLLAB&quot;]" data-title="내 제품과 공유받은 제품이 함께 있습니다">
+    <strong>참여 중</strong>은 다른 사용자가 나에게 공유한 제품입니다. 내 권한에 따라 가능한 작업이 다르고, 삭제해도 제품이 지워지는 것이 아니라 공유만 해제됩니다.
   </div>
   <div data-sel="#product-tbody" data-title="칸을 누르면 그 탭으로 바로 갑니다">
     <strong>문서·BOM·표시사항·영양성분·권한</strong> 칸은 각각 제품의 그 탭으로 가는 문입니다.
-    제품을 열고 탭을 다시 찾을 필요가 없습니다. BOM 칸의 백분율은 배합비 합이라,
-    <strong>100% 가 아니면</strong> 원재료명이 제대로 조립되지 않습니다.
+    제품을 연 뒤 탭을 다시 찾을 필요가 없습니다. BOM 칸의 백분율은 배합비 합이라,
+    <strong>100% 가 아니면</strong> 원재료명이 제대로 생성되지 않습니다.
   </div>
   <div data-sel="#product-search-field" data-title="원재료명으로도 찾습니다">
     제품명뿐 아니라 <strong>원재료명·식품유형·품목보고번호</strong>로 찾을 수 있습니다.
-    "이 원료를 쓴 제품이 어디였지" 를 여기서 봅니다.
+    "이 원료를 쓴 제품이 어디였지" 를 여기서 찾습니다.
   </div>
   <div data-sel="#status-filter" data-title="상태는 목록에서 바꾸는 것이 아닙니다">
     작성 중 → 자료 요청 → 제출 완료 → 검토 중 → 승인 대기 → 승인 완료.
-    <strong>제품 안에서 단추를 눌러야 넘어갑니다</strong> — 여기서는 그 상태로 거를 뿐입니다.
+    <strong>제품 상세에서 버튼을 눌러야 다음 단계로 넘어갑니다</strong> — 여기서는 상태별로 조회만 합니다.
   </div>
 </div>
 {% endblock %}

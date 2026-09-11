@@ -1139,24 +1139,24 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="ezc-steps" data-coach-scope="detail" data-coach-key="ingredient-list" hidden>
   <div data-sel="#newBtn" data-title="한 번 적으면 모든 제품이 씁니다">
     원료의 <strong>표시명·알레르기·영양성분</strong>을 여기서 한 번 정해 두면, 그 원료를 쓴 제품이
-    전부 같은 값을 씁니다. 제품마다 다시 적지 않아도 되고, 나중에 고치면 한 자리만 고칩니다.
+    전부 같은 값을 씁니다. 제품마다 다시 입력하지 않아도 되고, 값이 바뀌면 한 곳만 수정하면 됩니다.
   </div>
-  <div data-sel="#pasteBtn" data-title="엑셀은 옮겨 적지 말고 붙여넣으세요">
+  <div data-sel="#pasteBtn" data-title="엑셀은 직접 입력하지 말고 붙여넣으세요">
     쓰던 표를 <strong>머리글째 복사해 그대로 붙여넣으면</strong> 열 순서가 달라도 제자리를 찾아갑니다.
-    한 줄씩 옮겨 적다가 그만두는 일이 가장 많습니다.
+    한 건씩 직접 입력하다 중단하는 경우가 가장 많습니다.
   </div>
-  <div data-sel="#dupBtn" data-title="같은 원료가 여러 벌 쌓입니다">
-    거래처마다 이름을 조금씩 달리 적어 보내서, 옮겨 담다 보면 같은 원료가 여러 줄이 됩니다.
-    여기서 찾아 <strong>한 줄로 합칩니다</strong> — 합치면 그 원료를 쓰던 제품들도 따라갑니다.
+  <div data-sel="#dupBtn" data-title="같은 원료가 중복 등록됩니다">
+    거래처마다 이름을 조금씩 다르게 보내므로, 등록하다 보면 같은 원료가 여러 건이 됩니다.
+    여기서 찾아 <strong>한 건으로 통합합니다</strong> — 통합하면 그 원료를 쓰던 제품에도 함께 반영됩니다.
   </div>
   <div data-sel="#detailContent" data-title="여기 적은 값이 제품으로 넘어갑니다">
-    원료를 고르면 오른쪽에서 고칩니다. <strong>원재료 표시명</strong>은 라벨에 인쇄될 글자이고,
-    <strong>알레르기</strong>는 제품의 알레르기 문구가 됩니다. 영양성분은 배합으로 계산할 때 쓰입니다 —
-    다만 값이 정해진 원료가 <strong>스물다섯에 하나</strong>(4%)뿐이라, 계산을 쓰려면 여기부터 채워야 합니다.
+    원료를 고르면 오른쪽에서 수정합니다. <strong>원재료 표시명</strong>은 라벨에 인쇄될 글자이고,
+    <strong>알레르기</strong>는 제품의 알레르기 문구가 됩니다. 영양성분은 배합으로 계산할 때 사용됩니다 —
+    다만 값이 등록된 원료가 <strong>4%</strong> 뿐이라, 계산 기능을 쓰려면 여기부터 채워야 합니다.
   </div>
   <div data-sel="#ingredientSearchField" data-title="알레르기로도 찾을 수 있습니다">
-    원재료명·품목보고번호뿐 아니라 <strong>알레르기</strong>로 좁혀 볼 수 있습니다.
-    "우유가 든 원료를 전부 보자" 가 되는 자리입니다.
+    원재료명·품목보고번호뿐 아니라 <strong>알레르기</strong>로도 검색할 수 있습니다.
+    우유가 들어간 원료를 한 번에 조회할 때 씁니다.
   </div>
 </div>
 {% endblock %}
