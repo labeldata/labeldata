@@ -109,6 +109,12 @@ class 로그인_없이_열려_있던_문(TestCase):
         'product_export_api', 'inspection_export_api',
         # 모바일 앱 — DRF permission_classes 로 따로 막는다
         'login', 'logout', 'register_device', 'version_check',
+        # 받지 않기(앱) — 데코레이터는 AllowAny 지만 **뷰 안에서 막는다.**
+        # 기기가 계정에 묶여 있지 않으면 403 "로그인이 필요합니다. 받지 않기는
+        # 계정에 저장됩니다" 로 돌려보낸다(mobile/views.py 의 _device_user).
+        # 앱은 로그인 없이도 알림을 받으므로 주소 자체는 열려 있어야 하고,
+        # 권한은 device_id 가 아니라 **그 기기에 묶인 계정**이 가른다.
+        'alert_mutes_list', 'alert_mute_detail',
         'news_list', 'news_detail', 'rules_list', 'rule_detail',
         'bookmarks_list', 'bookmark_detail', 'notifications_list',
         'notification_read', 'notification_read_all', 'notification_delete',

@@ -1025,6 +1025,9 @@ class RegulatoryLayoutTests(TestCase):
         css = self.css
         css += (base / 'static/css/list_common.css').read_text(encoding='utf-8')
         css += (base / 'templates/label/_condition_panel.html').read_text(encoding='utf-8')
+        # 도움말 조각은 제 CSS 를 안에 들고 다닌다(static 이 아니다). 이 화면이
+        # 그 class 를 쓰므로 함께 읽어야 한다 — 안 읽으면 "규칙이 없다" 고 운다.
+        css += (base / 'templates/includes/_coachmark.html').read_text(encoding='utf-8')
         for extra in ('products_common.css', 'variables.css', 'style.css'):
             path = base / 'static/css' / extra
             if path.exists():
