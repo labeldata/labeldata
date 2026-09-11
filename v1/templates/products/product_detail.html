@@ -1235,15 +1235,28 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* BOM iframe → 부모 페이지 postMessage 처리 */
+/* 메시지는 **어디서든 온다.**
+
+   이 창에 handle 을 쥔 페이지(창을 window.open 으로 연 쪽, 끼워 넣은 프레임)는
+   무엇이든 보낼 수 있다. 아래 넷 중 하나(copyRawmtrlToBasicInfo)는 받은 글자를
+   **원재료명 칸에 그대로 써 넣는다** — 그 글자는 라벨에 인쇄된다.
+
+   우리 iframe 이 보낸 것만 받는다. */
+window.sameOriginMessage = function (e) {
+    return e && e.origin === window.location.origin;
+};
+
 /* 영양성분 탭의 안내에서 "표시사항 탭으로 이동" 을 누르면 온다.
    영양정보 표는 표시사항 미리보기에 함께 그려지고 PDF 도 거기서 한 장으로 나온다. */
 window.addEventListener('message', function(e) {
+    if (!window.sameOriginMessage(e)) return;
     if (!e.data || e.data.type !== 'openLabelTab') return;
     const labelTab = document.querySelector('[data-bs-target="#tab-label"]');
     if (labelTab) bootstrap.Tab.getOrCreateInstance(labelTab).show();
 });
 
 window.addEventListener('message', function(e) {
+    if (!window.sameOriginMessage(e)) return;
     if (!e.data || e.data.type !== 'copyRawmtrlToBasicInfo') return;
 
     const rawmtrl = e.data.rawmtrl || '';
@@ -1596,6 +1609,60 @@ async function changeStatus(newStatus, overrideReason, acknowledged) {
  * requires_reason 은 서버가 정한다. 검토자·승인자가 배정된 제품이면 사유를 받고,
  * 혼자 쓰는 제품이면 확인만 받는다.
  */
+/**
+ * 검증이 가리키는 칸으로 데려간다.
+ *
+ * 두 곳에서 부른다 — 확정 전 모달(이 문서)과 **미리보기 iframe 안의 검증
+ * 결과**(label_preview.js). iframe 쪽은 읽기 전용 표라, 거기서 지적을 눌러도
+ * "어느 줄인지" 까지만 알 수 있었다. 고칠 칸은 이 문서의 기본 정보 탭에 있다.
+ *
+ * 칸 id 규칙은 서버의 `_DISPLAY_ITEM_ANCHORS` 와 같다 —
+ * 'field-' + 밑줄을 붙임표로, 예외는 따로.
+ */
+window.VALIDATION_ANCHOR_EXCEPTION = {
+    'rawmtrl_nm_display': 'field-rawmtrl-nm',
+    'rawmtrl_nm': 'field-rawmtrl-nm'
+};
+window.VALIDATION_FIELD_TAB = { 'nutrition_text': 'tab-nutrition' };
+
+window.anchorOfField = function (field) {
+    return window.VALIDATION_ANCHOR_EXCEPTION[field]
+        || ('field-' + String(field).replace(/_/g, '-'));
+};
+
+window.gotoLabelField = function (field) {
+    if (!field) return false;
+
+    const tabId = window.VALIDATION_FIELD_TAB[field];
+    if (tabId) {
+        const tabBtn = document.querySelector('[data-bs-target="#' + tabId + '"]');
+        if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+        return true;
+    }
+
+    const el = document.getElementById(window.anchorOfField(field));
+    if (!el) return false;
+
+    // 그 칸이 있는 탭을 먼저 연다
+    const pane = el.closest('.tab-pane');
+    if (pane && !pane.classList.contains('active')) {
+        const tabBtn = document.querySelector('[data-bs-target="#' + pane.id + '"]');
+        if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+    }
+    // 탭이 그려진 뒤에 옮긴다 — 숨은 칸은 자리를 모른다
+    setTimeout(function () {
+        el.scrollIntoView({behavior: 'smooth', block: 'center'});
+        el.classList.add('di-highlight');
+        setTimeout(function () { el.classList.remove('di-highlight'); }, 1200);
+        if (typeof el.focus === 'function') el.focus({preventScroll: true});
+    }, 160);
+    return true;
+};
+
+/* 미리보기 iframe 에서 오는 요청은 `focusLabelField` 라는 이름으로 이미
+   오간다(_tab_label.html 이 받는다). 규약을 새로 하나 더 만들지 않는다 —
+   같은 일에 이름이 둘이면 어느 날 한쪽만 고쳐진다. */
+
 function showValidationBlock(newStatus, result) {
     const issues = result.issues || [];
     const unchecked = result.unchecked || [];
@@ -1632,15 +1699,9 @@ function showValidationBlock(newStatus, result) {
      *
      * 칸 id 규칙은 화면이 이미 쓰는 것과 같다(_DISPLAY_ITEM_ANCHORS) —
      * 'field-' + 밑줄을 붙임표로. 예외 둘만 적는다. */
-    const ANCHOR_EXCEPTION = {
-        'rawmtrl_nm_display': 'field-rawmtrl-nm',
-        'rawmtrl_nm': 'field-rawmtrl-nm'
-    };
-    const FIELD_TAB = { 'nutrition_text': 'tab-nutrition' };
-
-    function anchorOf(field) {
-        return ANCHOR_EXCEPTION[field] || ('field-' + String(field).replace(/_/g, '-'));
-    }
+    const ANCHOR_EXCEPTION = window.VALIDATION_ANCHOR_EXCEPTION;
+    const FIELD_TAB = window.VALIDATION_FIELD_TAB;
+    const anchorOf = window.anchorOfField;
 
     function reachable(i) {
         const fields = i.fields || [];
@@ -1709,30 +1770,8 @@ function showValidationBlock(newStatus, result) {
     listEl.onclick = function (ev) {
         const btn = ev.target.closest('.vb-go');
         if (!btn) return;
-        const field = btn.dataset.field;
         modal.hide();
-
-        const tabId = FIELD_TAB[field];
-        if (tabId) {
-            const tabBtn = document.querySelector('[data-bs-target="#' + tabId + '"]');
-            if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
-            return;
-        }
-        const el = document.getElementById(anchorOf(field));
-        if (!el) return;
-        // 기본 정보 탭에 있는 칸이라 그 탭을 먼저 연다
-        const pane = el.closest('.tab-pane');
-        if (pane && !pane.classList.contains('active')) {
-            const tabBtn = document.querySelector('[data-bs-target="#' + pane.id + '"]');
-            if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
-        }
-        // 탭이 그려진 뒤에 옮긴다 — 숨은 칸은 자리를 모른다
-        setTimeout(function () {
-            el.scrollIntoView({behavior: 'smooth', block: 'center'});
-            el.classList.add('di-highlight');
-            setTimeout(function () { el.classList.remove('di-highlight'); }, 1200);
-            if (typeof el.focus === 'function') el.focus({preventScroll: true});
-        }, 160);
+        window.gotoLabelField(btn.dataset.field);
     };
 
     proceedEl.onclick = function () {
@@ -2245,6 +2284,7 @@ async function revokeShare(button) {
 
 // BOM / 영양성분 / 표시사항 에디터 iframe에서 메시지 수신
 window.addEventListener('message', function(event) {
+    if (!window.sameOriginMessage(event)) return;
     if (!event.data || !event.data.type) return;
 
     // 범용 Snackbar 표시 요청 (iframe → 부모)
