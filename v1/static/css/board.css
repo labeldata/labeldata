@@ -488,14 +488,9 @@
 .badge-new   { background: var(--ez-danger-bg, #fce8e6);         color: var(--ez-danger-bright, #d93025);            font-size: 10px; padding: 1px 6px; border-radius: 8px; }
 .badge-mine  { background: var(--board-gray-200); color: var(--v2-text-sub); font-size: 10px; padding: 1px 6px; border-radius: 8px; }
 
-/* 페이지네이션 */
-.list-pagination     { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 0; flex-wrap: wrap; gap: 8px; }
-.pagination-info     { font-size: 12px; color: var(--v2-text-sub); }
-.pagination-info strong { color: var(--v2-text); }
-.pagination-nav .page-link                  { border: 1px solid var(--v2-border); color: var(--v2-text); font-size: 13px; padding: 5px 10px; transition: all 0.15s; }
-.pagination-nav .page-item.active .page-link{ background: var(--v2-blue); border-color: var(--v2-blue); color: #fff; }
-.pagination-nav .page-link:hover:not(.active){ background: var(--v2-gray-100); }
-.pagination-nav .page-item.disabled .page-link { color: var(--v2-border); }
+/* 페이지네이션 규칙은 list_common.css 가 갖는다. 게시판만 .pagination-nav 라는
+   제 이름으로 따로 들고 있었고, 그래서 같은 자리의 단추가 다른 목록 화면과
+   크기도 모서리도 달랐다. */
 
 /* 정렬·페이지수 select */
 .board-select { width: auto; font-size: 12px; border: 1px solid var(--v2-border); border-radius: 4px; padding: 5px 10px; color: var(--v2-text-sub); background: #fff; cursor: pointer; }

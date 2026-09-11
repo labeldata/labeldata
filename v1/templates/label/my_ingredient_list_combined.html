@@ -1,5 +1,5 @@
 {% extends "base_v2.html" %}
-{% load static %}
+{% load static list_pagination %}
 
 {% block title %}원료 관리{% endblock %}
 
@@ -383,92 +383,7 @@
         color: var(--text-secondary);
     }
 
-    /* ===== 페이지네이션 ===== */
-    .list-pagination {
-        flex-shrink: 0;
-        padding: 8px 16px;
-        border-top: 1px solid var(--border-color);
-        background: white;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        min-height: 48px;
-    }
-
-    .pagination-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        color: var(--text-secondary);
-        font-size: 12px;
-        flex-shrink: 0;
-    }
-
-    .pagination-info strong {
-        color: var(--text-primary);
-        font-weight: 600;
-    }
-
-    .pagination-per-page {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-
-    .pagination-per-page select {
-        padding: 2px 6px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 12px;
-        color: var(--text-primary);
-        background: white;
-        cursor: pointer;
-        outline: none;
-        transition: border-color 0.15s;
-    }
-
-    .pagination-per-page select:focus {
-        border-color: var(--google-blue);
-    }
-
-    /* Bootstrap pagination 오버라이드 */
-    .list-pagination .pagination {
-        margin: 0;
-        gap: 2px;
-    }
-
-    .list-pagination .page-link {
-        padding: 4px 9px;
-        font-size: 12px;
-        border-radius: 6px !important;
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        background: white;
-        line-height: 1.4;
-        transition: all 0.15s;
-    }
-
-    .list-pagination .page-item.active .page-link {
-        background: var(--google-blue);
-        border-color: var(--google-blue);
-        color: white;
-        font-weight: 600;
-    }
-
-    .list-pagination .page-item.disabled .page-link {
-        color: #c0c4c7;
-        border-color: #ebebeb;
-        background: white;
-    }
-
-    .list-pagination .page-link:hover:not(.active) {
-        background: var(--google-gray-100);
-        border-color: var(--google-blue);
-        color: var(--google-blue);
-    }
+    /* 페이지네이션 규칙은 list_common.css 로 옮겼다 — 목록 화면 전부가 함께 쓴다 */
 
     /* ===== 우측 패널 (상세정보) ===== */
     .ingredient-detail-panel {
@@ -786,66 +701,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="list-pagination">
-                <!-- 왼쪽: 전체 정보 + 페이지당 선택 -->
-                <div class="pagination-info">
-                    <span>전체 <strong>{{ total_count }}</strong>개 원료
-                        {% if page_obj.paginator.count > 0 %}
-                        ({{ page_obj.start_index }}–{{ page_obj.end_index }})
-                        {% endif %}
-                    </span>
-                    <div class="pagination-per-page">
-                        <label for="perPageSelect">페이지당</label>
-                        <select id="perPageSelect" onchange="(function(v){var p=new URLSearchParams(window.location.search);p.set('items_per_page',v);p.set('page','1');location.href='?'+p.toString();})(this.value)">
-                            <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10</option>
-                            <option value="25" {% if items_per_page == 25 %}selected{% endif %}>25</option>
-                            <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50</option>
-                            <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- 오른쪽: 페이지 버튼 -->
-                {% if page_obj.paginator.num_pages > 1 %}
-                <nav aria-label="원료 목록 페이지">
-                    <ul class="pagination mb-0">
-                        {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-double-left"></i></a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-left"></i></a>
-                        </li>
-                        {% else %}
-                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
-                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
-                        {% endif %}
-
-                        {% for num in page_obj.paginator.page_range %}
-                            {% if page_obj.number == num %}
-                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a></li>
-                            {% endif %}
-                        {% endfor %}
-
-                        {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-right"></i></a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-double-right"></i></a>
-                        </li>
-                        {% else %}
-                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
-                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
-                        {% endif %}
-                    </ul>
-                </nav>
-                {% else %}
-                <div></div>
-                {% endif %}
-            </div>
+            {% list_pagination page_obj qs=querystring_without_page unit='원료' per_page_param='items_per_page' per_page=items_per_page total=total_count aria_label='원료 목록 페이지' %}
         </div>
 
         <!-- 우측: 상세 정보 -->

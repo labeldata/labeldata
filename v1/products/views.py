@@ -137,6 +137,14 @@ def _render_email(template_name, context):
 
 # ==================== Google Drive 스타일 탐색기 ====================
 
+def _querystring_without_page(request):
+    """쪽 번호만 뺀 지금의 쿼리스트링. 쪽을 넘겨도 조건이 살아 있게 한다."""
+    params = request.GET.copy()
+    params.pop('page', None)
+    return params.urlencode()
+
+
+
 @login_required
 def product_explorer(request, folder_id=None):
     """Google Drive 스타일 제품 탐색기"""
@@ -500,6 +508,9 @@ def product_explorer(request, folder_id=None):
         'review_needed_count': review_needed_count,
         'page_obj': page_obj,
         'per_page': per_page,
+        # 쪽을 넘길 때 지금 조건을 그대로 들고 간다. 예전에는 템플릿이 q·
+        # per_page·filter 셋만 다시 붙여서 나머지 조건이 풀렸다.
+        'querystring_without_page': _querystring_without_page(request),
         'total_products_count': paginator.count,
         'filter_type': filter_type,
         'collab_count': collab_count,

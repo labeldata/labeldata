@@ -1,5 +1,5 @@
 {% extends 'base_v2.html' %}
-{% load static django_bootstrap5 %}
+{% load static django_bootstrap5 list_pagination %}
 {% block title %}게시판{% endblock %}
 
 {% block topbar %}
@@ -172,41 +172,12 @@
         </table>
     </div>
 
-    <!-- 페이지네이션 -->
-    <div class="list-pagination">
-        <span class="pagination-info">
-            전체 <strong>{{ page_obj.paginator.count }}</strong>개 게시글
-            {% if is_paginated %}
-                &nbsp;({{ page_obj.start_index }}–{{ page_obj.end_index }})
-            {% endif %}
-        </span>
-        {% if is_paginated %}
-        <nav aria-label="Page navigation">
-            <ul class="pagination pagination-nav mb-0">
-                <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
-                    <a class="page-link" href="{% if page_obj.has_previous %}?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}{% else %}#{% endif %}">
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                </li>
-                {% for num in page_range %}
-                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
-                    <a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a>
-                </li>
-                {% endfor %}
-                <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
-                    <a class="page-link" href="{% if page_obj.has_next %}?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}{% else %}#{% endif %}">
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-            </ul>
-        </nav>
-        <select class="board-select" onchange="location.href=this.value;">
-            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=10" {% if per_page == '10' %}selected{% endif %}>10개</option>
-            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=20" {% if per_page == '20' %}selected{% endif %}>20개</option>
-            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=50" {% if per_page == '50' %}selected{% endif %}>50개</option>
-        </select>
-        {% endif %}
-    </div>
+    {% comment %}
+      다른 목록 화면과 같은 바를 쓴다. 예전에는 '이전/다음' 둘뿐이고
+      '처음/끝' 이 없었으며, 페이지당 고르개가 쪽 단추 오른쪽에 따로
+      붙어 있었다 — 다른 화면은 왼쪽 글 옆에 있다.
+    {% endcomment %}
+    {% list_pagination page_obj qs=querystring_without_page unit='게시글' per_page_param='per_page' per_page=per_page per_page_options='10,20,50' aria_label='게시글 목록 페이지' %}
 </div>
 
 <script>

@@ -551,6 +551,9 @@ def my_label_list(request):
     total_count = labels.count()
     paginator, page_obj, page_range = paginate_queryset(labels, page_number, items_per_page)
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
+    # 쪽을 넘길 때 검색 조건을 들고 간다. 예전 페이지네이션 조각은 이 값을
+    # 쓰면서도 뷰가 넘겨 주지 않아, 2쪽으로 가면 검색이 풀렸다.
+    querystring_without_page = get_querystring_without(request, ["page"])
 
     # 항상 총 건수 표시 (검색 조건 유무와 관계없이)
     search_result_count = total_count
@@ -573,6 +576,7 @@ def my_label_list(request):
         "sort_field": sort_field,
         "sort_order": sort_order,
         "querystring_without_sort": querystring_without_sort,
+        "querystring_without_page": querystring_without_page,
         "ingredient_id": ingredient_id,
         "ingredient_name": ingredient_name,
         "search_result_count": search_result_count,  # 검색 결과 건수 추가

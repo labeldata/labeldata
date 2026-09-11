@@ -1,3 +1,11 @@
+{% comment %}
+  **옛 모양이다. 새로 쓰지 마세요.**
+
+  '처음/이전/다음/끝' 을 글자로 적어 가운데에 놓는 이 조각은 이제 _v1 구판
+  화면에만 남아 있다. 현행 목록 화면은 전부 includes/_list_pagination.html
+  한 벌을 {% templatetag openblock %} list_pagination {% templatetag closeblock %} 태그로 부른다 — 생김새도 쪽을 고르는
+  규칙도 거기 한 곳에 있다.
+{% endcomment %}
 <div class="pagination-wrapper">
     <ul class="pagination">
         {% if page_obj.has_previous %}

@@ -1,5 +1,5 @@
 {% extends "base_v2.html" %}
-{% load static humanize %}
+{% load static humanize list_pagination %}
 
 {% block title %}부적합·처분 알림{% endblock %}
 
@@ -462,23 +462,17 @@
 
         표 안에 두면 tbody 밖의 요소가 되어 브라우저가 표 밖으로 끌어내므로,
         목록 스크롤 바깥에 둔다.
+
+        생김새는 다른 목록 화면과 같은 공용 바를 쓴다. 예전에는 rs-page-btn
+        이라는 제 이름의 단추를 가운데 정렬로 놓고, 오른쪽 끝에 '3/120p' 를
+        붙였다 — 다른 화면 어디에도 없는 모양이었다. 쪽 수는 이제 단추가
+        말해 준다.
+
+        쪽 번호 파라미터가 탭마다 다른 것(insp_page / pub_page / page)은
+        합칠 수 없다. 한 화면에 목록이 셋이고 탭을 오갈 때 각자의 쪽을
+        기억해야 해서다 — 그래서 page_param 으로 넘긴다.
       {% endcomment %}
-      {% if pager_pages > 1 %}
-      <div class="rs-pagination">
-        {% if pager.has_previous %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&{{ pager_param }}={{ pager.previous_page_number }}" aria-label="이전 쪽">‹</a>
-        {% else %}<span class="rs-page-btn disabled">‹</span>{% endif %}
-        {% for p in pager_window %}
-          {% if p.ellipsis %}<span class="rs-page-info">…</span>
-          {% elif p.active %}<span class="rs-page-btn active" aria-current="page">{{ p.n }}</span>
-          {% else %}<a class="rs-page-btn" href="?{{ page_query_string }}&{{ pager_param }}={{ p.n }}">{{ p.n }}</a>{% endif %}
-        {% endfor %}
-        {% if pager.has_next %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&{{ pager_param }}={{ pager.next_page_number }}" aria-label="다음 쪽">›</a>
-        {% else %}<span class="rs-page-btn disabled">›</span>{% endif %}
-        <span class="rs-page-info" style="margin-left:4px;">{{ pager.number }}/{{ pager_pages }}p</span>
-      </div>
-      {% endif %}
+      {% list_pagination pager qs=page_query_string page_param=pager_param unit='알림' aria_label='알림 목록 페이지' %}
     </section>
 
     {# ── 오른쪽: 상세 패널 ── #}
@@ -1081,7 +1075,7 @@ window.showLoading = showLoading;
 // switchView / _applySwitchViewCSS 한 덩어리가 통째로 필요 없어졌다.
 // 화면 상태(#regSidebar[data-view], #regPage 클래스, 눌린 탭)는 서버가 그린다.
 (function () {
-  document.querySelectorAll('.rs-page-btn[href], .pv-tab[href]').forEach(function (a) {
+  document.querySelectorAll('.list-pagination .page-link[href], .pv-tab[href]').forEach(function (a) {
     a.addEventListener('click', function () { showLoading(); });
   });
 })();

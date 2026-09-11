@@ -331,25 +331,11 @@ a.rs-item-name:focus-visible { outline: 2px solid var(--c-primary); outline-offs
 .rs-empty-title { font-size: 13px; font-weight: 600; color: var(--c-text-secondary); }
 .rs-empty-sub   { font-size: 12px; color: var(--c-text-hint); line-height: 1.7; }
 
-/* ── 2-4. 페이지네이션 (원료 관리 .list-pagination 규격) ─────────── */
-.rs-pagination {
-  display: flex; align-items: center; justify-content: center; gap: 3px;
-  flex-shrink: 0; min-height: 46px; padding: 7px 16px;
-  background: #fff; border-top: 1px solid var(--c-border);
-}
-.rs-page-btn {
-  min-width: 28px; height: 28px; padding: 0 8px;
-  display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--c-border-line); border-radius: var(--r-sm);
-  background: #fff; font-size: 12px; color: var(--c-text-body);
-  text-decoration: none; transition: all var(--ez-transition-fast);
-}
-.rs-page-btn:hover    { background: var(--c-border-light); border-color: var(--c-primary);
-                        color: var(--c-primary); }
-.rs-page-btn.active   { background: var(--c-primary); border-color: var(--c-primary);
-                        color: #fff; font-weight: 600; pointer-events: none; }
-.rs-page-btn.disabled { color: #c0c4c7; border-color: #ebebeb; pointer-events: none; }
-.rs-page-info { font-size: 11.5px; color: var(--c-text-hint); white-space: nowrap; }
+/* ── 2-4. 페이지네이션 ───────────────────────────────────────────
+   규칙도 마크업도 공용이다 (list_common.css 의 .list-pagination /
+   includes/_list_pagination.html). 여기 있던 .rs-page-btn 은 다른 목록
+   화면과 혼자 다른 모양이었다 — '원료 관리 규격' 이라 적혀 있었지만
+   실제로는 가운데 정렬에 '3/120p' 가 붙은 제 모양이었다. */
 
 /* ── 2-5. 목록 배지 ─────────────────────────────────────────────── */
 .badge-dom, .badge-imp, .badge-admin, .badge-recall,

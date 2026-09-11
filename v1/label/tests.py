@@ -16244,3 +16244,108 @@ class 시안을_쓸지_묻는_창은_눌리지_않는다(TestCase):
         body = tab[tab.index('box.onclick = function'):]
         body = body[:body.index('\n        };')]
         self.assertIn('if (!btn && !outside) return;', body)
+
+
+class ListPaginationIsOneShapeTests(TestCase):
+    """
+    같은 일을 하는 페이지네이션이 화면마다 한 벌씩 있었다.
+
+    제품 관리·원료 관리·제품 조회·식품첨가물 DB 넷은 생김새까지 같은데도
+    각자 마흔 줄씩 베껴 들고 있었고, 게시판은 '이전/다음'만 있는 제 모양,
+    부적합·처분 알림은 rs-page-btn 이라는 또 다른 이름의 가운데 정렬이었다.
+    그래서 한쪽만 고쳐졌다 — '처음/끝' 단추가 어느 화면에는 있고 어느
+    화면에는 없었다.
+
+    지금은 includes/_list_pagination.html 한 벌을 {% list_pagination %} 태그가
+    그린다. 이 시험은 목록 화면들이 실제로 그 한 벌을 쓰는지 렌더해서 본다.
+    """
+
+    # (이름, 주소) — 목록이 있는 화면 전부
+    SCREENS = (
+        ('원료 관리',      '/label/my-ingredient-list-combined/'),
+        ('제품 조회',      '/label/food-items/'),
+        ('식품첨가물 DB',  '/label/food-additives/'),
+        ('표시사항 관리',  '/label/my-labels/'),
+        ('제품 관리',      '/products/explorer/'),
+        ('게시판',         '/board/'),
+        ('부적합·처분',    '/regulatory/'),
+    )
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='pager', password='x')
+        self.client.force_login(self.user)
+        # 제품 관리는 목록이 비면 바 대신 안내 화면을 그린다(예전부터 그랬다).
+        # 바를 보려면 제품이 한 건은 있어야 한다.
+        MyLabel.objects.create(user_id=self.user, my_label_name='쪽 시험용')
+
+    def _html(self, url):
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200, url)
+        return r.content.decode('utf-8')
+
+    def test_목록_화면이_모두_같은_바를_쓴다(self):
+        for name, url in self.SCREENS:
+            html = self._html(url)
+            self.assertIn('<div class="list-pagination">', html, name)
+            self.assertIn('class="pagination-info"', html, name)
+
+    def test_제_모양을_따로_그리던_것이_없다(self):
+        """옛 이름이 하나라도 남아 있으면 그 화면만 다시 흐른다."""
+        for name, url in self.SCREENS:
+            html = self._html(url)
+            for gone in ('rs-page-btn', 'pagination-nav', 'pagination-wrapper'):
+                self.assertNotIn(gone, html, '%s: %s' % (name, gone))
+
+    def test_쪽이_하나여도_전체_건수는_보인다(self):
+        """
+        바가 통째로 사라지면 목록 아래 테두리가 있다 없다 하고, '전체 N개'
+        를 읽을 자리도 같이 사라진다.
+        """
+        html = self._html('/label/my-ingredient-list-combined/')
+        self.assertIn('전체 <strong', html)
+
+    def test_페이지당_고르개는_있던_화면에만_있다(self):
+        """
+        모양을 맞춘다고 없던 기능을 붙이거나 있던 기능을 걷어내면 안 된다.
+        원료 관리·제품 관리·게시판은 바 안에 고르개가 있다. 제품 조회는 위
+        검색 폼 안에 있고(폼을 다시 보내야 조건이 남는다) 식품첨가물 DB 는
+        아예 없다 — 없던 것을 이 참에 붙이지는 않는다.
+        """
+        for url in ('/label/my-ingredient-list-combined/', '/products/explorer/'):
+            self.assertIn('id="perPageSelect"', self._html(url), url)
+        self.assertIn('id="per-page-select"', self._html('/label/food-items/'))
+        for url in ('/label/food-items/', '/label/food-additives/'):
+            self.assertNotIn('id="perPageSelect"', self._html(url), url)
+
+    def test_쪽을_넘겨도_조건이_붙어_간다(self):
+        """
+        제품 관리는 q·per_page·filter 셋만 손으로 다시 붙여서, 쪽을 넘기면
+        보기 방식이 풀렸다. 표시사항 관리는 뷰가 쿼리스트링을 아예 안 넘겨
+        주는데 조각은 그 이름을 쓰고 있어서 검색이 풀렸다.
+        """
+        r = self.client.get('/products/explorer/', {'view_type': 'list'})
+        self.assertEqual(r.context['querystring_without_page'], 'view_type=list')
+        r = self.client.get('/label/my-labels/', {'prdlst_nm': '사과'})
+        self.assertEqual(r.context['querystring_without_page'], 'prdlst_nm=%EC%82%AC%EA%B3%BC')
+
+    def test_떠_있는_도움말_단추_자리를_비워_둔다(self):
+        """
+        오른쪽 아래 고정된 ? 단추(.ezc-fab, 46px, right/bottom 20px)가 바의
+        오른쪽 끝을 덮어서 '다음 쪽' 을 누를 수가 없었다(원료 관리 전체보기).
+        단추 쪽 CSS 를 건드리지 않고 목록 쪽에서 자리를 비운다 — 값은
+        list_common.css 의 .list-pagination 한 곳에만 있다.
+        """
+        import io
+        from pathlib import Path
+        from django.conf import settings as dj
+        css = io.open(Path(dj.BASE_DIR) / 'static' / 'css' / 'list_common.css',
+                      encoding='utf-8').read()
+        rule = css[css.index('.list-pagination {'):]
+        rule = rule[:rule.index('\n}')]
+        self.assertIn('--ez-fab-size:  46px', rule)
+        self.assertIn('--ez-fab-inset: 20px', rule)
+        self.assertIn('padding-right: calc(var(--ez-fab-size) + var(--ez-fab-inset) * 2)', rule)
+        # 화면마다 따로 적어 두면 단추가 커질 때 한 곳만 고쳐서는 안 된다
+        for path in Path(dj.BASE_DIR).glob('templates/**/*.html'):
+            text = io.open(path, encoding='utf-8').read()
+            self.assertNotIn('--ez-fab-size', text, str(path))

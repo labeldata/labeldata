@@ -355,3 +355,101 @@
     display: block;
     -webkit-line-clamp: unset;
 }
+
+/* ── 페이지네이션 ───────────────────────────────────────────────
+   목록 아래 가로 바 하나. 왼쪽은 '전체 N개'와 '페이지당' 고르개,
+   오른쪽은 쪽 단추다. 마크업은 includes/_list_pagination.html 한 벌이고
+   여기 규칙이 그 한 벌을 꾸민다.
+
+   예전에는 이 규칙이 화면마다 <style> 안에 한 벌씩 있었다(원료 관리·제품
+   조회·식품첨가물 DB). 게시판은 board.css 에 .pagination-nav 라는 제 이름으로,
+   부적합·처분 알림은 regulatory.css 에 .rs-page-btn 이라는 또 다른 이름으로
+   들고 있었고, 그래서 같은 자리의 단추가 화면마다 크기도 모서리도 달랐다. */
+.list-pagination {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-height: 48px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--ez-gray-200, #e8eaed);
+    background: #fff;
+
+    /* 떠 있는 도움말 단추(_coachmark.html 의 .ezc-fab)가 오른쪽 아래에
+       고정으로 붙어 있어서, 오른쪽 끝의 '다음 쪽' 단추를 덮어 누를 수가
+       없었다(원료 관리 전체보기에서 실제로 났다). 단추 쪽 CSS 를 건드리지
+       않고 목록 쪽에서 자리를 비운다.
+
+       **값은 여기 두 줄이 전부다.** 단추 크기나 여백이 바뀌면 여기만 고친다.
+       바 오른쪽 바깥 여백(20px)만큼 한 번 더 빼서 단추와 딱 붙지 않게 한다. */
+    --ez-fab-size:  46px;   /* .ezc-fab 의 지름 */
+    --ez-fab-inset: 20px;   /* .ezc-fab 의 right / bottom */
+    padding-right: calc(var(--ez-fab-size) + var(--ez-fab-inset) * 2);
+}
+
+.pagination-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--ez-gray-700, #5f6368);
+}
+.pagination-info strong {
+    font-weight: 600;
+    color: var(--ez-gray-900, #202124);
+}
+
+.pagination-per-page {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--ez-gray-700, #5f6368);
+}
+.pagination-per-page label { margin: 0; }
+.pagination-per-page select {
+    padding: 2px 6px;
+    border: 1px solid var(--ez-gray-300, #dadce0);
+    border-radius: var(--ez-radius-sm, 4px);
+    background: #fff;
+    font-size: 12px;
+    color: var(--ez-gray-900, #202124);
+    cursor: pointer;
+    outline: none;
+    transition: border-color .15s;
+}
+.pagination-per-page select:focus { border-color: var(--ez-info, #1a73e8); }
+
+/* 부트스트랩 .pagination 위에 덧씌운다 — 목록 바 안에서만 적용되므로
+   다른 화면의 페이지네이션에는 영향이 없다. */
+.list-pagination .pagination { margin: 0; gap: 2px; }
+
+.list-pagination .page-link {
+    padding: 4px 9px;
+    border: 1px solid var(--ez-gray-300, #dadce0);
+    border-radius: var(--ez-radius-sm, 4px) !important;
+    background: #fff;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ez-gray-900, #202124);
+    transition: background-color .15s, border-color .15s, color .15s;
+}
+.list-pagination .page-link:hover:not(.active) {
+    background: var(--ez-gray-100, #f1f3f4);
+    border-color: var(--ez-info, #1a73e8);
+    color: var(--ez-info, #1a73e8);
+}
+.list-pagination .page-item.active .page-link {
+    background: var(--ez-info, #1a73e8);
+    border-color: var(--ez-info, #1a73e8);
+    color: #fff;
+    font-weight: 600;
+}
+.list-pagination .page-item.disabled .page-link {
+    background: #fff;
+    border-color: var(--ez-gray-200, #e8eaed);
+    color: var(--ez-gray-400, #bdc1c6);
+}

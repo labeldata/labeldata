@@ -4,15 +4,8 @@
    product_explorer.html 의 인라인 <script>에서 선언됩니다.
    ============================================================ */
 
-// 페이지당 항목 수 변경
-function changePerPage(perPage) {
-    const urlParams = new URLSearchParams(window.location.search);
-    urlParams.set('per_page', perPage);
-    urlParams.set('page', '1');
-    if (PE_FILTER_TYPE && PE_FILTER_TYPE !== 'ALL') urlParams.set('filter', PE_FILTER_TYPE);
-    else urlParams.delete('filter');
-    window.location.search = urlParams.toString();
-}
+// 페이지당 고르개는 공용 페이지네이션 조각(includes/_list_pagination.html)이
+// 제 onchange 를 들고 있다. 여기 있던 changePerPage 는 부르는 데가 없어졌다.
 
 // 검색 기능
 document.getElementById('product-search').addEventListener('keyup', function(e) {

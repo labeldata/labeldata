@@ -1,0 +1,76 @@
+{% comment %}
+  목록 화면 공용 페이지네이션. {% load list_pagination %} 뒤 {% list_pagination %}
+  태그로 부른다 — 직접 include 하지 마세요, 페이지 창을 태그가 골라 줍니다.
+
+  생김새의 기준은 제품 관리·원료 관리·제품 조회·식품첨가물 DB 가 쓰던 모양이다
+  (넷이 같았으므로 다수였다). 왼쪽에 '전체 N개' 와 '페이지당' 고르개, 오른쪽에
+  처음·이전·쪽번호·다음·끝 단추.
+
+  쪽이 하나뿐이어도 바는 그린다. 전체 건수를 알려 주는 자리이기도 하고,
+  목록 아래쪽 테두리가 사라졌다 나타났다 하지 않게 하려는 것이다.
+  다만 오른쪽 자리는 빈 <div> 로 둬서 왼쪽 글이 가운데로 흐르지 않게 한다.
+
+  CSS 는 list_common.css 에 있다.
+{% endcomment %}
+{% load humanize %}{% if draw %}
+<div class="list-pagination">
+    <div class="pagination-info">
+        <span>전체 <strong{% if capped %} title="결과가 많아 {{ total|intcomma }}건까지만 셌습니다. 조건을 좁히면 정확한 건수가 나옵니다."{% endif %}>{{ total|intcomma }}{% if capped %}+{% endif %}</strong>개 {{ unit }}{% if total %}
+            ({{ page_obj.start_index }}–{{ page_obj.end_index }}){% endif %}
+        </span>
+        {% if per_page_param %}
+        <div class="pagination-per-page">
+            <label for="perPageSelect">페이지당</label>
+            <select id="perPageSelect" data-param="{{ per_page_param }}"
+                    onchange="(function(s){var p=new URLSearchParams(window.location.search);p.set(s.dataset.param,s.value);p.set('{{ page_param }}','1');location.href='?'+p.toString();})(this)">
+                {% for opt in per_page_options %}
+                <option value="{{ opt }}" {% if opt == per_page %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if num_pages > 1 %}
+    <nav aria-label="{{ aria_label }}">
+        <ul class="pagination mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{{ page_param }}=1{% if qs %}&{{ qs }}{% endif %}" aria-label="첫 쪽"><i class="bi bi-chevron-double-left"></i></a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{{ page_param }}={{ page_obj.previous_page_number }}{% if qs %}&{{ qs }}{% endif %}" aria-label="이전 쪽"><i class="bi bi-chevron-left"></i></a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
+            <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
+            {% endif %}
+
+            {% for p in window %}
+                {% if p.ellipsis %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% elif p.active %}
+                <li class="page-item active"><span class="page-link" aria-current="page">{{ p.n }}</span></li>
+                {% else %}
+                <li class="page-item"><a class="page-link" href="?{{ page_param }}={{ p.n }}{% if qs %}&{{ qs }}{% endif %}">{{ p.n }}</a></li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{{ page_param }}={{ page_obj.next_page_number }}{% if qs %}&{{ qs }}{% endif %}" aria-label="다음 쪽"><i class="bi bi-chevron-right"></i></a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{{ page_param }}={{ num_pages }}{% if qs %}&{{ qs }}{% endif %}" aria-label="끝 쪽"><i class="bi bi-chevron-double-right"></i></a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
+            <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% else %}
+    <div></div>
+    {% endif %}
+</div>
+{% endif %}

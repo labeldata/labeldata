@@ -1,5 +1,5 @@
 {% extends "base_v2.html" %}
-{% load static %}
+{% load static list_pagination %}
 
 {% block title %}식품첨가물 DB{% endblock %}
 
@@ -153,26 +153,7 @@
         vertical-align: middle;
     }
 
-    /* 페이지네이션 스타일 */
-    .pagination {
-        --bs-pagination-padding-x: 0.75rem;
-        --bs-pagination-padding-y: 0.375rem;
-        --bs-pagination-font-size: 0.875rem;
-        --bs-pagination-color: #5f6368;
-        --bs-pagination-bg: #ffffff;
-        --bs-pagination-border-width: 1px;
-        --bs-pagination-border-color: #dadce0;
-        --bs-pagination-border-radius: 8px;
-        --bs-pagination-hover-color: #1f1f1f;
-        --bs-pagination-hover-bg: #f8f9fa;
-        --bs-pagination-hover-border-color: #dadce0;
-        --bs-pagination-focus-color: #1967d2;
-        --bs-pagination-focus-bg: #e8f0fe;
-        --bs-pagination-focus-box-shadow: 0 0 0 0.25rem rgba(25, 103, 210, 0.15);
-        --bs-pagination-active-color: #ffffff;
-        --bs-pagination-active-bg: #1967d2;
-        --bs-pagination-active-border-color: #1967d2;
-    }
+    /* 페이지네이션 규칙은 list_common.css 로 옮겼다 — 목록 화면 전부가 함께 쓴다 */
 
     /* 헤더 제목 */
     .page-header {
@@ -455,48 +436,7 @@
         {% endif %}
     </div>
 
-    <!-- 페이지네이션 및 정보 -->
-    <div class="d-flex justify-content-between align-items-center px-4 py-3 bg-white border-top">
-        <div class="d-flex align-items-center gap-3">
-            <div class="text-muted small">
-                {% if page_obj %}
-                    전체 <span class="fw-semibold text-dark">{{ page_obj.paginator.count }}</span>개 항목
-                    ({{ page_obj.start_index }}-{{ page_obj.end_index }})
-                {% endif %}
-            </div>
-        </div>
-        {% if page_obj.has_other_pages %}
-        <nav>
-            <ul class="pagination mb-0">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">«</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">‹</a>
-                    </li>
-                {% endif %}
-
-                {% for num in page_obj.paginator.page_range %}
-                    {% if page_obj.number == num %}
-                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                    {% elif num > page_obj.number|add:'-5' and num < page_obj.number|add:'5' %}
-                        <li class="page-item"><a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a></li>
-                    {% endif %}
-                {% endfor %}
-
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">›</a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">»</a>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
-    </div>
+    {% list_pagination page_obj qs=querystring_without_page unit='항목' total=total_count aria_label='식품첨가물 목록 페이지' %}
 </div>
 
 <!-- 수정 요청 모달 -->

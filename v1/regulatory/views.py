@@ -89,39 +89,6 @@ class _CountedPaginator(Paginator):
         return self._known_count
 
 
-def _page_window(page_obj, radius=2):
-    """
-    페이지 단추에 실제로 그려질 것만 골라 둔다 — [1, …, 8, 9, 10, 11, 12, …, 120] 꼴.
-
-    예전에는 템플릿이 paginator.page_range 를 통째로 돌면서 {% if %} 사슬로 대부분을
-    버렸다. 수거검사 공개 목록은 원본 전체가 모수라 6만 건이면 3,000쪽이고, 단추
-    일곱 개를 그리자고 3,000번을 돌며 |add 필터를 만 오천 번 태웠다. 실측으로 이
-    화면 렌더 시간의 3분의 2가 여기였다(news_list.html 77ms 중 62ms). 원본은 계속
-    쌓이므로 이 비용도 계속 는다.
-
-    고르는 규칙은 예전 {% if %} 사슬과 같은 순서·같은 결과다.
-      ① 현재 쪽  ② 현재 ±2  ③ 첫 쪽·끝 쪽  ④ 현재 ±3 자리에만 '…'
-    """
-    if page_obj is None:
-        return []
-    last = page_obj.paginator.num_pages
-    cur  = page_obj.number
-    candidates = {1, last, cur - radius - 1, cur + radius + 1}
-    candidates.update(range(cur - radius, cur + radius + 1))
-
-    window = []
-    for n in sorted(c for c in candidates if 1 <= c <= last):
-        if n == cur:
-            window.append({'n': n, 'active': True})
-        elif cur - radius <= n <= cur + radius:
-            window.append({'n': n})
-        elif n == 1 or n == last:
-            window.append({'n': n})
-        elif n in (cur - radius - 1, cur + radius + 1):
-            window.append({'ellipsis': True})
-    return window
-
-
 def _scope_qs(request, scope):
     """내 알림 / 일반 알림 / 전체 를 오가는 주소."""
     params = request.GET.copy()
@@ -811,20 +778,19 @@ def news_list(request):
     # 똑같이 생긴 덩어리 셋이 하나가 된다.
     if active_tab == TAB_INSPECTION:
         if inspection_has_matches:
-            _pager = (insp_page_obj, insp_paginator, 'insp_page')
+            _pager = (insp_page_obj, 'insp_page')
         else:
-            _pager = (recent_insp_page_obj, recent_insp_paginator, 'pub_page')
+            _pager = (recent_insp_page_obj, 'pub_page')
     else:
-        _pager = (page_obj, paginator, 'page')
-    _pager_obj, _pager_paginator, _pager_param = _pager
+        _pager = (page_obj, 'page')
+    # 쪽 수와 건수는 공용 페이지네이션 조각이 page_obj.paginator 에서 꺼낸다
+    _pager_obj, _pager_param = _pager
 
     return render(request, 'regulatory/news_list.html', {
         'active_tab':         active_tab,
         'tab_unread':         tab_unread,
         # 페이지네이션 — 지금 탭 것 한 벌
         'pager':              _pager_obj,
-        'pager_pages':        _pager_paginator.num_pages if _pager_paginator else 0,
-        'pager_window':       _page_window(_pager_obj),
         'pager_param':        _pager_param,
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,

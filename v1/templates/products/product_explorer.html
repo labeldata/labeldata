@@ -1,5 +1,5 @@
 ﻿{% extends "base_v2.html" %}
-{% load static %}
+{% load static list_pagination %}
 
 {% block title %}제품 관리{% endblock %}
 
@@ -327,74 +327,12 @@
             </tbody>
         </table>
         
-        <!-- 제품 수 정보 및 페이지네이션 -->
-        <div class="d-flex justify-content-between align-items-center px-4 py-3 bg-white border-top">
-            <div class="d-flex align-items-center gap-3">
-                <div class="text-muted small">
-                    전체 <span class="fw-semibold text-dark">{{ total_products_count }}</span>개 제품
-                    {% if page_obj %}
-                    ({{ page_obj.start_index }}-{{ page_obj.end_index }})
-                    {% endif %}
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <label class="text-muted small mb-0">페이지당:</label>
-                    <select id="per-page-select" class="form-select form-select-sm" style="width: 80px;" onchange="changePerPage(this.value)">
-                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                        <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-                    </select>
-                </div>
-            </div>
-            
-            {% if page_obj.paginator.num_pages > 1 %}
-            {% with fq=filter_type|default:"ALL" %}
-            <nav aria-label="제품 목록 페이지네이션">
-                <ul class="pagination pagination-sm mb-0">
-                    {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
-                            <i class="bi bi-chevron-double-left"></i></a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
-                            <i class="bi bi-chevron-left"></i></a>
-                    </li>
-                    {% else %}
-                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
-                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
-                    {% endif %}
-
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
-                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">{{ num }}</a>
-                        </li>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
-                            <i class="bi bi-chevron-right"></i></a>
-                    </li>
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
-                            <i class="bi bi-chevron-double-right"></i></a>
-                    </li>
-                    {% else %}
-                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
-                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
-                    {% endif %}
-                </ul>
-            </nav>
-            {% endwith %}
-            {% else %}
-            <div></div>
-            {% endif %}
-        </div>
+        {% comment %}
+          쪽 주소를 손으로 엮던 것을 공용 조각에 맡긴다. 예전에는 q·per_page·
+          filter 셋만 다시 붙여서, 쪽을 넘기면 보기 방식(view_type)이나 원료
+          필터가 조용히 풀렸다. 이제 page 를 뺀 쿼리스트링을 통째로 잇는다.
+        {% endcomment %}
+        {% list_pagination page_obj qs=querystring_without_page unit='제품' per_page_param='per_page' per_page=per_page per_page_options='25,50,100,200' total=total_products_count aria_label='제품 목록 페이지' %}
         
         {% else %}
         <div class="d-flex align-items-center justify-content-center" style="height: 400px;">
