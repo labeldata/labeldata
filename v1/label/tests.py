@@ -14548,3 +14548,60 @@ class 게이트는_등록_수가_아니라_기여도로_말한다(TestCase):
         h = self.tpl()
         # 센 것은 서버가 준 needed 다
         self.assertIn('need[r.name]', h)
+
+
+class 남의_원료는_지울_수도_없다(TestCase):
+    """
+    상세 화면을 막고 나서 형제 자리를 다시 봤더니 하나가 더 있었다.
+
+    `delete_my_ingredient` 는 **공용인지만 보고 주인인지는 안 봤다.**
+
+        B 가 A 의 원료를 POST  ->  {'success': True}
+        A 의 원료             ->  delete_YN = 'Y'
+
+    게다가 이 자리는 `@csrf_exempt` 라 다른 사이트에서 바로 부를 수도 있다.
+    형제 자리(bulk_delete·bulk_copy)는 처음부터 user_id 를 함께 보고
+    있었다 — 여기만 빠져 있었다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from v1.label.models import MyIngredient
+        U = get_user_model()
+        self.a = U.objects.create_user(username='a@a.com', email='a@a.com', password='x')
+        self.b = U.objects.create_user(username='b@b.com', email='b@b.com', password='x')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.a, prdlst_nm='A의 밀가루', delete_YN='N')
+        self.url = '/label/delete-my-ingredient/%d/' % self.ing.my_ingredient_id
+
+    def test_남의_것은_못_지운다(self):
+        self.client.force_login(self.b)
+        self.assertEqual(self.client.post(self.url).status_code, 404)
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.delete_YN, 'N')
+
+    def test_제_것은_지워진다(self):
+        self.client.force_login(self.a)
+        self.assertTrue(self.client.post(self.url).json()['success'])
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.delete_YN, 'Y')
+
+    def test_공용_원료는_그대로_막힌다(self):
+        from v1.label.models import MyIngredient
+        pub = MyIngredient.objects.create(user_id=None, prdlst_nm='정제수', delete_YN='N')
+        self.client.force_login(self.a)
+        resp = self.client.post(
+            '/label/delete-my-ingredient/%d/' % pub.my_ingredient_id)
+        self.assertFalse(resp.json()['success'])
+        pub.refresh_from_db()
+        self.assertEqual(pub.delete_YN, 'N')
+
+    def test_형제_자리도_주인을_본다(self):
+        """한 군데를 고쳤으면 같은 일을 하는 자리를 다 봐야 한다."""
+        import inspect
+
+        from v1.label import views
+        for name in ('bulk_delete_my_ingredients', 'bulk_copy_my_ingredients',
+                     'delete_my_ingredient'):
+            src = inspect.getsource(getattr(views, name))
+            self.assertIn('user_id', src, name)

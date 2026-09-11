@@ -1627,7 +1627,11 @@ def save_ingredients_to_label(request, label_id):
             else:
                 # 기존 원재료 사용
                 try:
-                    ingredient = MyIngredient.objects.get(my_ingredient_id=my_ingredient_id)
+                    # 주인까지 본다. 예전에는 id 로만 꺼내고 곧바로
+                    # summary_type_flag 를 저장해서, 남의 원료의 표시 방식이
+                    # 바뀔 수 있었다. 못 찾으면 아래에서 내 원료로 새로 만든다.
+                    ingredient = MyIngredient.objects.get(
+                        my_ingredient_id=my_ingredient_id, user_id=request.user)
                     # 기존 원재료의 summary_type_flag 업데이트
                     ingredient.summary_type_flag = ingredient_data.get('summary_type_flag', 'Y')
                     ingredient.save()
@@ -1722,10 +1726,27 @@ def delete_my_ingredient(request, ingredient_id):
         try:
             # 먼저 ID로 원료 조회
             ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id)
-            
+
             # 공용 원료(user_id=None)는 삭제 불가
             if ingredient.user_id is None:
                 return JsonResponse({'success': False, 'error': '정제수는 기본 원료로 삭제가 불가합니다.'})
+
+            # 남의 원료는 지울 수 없다.
+            #
+            # 공용인지만 보고 **주인인지는 안 봤다.** 그래서 id 만 알면 남의
+            # 원료를 지울 수 있었다 — 실제로 이랬다.
+            #
+            #     B 가 A 의 원료를 POST  ->  {'success': True}
+            #     A 의 원료             ->  delete_YN = 'Y'
+            #
+            # 이 자리는 @csrf_exempt 라 다른 사이트에서 바로 부를 수도 있다.
+            # 형제 자리(bulk_delete_my_ingredients, bulk_copy_my_ingredients)는
+            # 처음부터 user_id 를 함께 보고 있었다 — 여기만 빠져 있었다.
+            #
+            # 없는 것처럼 답한다. '권한이 없습니다' 는 "그 번호는 있다" 를
+            # 알려 주는 셈이라 번호를 훑을 수 있다.
+            if ingredient.user_id != request.user:
+                return JsonResponse({'success': False, 'error': '원료를 찾을 수 없습니다.'}, status=404)
             
             LabelIngredientRelation.objects.filter(ingredient_id=ingredient.my_ingredient_id).delete()
             ingredient.delete_YN = 'Y'
