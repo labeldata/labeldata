@@ -2071,10 +2071,25 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(res => res.json())
         .then(res => {
             if (res.success) {
-                /* 성공 표시는 **단추가 있을 때만.**
-                   탭 안에 끼워져 있으면 이 단추를 빼 두었다(바깥 "저장" 이
-                   이 함수를 부른다). 그때 여기서 textContent 를 읽어 터졌다 —
-                   저장은 됐는데 화면에는 오류만 떴다. */
+                /* **저장했으면 어떻게든 말한다.**
+                 *
+                 * 여기는 단추를 깜빡이는 것이 전부였다. 그런데 탭 안에서는 그
+                 * 단추를 빼 두었으므로(바깥 "저장" 이 이 함수를 부른다)
+                 * `if (saveBtn)` 이 거짓이 되고 **그걸로 끝**이었다 — 저장은
+                 * 되는데 화면은 아무 말도 안 했다. 사용자에게는 단추가 죽은
+                 * 것으로 보인다.
+                 *
+                 * 탭 안이면 바깥에 알린다. 바깥은 이 말을 이미 기다리고 있다
+                 * (product_detail 의 previewSettingsSaved). */
+                if (window.parent !== window) {
+                    try {
+                        window.parent.postMessage(
+                            {type: 'previewSettingsSaved'}, window.location.origin);
+                    } catch (e) { /* 출처가 다르면 못 보낸다 */ }
+                } else if (typeof window.showSaved === 'function') {
+                    window.showSaved('표시사항 설정을 저장했습니다');
+                }
+
                 const saveBtn = document.getElementById('saveSettingsBtn');
                 if (saveBtn) {
                     const originalText = saveBtn.textContent;
