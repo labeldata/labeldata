@@ -119,6 +119,17 @@ def extract_nutrients(item):
     return out
 
 
+
+def _plain_energy(values):
+    """단순 4·4·9. 원본의 절반쯤은 이 계산으로 만들어져 있다."""
+    carb = values.get('carbohydrates')
+    protein = values.get('proteins')
+    fat = values.get('fats')
+    if None in (carb, protein, fat):
+        return None
+    return float(carb) * 4 + float(protein) * 4 + float(fat) * 9
+
+
 def verify_row(values, basis_amount, basis_unit, mass_tol=10.0, energy_tol=0.15):
     """
     이 행이 매핑대로 읽혔는가를 데이터 자신에게 물어본다.
@@ -144,9 +155,9 @@ def verify_row(values, basis_amount, basis_unit, mass_tol=10.0, energy_tol=0.15)
     ('미역 튀각' 283 → 566). 그래서 폭을 넓히고 큰 어긋남만 잡는다. 좁게
     잡으면 쓸 수 있는 행을 못 쓰게 막는다(usable_for_recipe 가 fail 을 뺀다).
 
-    열량은 **규정 계수**로 잰다(calories_from_macros). 식이섬유 2.0 ·
-    당알콜 2.4 를 탄수화물에서 빼고 세는 그 계산이다 — 단순 4·4·9 로 재면
-    식이섬유가 많은 행이 그것만으로 어긋나 보인다.
+    열량은 **두 계산 중 하나라도 맞으면** 통과로 본다. 원본이 규정 계수
+    (식이섬유 2.0 · 당알콜 2.4)와 단순 4·4·9 를 섞어 쓰기 때문이다 — 아래
+    주석에 6 만 행으로 잰 수가 있다.
     """
     from v1.label.services.nutrition_calc import calories_from_macros
 
@@ -171,7 +182,26 @@ def verify_row(values, basis_amount, basis_unit, mass_tol=10.0, energy_tol=0.15)
 
     # 5 kcal 아래에서는 비율로 재면 작은 차이도 크게 보인다
     allowed = max(energy * energy_tol, 5.0)
-    if abs(calc - energy) > allowed:
+
+    # **원본이 두 규칙을 섞어 쓴다.** 6 만 행을 재 보고 알았다.
+    #
+    #     표기 51.0  ->  규정 43.03 / 단순 51.23   이 행은 단순 4·4·9 다
+    #     표기 37.0  ->  규정 38.92 / 단순 44.92   이 행은 규정 계수다
+    #
+    # 어느 쪽으로 만든 행인지는 우리가 알 수 없다. 한 규칙으로만 재면 다른
+    # 규칙으로 만든 행이 억울하게 걸린다. 그래서 **둘 중 하나라도 맞으면
+    # 통과**로 본다 — 이 검산이 잡으려는 것은 계수 다툼이 아니라 자릿수가
+    # 밀린 행이고, 그런 행은 두 규칙 모두에서 어긋난다.
+    #
+    #     규정만      어긋남 894 (1.49 %)
+    #     단순만      어긋남 1110 (1.85 %)
+    #     둘 중 하나  어긋남 848 (1.41 %)   ← 46 행이 돌아온다
+    #
+    # 크게 줄지는 않는다. 남은 848 행은 15~25 % 어긋난 **진짜 이상한 행**이다.
+    plain = _plain_energy(values)
+    fits = abs(calc - energy) <= allowed or (
+        plain is not None and abs(plain - energy) <= allowed)
+    if not fits:
         return False, '열량 재계산 %.1f kcal (표기 %.1f)' % (calc, energy)
 
     return True, ''

@@ -37,9 +37,18 @@
     border-color: #1A73E8; color: #1A73E8; outline: none;
   }
 
+  /* **어떤 상자에도 갇히지 않는다.**
+
+     처음에는 position:absolute 였다. 그랬더니 제품 기본정보의 알레르기
+     카드(.allergen-panel-root { overflow: hidden })가 설명을 잘라서, 마우스를
+     올려도 카드 테두리까지만 보였다. 그 카드 하나를 고칠 수도 있지만 —
+     overflow 를 쓰는 조상은 앞으로도 생긴다.
+
+     fixed 로 띄우면 조상의 overflow·transform·z-index 와 무관해진다. 대신
+     좌표를 우리가 잡아야 하므로, 열릴 때 JS 가 칩의 자리를 재서 넣는다. */
   .fhelp-p {
-    position: absolute; z-index: 1080; left: 0; top: calc(100% + 7px);
-    display: none; width: max-content; max-width: min(330px, 78vw);
+    position: fixed; z-index: 2147483000;
+    display: none; width: max-content; max-width: min(330px, calc(100vw - 24px));
     padding: 9px 11px; text-align: left;
     background: #fff; color: #3c4043;
     border: 1px solid #d8dde5; border-radius: 6px;
@@ -49,9 +58,6 @@
   }
   .fhelp:hover .fhelp-p, .fhelp:focus-within .fhelp-p,
   .fhelp.is-on .fhelp-p { display: block; }
-
-  /* 오른쪽 끝의 [?] 는 설명이 화면 밖으로 나간다 — 그때만 왼쪽으로 편다 */
-  .fhelp.to-left .fhelp-p { left: auto; right: 0; }
 
   .fhelp-p b { display: block; margin-bottom: 3px; color: #202124; font-weight: 600; }
   .fhelp-p strong { font-weight: 600; color: #202124; }
@@ -67,11 +73,58 @@
   if (window.__fhelpReady) return;      // 화면에 두 번 include 돼도 한 번만
   window.__fhelpReady = true;
 
+  var pinned = null;
+
+  /* 설명은 position:fixed 라 좌표를 우리가 잡는다. 칩 바로 아래에 두되,
+     오른쪽·아래로 넘치면 안으로 밀어 넣는다. 열 때마다 다시 잰다 — 미리
+     정해 두면 창 크기가 바뀌거나 스크롤할 때 틀린다. */
+  function place(chip) {
+    var p = chip.querySelector('.fhelp-p');
+    if (!p) return;
+    var c = chip.getBoundingClientRect();
+
+    // 재려면 일단 그려야 한다. 보이지 않게 두고 크기만 읽는다.
+    var was = p.style.visibility;
+    p.style.visibility = 'hidden';
+    p.style.display = 'block';
+    p.style.left = '0px';
+    p.style.top = '0px';
+    var w = p.offsetWidth, h = p.offsetHeight;
+    p.style.display = '';
+    p.style.visibility = was;
+
+    var pad = 8;
+    var left = c.left;
+    if (left + w > window.innerWidth - pad) left = window.innerWidth - w - pad;
+    if (left < pad) left = pad;
+
+    // 아래가 좁으면 위로 뒤집는다
+    var top = c.bottom + 7;
+    if (top + h > window.innerHeight - pad && c.top - 7 - h > pad) {
+      top = c.top - 7 - h;
+    }
+
+    p.style.left = Math.round(left) + 'px';
+    p.style.top = Math.round(top) + 'px';
+  }
+
   function closeAll(except) {
     document.querySelectorAll('.fhelp.is-on').forEach(function (el) {
       if (el !== except) el.classList.remove('is-on');
     });
+    if (pinned !== except) pinned = null;
   }
+
+  /* 마우스·키보드로 여는 길은 CSS 가 맡는다(:hover, :focus-within).
+     좌표만 여기서 미리 넣어 둔다 — 안 그러면 첫 프레임이 0,0 에 뜬다. */
+  document.addEventListener('mouseover', function (ev) {
+    var chip = ev.target.closest && ev.target.closest('.fhelp');
+    if (chip) place(chip);
+  });
+  document.addEventListener('focusin', function (ev) {
+    var chip = ev.target.closest && ev.target.closest('.fhelp');
+    if (chip) place(chip);
+  });
 
   document.addEventListener('click', function (ev) {
     var chip = ev.target.closest ? ev.target.closest('.fhelp') : null;
@@ -81,16 +134,16 @@
 
     if (!chip) { closeAll(null); return; }
     closeAll(chip);
-    chip.classList.toggle('is-on');
-
-    /* 오른쪽 끝에서는 설명이 화면 밖으로 나간다. 열 때 재 보고 방향을 정한다 —
-       미리 정해 두면 창 크기가 바뀔 때 틀린다. */
-    chip.classList.remove('to-left');
-    var p = chip.querySelector('.fhelp-p');
-    if (p && p.getBoundingClientRect().right > window.innerWidth - 8) {
-      chip.classList.add('to-left');
-    }
+    var on = chip.classList.toggle('is-on');
+    pinned = on ? chip : null;
+    if (on) place(chip);
   });
+
+  /* 눌러서 고정해 둔 것은 스크롤을 따라가야 한다. fixed 라 가만두면
+     화면에 붙박이처럼 남는다. */
+  function follow() { if (pinned) place(pinned); }
+  window.addEventListener('scroll', follow, true);
+  window.addEventListener('resize', follow);
 
   document.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape') { closeAll(null); return; }

@@ -318,7 +318,43 @@ def candidates(name, limit=TOP_N):
                        'rank_score': _rank_score(row, ns), 'reason': _reason(row)})
 
     scored.sort(key=lambda c: -c['rank_score'])
-    return scored[:limit]
+
+    # **같은 값이면 접고, 다른 값이면 둘 다 남긴다.**
+    #
+    # '땅콩' 을 찾으면 다섯 칸이 전부 '땅콩빵' 이었다. 이름이 '땅콩빵' 인 행이
+    # DB 에 6 건 있어서다(같은 품목을 여러 해에 조사한 것). 똑같은 글자 다섯
+    # 줄은 고르는 사람에게 **선택지가 하나도 없는 것과 같다** — 무엇이 다른지
+    # 화면에 안 나오니 고를 근거가 없다.
+    #
+    # 그런데 **이름만 보고 접으면 안 된다.** '버터' 는 동명이 열두 건인데
+    # 열량이 164 ~ 761 kcal 로 갈린다 — 가공버터와 유지방버터가 같은 이름을
+    # 쓴다. 이름으로 접으면 그 열두 개 중 하나가 조용히 골라지고, 값이
+    # 갈린다는 사실 자체가 화면에서 사라진다(spread_warning 이 볼 것이 없어
+    # 진다). **모르는 것을 아는 척하게 만드는 접기**다.
+    #
+    # 그래서 이름이 같고 **값도 사실상 같을 때만** 접는다. 같은 품목을 여러
+    # 해에 잰 것은 접히고, 이름만 같은 다른 물건은 둘 다 남는다.
+    out = []
+    for c in scored:
+        name_key = (c['row'].food_nm_kr or '').strip()
+        cal = c['row'].calories
+        dup = False
+        for kept in out:
+            if (kept['row'].food_nm_kr or '').strip() != name_key:
+                continue
+            k = kept['row'].calories
+            if cal is None or k is None:
+                dup = True
+                break
+            # 10 % 안이면 같은 것을 두 번 잰 것으로 본다
+            dup = abs(float(cal) - float(k)) <= max(float(k) * 0.10, 5.0)
+            break
+        if dup:
+            continue
+        out.append(c)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _negates(query_key, row_name):
