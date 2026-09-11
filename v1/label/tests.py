@@ -15428,3 +15428,117 @@ class 검사_결과가_어디에_생기는지_말한다(TestCase):
         h = self.tpl()
         self.assertIn('번호를 답니다', h)
         self.assertIn('번호를 달았습니다', h)
+
+
+class 원산지_순위는_조문이_정한다(TestCase):
+    """
+    「농수산물의 원산지 표시 등에 관한 법률 시행령」 제3조제2항.
+
+        물, 식품첨가물, 주정(酒精) 및 당류(당류를 주원료로 하여 가공한
+        당류가공품을 포함)는 **배합 비율의 순위와** 표시대상에서 제외한다
+
+    **"순위와" 가 핵심이다.** 제외 대상은 자리를 차지하지 않는다. 그러니 그것을
+    빼고 남은 것으로 다시 순위를 매기고, 4 순위였던 원료가 3 순위로 올라온다.
+
+    운영에서 "준초콜릿은 4 번째인데 왜 잡느냐" 는 물음이 있었다. 설탕·마가린을
+    빼면 준초콜릿이 3 순위가 된다 — 조문대로다. 이 시험이 그 답을 못 박는다.
+    """
+
+    class _Ing:
+        def __init__(self, name, food_type='', category=''):
+            self.prdlst_nm = name
+            self.prdlst_dcnm = food_type
+            self.food_category = category
+
+    class _Rel:
+        def __init__(self, ing, ratio):
+            self.ingredient = ing
+            self.ingredient_ratio = ratio
+
+    def label(self, rows):
+        class _Rels:
+            def __init__(self, items): self._items = items
+            def select_related(self, *a): return self
+            def all(self): return self._items
+
+        class _Label:
+            pk = 1
+        lbl = _Label()
+        lbl.ingredient_relations = _Rels(
+            [self._Rel(self._Ing(n, t), r) for n, t, r in rows])
+        return lbl
+
+    def test_제외된_것은_순위_자리를_차지하지_않는다(self):
+        from v1.label.services.origin_scope import required_origins
+        out = required_origins(self.label([
+            ('설탕', '설탕', 30.0),        # 당류 — 빠진다
+            ('밀가루', '밀가루', 25.0),
+            ('전란액', '알가공품', 20.0),
+            ('마가린', '마가린', 10.0),
+            ('준초콜릿', '초콜릿가공품', 5.29),
+        ]))
+        names = [i['name'] for i in out['items']]
+        # 설탕이 빠지므로 밀가루·전란액·마가린 이 1~3 순위다
+        self.assertEqual(names, ['밀가루', '전란액', '마가린'])
+        self.assertNotIn('준초콜릿', names)
+
+    def test_제외가_많으면_아래가_올라온다(self):
+        """
+        모듈 설계 때 손으로 따라간 실제 판정 사례. 전란액은 5 번째인데
+        정제수·설탕이 빠지면서 3 순위가 된다.
+        """
+        from v1.label.services.origin_scope import required_origins
+        out = required_origins(self.label([
+            ('밀가루', '밀가루', 44.0),
+            ('정제수', '', 25.0),          # 물 — 빠진다
+            ('마가린', '마가린', 20.0),
+            ('설탕', '설탕', 4.4),          # 당류 — 빠진다
+            ('전란액', '알가공품', 2.2),
+        ]))
+        self.assertEqual([i['name'] for i in out['items']],
+                         ['밀가루', '마가린', '전란액'])
+
+    def test_한_원료가_98퍼센트_이상이면_그것만(self):
+        from v1.label.services.origin_scope import required_origins
+        out = required_origins(self.label([
+            ('밀가루', '밀가루', 98.5),
+            ('전란액', '알가공품', 1.0),
+        ]))
+        self.assertEqual([i['name'] for i in out['items']], ['밀가루'])
+        self.assertIn('98', out['basis'])
+
+    def test_두_원료의_합이_98퍼센트_이상이면_둘만(self):
+        from v1.label.services.origin_scope import required_origins
+        out = required_origins(self.label([
+            ('밀가루', '밀가루', 60.0),
+            ('전란액', '알가공품', 38.5),
+            ('마가린', '마가린', 1.0),
+        ]))
+        self.assertEqual([i['name'] for i in out['items']], ['밀가루', '전란액'])
+
+    def test_당류가공품도_빠진다(self):
+        """
+        조문이 이름을 박아 넣었다 — "당류를 주원료로 하여 가공한 당류가공품을
+        포함". 목록에 없어서 순위에 남아 있었다.
+        """
+        from v1.label.services.origin_scope import required_origins
+        out = required_origins(self.label([
+            ('밀가루', '밀가루', 40.0),
+            ('당류가공품(분말)', '당류가공품', 30.0),
+            ('전란액', '알가공품', 20.0),
+            ('마가린', '마가린', 10.0),
+        ]))
+        names = [i['name'] for i in out['items']]
+        self.assertNotIn('당류가공품(분말)', names)
+        self.assertEqual(names, ['밀가루', '전란액', '마가린'])
+
+    def test_근거를_조문으로_적어_둔다(self):
+        """
+        같은 물음이 다시 오면 코드가 답해야 한다. 사람이 매번 법을 다시 찾는
+        일이 없도록.
+        """
+        import io
+        src = io.open('v1/label/services/origin_scope.py', encoding='utf-8').read()
+        self.assertIn('배합 비율의 순위와', src)
+        self.assertIn('제3조', src)
+        self.assertIn('당류가공품', src)
