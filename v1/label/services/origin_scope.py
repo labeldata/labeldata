@@ -63,7 +63,39 @@ def _norm(text) -> str:
     return re.sub(r'\s+', '', str(text or '')).lower()
 
 
-def _is_excluded(ingredient) -> tuple[bool, str]:
+def _bom_food_types(label) -> dict:
+    """
+    배합 표에 적힌 식품유형. {원료 id: 식품유형}
+
+    **화면이 보여 주는 값과 검증이 보는 값이 달랐다.**
+
+    이 판정은 원료 보관함의 마스터(MyIngredient.prdlst_dcnm)를 봤는데, 배합
+    화면에서 사람이 고치는 것은 그 줄의 값(ProductBOM.food_type)이다. 운영에서
+    이렇게 나왔다.
+
+        배합 표의 마가린 식품유형   (비어 있음)
+        원료 마스터의 마가린        '설탕'      <- 잘못 저장된 값
+        검증                       "마가린(당류)" 로 제외
+
+    사용자는 배합 표를 보고 있으니 왜 당류로 빠졌는지 알 수가 없다. 게다가
+    **라벨은 배합으로 조립된다** — 그 표에 적힌 것이 이 제품에서의 값이다.
+    배합에 적혀 있으면 그것을 먼저 보고, 비어 있을 때만 마스터로 떨어진다.
+    """
+    try:
+        from v1.bom.models import ProductBOM
+        rows = (ProductBOM.objects
+                .filter(parent_label=label, active_yn=True)
+                .exclude(source_ingredient__isnull=True)
+                .values_list('source_ingredient_id', 'food_type'))
+    except Exception:
+        logger.exception('원산지 순위 산정: 배합의 식품유형을 읽지 못했다 (label=%s)',
+                         getattr(label, 'pk', None))
+        return {}
+    return {key: (value or '').strip()
+            for key, value in rows if (value or '').strip()}
+
+
+def _is_excluded(ingredient, food_type_override='') -> tuple[bool, str]:
     """
     원산지 표시 대상에서 빠지는 원료인가. (빠지는가, 이유) 를 돌려준다.
 
@@ -72,7 +104,9 @@ def _is_excluded(ingredient) -> tuple[bool, str]:
     """
     name = _norm(getattr(ingredient, 'prdlst_nm', ''))
     category = (getattr(ingredient, 'food_category', '') or '').strip()
-    food_type = _norm(getattr(ingredient, 'prdlst_dcnm', ''))
+    # 배합 표에 적힌 것이 먼저다 (위 _bom_food_types 주석 참고)
+    shown = food_type_override or (getattr(ingredient, 'prdlst_dcnm', '') or '')
+    food_type = _norm(shown)
 
     if category == 'additive':
         return True, '식품첨가물'
@@ -83,8 +117,7 @@ def _is_excluded(ingredient) -> tuple[bool, str]:
     if _SUGAR_PRODUCT in name:
         return True, '당류가공품'
     if _SUGAR_PRODUCT in food_type:
-        return True, "당류가공품 — 식품유형이 '%s'" % (
-            getattr(ingredient, 'prdlst_dcnm', '') or '').strip()
+        return True, "당류가공품 — 식품유형이 '%s'" % shown.strip()
     for sugar in _SUGARS:
         if not _norm(sugar):
             continue
@@ -97,8 +130,7 @@ def _is_excluded(ingredient) -> tuple[bool, str]:
         if _norm(sugar) == name:
             return True, '당류'
         if _norm(sugar) == food_type:
-            return True, "당류 — 식품유형이 '%s'" % (
-                getattr(ingredient, 'prdlst_dcnm', '') or '').strip()
+            return True, "당류 — 식품유형이 '%s'" % shown.strip()
     return False, ''
 
 
@@ -120,6 +152,8 @@ def required_origins(label) -> dict:
                          getattr(label, 'pk', None))
         return {'items': [], 'basis': '', 'reason': 'no_ratio'}
 
+    bom_types = _bom_food_types(label)
+
     rows = []
     for rel in relations:
         ing = rel.ingredient
@@ -127,7 +161,9 @@ def required_origins(label) -> dict:
         name = (getattr(ing, 'prdlst_nm', '') or '').strip()
         if ratio is None or not name:
             continue
-        excluded, why = _is_excluded(ing)
+        # id 가 없는 원료가 섞여도 원산지 검사가 통째로 멈추면 안 된다
+        key = getattr(ing, 'my_ingredient_id', None)
+        excluded, why = _is_excluded(ing, bom_types.get(key, '') if key else '')
         rows.append({'name': name, 'ratio': float(ratio), 'excluded': excluded,
                      'why': why})
 

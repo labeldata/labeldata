@@ -1205,7 +1205,7 @@ async function submitImportCompanyDoc() {
         });
         const result = await response.json();
         if (result.success) {
-            showSnackbar(result.message || '삭제되었습니다.', 'success');
+            showSavedAfterReload(result.message || '삭제했습니다');
             sessionStorage.setItem('returnToTab', 'docs');
             location.reload();
         } else {
@@ -1504,7 +1504,8 @@ async function submitImportCompanyDoc() {
             const result = await response.json();
             
             if (result.success) {
-                showSnackbar('문서 정보가 업데이트되었습니다.', 'success');
+                // 바로 아래에서 새로고침한다 — 말을 그 너머로 넘긴다
+                showSavedAfterReload('문서 정보를 저장했습니다');
                 closeEditPanel();
                 sessionStorage.setItem('returnToTab', 'docs');
                 window.location.reload();
@@ -1632,7 +1633,7 @@ async function submitImportCompanyDoc() {
 
             if (failed.length === 0) {
                 bootstrap.Modal.getInstance(document.getElementById('addSlotModal'))?.hide();
-                showSnackbar('문서 목록이 업데이트되었습니다.', 'success');
+                showSavedAfterReload('문서 목록을 저장했습니다');
                 sessionStorage.setItem('returnToTab', 'docs');
                 location.reload();
             } else {
