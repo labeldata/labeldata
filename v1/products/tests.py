@@ -4779,3 +4779,117 @@ class 끼워_넣다_남의_규칙을_가르지_않는다(TestCase):
         """여기만 각지고 회색이면 같은 줄에 선 기본 문구 버튼과 따로 논다."""
         head = self.tab.index('.my-phrase-act:last-child')
         self.assertIn('border-radius: 0 16px 16px 0', self.tab[head:head + 200])
+
+
+class 코치마크는_그_화면만_짚는다(TestCase):
+    """
+    예전 튜토리얼은 모달을 연속으로 넘기는 전체 투어였고 버려졌다. 한 번 보고
+    끝나는 데다, 사람이 막히는 순간은 가입 첫날이 아니라 **지금 이 칸**이다.
+
+    그래서 화면마다 [튜토리얼] 을 두고 그 화면만 서너 걸음으로 짚는다. 여기서
+    지키려는 것은 셋이다 — 문구가 엔진이 아니라 화면에 있을 것, 가리킬 것이
+    없으면 걸음을 뺄 것, iframe 안을 가리키지 않을 것.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR) / 'templates'
+        self.engine = (base / 'includes/_coachmark.html').read_text(encoding='utf-8')
+        self.product = (base / 'products/product_detail.html').read_text(encoding='utf-8')
+        self.basic = (base / 'products/_tab_basic_info.html').read_text(encoding='utf-8')
+        self.ingredient = (base / 'label/my_ingredient_detail_partial.html'
+                           ).read_text(encoding='utf-8')
+
+    def _steps(self, html):
+        import re
+        block = re.search('<div class="ezc-steps".*?' + chr(10) + '</div>',
+                          html, re.S)
+        self.assertIsNotNone(block, '걸음 목록이 없다')
+        return re.findall(r'data-sel="([^"]+)"', block.group(0))
+
+    def test_두_화면이_각각_서너_걸음을_갖는다(self):
+        for name, html in (('제품 상세', self.product), ('원료 상세', self.ingredient)):
+            sels = self._steps(html)
+            self.assertGreaterEqual(len(sels), 3, name)
+            self.assertLessEqual(len(sels), 6, '%s: 여섯 걸음을 넘으면 투어다' % name)
+
+    def test_문구는_엔진이_아니라_화면에_있다(self):
+        """
+        엔진에 문구를 두면 화면마다 엔진을 고쳐야 하고, 자바스크립트 문자열에
+        든 한국어 한 줄이 끊기면 그 script 블록 전체가 죽는다(templates.E006).
+        """
+        script = self.engine[self.engine.index('<script>'):]
+        # 엔진이 제 입으로 말하는 것은 단추 이름뿐이다
+        self.assertIn("'다음'", script)
+        self.assertIn("'그만두기'", script)
+        for word in ('품목보고번호', '알레르기', '배합비'):
+            self.assertNotIn(word, script, '화면 문구가 엔진에 새어 들어갔다')
+
+    def test_가리킬_것이_없으면_그_걸음을_건너뛴다(self):
+        """새 원료에는 영양성분 칸이 아직 없다. 빈 곳을 가리키면 안 된다."""
+        self.assertIn('if (!shown(el)) return;', self.engine)
+        self.assertIn('r.width > 0 && r.height > 0', self.engine)
+        # 새 원료에 없는 그 칸이 실제로 걸음에 들어 있다 — 건너뛰기가 도는 자리
+        self.assertIn('#ingNutrition', self._steps(self.ingredient))
+
+    def test_가리키는_것이_실제로_그_화면에_있다(self):
+        """
+        선택자가 틀리면 걸음이 조용히 사라진다 — 건너뛰기와 구별이 안 된다.
+        그래서 여기서 대조한다.
+        """
+        from v1.products.views import _WORKFLOW_STEPS
+        tabs = {'#' + tab for tab, _name, _hint in _WORKFLOW_STEPS}
+
+        for sel in self._steps(self.product):
+            if sel.startswith('[data-bs-target'):
+                # 탭 단추는 _WORKFLOW_STEPS 로 찍힌다. 이름이 거기 있어야 한다.
+                self.assertIn(sel[sel.index('#'):sel.rindex('&quot;')], tabs, sel)
+                continue
+            mark = ('id="%s"' % sel[1:]) if sel.startswith('#') else ('class="%s' % sel[1:])
+            self.assertTrue(mark in self.product or mark in self.basic, sel)
+
+        for sel in self._steps(self.ingredient):
+            self.assertIn('id="%s"' % sel[1:], self.ingredient, sel)
+
+    def test_iframe_안은_가리키지_않는다(self):
+        """
+        BOM·영양성분·미리보기는 iframe 이다. 안쪽 좌표를 얻으려면 postMessage
+        가 필요한데 그만한 얼개를 지금 들이지 않았다 — 탭 단추까지만 가리킨다.
+        """
+        import re
+        inner = set()
+        for frame in re.findall(r'<iframe[^>]*id="([^"]+)"', self.product):
+            inner.add('#' + frame)
+        for sel in self._steps(self.product):
+            self.assertNotIn(sel, inner)
+        self.assertIn('postMessage', self.engine)   # 왜 안 하는지 적어 두었다
+
+    def test_본_것은_기억해서_다시_권하지_않는다(self):
+        self.assertIn("localStorage.setItem(KEY", self.engine)
+        self.assertIn('if (seen(key)) return;', self.engine)
+        # 막혀 있는 브라우저에서 읽기만 해도 예외가 난다. 화면이 죽으면 안 된다.
+        self.assertIn('catch (e) { return false; }', self.engine)
+
+    def test_신규_사용자에게는_제품_화면에서_한_번_권한다(self):
+        self.assertIn('data-coach-offer="1"', self.product)
+        # 원료 화면은 권하지 않는다 — 스스로 [튜토리얼] 을 누를 때만 연다
+        self.assertNotIn('data-coach-offer', self.ingredient)
+
+    def test_저절로_시작하지_않는다(self):
+        """가로막고 시작하는 것이 예전 투어가 버려진 까닭이다."""
+        import re
+        offer = self.engine[self.engine.index('function offer()'):]
+        offer = offer[:offer.index('window.ezCoach =')]
+        self.assertIsNone(re.search(r'^\s*start\(\);', offer, re.M))
+
+    def test_게스트에게도_보인다(self):
+        """게스트는 둘러보러 온 사람이다 — 설명이 가장 필요한 쪽이다."""
+        for html, mark in ((self.product, 'id="productCoachBtn"'),
+                           (self.ingredient, 'id="ingCoachBtn"')):
+            head = html.rindex('{% if', 0, html.index(mark)) if '{% if' in html[:html.index(mark)] else 0
+            self.assertNotIn('is_guest', html[head:html.index(mark)])
+
+    def test_단추는_두_화면_모두에_있다(self):
+        for html in (self.product, self.ingredient):
+            self.assertIn('ezCoach.start()', html)
