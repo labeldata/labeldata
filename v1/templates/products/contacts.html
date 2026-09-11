@@ -1908,4 +1908,30 @@ function showQsError(msg) {
 })();
 </script>
 
+{% comment %}
+  연락처 관리의 걸음. 이 화면은 주소록처럼 생겼지만 실제로 하는 일은
+  **서류를 청하는 것**이다. 연락처를 적어 두는 것 자체가 목적이 아니라,
+  규격서·성적서를 요청하고 그 회신을 여기서 좇는 것이 목적이다.
+
+  왼쪽 표는 엑셀 그대로 붙여넣는 자리이고, 오른쪽은 그 사람과 오간 것이다.
+  두 쪽이 무슨 관계인지가 안 보이면 오른쪽은 늘 빈 칸으로 남는다.
+{% endcomment %}
+<div class="ezc-steps" data-coach-key="contacts" hidden>
+  <div data-sel="#contactsGrid" data-title="엑셀 표를 그대로 붙여넣으세요">
+    쓰던 거래처 표를 <strong>머리글째 복사해(Ctrl+V)</strong> 붙여넣으면 열 순서가 달라도 제자리를
+    찾아갑니다. 우리 표에 없는 열은 비고로 모이므로 지우고 오지 않아도 됩니다.
+  </div>
+  <div data-sel="#emptyState" data-title="연락처를 적는 것이 목적이 아닙니다">
+    한 줄을 <strong>누르면</strong> 그 사람과 오간 공유·자료요청 현황이 오른쪽에 뜹니다.
+    여러 줄을 <strong>체크하면</strong> 한꺼번에 자료 요청을 보냅니다 — 이 화면이 하는 일은 그것입니다.
+  </div>
+  <div data-sel="#contactsFilterBar" data-title="회신을 여기서 좇습니다">
+    <strong>요청 전송·미회신·요청수신</strong>으로 걸러 봅니다. 보낸 것을 세고 있을 필요 없이
+    미회신만 보면 누구를 다시 채근할지가 바로 나옵니다.
+  </div>
+  <div data-sel="#recvReqFilterBtn" data-title="나도 요청을 받습니다">
+    거래처가 나에게 서류를 청하면 여기 쌓입니다. 빨간 배지가 붙어 있으면
+    <strong>내가 아직 올리지 않은 서류</strong>가 있다는 뜻입니다.
+  </div>
+</div>
 {% endblock %}

@@ -519,6 +519,31 @@
     <div style="color:#5f6368;font-size:14px;font-weight:500;">불러오는 중...</div>
   </div>
 </div>
+{% comment %}
+  부적합·처분 알림의 걸음. 이 화면을 처음 열면 남의 회사 이야기가 가득해서
+  "이게 나와 무슨 상관인가" 로 보인다. 핵심은 **내 알림**이고, 그것이 걸리려면
+  원료 관리와 알림 설정에 적어 둔 것이 있어야 한다 — 그 연결을 먼저 말한다.
+{% endcomment %}
+<div class="ezc-steps" data-coach-key="regulatory-news" hidden>
+  <div data-sel=".reg-tabs" data-title="셋은 서로 다른 발표입니다">
+    <strong>부적합</strong>은 제품이 기준에 걸린 것, <strong>행정처분</strong>은 업체가 받은 처분,
+    <strong>수거검사</strong>는 앞으로 무엇을 거둬 갈지 미리 알리는 계획입니다.
+    점이 붙은 탭에 아직 안 본 것이 있습니다.
+  </div>
+  <div data-sel="#sidebarInspNewsCnt" data-title="내 알림만 보는 것이 이 화면의 쓸모입니다">
+    <strong>내 알림</strong>은 내 제품·원료·키워드에 걸린 것만 모은 것입니다.
+    원료 관리에 적어 둔 것이 많을수록 정확해집니다 — 비어 있으면 걸릴 것도 없습니다.
+    <strong>미조치</strong>는 보기는 했지만 아직 아무것도 하지 않은 건입니다.
+  </div>
+  <div data-sel=".rs-settings-btn" data-title="원료 이름만으로는 다 못 잡습니다">
+    거래처명·제조소·브랜드처럼 <strong>직접 적어 둬야 걸리는 말</strong>을 여기서 등록합니다.
+    수거검사 계획도 여기서 받을지 정합니다.
+  </div>
+  <div data-sel=".reg-table" data-title="줄을 누르면 원문과 조치가 함께 뜹니다">
+    오른쪽에 발표 원문과 <strong>내 어느 제품·원료에 걸렸는지</strong>가 같이 뜹니다.
+    조치를 남기면 미조치에서 빠집니다 — 읽음 처리와 달리 <strong>이력이 남습니다</strong>.
+  </div>
+</div>
 {% endblock %}
 
 

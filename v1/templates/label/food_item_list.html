@@ -659,4 +659,27 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script src="{% static 'js/list_common.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{% comment %}
+  제품 조회의 걸음. 여기서 막히는 자리는 검색이 안 나오는 것이 아니라
+  **검색이 아예 실행되지 않는 것**이다. 국내 183만 건·수입 59만 건이라
+  조건 없이 훑으면 오래 걸려서 막아 두었는데, 그 사정을 모르면 고장으로 보인다.
+{% endcomment %}
+<div class="ezc-steps" data-coach-key="food-item-list" hidden>
+  <div data-sel=".pv-tabs" data-title="국내와 수입은 다른 표입니다">
+    <strong>국내 품목보고</strong>와 <strong>수입식품</strong>은 들고 있는 칸이 서로 다릅니다.
+    한 번 검색하면 양쪽 건수가 탭에 함께 떠서, 반대쪽에 있는지 옮겨 보지 않고도 압니다.
+  </div>
+  <div data-sel="#product-search" data-title="두 글자 이상이라야 인덱스를 탑니다">
+    한 글자로 찾으면 백만 줄을 한 줄씩 훑어야 해서 결과가 안 나옵니다.
+    <strong>이름으로 찾는 조건은 두 글자 이상</strong>으로 넣으세요.
+  </div>
+  <div data-sel="#condToggle" data-title="조건을 하나 얹으면 바로 나옵니다">
+    검색이 실행되지 않았다는 말이 뜨면 고장이 아니라 <strong>일부러 막은 것</strong>입니다.
+    여기서 빠른 조건을 하나만 함께 넣어도 인덱스를 타서 결과가 곧바로 나옵니다.
+  </div>
+  <div data-sel=".product-table" data-title="줄을 누르면 표시사항을 통째로 봅니다">
+    남의 라벨이 어떻게 적혀 있는지 보는 자리입니다. 품목보고번호를 적어 두면
+    <strong>제품의 기본 정보에서 그 번호로 칸을 채울</strong> 수 있습니다.
+  </div>
+</div>
 {% endblock %}
