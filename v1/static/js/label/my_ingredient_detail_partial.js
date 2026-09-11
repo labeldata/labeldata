@@ -264,8 +264,28 @@ function autoDetectAllergensIngredient() {
         }
     }
     
-    // 감지된 알레르기 성분을 선택된 목록에 추가
-    selectedAllergens = Array.from(detectedAllergens);
+    /* **더하기만 한다. 절대 지우지 않는다.**
+     *
+     * 예전에는 고른 목록에 감지 결과를 그대로 대입했다 —
+     * 감지 결과가 기존 선택을 통째로 갈아치웠다. 운영 데이터 622 개를 재
+     * 보니 이것이 왜 위험한지 그대로 드러났다.
+     *
+     *     Synthetic flavor 합성바닐라향   사람: 밀·알류·우유   감지: 없음
+     *     626538 비프향 향료제제           사람: 메밀·우유      감지: 없음
+     *     마가린                          사람: 대두·우유      감지: 없음
+     *
+     * 향료·제제·가공유지는 **이름 안에 키워드가 아예 없다.** 사람이 성적서를
+     * 보고 넣은 값인데, 자동감지를 한 번 누르면 그것이 사라졌다. 알레르기는
+     * 놓치면 리콜이다 — 기계가 못 찾은 것이 사람이 찾은 것을 이길 수 없다.
+     *
+     * 뺄 일이 있으면 칩을 직접 누르면 된다. 그 자리는 원래 그러라고 있다.
+     *
+     * 제품 화면(_tab_basic_info)은 이미 이렇게 하고 있었다 — 출처가 'auto'
+     * 인 것만 지우고 사람이 고른 것은 남긴다. 두 화면을 같은 몸짓으로 맞춘다. */
+    const before = new Set(selectedAllergens);
+    const added = Array.from(detectedAllergens).filter(a => !before.has(a));
+    detectedAllergens.forEach(a => before.add(a));
+    selectedAllergens = Array.from(before);
     
     // UI 업데이트
     const allergyBtnList = document.getElementById('allergyBtnList');
@@ -291,9 +311,55 @@ function autoDetectAllergensIngredient() {
     }
     
     updateAllergyDisplay();
-    
+    reportAllergyDetect(added, combinedText);
+
     // 사용 로그 기록
     logAllergyAutoDetect();
+}
+
+/* 이름으로는 알 수 없는 원료.
+ *
+ * 운영 데이터에서 놓친 54 건이 거의 다 여기였다. 향료·제제·가공유지·유산균
+ * 처럼 **이름 안에 키워드가 없는** 원료들이다. 키워드 사전을 아무리 키워도
+ * 안 잡힌다 — 답이 성적서에 있기 때문이다.
+ *
+ *     마가린   -> 대두 (레시틴)      유산균   -> 우유 (배지)
+ *     쇼트닝   -> 대두               곡류가공품 -> 밀
+ *     증류주   -> 밀 (주박)          베이킹파우더 -> 밀 (전분)
+ *
+ * 이런 원료에서 감지 결과가 비면 "알레르기 없음" 이 아니라 **"이름으로는 알
+ * 수 없음"** 이다. 둘은 전혀 다른 말인데 화면은 똑같이 비어 보였다. */
+const NAME_TELLS_NOTHING = [
+    '향료', '향 ', '제제', '가공유지', '경화유', '마가린', '쇼트닝',
+    '유산균', '시즈닝', '조미', '주정', '증류주', '베이킹파우더',
+    '가공품', '전분', '효소', 'flavor', 'seasoning'
+];
+
+function reportAllergyDetect(added, text) {
+    const slot = document.getElementById('allergyDetectNote');
+    if (!slot) return;
+
+    const opaque = NAME_TELLS_NOTHING.some(w => text.toLowerCase().includes(w));
+    const parts = [];
+
+    if (added.length) {
+        parts.push('<span class="ag-note-add">' + added.join(', ') + ' 을(를) 더했습니다</span>');
+    } else {
+        parts.push('<span class="ag-note-dim">새로 찾은 것이 없습니다</span>');
+    }
+    // 지우지 않는다는 사실을 그 자리에서 말한다 — 안 그러면 '재감지' 를
+    // 눌러도 옛 값이 남아 있는 것이 고장으로 보인다.
+    parts.push('<span class="ag-note-dim">고른 것은 지우지 않습니다. 뺄 것은 칩을 누르세요.</span>');
+
+    if (opaque) {
+        parts.push('<span class="ag-note-warn">'
+            + '<i class="bi bi-exclamation-triangle-fill"></i> '
+            + '향료·제제·가공유지 같은 원료는 <strong>이름만으로는 알 수 없습니다.</strong> '
+            + '성적서를 확인하세요.</span>');
+    }
+
+    slot.innerHTML = parts.join('');
+    slot.style.display = 'block';
 }
 
 // 알레르기 자동감지 사용 로그 기록

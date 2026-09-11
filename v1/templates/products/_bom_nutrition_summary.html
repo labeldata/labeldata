@@ -65,13 +65,26 @@
       return;
     }
     var all = g.done >= g.total;
+
+    /* **'N/M건 등록' 은 틀린 말이었다.**
+       그렇게 적어 두니 68 개를 다 채워야 하는 것으로 읽힌다. 운영에서 영양
+       성분이 정해진 원료는 68 중 3 개(4 %)라, 그 말대로면 영영 계산이 안 된다.
+
+       실제 판정은 등록 수가 아니라 **기여도**다(nutrition_contrib). 배합비가
+       작아서 표시값을 못 움직이는 원료는 비어 있어도 통과한다 — 아홉 개를
+       다 묻지 않고 막는 성분 하나만 묻는 것이 그 엔진이 하는 일이다.
+
+       그러니 센 것은 '등록된 원료' 가 아니라 **'막고 있지 않은 원료'** 다.
+       글자를 그 뜻으로 고친다. */
     slot.innerHTML =
       '<button type="button" class="btn v2-btn-sm ' + (all ? 'btn-primary' : 'btn-light border')
         + '" data-act="calc">'
       + (all ? '<i class="bi bi-calculator"></i> 계산 가능합니다'
-             : g.done + '/' + g.total + '건 등록')
+             : '<i class="bi bi-calculator"></i> 계산하기 <span class="bom-nut-dim">'
+               + (g.total - g.done) + '건 막힘</span>')
       + '</button>'
-      + (all ? '' : '<span class="bom-nut-dim">원료의 영양성분을 다 채우면 계산할 수 있습니다</span>');
+      + (all ? '' : '<span class="bom-nut-dim">눌러서 무엇이 막는지 봅니다.'
+                  + ' 배합비가 작아 표시값을 못 움직이는 원료는 비어 있어도 됩니다.</span>');
   }
 
   function render(d) {
