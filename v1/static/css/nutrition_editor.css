@@ -468,3 +468,39 @@ body {
     color: var(--ez-danger, #c5221f);
     font-weight: 600;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   입력 칸과 결과 칸을 눈으로 가른다.
+
+   다섯 열이 '이름표 · 입력 · 결과' 세 가지 성격인데 다섯 칸이 똑같이 생겼다.
+   Handsontable 의 readOnly 는 회색조 정도의 차이라 **어느 칸을 고칠 수 있는지
+   눌러 봐야** 알았다. 결과 칸에 바탕을 깔고 열 머리에 자물쇠를 단다.
+   ───────────────────────────────────────────────────────────────────── */
+.handsontable td.nutri-out {
+  background: #f7f8fa;
+  color: var(--v2-text-sub, #5f6368);
+}
+.handsontable td.nutri-out.nutri-applied {
+  color: var(--v2-text, #202124);
+  font-weight: 500;
+}
+
+/* 접어 둔 줄로 가는 문. 표 밖에 있어 Handsontable 이 다시 그려도 남는다. */
+.nutri-fold-btn {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px dashed #d2d6dc;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--v2-text-sub, #5f6368);
+  cursor: pointer;
+}
+.nutri-fold-btn:hover {
+  border-color: var(--v2-blue, #1a73e8);
+  border-style: solid;
+  color: var(--v2-blue, #1a73e8);
+  background: #f8fbff;
+}

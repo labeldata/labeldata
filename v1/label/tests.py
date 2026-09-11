@@ -14935,3 +14935,119 @@ class 막는_것과_보여_줄_것은_다르다(TestCase):
     def test_이름을_붙여_보낸다(self):
         """화면이 영어 키를 그대로 찍으면 안 된다."""
         self.assertIn('_name_unchecked', self.src())
+
+
+class 영양성분_표는_입력과_결과를_가른다(TestCase):
+    """
+    다섯 열이 *이름표 · 입력 · 결과* 세 가지 성격인데 다섯 칸이 똑같이 생겼다.
+    Handsontable 의 readOnly 는 회색조 정도의 차이라 **어느 칸을 고칠 수
+    있는지 눌러 봐야** 알았다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/products/nutrition_editor.html',
+                       encoding='utf-8').read()
+
+    def test_열_이름이_하는_일을_말한다(self):
+        """
+        '계산값' 은 사람이 직접 치는 칸인데 *누르면 자동으로 채워진다* 는
+        뜻으로 읽힌다. 그런 단추를 찾다가 못 찾고 비워 둔다.
+        """
+        h = self.tpl()
+        headers = h[h.index('colHeaders:'):]
+        headers = headers[:headers.index(']') + 1]
+        self.assertIn('입력값 (100g당)', headers)
+        self.assertIn('인쇄될 값', headers)
+        self.assertNotIn('계산값 (100g당)', headers)
+
+    def test_고칠_수_없는_칸은_자물쇠를_단다(self):
+        h = self.tpl()
+        headers = h[h.index('colHeaders:'):]
+        headers = headers[:headers.index(']') + 1]
+        self.assertEqual(headers.count('🔒'), 2)   # 인쇄될 값 · 강조표시 판정
+
+    def test_결과_칸에_바탕을_깐다(self):
+        import io
+        h = self.tpl()
+        self.assertIn("className: 'nutri-out'", h)
+        css = io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
+        self.assertIn('.handsontable td.nutri-out', css)
+
+    def test_너비를_저장하는_키는_바꾸지_않는다(self):
+        """
+        그 키로 사용자가 끌어 둔 너비가 계정에 남아 있다. 이름을 바꾸면 찾지
+        못하고 기본값으로 돌아간다 — 보이는 이름만 바꾼다.
+        """
+        h = self.tpl()
+        rules = h[h.index('const NUTRITION_COL_WIDTH'):]
+        rules = rules[:rules.index('};')]
+        self.assertIn("'계산값 (100g당)'", rules)
+        self.assertIn("'적용값'", rules)
+        headers = h[h.index('headers: ['):]
+        headers = headers[:headers.index(']') + 1]
+        self.assertIn('계산값 (100g당)', headers)
+        self.assertIn('적용값', headers)
+
+
+class 줄을_접어도_값은_그대로다(TestCase):
+    """
+    이 표의 값은 **라벨에 인쇄된다.** 번호가 한 칸 밀리면 나트륨 자리에
+    단백질이 들어가고, 아무도 모른 채 인쇄된다. 접기를 넣으면서 가장 조심한
+    자리다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/products/nutrition_editor.html',
+                       encoding='utf-8').read()
+
+    def test_줄을_덜어내지_않고_감추기만_한다(self):
+        """
+        trimRows 는 줄을 데이터에서 덜어내 번호를 민다. hiddenRows 는 그리지
+        않을 뿐 데이터는 그대로다.
+        """
+        h = self.tpl()
+        self.assertIn('hiddenRows: {', h)
+        # 설정만 본다 — 주석에서 왜 trim 을 안 쓰는지 설명하고 있다
+        conf = h[h.index('hot = new Handsontable('):h.index('applyExtraFold();')]
+        self.assertNotIn('trimRows:', conf)
+        self.assertNotIn("getPlugin('trimRows')", h)
+
+    def test_읽기는_물리_순서로_한다(self):
+        """getData() 는 화면 기준이라 접힌 줄에서 어긋날 수 있다."""
+        h = self.tpl()
+        for fn in ('function getGridNutritionInputs', 'function gridValues'):
+            body = h[h.index(fn):]
+            body = body[:body.index('\n}')]
+            self.assertIn('getSourceData()', body, fn)
+            self.assertNotIn('hot.getData()', body, fn)
+
+    def test_쓰기는_화면_번호로_옮긴다(self):
+        """setDataAtCell 은 화면 번호를 받는다."""
+        h = self.tpl()
+        self.assertIn('hot.toVisualRow(index)', h)
+        # 물리 번호를 그대로 쓰던 두 자리가 남아 있지 않다
+        self.assertNotIn("hot.setDataAtCell(index, 4,", h)
+        self.assertNotIn("changes.push([index, 3,", h)
+
+    def test_표시_의무는_절대_접지_않는다(self):
+        h = self.tpl()
+        body = h[h.index('function extraRowsToHide'):]
+        body = body[:body.index('\n}')]
+        self.assertIn('if (nutrient.required) return;', body)
+
+    def test_값이_든_줄도_접지_않는다(self):
+        """
+        넣어 둔 숫자가 화면에서 사라지면 지운 것으로 보이고, 다시 넣는다.
+        """
+        h = self.tpl()
+        body = h[h.index('function extraRowsToHide'):]
+        body = body[:body.index('\n}')]
+        self.assertIn('if (!filled) hide.push(index);', body)
+
+    def test_필수_영양성분은_아홉_개다(self):
+        """접는 기준이 이 플래그다 — 수가 달라지면 알아야 한다."""
+        h = self.tpl()
+        table = h[h.index('const ALL_NUTRIENTS'):h.index('const NUTRITION_COL_WIDTH')]
+        self.assertEqual(table.count('required: true'), 9)
