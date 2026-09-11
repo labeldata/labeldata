@@ -908,6 +908,48 @@ _CROSS_CONTAMINATION = (
 )
 
 
+def _looks_like_cross_list(text, rawmtrl):
+    """
+    꼬리말이 없어도 **혼입 목록인지** 알아본다.
+
+    프롬프트를 고친 뒤에도 이렇게 읽혔다.
+
+        allergens  알류, 우유, 밀, 메밀, 대두, 땅콩, 고등어, 게, 새우,
+                   복숭아, 토마토, 아황산류, 호두, 닭고기, 오징어, 조개류
+
+    "…를 사용한 제품과 같은 시설에서 제조" 라는 **꼬리를 떼고 이름만** 가져온
+    것이다. 그러니 꼬리말로는 못 잡는다. 두 가지를 함께 본다.
+
+      ① 수가 많다. 표시기준의 알레르기는 열아홉 가지인데, 한 제품이 그중
+         여덟 가지 넘게 **실제로** 넣는 일은 드물다. 혼입 문구는 공장이 다루는
+         모든 것을 적으므로 열댓 가지가 흔하다.
+
+      ② 원재료명에 없다. 넣었다면 원재료명 어딘가에 그 이름이나 그 재료가
+         적혀 있어야 한다. 복숭아·토마토·오징어가 원재료명에 없는데 "함유" 일
+         수는 없다.
+
+    둘 다일 때만 혼입으로 본다. **하나만으로는 안 된다** — 종합선물세트처럼
+    정말 여러 가지를 넣은 제품이 있고, 원재료명을 덜 읽었을 수도 있다.
+    """
+    names = [n.strip() for n in re.split(r'[,·/]', text or '') if n.strip()]
+    if len(names) < 8:
+        return False
+
+    hay = ''.join((rawmtrl or '').split())
+    if not hay:
+        return False        # 견줄 것이 없으면 판단하지 않는다
+
+    from v1.label.constants import ALLERGEN_KEYWORDS
+    found = 0
+    for name in names:
+        base = re.sub(r'[(（\[].*', '', name).strip()
+        words = [base] + list(ALLERGEN_KEYWORDS.get(base, ()))
+        if any(w and ''.join(w.split()) in hay for w in words):
+            found += 1
+    # 절반도 원재료명에 없으면 이 제품 이야기가 아니다
+    return found * 2 < len(names)
+
+
 def separate_cross_contamination(data):
     """
     알레르기 칸에 들어온 **혼입 가능 문구**를 주의사항으로 되돌린다.
@@ -932,10 +974,18 @@ def separate_cross_contamination(data):
     if not isinstance(item, dict):
         return data
     text = str(item.get('value') or '')
-    if not text or not any(mark in text for mark in _CROSS_CONTAMINATION):
+    if not text:
         return data
 
-    logger.info('알레르기 칸의 혼입 문구를 주의사항으로 옮긴다: %s', text[:60])
+    rawmtrl = data.get('rawmtrl_nm')
+    rawmtrl = rawmtrl.get('value') if isinstance(rawmtrl, dict) else rawmtrl
+    tailed = any(mark in text for mark in _CROSS_CONTAMINATION)
+    listed = _looks_like_cross_list(text, rawmtrl)
+    if not tailed and not listed:
+        return data
+
+    logger.info('알레르기 칸의 혼입 문구를 주의사항으로 옮긴다 (%s): %s',
+                '꼬리말' if tailed else '이름 수·원재료명 대조', text[:60])
 
     data['allergens'] = {'value': None, 'confidence': 'none',
                          'moved_to_cautions': True}

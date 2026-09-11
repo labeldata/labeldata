@@ -139,6 +139,9 @@ urlpatterns = [
     # 디자인 시안 대조 기록 — 파일은 문서함에, 결과는 그 파일에 붙는다
     path('labels/<int:label_id>/design-compare/', views.design_compare_record,
          name='design_compare_record'),
+    # 마지막으로 올린 시안. 2 차 검증에서 "저장된 것으로" 를 내어 주려고 본다
+    path('labels/<int:label_id>/design-compare/latest/', views.design_compare_latest,
+         name='design_compare_latest'),
 
     # 불러오기 모달 — 품목보고번호 조회 / 원료 사진 업로드 / 원료 BOM 등록
     path('labels/<int:label_id>/lookup/report-no/', views.report_no_lookup, name='report_no_lookup'),

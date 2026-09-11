@@ -1,5 +1,31 @@
 ﻿<!-- _tab_label.html: 표시사항 탭 – 미리보기 직접 임베드 -->
 <style>
+/* 이미 올려 둔 시안을 쓸지 묻는 작은 판.
+
+   2 차 검증을 한 번 하면 그 파일이 문서함에 남는데, 다음에 검증을 누르면
+   파일 고르기 창이 곧바로 열려서 있는 파일을 다시 찾아 와야 했다.
+   **저장된 시안이 실제로 있을 때만** 뜬다. */
+.ltdp {
+    margin: 8px 0;
+    padding: 12px 14px;
+    background: var(--ez-info-bg, #e8f0fe);
+    border: 1px solid var(--ez-info, #1a73e8);
+    border-radius: 8px;
+}
+.ltdp[hidden] { display: none; }
+.ltdp-head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600; color: var(--ez-gray-900, #202124);
+}
+.ltdp-name {
+    margin-top: 5px; font-size: 13px; color: var(--ez-gray-900, #202124);
+    word-break: break-all;
+}
+.ltdp-meta {
+    margin-top: 2px; font-size: 11.5px; color: var(--ez-gray-700, #5f6368);
+}
+.ltdp-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+
 #ltRoot {
     flex: 1 1 auto;
     display: flex;
@@ -59,6 +85,23 @@
       두 벌이 된다. 문 하나만 열어 준다 — window.ltStartCompare().
     {% endcomment %}
     <input type="file" id="ltCompareFile" accept="image/*,.pdf" hidden>
+    {% comment %}
+      저장된 시안이 있을 때만 뜬다. 없으면 이 판을 건너뛰고 곧바로 파일
+      고르기가 열린다 — 없는 선택지를 보여 주지 않는다.
+    {% endcomment %}
+    <div id="ltDesignPick" class="ltdp" hidden>
+        <div class="ltdp-head"><i class="bi bi-archive"></i>이미 올려 둔 시안이 있습니다</div>
+        <div class="ltdp-name"></div>
+        <div class="ltdp-meta"></div>
+        <div class="ltdp-acts">
+            <button type="button" class="btn btn-primary v2-btn-sm" data-pick="saved">
+                <i class="bi bi-arrow-clockwise"></i>이 시안으로 검증
+            </button>
+            <button type="button" class="btn btn-light border v2-btn-sm" data-pick="new">
+                <i class="bi bi-upload"></i>다른 파일 첨부
+            </button>
+        </div>
+    </div>
     {% endif %}
     <div id="lt-loading">
         <div class="spinner-border text-primary" style="width:1.8rem;height:1.8rem;" role="status"></div>
@@ -283,11 +326,84 @@
         if (win && typeof win.ltCompareBusy === 'function') win.ltCompareBusy(on);
     }
 
+    /* 저장된 시안을 쓸지 묻는다. 창을 새로 만들지 않고 이 화면의 작은 판을
+       쓴다 — 이 물음에 부트스트랩 모달까지 쌓을 일은 아니다. */
+    function askWhichDesign(doc, done) {
+        var box = document.getElementById('ltDesignPick');
+        if (!box) { done(false); return; }
+
+        var when = (doc.checked_at || doc.uploaded_at || '').slice(0, 16).replace('T', ' ');
+        var size = doc.size ? (Math.round(doc.size / 1024) + ' KB') : '';
+        box.querySelector('.ltdp-name').textContent = doc.name || '저장된 시안';
+        box.querySelector('.ltdp-meta').textContent =
+            [when ? when + ' 검증' : '', size, doc.version ? '버전 ' + doc.version : '']
+                .filter(Boolean).join('  ·  ');
+        box.hidden = false;
+
+        box.onclick = function (ev) {
+            var btn = ev.target.closest('[data-pick]');
+            if (!btn) return;
+            box.hidden = true;
+            box.onclick = null;
+            done(btn.dataset.pick === 'saved');
+        };
+    }
+
+    /* 저장된 시안으로 대조한다. 파일을 다시 받아 와 판독기에 넣는다 —
+       판독은 이미지가 있어야 하고, 서버에 둔 것을 화면이 다시 읽는 길은
+       이것뿐이다. */
+    function compareWithSaved(doc) {
+        compareBusy(true);
+        fetch(doc.url, {credentials: 'same-origin'})
+            .then(function (r) {
+                if (!r.ok) throw new Error('저장된 시안을 불러오지 못했습니다.');
+                return r.blob();
+            })
+            .then(function (blob) {
+                var file = new File([blob], doc.name || 'design', {type: blob.type});
+                var pick = (typeof window.cropPhoto === 'function')
+                    ? window.cropPhoto(file)
+                    : Promise.resolve([{file: file, role: 'whole'}]);
+                return pick.then(function (parts) {
+                    if (!parts || !parts.length) return null;
+                    return window.basicInfoOcrCompare(parts, file);
+                });
+            })
+            .catch(function (err) {
+                if (window.showSnackbar) {
+                    window.showSnackbar((err && err.message) || '저장된 시안을 쓰지 못했습니다.',
+                                        'error');
+                }
+            })
+            .then(function () { compareBusy(false); });
+    }
+
     function wireCompare() {
         var input = document.getElementById('ltCompareFile');
         if (!input) return;
 
-        window.ltStartCompare = function () { input.click(); };
+        /* **이미 올려 둔 시안이 있으면 그것부터 권한다.**
+         *
+         * 2 차 검증을 한 번 하면 그 파일이 문서함에 남는다. 그런데 다음에
+         * 검증을 누르면 파일 고르기 창이 곧바로 열려서, 있는 파일을 다시 찾아
+         * 와야 했다 — 도안은 메일이나 메신저로 오가는 것이라 다시 찾기가
+         * 번거롭다.
+         *
+         * 묻는 것은 **저장된 시안이 실제로 있을 때만**이다. 없으면 예전처럼
+         * 곧바로 고르기 창을 연다 — 없는 선택지를 보여 주지 않는다. */
+        window.ltStartCompare = function () {
+            var url = '{% url "products:design_compare_latest" label_id=product.my_label_id %}';
+            fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var doc = d && d.success && d.document;
+                    if (!doc) { input.click(); return; }
+                    askWhichDesign(doc, function (useSaved) {
+                        if (useSaved) { compareWithSaved(doc); } else { input.click(); }
+                    });
+                })
+                .catch(function () { input.click(); });   // 못 물어보면 그냥 고른다
+        };
         input.addEventListener('change', function () {
             var file = input.files && input.files[0];
             input.value = '';
