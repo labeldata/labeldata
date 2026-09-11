@@ -15430,6 +15430,195 @@ class 검사_결과가_어디에_생기는지_말한다(TestCase):
         self.assertIn('번호를 달았습니다', h)
 
 
+class 요약은_내용이_있는_것만_세운다(TestCase):
+    """
+    표시명·알레르기·GMO·영양성분이 세 줄로 늘 펼쳐져 있었다. 요약은 표 **위**에
+    붙어 있어 그 높이가 곧 표가 밀리는 만큼이다 — 대개 비어 있는 줄까지 자리를
+    차지했다. 게다가 비어 있는 것도 이름표를 달고 '-' 를 보여 줬다.
+    """
+
+    def tpl(self):
+        import io
+        return io.open('v1/templates/products/bom_detail.html',
+                       encoding='utf-8').read()
+
+    def test_탭으로_바뀌었다(self):
+        h = self.tpl()
+        for key in ('rawmtrl', 'allergens', 'gmo', 'nutrition'):
+            self.assertIn('id="bsum-pane-%s"' % key, h)
+        self.assertIn('id="bsum-tabs"', h)
+
+    def test_내용이_있는_것만_세운다(self):
+        h = self.tpl()
+        body = h[h.index('function renderSummaryTabs'):]
+        body = body[:body.index('\n    }')]
+        self.assertIn('has: !!state.rawmtrl', body)
+        self.assertIn('state.allergens.length > 0', body)
+        self.assertIn('state.gmo.length > 0', body)
+        self.assertIn('live = defs.filter', body)
+
+    def test_영양성분은_늘_세운다(self):
+        """
+        비어 있는 것이 아니라 "아직 계산할 수 없다" 는 답이고, 그 답을 보러
+        오는 자리다.
+        """
+        h = self.tpl()
+        body = h[h.index('function renderSummaryTabs'):]
+        body = body[:body.index('\n    }')]
+        line = [ln for ln in body.split(chr(10)) if "'nutrition'" in ln][0]
+        self.assertIn('has: true', line)
+
+    def test_몇_건인지_탭에_적는다(self):
+        """열어 보지 않고도 아는 것이 낫다."""
+        h = self.tpl()
+        self.assertIn('bsum-n', h)
+        body = h[h.index('function renderSummaryTabs'):]
+        self.assertIn("n: state.allergens.length", body)
+        self.assertIn("n: state.gmo.length", body)
+
+    def test_고르던_탭이_사라지면_첫_탭으로_간다(self):
+        h = self.tpl()
+        body = h[h.index('function renderSummaryTabs'):]
+        self.assertIn('!live.some(d => d.key === _bsumActive)', body)
+
+
+class 지적이_여럿인_줄은_읽을_수_있어야_한다(TestCase):
+    """
+    한 줄에 지적이 여럿이면 배지에 "2,5,7" 이 들어간다. 14px 원에 8pt 로 밀어
+    넣으니 읽을 수가 없었다.
+    """
+
+    def css(self):
+        import io
+        return io.open('v1/static/css/label_preview.css', encoding='utf-8').read()
+
+    def test_숫자가_늘면_옆으로_늘어난다(self):
+        css = self.css()
+        body = css[css.index('.pv-issue-badge {'):]
+        body = body[:body.index('}')]
+        self.assertIn('padding: 0 5px', body)
+        self.assertIn('white-space: nowrap', body)
+        self.assertIn('tabular-nums', body)
+
+    def test_지적이_둘_이상인_줄은_더_굵게_긋는다(self):
+        css = self.css()
+        self.assertIn('.pv-row-issue.pv-row-many', css)
+        import io
+        js = io.open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
+        self.assertIn("classList.toggle('pv-row-many', numbers.length > 1)", js)
+
+    def test_몇_건인지_말해_준다(self):
+        import io
+        js = io.open('v1/static/js/label/label_preview.js', encoding='utf-8').read()
+        self.assertIn('건 있습니다', js)
+
+
+class 접은_뒤에는_높이를_다시_잰다(TestCase):
+    """
+    줄을 감추면 표가 짧아지는데 Handsontable 은 제가 쓰던 높이를 그대로 들고
+    있어서, 마지막 줄(나트륨)이 담는 칸 경계에 걸려 **글자가 잘렸다** —
+    #grid-container 가 overflow:hidden 이라 잘린 채로 보인다.
+    """
+
+    def test_refreshDimensions_를_부른다(self):
+        import io
+        h = io.open('v1/templates/products/nutrition_editor.html',
+                    encoding='utf-8').read()
+        body = h[h.index('function applyExtraFold'):]
+        body = body[:body.index('\n}')]
+        self.assertIn('refreshDimensions()', body)
+
+
+class 저장했다는_말은_눈에_닿는_자리에서_한다(TestCase):
+    """
+    스낵바는 화면 **맨 아래 가운데**에 4 초 뜬다. 그런데 저장 단추는 대개 패널
+    머리(위쪽)에 있어서, 누른 자리와 답이 나오는 자리가 화면 양 끝이다 — 긴
+    폼에서는 아예 못 본다.
+
+    그리고 저장 알림이 **다섯 갈래**였다.
+
+        스낵바 · showToast · alert() · 단추 옆 작은 배지 · 전용 오버레이
+
+    같은 일에 다섯 모습이면 사용자는 매번 다시 배운다.
+    """
+
+    def base(self):
+        import io
+        return io.open('v1/templates/base_v2.html', encoding='utf-8').read()
+
+    def css(self):
+        import io
+        return io.open('v1/static/css/products_common.css', encoding='utf-8').read()
+
+    def test_한_자리에서_말한다(self):
+        h = self.base()
+        self.assertIn('window.showSaved = function', h)
+        self.assertIn('id="v2Saved"', h)
+
+    def test_화면_가운데에_뜬다(self):
+        css = self.css()
+        body = css[css.index('#v2Saved {'):]
+        body = body[:body.index('}')]
+        self.assertIn('position: fixed', body)
+        self.assertIn('top: 38%', body)
+        self.assertIn('translate(-50%, -50%)', body)
+
+    def test_막지_않는다(self):
+        """
+        확인을 누르게 하는 alert() 은 저장처럼 자주 하는 일에 쓸 물건이 아니다.
+        """
+        css = self.css()
+        body = css[css.index('#v2Saved {'):]
+        body = body[:body.index('}')]
+        self.assertIn('pointer-events: none', body)
+        h = self.base()
+        fn = h[h.index('window.showSaved = function'):]
+        fn = fn[:fn.index('\n      };')]
+        self.assertIn('setTimeout', fn)          # 스스로 사라진다
+
+    def test_연달아_눌러도_다시_뜬다(self):
+        h = self.base()
+        fn = h[h.index('window.showSaved = function'):]
+        fn = fn[:fn.index('\n      };')]
+        self.assertIn('void el.offsetWidth', fn)
+
+    def test_껍데기가_없는_화면에서도_말은_한다(self):
+        """base_v2 를 안 쓰는 화면이 있다. 조용히 아무 말도 안 하면 안 된다."""
+        h = self.base()
+        fn = h[h.index('window.showSaved = function'):]
+        fn = fn[:fn.index('\n      };')]
+        self.assertIn('window.showSnackbar', fn)
+
+    def test_다른_알림까지_가운데로_옮기지_않았다(self):
+        """
+        저장은 사용자가 답을 기다리는 유일한 순간이다. 다른 알림까지 가운데로
+        옮기면 곧 성가신 것이 되고, 성가신 것은 읽히지 않는다.
+        """
+        css = self.css()
+        snack = css[css.index('#v2Snackbar.snack-show'):]
+        snack = snack[:snack.index('\n\n')]
+        self.assertIn('translateX(-50%)', snack)   # 스낵바는 그대로 아래
+
+    def test_저장_경로들이_이것을_쓴다(self):
+        import io
+        for path, needle in (
+            ('v1/templates/products/nutrition_editor.html', 'showSaved('),
+            ('v1/templates/products/product_detail.html', 'window.showSaved('),
+            ('v1/static/js/label/my_ingredient_detail_partial.js', 'window.showSaved('),
+            ('v1/templates/products/document_ai_review_v2.html', 'showSaved('),
+        ):
+            self.assertIn(needle, io.open(path, encoding='utf-8').read(), path)
+
+    def test_저장에_alert_을_쓰지_않는다(self):
+        import io
+        for path in ('v1/templates/products/document_ai_review.html',
+                     'v1/templates/products/document_ai_review_v2.html'):
+            text = io.open(path, encoding='utf-8').read()
+            for line in text.split(chr(10)):
+                if 'alert(' in line and '저장되었습니다' in line:
+                    # 껍데기가 없을 때를 받치는 자리만 남아 있어야 한다
+                    self.assertIn('window.showSaved', line, path)
+
 class 원산지_순위는_조문이_정한다(TestCase):
     """
     「농수산물의 원산지 표시 등에 관한 법률 시행령」 제3조제2항.

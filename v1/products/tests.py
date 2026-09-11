@@ -3926,12 +3926,21 @@ class 함유는_한_번만_쓴다(TestCase):
         head = self.html.index('window._bomSummaryAllergenText')
         self.assertIn("allergenText + ' 함유'", self.html[head:head + 200])
 
-    def test_GMO_가_같은_줄에_있다(self):
-        head = self.html.index('class="bom-summary-row bom-summary-pair"')
-        block = self.html[head:self.html.index('</details>', head)]
-        self.assertIn('id="bom-summary-allergens"', block)
-        self.assertIn('id="bom-summary-gmo"', block)
-        self.assertIn('.bom-summary-pair', self.css)
+    def test_알레르기와_GMO_가_자리를_덜_쓴다(self):
+        """
+        둘을 한 줄에 붙여 둔 적이 있다. 요약이 표 **위**에 붙어 있어 그 높이가
+        곧 표가 밀리는 만큼이라, 짧은 값 둘이 줄을 하나씩 차지하는 것이
+        아까웠기 때문이다.
+
+        이제 **탭**이 그 일을 더 잘한다 — 값이 없으면 아예 서지 않는다.
+        한 줄에 붙이는 것은 '없음' 두 개를 나란히 보여 주는 일이었다.
+        """
+        self.assertIn('id="bsum-pane-allergens"', self.html)
+        self.assertIn('id="bsum-pane-gmo"', self.html)
+        self.assertIn('.bsum-tab', self.css)
+        # 옛 한 줄 배치는 남아 있지 않다
+        self.assertNotIn('bom-summary-pair', self.html)
+        self.assertNotIn('.bom-summary-pair', self.css)
 
     def test_한_덩이로_보여_준다(self):
         # 조각조각 뱃지로 흩으면 인쇄될 문구가 안 보인다

@@ -187,9 +187,23 @@ body.in-iframe .bom-page-header { display: none !important; }
                     </span>
                     <span class="bom-summary-toggle"><i class="bi bi-chevron-down"></i></span>
                 </summary>
+                {% comment %}
+                  **세 줄을 탭으로 바꾼다.**
+
+                  예전에는 표시명·알레르기·GMO·영양성분이 세 줄로 늘 펼쳐져
+                  있었다. 요약은 표 **위**에 붙어 있어서 그 높이가 곧 표가
+                  밀리는 만큼이다 — 대개 비어 있는 줄까지 자리를 차지했다.
+
+                  게다가 **비어 있는 것도 이름표를 달고 '-' 를 보여 줬다.**
+                  아무것도 없다는 말을 세 줄에 걸쳐 하고 있었던 셈이다.
+
+                  내용이 있는 것만 탭으로 세운다. 알레르기·GMO 는 몇 건인지를
+                  탭에 적는다 — 열어 보지 않고도 아는 것이 낫다.
+                {% endcomment %}
                 <div class="bom-summary-body">
-                    <div class="bom-summary-row">
-                        <span class="bom-summary-label">원재료명 표시명</span>
+                    <div class="bsum-tabs" id="bsum-tabs" role="tablist"></div>
+
+                    <div class="bsum-pane" id="bsum-pane-rawmtrl" hidden>
                         <div id="bom-summary-rawmtrl" class="bom-summary-value">
                             <span class="text-muted">BOM에 원료를 입력하면 자동으로 생성됩니다.</span>
                         </div>
@@ -200,42 +214,33 @@ body.in-iframe .bom-page-header { display: none !important; }
                             <i class="bi bi-arrow-left-circle"></i>기본정보로 복사
                         </button>
                     </div>
-                    {% comment %}
-                      알레르기와 GMO 를 한 줄에 둔다. 둘 다 짧은 값인데 줄을
-                      하나씩 차지해서, 요약이 표 위에 붙어 있는 만큼 표가
-                      그만큼 밀렸다.
-                    {% endcomment %}
-                    <div class="bom-summary-row bom-summary-pair">
-                        <span class="bom-summary-label">
-                            <i class="bi bi-exclamation-triangle-fill text-warning"></i>알레르기
-                        </span>
+
+                    <div class="bsum-pane" id="bsum-pane-allergens" hidden>
                         <div id="bom-summary-allergens" class="bom-summary-value">
                             <span class="text-muted">-</span>
                         </div>
-                        <span class="bom-summary-label bom-summary-label--gmo">
-                            <i class="bi bi-dna text-success"></i>GMO
-                        </span>
-                        <div id="bom-summary-gmo" class="bom-summary-value bom-summary-value--gmo">
+                    </div>
+
+                    <div class="bsum-pane" id="bsum-pane-gmo" hidden>
+                        <div id="bom-summary-gmo" class="bom-summary-value">
                             <span class="text-muted">-</span>
                         </div>
                     </div>
+
                     {% comment %}
                       영양성분은 이 배합의 또 다른 결과물이다. 여기서 보여
                       주는 것은 **계산값이 나오는가 아닌가**와 **무엇이 막고
                       있는가** 둘뿐이다. 값 자체는 영양성분 탭에서 본다 —
                       한 가지 일에 자리를 둘로 두지 않는다.
-
-                      막는 것을 원료 단위가 아니라 **성분 단위**로 말한다.
-                      향료 하나 때문에 아홉 개를 다 물으면 규격서를 통째로
-                      구해야 하지만, 실제로 모자란 것은 한둘일 때가 많다.
                     {% endcomment %}
-                    <div class="bom-summary-row">
-                        <span class="bom-summary-label">
-                            <i class="bi bi-calculator text-primary"></i>영양성분
-                        </span>
+                    <div class="bsum-pane" id="bsum-pane-nutrition" hidden>
                         <div id="bom-summary-nutrition" class="bom-summary-value">
                             <span class="text-muted">배합비를 넣으면 계산할 수 있는지 알려 드립니다.</span>
                         </div>
+                    </div>
+
+                    <div class="bsum-empty" id="bsum-empty">
+                        BOM에 원료를 넣으면 여기에 요약이 만들어집니다.
                     </div>
                 </div>
             </details>
@@ -1878,6 +1883,62 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (e.key === 'Escape') closeRowDetail();
     });
 
+    /* 요약의 탭.
+
+       예전에는 표시명·알레르기·GMO·영양성분이 세 줄로 늘 펼쳐져 있었다.
+       요약은 표 **위**에 붙어 있어서 그 높이가 곧 표가 밀리는 만큼이다 —
+       대개 비어 있는 줄까지 자리를 차지했다. 게다가 비어 있는 것도 이름표를
+       달고 '-' 를 보여 줬다. 아무것도 없다는 말을 세 줄에 걸쳐 한 셈이다.
+
+       **영양성분은 늘 세운다.** 비어 있는 것이 아니라 "아직 계산할 수 없다"
+       는 답이고, 그 답을 보러 오는 자리이기 때문이다. */
+    let _bsumActive = 'rawmtrl';
+
+    function renderSummaryTabs(state) {
+        const tabsEl = document.getElementById('bsum-tabs');
+        const emptyEl = document.getElementById('bsum-empty');
+        if (!tabsEl) return;
+
+        const defs = [
+            {key: 'rawmtrl',   label: '원재료명 표시명', has: !!state.rawmtrl},
+            {key: 'allergens', label: '알레르기', n: state.allergens.length,
+             has: state.allergens.length > 0},
+            {key: 'gmo',       label: 'GMO', n: state.gmo.length,
+             has: state.gmo.length > 0},
+            {key: 'nutrition', label: '영양성분', has: true}
+        ];
+        const live = defs.filter(d => d.has);
+
+        // 고르고 있던 탭이 사라졌으면 첫 탭으로 돌아간다
+        if (!live.some(d => d.key === _bsumActive)) {
+            _bsumActive = live.length ? live[0].key : '';
+        }
+
+        tabsEl.innerHTML = live.map(function (d) {
+            const on = d.key === _bsumActive;
+            const count = d.n ? ' <span class="bsum-n">' + d.n + '</span>' : '';
+            /* class 는 통째로 내보낸다. 이어 붙이면 자체 검사(products.W002)가
+               단추 이름을 "bsum-tab'" 로 읽는다 — 사람이 읽기에도 그 편이 낫다. */
+            const cls = on ? 'class="bsum-tab is-on"' : 'class="bsum-tab"';
+            return '<button type="button" ' + cls
+                 + ' role="tab" aria-selected="' + on + '" data-bsum="' + d.key + '">'
+                 + d.label + count + '</button>';
+        }).join('');
+
+        defs.forEach(function (d) {
+            const pane = document.getElementById('bsum-pane-' + d.key);
+            if (pane) pane.hidden = !(d.has && d.key === _bsumActive);
+        });
+        if (emptyEl) emptyEl.hidden = live.length > 0;
+    }
+
+    document.addEventListener('click', function (ev) {
+        const btn = ev.target.closest && ev.target.closest('.bsum-tab');
+        if (!btn) return;
+        _bsumActive = btn.dataset.bsum;
+        if (typeof generateBomSummary === 'function') generateBomSummary();
+    });
+
     function generateBomSummary() {
         if (!hot) return;
 
@@ -1998,6 +2059,14 @@ body.in-iframe .bom-page-header { display: none !important; }
         /* 화면에 보이는 것과 같은 문구. 두 벌로 두면 갈라진다 */
         window._bomSummaryAllergenText = allergenText ? allergenText + ' 함유' : '';
         window._bomSummaryGmo       = Array.from(gmoSet);
+
+        /* 내용이 있는 것만 탭으로 세운다. 알레르기·GMO 는 몇 건인지 적는다 —
+           열어 보지 않고도 아는 것이 낫다. */
+        renderSummaryTabs({
+            rawmtrl: rawmtrlText,
+            allergens: Array.from(allergenSet),
+            gmo: Array.from(gmoSet)
+        });
 
         /* 접어 뒀을 때 보이는 한 줄.
            요약은 표를 고치는 내내 봐야 하는 것이라, 접혀 있어도 알레르기가

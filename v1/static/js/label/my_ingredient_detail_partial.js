@@ -683,6 +683,8 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
             if (saveBtn) {
                 setSaveBtn('ok', '저장했습니다');
                 setTimeout(resetSaveBtn, 1500);
+                // 단추 글자만 바뀌면 방금 고친 칸을 보고 있던 사람은 못 본다
+                if (window.showSaved) window.showSaved('저장했습니다');
             }
 
             // ── localStorage 동기화 알림 저장 ──────────────────────────

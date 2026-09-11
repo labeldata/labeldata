@@ -2295,7 +2295,7 @@ window.addEventListener('message', function(event) {
 
     // BOM 저장 완료
     if (event.data.type === 'bomSaved') {
-        showSnackbar(event.data.message || '저장되었습니다.', 'success');
+        showSaved(event.data.message || '저장했습니다');
         showSaveStatusMsg();
         // ── localStorage 동기화 알림 저장 ──
         try {
@@ -2319,7 +2319,7 @@ window.addEventListener('message', function(event) {
 
     // 영양성분 저장 완료
     if (event.data.type === 'nutritionSaved') {
-        showSnackbar(event.data.message || '영양성분이 저장되었습니다.', 'success');
+        showSaved(event.data.message || '영양성분을 저장했습니다');
         showSaveStatusMsg();
         return;
     }
@@ -3595,7 +3595,12 @@ function saveBasicInfo() {
 }
 
 // 상단 저장 버튼 옆 '저장되었습니다' 메시지를 잠깐 표시 후 자동 소멸
+//
+// 단추 옆 배지는 **그 자리를 보고 있는 사람**을 위한 것이라 남긴다. 다만
+// 저장 단추는 패널 머리에 있고 사용자의 눈은 방금 고친 칸에 있다 — 긴 폼에서
+// 이 배지는 화면 밖일 때가 많다. 가운데에서도 한 번 말한다.
 function showSaveStatusMsg() {
+    if (window.showSaved) window.showSaved('저장했습니다');
     const el = document.getElementById('save-status');
     if (!el) return;
     el.style.opacity = '1';

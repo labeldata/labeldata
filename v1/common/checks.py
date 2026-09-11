@@ -131,6 +131,9 @@ _OWN_SIZED_BUTTONS = frozenset({
     # 배합 표의 행 머리 단추. 행 머리는 높이 22px·너비 54px 라 공용 단추가
     # 들어가지 않는다 — 표 자체가 정하는 크기다.
     'bom-rowbtn',
+    # 배합 요약의 탭 머리. 탭은 아래 테두리로 고른 것을 드러내는 것이라
+    # 공용 단추의 배경·테두리·모서리가 모두 방해가 된다 — dr-tab-btn 과 같다.
+    'bsum-tab',
     'dr-tab-btn', 'gmo-btn', 'panel-toggle-btn', 'product-quick-text-btn',
     'quick-allergen-btn', 'side-panel-toggle', 'summary-type-btn',
     # 부적합·처분 알림

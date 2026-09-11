@@ -222,6 +222,15 @@
       <button onclick="hideSnackbar()" style="background:none;border:none;color:#90caf9;
         font-size:.8rem;font-weight:600;cursor:pointer;padding:0;flex-shrink:0;letter-spacing:.05em;">닫기</button>
     </div>
+    {% comment %}
+      저장했다는 말. 화면 가운데에서 크게, 그러나 막지 않고 잠깐.
+      자세한 까닭은 아래 showSaved() 주석에 있다.
+    {% endcomment %}
+    <div id="v2Saved" role="status" aria-live="polite">
+      <i class="bi bi-check-lg" aria-hidden="true"></i>
+      <span id="v2SavedMsg"></span>
+    </div>
+
     <script>
     (function(){
       let _t = null;
@@ -243,6 +252,40 @@
         var dur = (type === 'error' || type === 'warning') ? 6000 : 4000;
         _t = setTimeout(window.hideSnackbar, dur);
       };
+      /* ── 저장했다는 말은 **눈에 닿는 자리**에서 한다 ──────────────
+       *
+       * 스낵바는 화면 맨 아래 가운데에 4 초 뜬다. 그런데 저장 단추는 대개
+       * 패널 머리(위쪽)에 있어서, 누른 자리와 답이 나오는 자리가 화면 양
+       * 끝이다 — 긴 폼에서는 아예 못 본다.
+       *
+       * 저장은 **사용자가 답을 기다리는 유일한 순간**이다. 그 하나만 화면
+       * 가운데에서 크게 말한다. 다른 알림까지 가운데로 옮기면 곧 성가신 것이
+       * 되고, 성가신 것은 읽히지 않는다.
+       *
+       * 막지 않는다 — pointer-events:none 이라 뒤를 그대로 누를 수 있고
+       * 1.4 초 뒤 스스로 사라진다. 확인을 누르게 하는 alert() 은 저장처럼
+       * 자주 하는 일에 쓸 물건이 아니다.
+       *
+       * 예전에는 저장 알림이 다섯 갈래였다 — 스낵바 · showToast · alert() ·
+       * 단추 옆 작은 배지 · 전용 오버레이. 같은 일에 다섯 모습이면 사용자는
+       * 매번 다시 배운다.
+       */
+      let _st = null;
+      window.showSaved = function(message) {
+        var el = document.getElementById('v2Saved');
+        var msg = document.getElementById('v2SavedMsg');
+        if (!el || !msg) {                       // 이 껍데기를 안 쓰는 화면
+          if (window.showSnackbar) window.showSnackbar(message || '저장했습니다', 'success');
+          return;
+        }
+        if (_st) { clearTimeout(_st); _st = null; }
+        msg.textContent = message || '저장했습니다';
+        el.classList.remove('saved-show');
+        void el.offsetWidth;                     // 연달아 눌러도 다시 뜬다
+        el.classList.add('saved-show');
+        _st = setTimeout(function () { el.classList.remove('saved-show'); }, 1400);
+      };
+
       window.hideSnackbar = function() {
         var el = document.getElementById('v2Snackbar');
         if (el) el.classList.remove('snack-show','snack-error','snack-warning','snack-info');
