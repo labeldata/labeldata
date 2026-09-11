@@ -1,6 +1,8 @@
 ﻿from django.shortcuts import render, redirect
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
 from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
+
+from v1.common.guest import create_guest, is_guest
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -357,14 +359,23 @@ def verify_email(request):
 def login_view(request):
     """로그인 (이메일 인증된 계정만 허용, Guest 로그인 지원)"""
     if request.method == 'POST':
-        # Guest 로그인 처리
+        # Guest 로그인 — **방문마다 새 계정을 내준다.**
+        #
+        # 예전에는 계정 하나(guest@labeasylabel.com)를 모두가 같이 썼다. 그래서
+        # A 가 만든 제품을 B 가 보고 그 위에 덮어썼다. 홍보를 하면 첫 화면이
+        # 남의 실습 데이터로 채워진다.
+        #
+        # 저마다 제 계정이면 이미 있는 소유권 규칙이 그대로 일한다 — 게스트를
+        # 위해 따로 거르는 코드를 심을 필요가 없다.
         if request.POST.get('guest_login') == '1':
-            email = 'guest@labeasylabel.com'
-            password = 'rptmxmfhrmdls1!'
-        else:
-            email = request.POST.get('username', '').strip()
-            password = request.POST.get('password')
-        
+            guest = create_guest()
+            login(request, guest,
+                  backend='django.contrib.auth.backends.ModelBackend')
+            return redirect('main:home')
+
+        email = request.POST.get('username', '').strip()
+        password = request.POST.get('password')
+
         # 먼저 사용자 존재 여부 및 비밀번호 확인
         user = authenticate(request, username=email, password=password)
         
@@ -498,7 +509,7 @@ def signup_done_view(request):
 def change_password(request):
     """비밀번호 변경"""
     # Guest 사용자는 비밀번호 변경 불가
-    if request.user.email == 'guest@labeasylabel.com':
+    if is_guest(request.user):
         messages.error(request, 'Guest 계정은 비밀번호를 변경할 수 없습니다.')
         return redirect('main:home')
     
@@ -521,10 +532,12 @@ def user_profile(request):
     """내 정보 수정 — 회사 정보 + 고정 서류 관리"""
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
     documents = CompanyDocument.objects.filter(user=request.user)
-    is_guest = request.user.email == 'guest@labeasylabel.com'
+    # 판정은 한 곳에서만 한다. 게스트가 방문마다 다른 계정이 되면서
+    # 이메일 비교는 늘 거짓이 됐다 — 그러면 게스트가 정보를 고칠 수 있다.
+    guest = is_guest(request.user)
 
     if request.method == 'POST':
-        if is_guest:
+        if guest:
             messages.error(request, 'Guest 계정은 정보를 수정할 수 없습니다.')
             return redirect('user_management:user_profile')
 
@@ -565,7 +578,7 @@ def user_profile(request):
                 messages.error(request, '서류 구분과 파일을 모두 선택해주세요.')
 
         elif action == 'change_password':
-            if is_guest:
+            if guest:
                 messages.error(request, 'Guest 계정은 비밀번호를 변경할 수 없습니다.')
             else:
                 form = PasswordChangeForm(request.user, request.POST)
@@ -608,7 +621,7 @@ def user_profile(request):
         'doc_type_choices': doc_type_choices,
         'product_doc_types': product_doc_types,
         'pw_form': pw_form,
-        'is_guest': is_guest,
+        'is_guest': guest,
         'alert_rules': unique_alert_rules,
         'quota_all': quota.usage_all(request.user),
         'quota_storage': quota.usage(request.user, 'storage'),

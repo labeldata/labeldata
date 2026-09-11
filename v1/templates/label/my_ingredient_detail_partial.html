@@ -417,7 +417,7 @@
         <div class="panel-actions">
             <button type="button" class="panel-btn" id="closeBtn">입력 초기화</button>
             {% if not read_only %}
-            {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="panel-btn danger" id="deleteBtn"><i class="bi bi-trash"></i> 삭제</button>{% endif %}
+            {% if mode == 'edit' and not is_guest %}<button type="button" class="panel-btn danger" id="deleteBtn"><i class="bi bi-trash"></i> 삭제</button>{% endif %}
             <button type="submit" form="ingredientForm" class="panel-btn primary" id="ingSaveBtn"><i class="bi bi-check-lg"></i> <span id="ingSaveLabel">저장</span></button>
             {% endif %}
         </div>

@@ -99,7 +99,7 @@
                 <i class="bi bi-arrow-left-right me-1" style="font-size:0.85rem;"></i>홈 전환
             </a>
             {% if user.is_authenticated %}
-                {% if user.email == 'guest@labeasylabel.com' %}
+                {% if is_guest %}
                     <span class="text-white me-3" id="username-display" title="Guest 계정은 비밀번호 변경이 불가능합니다"></span>
                 {% else %}
                     <a href="{% url 'user_management:change_password' %}" class="text-white me-3 text-decoration-none" id="username-display" title="비밀번호 변경"></a>
@@ -124,19 +124,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (usernameDisplay) {
         const userEmail = '{{ user.email|escapejs }}';
         const isStaff = {{ user.is_staff|yesno:"true,false" }};
-        
-        if (userEmail) {
+        /* 둘러보는 사람인지는 **서버가 정한다.** 예전에는 이메일 문자열을
+           여기서 견줬는데, 게스트가 방문마다 다른 계정이 되면서 그 비교가
+           거짓이 된다. 게다가 게스트에게는 보낼 주소가 없어 이메일이 비어
+           있다 — 그러면 이름 자리가 통째로 빈칸이 됐다. */
+        const isGuest = {{ is_guest|yesno:"true,false" }};
+
+        if (isGuest) {
+            usernameDisplay.textContent = '둘러보는 중';
+            usernameDisplay.classList.add('guest-user');
+        } else if (userEmail) {
             // 관리자인 경우 "관리자"로 표시
             if (isStaff) {
                 usernameDisplay.textContent = '관리자님';
             } else {
                 const username = userEmail.split('@')[0];
                 usernameDisplay.textContent = username + '님';
-            }
-            
-            // Guest 사용자인 경우 특별 처리
-            if (userEmail === 'guest@labeasylabel.com') {
-                usernameDisplay.classList.add('guest-user');
             }
         }
     }
