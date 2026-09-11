@@ -1669,3 +1669,44 @@ html.v2-max .v2-max-exit { display: flex; }
     background: var(--ez-info, #1a73e8);
     color:      #ffffff;
 }
+
+/* -------------------------
+   저장했다는 말 — showSaved(message)
+   스낵바는 화면 맨 아래 가운데에 뜨는데, 저장 단추는 대개 패널 머리(위쪽)에
+   있다. 누른 자리와 답이 나오는 자리가 화면 양 끝이라 긴 폼에서는 못 본다.
+   저장은 사용자가 답을 기다리는 유일한 순간이라 그것만 가운데에서 말한다.
+   ------------------------- */
+#v2Saved {
+    position: fixed;
+    top: 38%;
+    left: 50%;
+    z-index: 10001;                 /* 스낵바(10000)보다 위 */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 26px;
+    background: rgba(32, 33, 36, .93);
+    color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .28);
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    /* **막지 않는다.** 뒤를 그대로 누를 수 있어야 한다 */
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.94);
+    transition: opacity .16s ease-out, transform .16s ease-out;
+}
+#v2Saved.saved-show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+#v2Saved i {
+    font-size: 20px;
+    color: #81c995;                 /* 옅은 바탕이 아니라 검은 바탕 위다 */
+}
+@media (prefers-reduced-motion: reduce) {
+    #v2Saved { transition: opacity .16s ease-out; transform: translate(-50%, -50%); }
+    #v2Saved.saved-show { transform: translate(-50%, -50%); }
+}

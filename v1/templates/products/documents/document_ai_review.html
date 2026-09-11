@@ -351,7 +351,8 @@ async function saveExtracted() {
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
     body: JSON.stringify({ extracted_data: extracted }),
   });
-  if (res.ok) showToast('저장되었습니다.', 'success');
+  if (res.ok) { if (window.showSaved) showSaved('저장했습니다');
+                else showToast('저장되었습니다.', 'success'); }
   else showToast('저장 실패', 'danger');
   cancelEditMode();
 }

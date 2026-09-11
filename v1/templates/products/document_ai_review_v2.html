@@ -448,7 +448,7 @@ document.getElementById('aiReviewForm')?.addEventListener('submit', function(e) 
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            alert('저장되었습니다');
+            if (window.showSaved) showSaved('저장했습니다'); else alert('저장되었습니다');
             location.reload();
         } else {
             alert('저장 실패: ' + (data.message || '오류'));

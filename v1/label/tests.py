@@ -15527,3 +15527,94 @@ class 접은_뒤에는_높이를_다시_잰다(TestCase):
         body = h[h.index('function applyExtraFold'):]
         body = body[:body.index('\n}')]
         self.assertIn('refreshDimensions()', body)
+
+
+class 저장했다는_말은_눈에_닿는_자리에서_한다(TestCase):
+    """
+    스낵바는 화면 **맨 아래 가운데**에 4 초 뜬다. 그런데 저장 단추는 대개 패널
+    머리(위쪽)에 있어서, 누른 자리와 답이 나오는 자리가 화면 양 끝이다 — 긴
+    폼에서는 아예 못 본다.
+
+    그리고 저장 알림이 **다섯 갈래**였다.
+
+        스낵바 · showToast · alert() · 단추 옆 작은 배지 · 전용 오버레이
+
+    같은 일에 다섯 모습이면 사용자는 매번 다시 배운다.
+    """
+
+    def base(self):
+        import io
+        return io.open('v1/templates/base_v2.html', encoding='utf-8').read()
+
+    def css(self):
+        import io
+        return io.open('v1/static/css/products_common.css', encoding='utf-8').read()
+
+    def test_한_자리에서_말한다(self):
+        h = self.base()
+        self.assertIn('window.showSaved = function', h)
+        self.assertIn('id="v2Saved"', h)
+
+    def test_화면_가운데에_뜬다(self):
+        css = self.css()
+        body = css[css.index('#v2Saved {'):]
+        body = body[:body.index('}')]
+        self.assertIn('position: fixed', body)
+        self.assertIn('top: 38%', body)
+        self.assertIn('translate(-50%, -50%)', body)
+
+    def test_막지_않는다(self):
+        """
+        확인을 누르게 하는 alert() 은 저장처럼 자주 하는 일에 쓸 물건이 아니다.
+        """
+        css = self.css()
+        body = css[css.index('#v2Saved {'):]
+        body = body[:body.index('}')]
+        self.assertIn('pointer-events: none', body)
+        h = self.base()
+        fn = h[h.index('window.showSaved = function'):]
+        fn = fn[:fn.index('\n      };')]
+        self.assertIn('setTimeout', fn)          # 스스로 사라진다
+
+    def test_연달아_눌러도_다시_뜬다(self):
+        h = self.base()
+        fn = h[h.index('window.showSaved = function'):]
+        fn = fn[:fn.index('\n      };')]
+        self.assertIn('void el.offsetWidth', fn)
+
+    def test_껍데기가_없는_화면에서도_말은_한다(self):
+        """base_v2 를 안 쓰는 화면이 있다. 조용히 아무 말도 안 하면 안 된다."""
+        h = self.base()
+        fn = h[h.index('window.showSaved = function'):]
+        fn = fn[:fn.index('\n      };')]
+        self.assertIn('window.showSnackbar', fn)
+
+    def test_다른_알림까지_가운데로_옮기지_않았다(self):
+        """
+        저장은 사용자가 답을 기다리는 유일한 순간이다. 다른 알림까지 가운데로
+        옮기면 곧 성가신 것이 되고, 성가신 것은 읽히지 않는다.
+        """
+        css = self.css()
+        snack = css[css.index('#v2Snackbar.snack-show'):]
+        snack = snack[:snack.index('\n\n')]
+        self.assertIn('translateX(-50%)', snack)   # 스낵바는 그대로 아래
+
+    def test_저장_경로들이_이것을_쓴다(self):
+        import io
+        for path, needle in (
+            ('v1/templates/products/nutrition_editor.html', 'showSaved('),
+            ('v1/templates/products/product_detail.html', 'window.showSaved('),
+            ('v1/static/js/label/my_ingredient_detail_partial.js', 'window.showSaved('),
+            ('v1/templates/products/document_ai_review_v2.html', 'showSaved('),
+        ):
+            self.assertIn(needle, io.open(path, encoding='utf-8').read(), path)
+
+    def test_저장에_alert_을_쓰지_않는다(self):
+        import io
+        for path in ('v1/templates/products/document_ai_review.html',
+                     'v1/templates/products/document_ai_review_v2.html'):
+            text = io.open(path, encoding='utf-8').read()
+            for line in text.split(chr(10)):
+                if 'alert(' in line and '저장되었습니다' in line:
+                    # 껍데기가 없을 때를 받치는 자리만 남아 있어야 한다
+                    self.assertIn('window.showSaved', line, path)
