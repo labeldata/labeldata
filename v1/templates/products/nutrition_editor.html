@@ -913,11 +913,21 @@ function applyExtraFold() {
      * 사라진다. 펴면 원래대로 되돌린다. */
     const box = document.getElementById('grid-container');
     if (box) {
-        const shown = ALL_NUTRIENTS.length - hide.length;
         if (hide.length) {
-            const ROW = 22, HEAD = 30, EDGE = 2;
-            box.style.flex = '0 0 auto';
-            box.style.height = (shown * ROW + HEAD + EDGE) + 'px';
+            /* **재서 쓴다. 셈하지 않는다.**
+             *
+             * 앞서 `줄수 × 22 + 머리글 30` 으로 셈했다가 또 잘렸다. rowHeights
+             * 는 우리가 바라는 값이고 실제로 그려진 높이가 아니다 — 테두리·
+             * 글꼴·줄바꿈이 붙으면 더 커진다. 짐작한 높이가 실제보다 작으면
+             * 마지막 줄(나트륨)이 그만큼 잘린다.
+             *
+             * 그려진 것을 그대로 잰다. 표가 아직 안 그려졌으면 아무것도 하지
+             * 않는다 — 잘못 잰 값으로 못 박느니 원래대로 두는 편이 낫다. */
+            const core = box.querySelector('.ht_master .htCore');
+            if (core && core.offsetHeight > 0) {
+                box.style.flex = '0 0 auto';
+                box.style.height = (core.offsetHeight + 4) + 'px';   // 테두리
+            }
         } else {
             box.style.flex = '';
             box.style.height = '';
