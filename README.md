@@ -23,28 +23,38 @@ python manage.py collectstatic --noinput     # 정적 파일이 바뀌었으면 
 
 ## 문서
 
-작업 문서는 **저장소에 넣지 않는다.** 서버가 `main` 을 그대로 받아 가는 방식
-이라, 계획·현황 문서까지 운영 서버에 실릴 이유가 없다. 개발 PC 에만 둔다
-(`.gitignore` 에 이름이 적혀 있다).
+작업 문서는 **저장소에 둔다.** 예전에는 "운영 서버가 main 을 그대로 받아 가니
+계획 문서까지 실릴 이유가 없다" 며 개발 PC 로 내렸는데(2026-09-05), 그렇게 내린
+넷이 **그대로 사라졌다** — 개발 PC 에도 없고 git 이력에만 남았다.
+
+    DEPLOY.md 495줄 · LABEL_WORKFLOW_PLAN.md 291줄
+    OCR_UPGRADE_PLAN.md 1,649줄 · LAW_MONITOR_INTEGRATION_PLAN.md 562줄
+
+문서가 운영 서버에 몇 킬로바이트 실리는 것보다 **문서가 없어지는 것이 훨씬
+비싸다.** 2026-09-11 에 정책을 되돌렸다.
 
 | 문서 | 언제 보나 |
 |---|---|
-| `PROJECT_DESIGN.md` | 시스템 전체 구조. 앱이 어떻게 나뉘고 무엇이 어디 있는지 |
-| `LABEL_WORKFLOW_PLAN.md` | 표시사항 업무 흐름 — 개선 항목, 남은 것, 작업 기록 |
-| `OCR_UPGRADE_PLAN.md` | **사진·문서 판독(OCR/VLM) 의 유일한 기준.** 방식·측정 기록·다음 작업 |
-| `DEPLOY.md` | 서버 운영 — 배포 절차, 정기 배치, 빠뜨렸을 때의 증상 |
-| `LAW_MONITOR_INTEGRATION_PLAN.md` | 법령 개정 모니터링 이식 계획 (**미착수**) |
-| `REFACTORING_PLAN.md` | 프런트엔드 리팩토링 계획 (Phase 4 JS **미착수**) |
+| `IMPROVEMENT_PLAN.md` | **기능 개선의 유일한 기준.** 끝난 것·남은 것·안 하기로 한 것 |
+| `README.md` | 이 파일. 어떻게 돌리고 어떻게 올리나 |
 
-옛 문서는 `git log --follow -- <파일명>` 으로 꺼낼 수 있다. 저장소에서 뺀
-날까지의 내용이 이력에 남아 있다 — `LABEL_IMPROVEMENT_STATUS.md`(2026-09-05
-닫음, 살아 있던 항목은 `LABEL_WORKFLOW_PLAN.md` 로 옮김),
-`ocr_system_design.md`(`OCR_UPGRADE_PLAN.md` 부록 A).
+옛 문서는 `git log --follow -- <파일명>` 으로 꺼낸다. 저장소에서 뺀 날까지의
+내용이 이력에 남아 있다.
+
+| 없어진 문서 | 어디로 |
+|---|---|
+| `NUTRITION_UX_PLAN.md` | `IMPROVEMENT_PLAN.md` 1·2·5·6 장 |
+| `REGULATORY_ALERT_PIPELINE.md` | `IMPROVEMENT_PLAN.md` 4 장 |
+| `FOOD_CATEGORY_REFACTORING_DESIGN.md` | **채택되지 않았다.** 3 장에 까닭만 남겼다 |
+| `MENU_ANALYSIS.md` | 폐기 — 적혀 있던 "미수정" 버그가 이미 고쳐져 있었다 |
+| `REGULATORY_SYSTEM_ANALYSIS.md` | 폐기 — 2025-07 기준. 4 장이 대신한다 |
+| `LABEL_IMPROVEMENT_STATUS.md` | 2026-09-05 닫음 |
+| `ocr_system_design.md` | 미채택 설계안 |
 
 ### 문서를 늘리기 전에
 
-같은 주제의 문서가 둘이 되면 **어느 날 한쪽만 고쳐진다.** 실제로 그랬다 —
-판독 관련 문서가 둘이었고, 채택하지 않은 설계안이 1,068줄로 남아 현재 기준인
-척했다. 표시사항 쪽도 현황 문서와 계획 문서가 갈려 있다가 한쪽만 늙었다.
+같은 주제의 문서가 둘이 되면 **어느 날 한쪽만 고쳐진다.** 실제로 세 번 그랬다 —
+판독 문서가 둘이었고(미채택 설계안 1,068줄이 현재 기준인 척했다), 표시사항 쪽이
+현황과 계획으로 갈렸고, 부적합·처분 문서가 2025-07 판과 2026-09 판 둘이었다.
 
-새 문서를 만들기 전에 **위 여섯 개 중 어디에 들어갈 내용인지** 먼저 보라.
+새 문서를 만들기 전에 **`IMPROVEMENT_PLAN.md` 에 들어갈 내용인지** 먼저 보라.
