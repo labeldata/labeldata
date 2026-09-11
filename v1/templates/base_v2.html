@@ -85,67 +85,40 @@
                 </a>
             </div>
 
-            {% comment %}
-              [튜토리얼] 을 여기 둔다.
-
-              처음에는 화면마다 머리에 붙였는데 **찾지 못했다.** 저장·삭제·공유
-              같은 **행동 단추들 사이**에 섞여 있었기 때문이다 — 도움을 찾는
-              눈이 가는 자리가 아니고, 그 줄은 이미 단추가 넷이었다.
-
-              사이드바는 **어느 화면에서나 같은 자리**다. 한 번 익히면 전부
-              통하고, 나중에 BOM·검증에 걸음을 더할 때 붙일 자리를 새로 고민할
-              필요도 없다.
-
-              '새로 만들기' 와 한 줄에 둔다. 세로로 쌓으면 메뉴가 한 줄 길어져
-              아래 항목이 그만큼 밀린다 — 둘 다 자주 쓰는 것도 아니다.
-              접힌 사이드바(nav-label 이 사라지는 상태)에서는 아이콘만 남는다.
-            {% endcomment %}
-            <div class="px-2 d-flex gap-2 align-items-stretch">
-                <a class="btn btn-white shadow-sm rounded-pill py-2 px-3 flex-grow-1 text-start border d-flex align-items-center gap-2" href="{% url 'products:product_create' %}">
+            <div class="px-2">
+                <a class="btn btn-white shadow-sm rounded-pill py-2 px-3 w-100 text-start border d-flex align-items-center gap-2" href="{% url 'products:product_create' %}">
                     <i class="bi bi-plus-lg text-primary" style="flex-shrink:0;"></i><span class="nav-label fw-medium">새로 만들기</span>
                 </a>
-                {% comment %}
-                  이 화면에 걸음이 없으면 스스로 숨는다(엔진이 .ezc-steps 를
-                  못 찾으면 hidden 을 붙인다). 눌러도 아무 일이 없는 단추를
-                  어느 화면에나 띄워 두면 곧 안 보게 된다.
-                {% endcomment %}
-                <button type="button" id="ezCoachNavBtn"
-                        class="btn btn-white shadow-sm rounded-pill py-2 px-3 border d-flex align-items-center justify-content-center flex-shrink-0"
-                        title="이 화면 사용법을 짚어 드립니다" hidden
-                        onclick="if (window.ezCoach) ezCoach.start();">
-                    <i class="bi bi-question-circle text-primary"></i>
-                    <span class="nav-label ms-2 fw-medium">튜토리얼</span>
-                </button>
             </div>
 
             <div class="nav flex-column v2-sidebar-nav">
-                <a href="{% url 'products:product_explorer' %}" class="nav-link {% if request.resolver_match.url_name == 'product_explorer' or request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_detail' or request.resolver_match.url_name == 'product_detail_new' %}{% if request.GET.from != 'collab' %}active{% endif %}{% endif %}">
+                <a href="{% url 'products:product_explorer' %}" class="nav-link {% if request.resolver_match.url_name == 'product_explorer' or request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_detail' or request.resolver_match.url_name == 'product_detail_new' %}{% if request.GET.from != 'collab' %}active{% endif %}{% endif %}" data-nav="products">
                     <i class="bi bi-hdd-stack" style="flex-shrink:0;"></i><span class="nav-label">제품 관리</span>
                 </a>
-                <a href="{% url 'label:my_ingredient_list_combined' %}" class="nav-link {% if request.resolver_match.url_name == 'my_ingredient_list_combined' %}active{% endif %}">
+                <a href="{% url 'label:my_ingredient_list_combined' %}" class="nav-link {% if request.resolver_match.url_name == 'my_ingredient_list_combined' %}active{% endif %}" data-nav="ingredients">
                     <i class="bi bi-box-seam" style="flex-shrink:0;"></i><span class="nav-label">원료 관리</span>
                 </a>
                 <div class="border-top my-3"></div>
 
-                <a href="{% url 'products:inbox' %}" class="nav-link {% if request.resolver_match.url_name == 'inbox' or request.GET.from == 'collab' %}active{% endif %}">
+                <a href="{% url 'products:inbox' %}" class="nav-link {% if request.resolver_match.url_name == 'inbox' or request.GET.from == 'collab' %}active{% endif %}" data-nav="collab">
                     <i class="bi bi-people" style="flex-shrink:0;"></i><span class="nav-label">공동 작업</span>
                 </a>
-                <a href="{% url 'products:contacts' %}" class="nav-link {% if request.resolver_match.url_name == 'contacts' or request.resolver_match.url_name == 'doc_requests_dashboard' %}active{% endif %}">
+                <a href="{% url 'products:contacts' %}" class="nav-link {% if request.resolver_match.url_name == 'contacts' or request.resolver_match.url_name == 'doc_requests_dashboard' %}active{% endif %}" data-nav="contacts">
                     <i class="bi bi-person-lines-fill" style="flex-shrink:0;"></i><span class="nav-label">연락처 관리</span>
                 </a>
                 <div class="border-top my-3"></div>
 
                 {# 제품 조회 — 국내/수입은 화면 안 탭으로 전환한다 (메뉴 통합) #}
-                <a href="{% url 'label:food_item_list_domestic' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list_domestic' or request.resolver_match.url_name == 'food_item_list_imported' or request.resolver_match.url_name == 'food_item_list' %}active{% endif %}">
+                <a href="{% url 'label:food_item_list_domestic' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list_domestic' or request.resolver_match.url_name == 'food_item_list_imported' or request.resolver_match.url_name == 'food_item_list' %}active{% endif %}" data-nav="lookup">
                     <i class="bi bi-search" style="flex-shrink:0;"></i><span class="nav-label">제품 조회</span>
                 </a>
-                <a href="{% url 'label:food_additive_search' %}" class="nav-link {% if request.resolver_match.url_name == 'food_additive_search' %}active{% endif %}">
+                <a href="{% url 'label:food_additive_search' %}" class="nav-link {% if request.resolver_match.url_name == 'food_additive_search' %}active{% endif %}" data-nav="additives">
                     <i class="bi bi-database" style="flex-shrink:0;"></i><span class="nav-label">식품첨가물 DB</span>
                 </a>
                 <div class="border-top my-3"></div>
 
                 {# 부적합·처분 알림 #}
-                <a href="{% url 'regulatory:list' %}" class="nav-link position-relative {% if request.resolver_match.namespace == 'regulatory' %}active{% endif %}">
+                <a href="{% url 'regulatory:list' %}" class="nav-link position-relative {% if request.resolver_match.namespace == 'regulatory' %}active{% endif %}" data-nav="regulatory">
                     <i class="bi bi-shield-exclamation" style="flex-shrink:0;"></i><span class="nav-label">부적합·처분 알림</span>
                     {% if regulatory_alert_count > 0 %}
                     <span id="regAlertBadge" class="position-absolute badge rounded-pill bg-danger"
@@ -155,7 +128,7 @@
                     {% endif %}
                 </a>
 
-                <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.namespace == 'board' %}active{% endif %}">
+                <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.namespace == 'board' %}active{% endif %}" data-nav="board">
                     <i class="bi bi-chat-dots" style="flex-shrink:0;"></i><span class="nav-label">게시판</span>
                 </a>
 
@@ -249,6 +222,58 @@
       <button onclick="hideSnackbar()" style="background:none;border:none;color:#90caf9;
         font-size:.8rem;font-weight:600;cursor:pointer;padding:0;flex-shrink:0;letter-spacing:.05em;">닫기</button>
     </div>
+    {% comment %}
+      도움말 — 오른쪽 아래 동그란 단추. 엔진이 여기 있어야 **어느 화면에서나**
+      뜬다. 예전에는 화면 둘에만 include 해 두어 나머지 메뉴에서는 아예 없었다.
+    {% endcomment %}
+    {% include "includes/_coachmark.html" %}
+
+    {% comment %}
+      **메뉴 둘러보기** — 어느 화면에서나 같은 걸음이라 여기 한 번만 적는다.
+
+      "이 서비스에 뭐가 있지" 에 답한다. 화면별 안내(detail)와 묻는 것이 달라서
+      갈래를 나눴다 — 하나로 두면 둘 다 못 한다. 전체 투어는 지금 막힌 자리를
+      안 짚고, 화면별 안내는 처음 온 사람에게 "그래서 이게 뭐 하는 서비스인데"
+      를 안 알려 준다.
+
+      사이드바가 접혀 있으면 글자가 사라지지만 아이콘은 남으므로 짚을 수 있다.
+      로그인 안 한 화면에는 사이드바가 없고, 그때는 걸음이 하나도 안 잡혀
+      단추부터 안 뜬다(엔진의 usable 참고).
+    {% endcomment %}
+    <div class="ezc-steps" data-coach-scope="tour" data-coach-key="menu-tour" hidden>
+      <div data-sel="[data-nav='products']" data-title="제품 관리 — 여기서 시작합니다">
+        라벨 하나가 제품 하나입니다. 만들고, 배합을 넣고, 검증하고, 문서를
+        모아 두는 일이 <b>제품 안에서</b> 다 일어납니다.
+      </div>
+      <div data-sel="[data-nav='ingredients']" data-title="원료 관리 — 한 번 적고 여러 제품에서 씁니다">
+        원료의 표시명·알레르기·영양성분을 여기서 한 번 정해 두면, 그 원료를 쓴
+        <b>모든 제품</b>이 같은 값을 씁니다. 제품마다 다시 적지 않습니다.
+      </div>
+      <div data-sel="[data-nav='lookup']" data-title="제품 조회 — 남의 라벨을 봅니다">
+        식약처에 신고된 제품을 찾아봅니다. 품목보고번호로 우리 제품 칸을
+        채울 수도 있습니다.
+      </div>
+      <div data-sel="[data-nav='additives']" data-title="식품첨가물 DB — 표시명을 확인합니다">
+        첨가물은 <b>표시하는 이름이 따로</b> 정해져 있습니다. 주용도와 함께
+        여기서 찾습니다.
+      </div>
+      <div data-sel="[data-nav='collab']" data-title="공동 작업 — 받은 것이 여기 쌓입니다">
+        거래처가 보내 준 표시사항·서류가 들어옵니다. 받아서 <b>내 원료로</b>
+        쓸 수 있습니다.
+      </div>
+      <div data-sel="[data-nav='contacts']" data-title="연락처 관리 — 서류를 청합니다">
+        거래처를 적어 두고 규격서·성적서를 요청합니다. 받은 것은 공동 작업으로
+        들어옵니다.
+      </div>
+      <div data-sel="[data-nav='regulatory']" data-title="부적합·처분 알림 — 내 원료가 걸리면 알려 줍니다">
+        발표되는 부적합·행정처분을 <b>내가 쓰는 원료와 대조</b>해 알려 줍니다.
+        원료 관리에 적어 둔 것이 많을수록 정확해집니다.
+      </div>
+      <div data-sel="[data-nav='board']" data-title="게시판">
+        공지와 묻고 답하기입니다.
+      </div>
+    </div>
+
     {% comment %}
       저장했다는 말. 화면 가운데에서 크게, 그러나 막지 않고 잠깐.
       자세한 까닭은 아래 showSaved() 주석에 있다.

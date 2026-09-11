@@ -4887,49 +4887,81 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         import io
         return io.open('v1/templates/base_v2.html', encoding='utf-8').read()
 
-    def test_들어가는_자리는_사이드바_한_곳이다(self):
+    def test_들어가는_자리는_떠_있는_단추다(self):
         """
-        처음에는 화면마다 머리에 붙였는데 **찾지 못했다.** 저장·삭제·공유 같은
-        행동 단추들 사이에 섞여 있었기 때문이다 — 도움을 찾는 눈이 가는 자리가
-        아니고, 그 줄은 이미 단추가 넷이었다.
+        자리를 두 번 옮겼다.
 
-        사이드바는 어느 화면에서나 같은 자리다. 한 번 익히면 전부 통한다.
+            ① 화면 머리의 행동 단추들 사이  -> 못 찾았다. 저장·삭제·공유 옆이라
+                                              도움을 찾는 눈이 가는 자리가 아니다
+            ② 사이드바의 '새로 만들기' 옆   -> 사이드바는 **접힌다**(아이콘만
+                                              남는다). 게다가 제품 상세는
+                                              사이드바를 접고 시작한다
+
+        오른쪽 아래 동그란 단추는 어느 화면에서나 같은 자리이고 접히지 않는다.
         """
-        base = self.base()
-        self.assertIn('id="ezCoachNavBtn"', base)
-        self.assertIn('ezCoach.start()', base)
-        # 같은 일을 하는 단추가 둘이면 어느 것을 눌러야 하는지 묻게 된다
+        engine = self.engine
+        self.assertIn("fab.className = 'ezc-fab'", engine)
+        self.assertIn('.ezc-fab', engine)
+        self.assertIn('position: fixed', engine[engine.index('.ezc-fab {'):])
+        # 화면이 제 단추를 따로 만들지 않는다 — 같은 일에 단추가 둘이면 묻게 된다
         for html in (self.product, self.ingredient):
             self.assertNotIn('ezCoach.start()', html)
+        self.assertNotIn('ezCoachNavBtn', self.base())
 
-    def test_새로_만들기와_한_줄에_둔다(self):
-        """세로로 쌓으면 메뉴가 한 줄 길어져 아래 항목이 그만큼 밀린다."""
-        base = self.base()
-        at = base.index('id="ezCoachNavBtn"')
-        head = base.rindex('<div class="px-2', 0, at)
-        self.assertIn('d-flex', base[head:at])
-        self.assertIn('새로 만들기', base[head:at])
-
-    def test_걸음이_없는_화면에서는_숨는다(self):
+    def test_묻는_것이_둘이라_갈래도_둘이다(self):
         """
-        사이드바는 어느 화면에나 있다. 그냥 두면 걸음을 아직 안 적은 화면에서도
-        단추가 보이고, 눌러도 아무 일이 없는 단추를 늘 띄워 두면 사용자는 곧 그
-        단추를 안 보게 된다.
+        "이 서비스에 뭐가 있지" 와 "여기서 뭘 하지" 는 다른 물음이다. 하나로
+        두면 둘 다 못 한다 — 전체 투어는 지금 막힌 자리를 안 짚고, 화면별
+        안내는 처음 온 사람에게 이게 뭐 하는 서비스인지를 안 알려 준다.
         """
-        base = self.base()
-        at = base.index('id="ezCoachNavBtn"')
-        self.assertIn('hidden', base[at:at + 400])
         engine = self.engine
-        self.assertIn('function showNavButton', engine)
-        self.assertIn('btn.hidden = !holder()', engine)
+        self.assertIn("usable('tour')", engine)
+        self.assertIn("usable('detail')", engine)
+        self.assertIn('메뉴 둘러보기', engine)
+        self.assertIn('이 화면 사용법', engine)
 
-    def test_부분만_갈아_끼워도_따라간다(self):
-        """원료 상세는 목록에서 AJAX 로 갈아 끼운다 — 그때 걸음이 오간다."""
-        self.assertIn('MutationObserver', self.engine)
+    def test_메뉴_둘러보기는_한_곳에만_적는다(self):
+        """어느 화면에서나 같은 걸음이다. 화면마다 적으면 곧 갈라진다."""
+        base = self.base()
+        self.assertIn('data-coach-scope="tour"', base)
+        for html in (self.product, self.ingredient):
+            self.assertNotIn('data-coach-scope="tour"', html)
+
+    def test_메뉴를_이름표로_짚는다(self):
+        """
+        href 로 짚으면 주소가 바뀔 때 **조용히** 어긋난다 — 걸음이 사라지고
+        건너뛴 것과 구별이 안 된다.
+        """
+        base = self.base()
+        self.assertIn('data-nav="products"', base)
+        self.assertIn('data-nav="ingredients"', base)
+        tour = base[base.index('data-coach-scope="tour"'):]
+        tour = tour[:tour.index('</div>' + chr(10) + '    </div>')]
+        for key in ('products', 'ingredients', 'lookup', 'additives',
+                    'collab', 'contacts', 'regulatory', 'board'):
+            self.assertIn("data-sel=\"[data-nav='%s']\"" % key, tour, key)
+            self.assertIn('data-nav="%s"' % key, base, key)
+
+    def test_엔진은_모든_화면에_실린다(self):
+        """
+        예전에는 화면 둘에만 include 해 두어 나머지 메뉴에서는 도움말이 아예
+        없었다.
+        """
+        base = self.base()
+        self.assertIn('includes/_coachmark.html', base)
+        for html in (self.product, self.ingredient):
+            self.assertNotIn('includes/_coachmark.html', html)
+
+    def test_갈_곳이_없으면_단추도_없다(self):
+        """
+        눌러도 아무 일이 없는 단추를 어느 화면에나 띄워 두면 곧 안 보게 되고,
+        정작 걸음이 있는 화면에서도 안 누른다.
+        """
+        engine = self.engine
+        self.assertIn("var any = usable('tour') || usable('detail');", engine)
+        self.assertIn('if (!any)', engine)
 
     def test_게스트에게도_보인다(self):
         """게스트는 둘러보러 온 사람이다 — 설명이 가장 필요한 쪽이다."""
-        base = self.base()
-        at = base.index('id="ezCoachNavBtn"')
-        head = base.rindex('<div class="px-2', 0, at)
-        self.assertNotIn('is_guest', base[head:at])
+        engine = self.engine
+        self.assertNotIn('is_guest', engine)
