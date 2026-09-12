@@ -98,6 +98,19 @@
       });
   }
 
+  function post(url, payload) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify(payload)
+    }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success) { alert((d && d.error) || '저장하지 못했습니다'); return false; }
+        flash('저장했습니다');
+        return true;
+      });
+  }
+
   /* 아홉 개를 다 보여 준다.
      앞 다섯 개만 보이던 때는 나트륨이 아홉 번째라 잘렸다. 하필 나트륨이다 —
      기여도 판정에서 가장 자주 막는 성분이고, 상한이 정제소금이라 배합비
@@ -175,6 +188,9 @@
       parts.push('<div class="ing-nut-actions">'
         + '<button type="button" class="panel-btn" data-act="refresh">다시 고르기</button>'
         + '<button type="button" class="panel-btn" data-act="manual">직접 입력</button>'
+        + '<button type="button" class="panel-btn" data-act="spec"'
+        + ' title="영양성분 성적서 사진을 판독해 값을 채웁니다">'
+        + '성적서에서 읽기</button>'
         + '<button type="button" class="panel-btn danger" data-act="clear">지우기</button>'
         + '</div>');
     } else {
@@ -214,6 +230,9 @@
 
       parts.push('<div class="ing-nut-actions">'
         + '<button type="button" class="panel-btn" data-act="manual">직접 입력</button>'
+        + '<button type="button" class="panel-btn" data-act="spec"'
+        + ' title="영양성분 성적서 사진을 판독해 값을 채웁니다">'
+        + '성적서에서 읽기</button>'
         + '<button type="button" class="panel-btn" data-act="negligible"'
         + ' title="배합비가 아주 작아 표시값을 바꾸지 못하는 원료입니다">'
         + '영향 없음으로 두기</button>'
@@ -224,6 +243,83 @@
     parts.push('<span id="ingNutFlash" class="ing-nut-flash" role="status"></span>');
     box.innerHTML = parts.join('');
   }
+
+  var specValues = null, specName = '';
+
+  function specRead(file) {
+    var flash = document.getElementById('ingNutFlash');
+    if (flash) flash.textContent = '성적서를 판독하는 중입니다…';
+
+    var fd = new FormData();
+    fd.append('file', file);
+    fetch(box.dataset.specUrl, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf()},
+      body: fd
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (flash) flash.textContent = '';
+        if (!d || !d.success) {
+          alert((d && d.error) || '판독하지 못했습니다.');
+          return;
+        }
+        /* 기준량을 못 읽으면 값이 비어 온다. **100 으로 가정하지 않는다** —
+           1회 제공량 30g 성적서가 그대로 들어오면 값이 3.3배 낮아지는데
+           터지지 않으니 아무도 모른다. */
+        if (d.error) { alert(d.error); return; }
+        specValues = d.values || {};
+        specName = d.filename || '';
+        drawSpec(d);
+      })
+      .catch(function () {
+        if (flash) flash.textContent = '';
+        alert('판독 중 오류가 발생했습니다.');
+      });
+  }
+
+  function drawSpec(d) {
+    var old = document.getElementById('ingNutSpec');
+    if (old) old.remove();
+
+    var rows = FIELDS.map(function (f) {
+      var v = (d.values || {})[f[0]];
+      return '<tr><th>' + esc(f[1]) + '</th><td>'
+        + (v == null ? '<span class="ing-nut-why">미기재</span>' : esc(String(v)))
+        + '</td></tr>';
+    }).join('');
+
+    var el = document.createElement('div');
+    el.id = 'ingNutSpec';
+    el.className = 'ing-nut-manual';
+    el.innerHTML = ''
+      + '<div class="ing-nut-why">성적서 기준량 '
+      + esc(String(d.basis_amount || '-')) + esc(d.basis_unit || '')
+      + ' 을 <b>100' + esc(d.basis_unit || 'g') + ' 당</b>으로 환산한 값입니다. '
+      + '확인 후 저장하면 출처가 <b>업체 시험성적서(등급 A)</b> 가 됩니다.</div>'
+      + '<table><tbody>' + rows + '</tbody></table>'
+      + '<div class="ing-nut-actions">'
+      + '<button type="button" class="panel-btn primary" data-act="spec-save">저장</button>'
+      + '<button type="button" class="panel-btn" data-act="spec-cancel">취소</button>'
+      + '</div>';
+    box.appendChild(el);
+    el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+  }
+
+  /* 파일 고르개는 화면에 안 보인다. 단추를 누르면 이것이 열린다 —
+     칸을 따로 두면 영양성분 표 옆에 빈 상자가 늘 서 있게 된다. */
+  (function () {
+    var f = document.createElement('input');
+    f.type = 'file';
+    f.id = 'ingNutSpecFile';
+    f.accept = 'image/*';
+    f.style.display = 'none';
+    f.addEventListener('change', function () {
+      if (f.files && f.files[0]) specRead(f.files[0]);
+      f.value = '';            // 같은 파일을 다시 골라도 열리게
+    });
+    box.appendChild(f);
+  })();
 
   box.addEventListener('click', function (ev) {
     var cnd = ev.target.closest('.ing-nut-cand');
@@ -248,6 +344,37 @@
     if (act === 'clear' || act === 'negligible') {
       save({kind: act === 'clear' ? 'clear' : 'negligible'})
         .then(function (ok) { if (ok) { load(); } });
+      return;
+    }
+
+    /* ── 성적서에서 읽기 ─────────────────────────────────────────────
+     *
+     * 원료 영양성분의 출처에는 등급이 있고 **공공 DB 로 채운 값은 영원히 C**
+     * 다. 식약처 DB 의 밀가루는 "일반적인 밀가루" 이지 "우리가 쓰는 그
+     * 밀가루" 가 아니기 때문이다. A 를 만들 수 있는 경로는 성적서뿐이다.
+     *
+     * **파일은 남기지 않는다.** 원료에는 서류를 붙일 곳이 없고(문서함은
+     * 제품에 딸린다), 제품 문서함에 넣으면 **그 원료를 쓰는 다른 제품에서는
+     * 안 보인다.** 무엇을 보고 넣었는지는 파일 이름으로 남긴다.
+     * ───────────────────────────────────────────────────────────── */
+    if (act === 'spec') {
+      var picker = document.getElementById('ingNutSpecFile');
+      if (picker) picker.click();
+      return;
+    }
+
+    if (act === 'spec-save') {
+      if (!specValues) return;
+      post(box.dataset.specSaveUrl,
+           {values: specValues, filename: specName})
+        .then(function (ok) { if (ok) { specValues = null; load(); } });
+      return;
+    }
+
+    if (act === 'spec-cancel') {
+      specValues = null;
+      var sbox = document.getElementById('ingNutSpec');
+      if (sbox) sbox.remove();
       return;
     }
 

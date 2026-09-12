@@ -605,7 +605,9 @@
                         <td colspan="3">
                             <div id="ingNutrition"
                                  data-url="{% url 'label:my_ingredient_nutrition' ingredient_id=ingredient.my_ingredient_id %}"
-                                 data-save-url="{% url 'label:my_ingredient_nutrition_save' ingredient_id=ingredient.my_ingredient_id %}">
+                                 data-save-url="{% url 'label:my_ingredient_nutrition_save' ingredient_id=ingredient.my_ingredient_id %}"
+                                 data-spec-url="{% url 'label:ingredient_spec_nutrition' ingredient_id=ingredient.my_ingredient_id %}"
+                                 data-spec-save-url="{% url 'label:ingredient_spec_nutrition_save' ingredient_id=ingredient.my_ingredient_id %}">
                                 <div class="ing-nut-loading text-muted small">불러오는 중…</div>
                             </div>
                         </td>

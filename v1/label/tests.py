@@ -17526,3 +17526,65 @@ class 다른_곳은_어떻게_적었는가(TestCase):
         self.assertIn('다수는 나와 같게 적었습니다', html)
         self.assertIn('다수는 다르게 적었습니다', html)
         self.assertIn('다수가 옳다는 뜻은 아닙니다', html)
+
+
+class 원료_상세에서도_성적서를_읽는다(TestCase):
+    """
+    서버는 진작 됐는데 **원료 쪽 입구가 없었다.** 값이 들어갈 바로 그 자리에
+    단추가 없으면, 사용자는 그 기능이 있는 줄도 모른다 — 작업 6 에서 배운
+    것과 같다(기능이 없던 게 아니라 묻는 자리가 틀렸다).
+    """
+
+    def panel(self):
+        from pathlib import Path
+        return Path('v1/templates/label/_ingredient_nutrition.html').read_text(
+            encoding='utf-8')
+
+    def detail(self):
+        from pathlib import Path
+        return Path('v1/templates/label/my_ingredient_detail_partial.html').read_text(
+            encoding='utf-8')
+
+    def test_직접_입력_옆에_단추가_있다(self):
+        panel = self.panel()
+        self.assertIn("data-act=\"spec\"", panel)
+        self.assertIn('성적서에서 읽기', panel)
+
+    def test_값이_이미_있어도_다시_읽을_수_있다(self):
+        """
+        성적서는 나중에 온다. 공공 DB 로 채워 둔 C 등급을 A 로 올리는 길이
+        막혀 있으면 안 된다.
+        """
+        panel = self.panel()
+        block = panel[panel.index("data-act=\"refresh\""):]
+        block = block[:block.index("data-act=\"clear\"")]
+        self.assertIn("data-act=\"spec\"", block)
+
+    def test_주소를_화면이_들고_있다(self):
+        detail = self.detail()
+        self.assertIn('data-spec-url=', detail)
+        self.assertIn('data-spec-save-url=', detail)
+
+    def test_기준량을_못_읽으면_멈춘다(self):
+        """
+        1회 제공량 30g 성적서를 100g 으로 가정하면 값이 3.3배 낮아진다.
+        터지지 않으니 아무도 모른다.
+        """
+        panel = self.panel()
+        self.assertIn('if (d.error) { alert(d.error); return; }', panel)
+
+    def test_확인한_뒤에_저장한다(self):
+        """
+        판독이 틀린 값이 A 등급으로 저장되면 가장 나쁘다 — 등급이 높다는 것은
+        "믿어도 된다" 는 뜻인데 그게 거짓이면 아래 모든 판단이 무너진다.
+        """
+        panel = self.panel()
+        self.assertIn("data-act=\"spec-save\"", panel)
+        self.assertIn("data-act=\"spec-cancel\"", panel)
+        # 읽자마자 저장하는 길이 없다
+        self.assertNotIn('specRead(file).then(function () { post(', panel)
+
+    def test_파일_고르개는_숨겨_둔다(self):
+        """칸을 따로 두면 영양성분 표 옆에 빈 상자가 늘 서 있게 된다."""
+        panel = self.panel()
+        self.assertIn("f.style.display = 'none';", panel)
