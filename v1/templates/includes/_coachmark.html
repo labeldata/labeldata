@@ -481,7 +481,7 @@
     bar.className = 'ezc-offer';
     var text = document.createElement('span');
     text.textContent = root.getAttribute('data-coach-offer-text')
-                       || '처음이신가요? 이 화면이 하는 일을 짧게 짚어 드립니다.';
+                       || '처음이신가요? 이 화면의 기능을 간단히 안내합니다.';
     bar.appendChild(text);
     /* **함수를 그대로 넘기면 안 된다.**
      *
@@ -541,7 +541,7 @@
                                 function () { start('tour'); }));
     }
     if (usable('detail')) {
-      menu.appendChild(menuItem('이 화면 사용법', '지금 보고 있는 화면을 짚어 드립니다',
+      menu.appendChild(menuItem('이 화면 사용법', '지금 보고 있는 화면을 안내합니다',
                                 function () { start('detail'); }));
     } else {
       var none = document.createElement('div');

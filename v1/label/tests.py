@@ -8581,7 +8581,7 @@ class RawmtrlBuilderIsWhereTheWorkIsTests(TestCase):
         # 문구를 바꾸려면 BOM 을 고쳐야 한다. 그 길을 여기서 열어 준다.
         self.assertIn('window.goToBomTabForRawmtrl', self.html)
         self.assertIn('data-bs-target="#tab-bom"', self.html)
-        self.assertIn('BOM 탭에서 고치기', self.html)
+        self.assertIn('BOM 탭에서 수정', self.html)      # '고치기' 에서 바꿨다
 
     def test_직접_골라야_할_첨가물을_짚어_준다(self):
         self.assertIn('needs_review', self.html)
@@ -14864,7 +14864,7 @@ class 검증_지적은_심각도로_갈린다(TestCase):
         """
         js = self.js()
         self.assertIn('const blocking =', js)
-        self.assertIn('고쳐야 할 것이', js)
+        self.assertIn('수정할 항목이', js)               # '고쳐야 할 것이' 에서 바꿨다
 
     def test_검사_못_함은_지적이_아니다(self):
         """`_unchecked` 는 자료가 없어 판정 자체를 못 한 것이다."""

@@ -1786,9 +1786,9 @@ function showValidationBlock(newStatus, result) {
     if (requiresReason) {
         titleEl.textContent = '승인 전 확인이 필요합니다';
         leadEl.innerHTML = (blocking
-            ? '고쳐야 할 것이 <b class="text-dark">' + blocking + '건</b> 있습니다. '
+            ? '수정할 항목이 <b class="text-dark">' + blocking + '건</b> 있습니다. '
               + '이대로 승인하면 표시기준 위반이 될 수 있습니다.'
-            : '고쳐야 할 것은 없습니다. 아래는 참고 사항입니다.');
+            : '수정할 항목은 없습니다. 아래는 참고 사항입니다.');
         proceedEl.textContent = '사유 남기고 승인';
     } else {
         titleEl.textContent = '확정 전 확인해 주세요';

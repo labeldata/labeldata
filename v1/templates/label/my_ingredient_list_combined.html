@@ -1537,7 +1537,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var badge = document.getElementById('dupBadge');
       badge.textContent = data.summary.extra;
       badge.classList.add('on');
-      btn.title = '같은 원료가 여러 벌 쌓여 있습니다 — 여분 ' + data.summary.extra + '건';
+      btn.title = '같은 원료가 중복 등록돼 있습니다 — 중복분 ' + data.summary.extra + '건';
     })
     .catch(function () {});
 })();
