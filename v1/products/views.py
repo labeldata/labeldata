@@ -5496,6 +5496,43 @@ def contacts_api_update(request):
 
 @login_required
 @require_POST
+def contacts_api_delete(request):
+    """
+    주소록에서 연락처를 지운다.
+
+    지우는 길이 아예 없었다. 일괄 삭제와 컨텍스트 메뉴 '행 삭제' 는 화면
+    배열에서만 빼서, 새로고침하면 되살아났다. 확인창이 "DB에서 삭제되지
+    않으며" 라고 적어 두긴 했지만, 그러면 오타로 만들어진 연락처를 없앨
+    방법이 없다(@ 만 있으면 즉시 만들어진다).
+
+    **공유 이력은 건드리지 않는다.** ProductShare 를 지우면 그 제품의 권한이
+    날아간다 — 주소록에서 빼는 것과 권한을 빼앗는 것은 다른 일이다. 그래서
+    활성 공유가 있는 이메일은 목록에서 다시 나타난다(_contact_rows 가 합집합
+    이다). 그 사실을 응답으로 알려 준다.
+    """
+    emails = [e.strip().lower() for e in request.POST.getlist('emails') if e.strip()]
+    if not emails:
+        raw = (request.POST.get('emails') or '').strip()
+        emails = [e.strip().lower() for e in raw.split(',') if e.strip()]
+    if not emails:
+        return JsonResponse({'success': False, 'error': '지울 연락처가 없습니다.'}, status=400)
+
+    deleted, _ = UserContact.objects.filter(
+        owner=request.user, email__in=emails).delete()
+
+    still_shared = sorted(
+        ProductShare.objects.filter(
+            Q(label__user_id=request.user) | Q(created_by=request.user)
+        ).filter(
+            recipient_email__in=emails, share_mode='PRIVATE', active_yn=True
+        ).values_list('recipient_email', flat=True).distinct()
+    )
+    return JsonResponse({'success': True, 'deleted': deleted,
+                         'still_shared': still_shared})
+
+
+@login_required
+@require_POST
 def contacts_api_add(request):
     """새 연락처 추가 API – UserContact 테이블에 저장 (이미 있으면 업데이트)"""
     email = request.POST.get('email', '').strip().lower()

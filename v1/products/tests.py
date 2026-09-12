@@ -7924,3 +7924,104 @@ class PermissionChangesAreConfirmedOnceTests(TestCase):
         """예전에는 팔레트 안에서 조금만 끌어도 확인창 없이 공유가 날아갔다."""
         body = self._body('dropPersonToPalette')
         self.assertIn('.dropzone-body .person-card[data-share-id=', body)
+
+
+class ContactRowIdentityIsNotIndexTests(TestCase):
+    """
+    저장이 `allRows[rowIdx]` 로 '변경 전 이메일' 을 정했다. 격자 행 번호를
+    원본 배열 인덱스로 쓴 것인데, 필터를 켜면 격자는 부분집합이고
+    일괄삭제(splice)·행이동 뒤에는 번호가 밀린다.
+
+    그래서 **엉뚱한 거래처의 이메일이 old_email 로 올라가** 그 사람의 공유
+    수신자가 바뀌고 주소록 행이 삭제됐다. 고친 사람은 자기 줄만 손댄 줄 안다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / 'contacts.html').read_text(encoding='utf-8')
+
+    def test_행_번호로_원본을_찾지_않는다(self):
+        import re
+        # 주석 안의 언급은 세지 않는다 (왜 그랬는지를 적어 두었다)
+        code = re.sub(r'/\*.*?\*/|^\s*//.*$', '', self.src, flags=re.S | re.M)
+        self.assertNotIn('allRows[rowIdx]', code)
+
+    def test_기준은_행_객체가_든다(self):
+        self.assertIn('rowData._origEmail', self.src)
+        self.assertIn('_origEmail:', self.src)
+
+    def test_저장_성공_뒤_기준을_갱신한다(self):
+        self.assertIn('rowData._origEmail = newEmail', self.src)
+
+    def test_새_행은_객체로_원본에_넣는다(self):
+        self.assertIn('allRows.indexOf(rowData) === -1', self.src)
+
+    def test_빈_줄은_한_곳에서_만든다(self):
+        """두 곳에서 따로 만들다 한쪽에 memo 칸이 빠져 있었다."""
+        self.assertEqual(self.src.count('const emptyRow = ()'), 1)
+        self.assertGreaterEqual(self.src.count('push(emptyRow())'), 2)
+
+    def test_자동_저장_실패를_말한다(self):
+        """400·403·500·네트워크 끊김을 모두 무시하고 있었다."""
+        self.assertIn('저장하지 못했습니다', self.src)
+        self.assertIn('서버에 연결할 수 없어 저장되지 않았습니다', self.src)
+
+
+class ContactDeleteReachesTheServerTests(TestCase):
+    """
+    일괄 삭제와 '행 삭제' 가 화면 배열에서만 뺐다. 새로고침하면 되살아났고,
+    오타로 만들어진 연락처(@ 만 있으면 즉시 생성된다)를 없앨 방법이 없었다.
+
+    **공유 이력은 건드리지 않는다.** 주소록에서 빼는 것과 권한을 빼앗는 것은
+    다른 일이다 — 활성 공유가 있으면 목록에 다시 나타나고, 그 사실을 말해 준다.
+    """
+
+    def setUp(self):
+        from v1.products.models import UserContact
+        self.UserContact = UserContact
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.client.force_login(self.owner)
+
+    def test_주소록에서_지운다(self):
+        self.UserContact.objects.create(owner=self.owner, email='a@x.com')
+        self.UserContact.objects.create(owner=self.owner, email='b@x.com')
+        r = self.client.post(reverse('products:contacts_api_delete'),
+                             {'emails': ['a@x.com']})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            [c.email for c in self.UserContact.objects.filter(owner=self.owner)],
+            ['b@x.com'])
+
+    def test_공유가_있으면_알려_준다(self):
+        label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        share = ProductShare.objects.create(
+            label=label, recipient_email='a@x.com', share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=share)
+        self.UserContact.objects.create(owner=self.owner, email='a@x.com')
+        body = self.client.post(reverse('products:contacts_api_delete'),
+                                {'emails': ['a@x.com']}).json()
+        self.assertEqual(body['still_shared'], ['a@x.com'])
+        share.refresh_from_db()
+        self.assertTrue(share.active_yn, '주소록 삭제가 공유를 건드렸다')
+
+    def test_남의_주소록은_못_지운다(self):
+        other = User.objects.create_user('남', password='x', email='other@x.com')
+        self.UserContact.objects.create(owner=other, email='a@x.com')
+        self.client.post(reverse('products:contacts_api_delete'),
+                         {'emails': ['a@x.com']})
+        self.assertTrue(self.UserContact.objects.filter(owner=other).exists())
+
+    def test_빈_요청은_막는다(self):
+        r = self.client.post(reverse('products:contacts_api_delete'), {})
+        self.assertEqual(r.status_code, 400)
+
+    def test_화면이_그_api_를_부른다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+               / 'contacts.html').read_text(encoding='utf-8')
+        self.assertIn('CONTACTS_API_DELETE', src)
+        self.assertIn('fetch(CONTACTS_API_DELETE', src)

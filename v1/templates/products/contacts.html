@@ -420,12 +420,17 @@ const CSRF_TOKEN = '{{ csrf_token }}';
 const CONTACTS_API_LIST   = '{% url "products:contacts_api_list" %}';
 const CONTACTS_API_UPDATE = '{% url "products:contacts_api_update" %}';
 const CONTACTS_API_ADD    = '{% url "products:contacts_api_add" %}';
+const CONTACTS_API_DELETE = '{% url "products:contacts_api_delete" %}';
 const CONTACTS_API_SHARES = '{% url "products:contacts_api_shares" %}';
 const SHARE_CREATE_BASE   = '/products/share/create/'; // + label_id + '/'
 const PRODUCT_DETAIL_URL  = '/products/';  // + label_id + '/new/'
 
 // 서버에서 넘어온 초기 연락처 데이터 (json_script 안전 파싱)
-const initRows = (JSON.parse(document.getElementById('contacts-init-data').textContent) || []).map(r => ({...r, _checked: false, doc_sent: r.doc_sent||0, doc_pending: r.doc_pending||0, doc_received: r.doc_received||0}));
+/* _origEmail: '변경 전 이메일'. 행 번호가 아니라 **행 자체**가 기준을 든다 */
+const initRows = (JSON.parse(document.getElementById('contacts-init-data').textContent) || [])
+    .map(r => ({...r, _checked: false, _origEmail: (r.email || '').toLowerCase(),
+                doc_sent: r.doc_sent||0, doc_pending: r.doc_pending||0,
+                doc_received: r.doc_received||0}));
 
 const DOC_TYPES_API  = '{% url "products:api_doc_types" %}';
 const SEND_DOC_REQ_API = '{% url "products:api_send_doc_request" %}';
@@ -448,6 +453,15 @@ let selectedEmail   = null;
 let selectedContact = {};   // 현재 선택된 연락처 { email, name, company }
 let hot = null;
 let allRows = []; // 필터 원본 데이터 보관
+
+/* 빈 줄 한 개. setTableFilter 와 격자 초기화가 **같은 것**을 써야 한다 —
+   한쪽에만 칸이 빠지면 그 칸이 undefined 가 되고, 저장 때 '안 보낸 칸' 이 된다.
+   _origEmail 은 '변경 전 이메일' 로, 행 번호가 아니라 행 자체가 기준을 든다. */
+const emptyRow = () => ({
+    _checked: false, _origEmail: '',
+    email: '', name: '', company: '', license_no: '', memo: '',
+    sent: 0, received: 0, doc_sent: 0, doc_pending: 0, doc_received: 0
+});
 let currentFilter = 'all';
 
 // 선택 UI 업데이트 (전역 – setTableFilter 등에서 호출)
@@ -484,7 +498,9 @@ function setTableFilter(filter, btn) {
     }
 
     const display = [...filtered];
-    while (display.length < 20) display.push({ _checked: false, email: '', name: '', company: '', license_no: '', sent: 0, received: 0, doc_sent: 0, doc_pending: 0, doc_received: 0 });
+    /* 빈 줄에도 memo·_origEmail 자리를 둔다 — 없으면 그 칸이 undefined 가 되고,
+       저장 때 '안 보낸 칸' 이 된다 */
+    while (display.length < 20) display.push(emptyRow());
 
     const infoEl = document.getElementById('filterInfo');
     infoEl.textContent = filter === 'all' ? '' : `${filtered.length}연락처 해당`;
@@ -710,7 +726,6 @@ document.addEventListener('DOMContentLoaded', function () {
        봤다. 엑셀에서는 그냥 다음 줄에 치면 늘어난다. minSpareRows 가 같은
        일을 한다 — 마지막 줄을 채우면 아래에 빈 줄이 다시 생긴다. 몇 줄이
        필요한지 미리 알 수 있는 사람은 없다. */
-    const emptyRow = () => ({ _checked: false, email: '', name: '', company: '', license_no: '', memo: '', sent: 0, received: 0, doc_sent: 0, doc_pending: 0, doc_received: 0 });
     const tableData = [...initRows];
     while (tableData.length < 20) tableData.push(emptyRow());
     allRows = initRows; // 원본 보관 (필터용)
@@ -925,8 +940,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     const newEmail = (rowData.email || '').trim().toLowerCase();
                     if (!newEmail || !newEmail.includes('@')) return;
                     
-                    // 변경 전 이메일 (allRows에서 찾기 - 원본 상태)
-                    const currentEmailInAll = allRows[rowIdx] ? allRows[rowIdx].email : null;
+                    /* 변경 전 이메일은 **행 객체**가 들고 있다.
+                     *
+                     * 예전에는 allRows[rowIdx] 로 격자 행 번호를 원본 배열
+                     * 인덱스로 썼다. 그런데 필터를 켜면 격자는 부분집합이고,
+                     * 일괄삭제(splice)·행이동 뒤에는 번호가 밀린다. 그래서
+                     * **엉뚱한 거래처의 이메일이 old_email 로 올라가** 그 사람의
+                     * 공유 수신자가 바뀌고 주소록 행이 삭제됐다. 고친 사람은
+                     * 자기 줄만 손댄 줄 안다. */
+                    const currentEmailInAll = rowData._origEmail || null;
                     const emailChanged = currentEmailInAll && currentEmailInAll.toLowerCase() !== newEmail;
                     
                     // 이메일 변경 여부에 따라 API 결정
@@ -948,29 +970,18 @@ document.addEventListener('DOMContentLoaded', function () {
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
                             body: body.toString(),
                         }).then(r => {
-                            if (r.ok) {
-                                // 성공 시 allRows 동기화
-                                if (allRows[rowIdx]) allRows[rowIdx].email = newEmail;
+                            if (!r.ok) {
+                                showSnackbar('저장하지 못했습니다. 새로고침하면 값이 되돌아갑니다.', 'error');
+                                return;
                             }
-                        }).catch(() => {});
-                    } else if (newEmail) {
-                        // 이메일 유지, 다른 필드만 수정: UPDATE
-                        const body = new URLSearchParams({
-                            old_email:  newEmail,
-                            email:      newEmail,
-                            name:       rowData.name       || '',
-                            company:    rowData.company    || '',
-                            license_no: rowData.license_no || '',
+                            rowData._origEmail = newEmail;   /* 다음 수정의 기준 */
+                        }).catch(() => {
+                            showSnackbar('서버에 연결할 수 없어 저장되지 않았습니다.', 'error');
                         });
-                        fetch(CONTACTS_API_UPDATE, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
-                            body: body.toString(),
-                        }).catch(() => {});
                     }
                 });
             }
-            
+
             // 새로운 행: 이메일 새로 입력된 경우 → ADD
             const newRowEmailChanges = changes.filter(([, prop, oldVal, newVal]) =>
                 prop === 'email' && !oldVal && newVal && typeof newVal === 'string' && newVal.includes('@')
@@ -978,21 +989,31 @@ document.addEventListener('DOMContentLoaded', function () {
             if (newRowEmailChanges.length) {
                 newRowEmailChanges.forEach(([rowIdx, , , newEmail]) => {
                     const rowData = hot.getSourceDataAtRow(rowIdx);
+                    if (!rowData) return;
                     const body = new URLSearchParams({
                         email:      newEmail.trim().toLowerCase(),
-                        name:       (rowData && rowData.name)       || '',
-                        company:    (rowData && rowData.company)    || '',
-                        license_no: (rowData && rowData.license_no) || '',
+                        name:       rowData.name       || '',
+                        company:    rowData.company    || '',
+                        license_no: rowData.license_no || '',
+                        memo:       rowData.memo       || '',
                     });
                     fetch(CONTACTS_API_ADD, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
                         body: body.toString(),
                     }).then(r => {
-                        if (r.ok && allRows[rowIdx]) {
-                            allRows[rowIdx].email = newEmail.trim().toLowerCase();
+                        if (!r.ok) {
+                            showSnackbar('연락처를 추가하지 못했습니다.', 'error');
+                            return;
                         }
-                    }).catch(err => {});
+                        /* 행 **객체**를 원본에 넣는다.
+                           예전에는 allRows[rowIdx] 를 격자 행 번호로 찾아 고쳤다.
+                           필터를 켠 뒤에는 그 번호가 다른 사람을 가리킨다. */
+                        rowData._origEmail = newEmail.trim().toLowerCase();
+                        if (allRows.indexOf(rowData) === -1) allRows.push(rowData);
+                    }).catch(() => {
+                        showSnackbar('서버에 연결할 수 없어 추가되지 않았습니다.', 'error');
+                    });
                 });
             }
 
@@ -1083,12 +1104,41 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('bulkDeleteBtn').addEventListener('click', () => {
         const checkedRows = allRows.filter(r => r._checked && r.email);
         if (!checkedRows.length) return;
-        if (!confirm(`선택한 ${checkedRows.length}개 연락처를 목록에서 제거하시겠습니까?\n(DB에서 삭제되지 않으며 공유 이력은 유지됩니다)`)) return;
-        // allRows에서 제거
-        checkedRows.forEach(row => {
-            const idx = allRows.indexOf(row);
-            if (idx !== -1) allRows.splice(idx, 1);
-        });
+        if (!confirm(`선택한 ${checkedRows.length}개 연락처를 주소록에서 지웁니다.\n공유 이력은 그대로 남습니다 — 활성 공유가 있는 사람은 목록에 다시 나타납니다.`)) return;
+
+        /* **서버에도 보낸다.**
+           예전에는 화면 배열에서만 빼서 새로고침하면 되살아났다. 오타로
+           만들어진 연락처(@ 만 있으면 즉시 생성된다)를 없앨 방법이 없었다. */
+        const delBody = new URLSearchParams();
+        checkedRows.forEach(r => delBody.append('emails', (r.email || '').toLowerCase()));
+        fetch(CONTACTS_API_DELETE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+            body: delBody.toString(),
+        }).then(r => r.json().catch(() => ({}))).then(res => {
+            if (!res.success) {
+                showSnackbar(res.error || '삭제하지 못했습니다.', 'error');
+                return;
+            }
+            checkedRows.forEach(row => {
+                const idx = allRows.indexOf(row);
+                if (idx !== -1) allRows.splice(idx, 1);
+            });
+            const kept = res.still_shared || [];
+            if (kept.length) {
+                showSnackbar(
+                    `${checkedRows.length - kept.length}건을 지웠습니다. `
+                    + `${kept.length}건은 활성 공유가 있어 목록에 남습니다 — `
+                    + '권한 설정에서 공유를 먼저 해제하세요.', 'warning');
+            } else {
+                showSnackbar(`${checkedRows.length}개 연락처를 지웠습니다.`, 'success');
+            }
+            const activeBtn = document.querySelector('.contacts-filter-btn.active')
+                              || document.querySelector('.contacts-filter-btn');
+            setTableFilter(currentFilter || 'all', activeBtn);
+            updateSelectionUI();
+        }).catch(() => showSnackbar('서버에 연결할 수 없습니다.', 'error'));
+        return;
         // 필터 다시 적용해서 그리드 갱신
         const activeBtn = document.querySelector('.contacts-filter-btn.active');
         if (activeBtn) activeBtn.click(); else setTableFilter('all', document.querySelector('[data-filter="all"]'));
