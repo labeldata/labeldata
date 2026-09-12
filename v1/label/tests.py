@@ -16692,3 +16692,102 @@ class 시안_대조는_유사도로_봐주지_않는다(TestCase):
         from v1.label.services import design_match
         self.assertEqual(design_match.DEFAULT_MODE, 'strict')
         self.assertNotIn(design_match.DEFAULT_MODE, design_match._FORGIVING)
+
+
+class 농진청_성분표를_옮겨_적는다(TestCase):
+    """
+    식약처 적재본으로는 **원재료성 식품에 닿을 수 없다.** 그 그룹의 보고번호
+    보유율이 0 % 라 번호로는 영영 못 붙고, 적재본은 '수집'(업체 신고값)이 97 %
+    라 이름으로 찾아도 값이 흔들린다. 농진청 10.4 는 3,366 건이 전부 분석값이고
+    식품군이 정확히 그 빈 구간이다.
+    """
+
+    def test_열은_이름으로_찾는다(self):
+        """
+        AMT_NUM1~157 번호를 명세 보고 옮겨 적다 한 칸 밀리면 엉뚱한 값이
+        **조용히** 들어간다. 엑셀은 글자로 오므로 그 사고가 원천에서 없다.
+        """
+        from v1.label.services import rda_nutrition as rda
+
+        self.assertEqual(rda.COLUMNS['에너지'], 'calories')
+        self.assertEqual(rda.COLUMNS['나트륨'], 'natriums')
+        self.assertEqual(rda.COLUMNS['총포화지방산'], 'saturated_fats')
+        # 이 표에 없는 것을 있는 척하지 않는다
+        self.assertNotIn('콜레스테롤', rda.COLUMNS)
+
+    def test_미량과_빈칸을_0_으로_적지_않는다(self):
+        """'-' 를 0 으로 적으면 거짓말이 된다. 모르는 것과 없는 것은 다르다."""
+        from v1.label.services.rda_nutrition import _num
+
+        self.assertIsNone(_num('-'))
+        self.assertIsNone(_num(''))
+        self.assertIsNone(_num(None))
+        self.assertEqual(_num('Tr'), 0.0)     # 미량은 실제로 0 에 가깝다
+        self.assertEqual(_num('12.5'), 12.5)
+        self.assertEqual(_num('1,234'), 1234.0)
+
+    def test_학명은_속과_종만_본다(self):
+        from v1.label.services.rda_nutrition import species
+
+        self.assertEqual(species('Avena sativa L.'), 'avena sativa')
+        self.assertEqual(species('Pouteria caimito Radlk / L'), 'pouteria caimito')
+        self.assertEqual(species(''), '')
+        self.assertEqual(species('한글만'), '')
+
+    def test_농진청_이름은_쉼표_앞이_기본명이다(self):
+        from v1.label.services.rda_nutrition import base_name
+
+        self.assertEqual(base_name('귀리, 겉귀리, 도정, 생것'), '귀리')
+        self.assertEqual(base_name('메밀묵'), '메밀묵')
+
+    def test_검산식을_두_벌로_두지_않는다(self):
+        """
+        단순 4·4·9 로 재면 곤약·돼지감자·무설탕껌처럼 식이섬유·당알콜이 많은
+        식품이 통째로 '어긋남' 이 된다. 규정 계수(식이섬유 2.0·당알콜 2.4)를
+        아는 것은 mfds_nutrition.verify_row 뿐이다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/label/services/rda_nutrition.py').read_text(encoding='utf-8')
+        self.assertIn('from v1.label.services.mfds_nutrition import verify_row', src)
+        self.assertNotIn('* 4 +', src)      # 계수를 여기서 다시 적지 않는다
+
+    def test_A코드_연결은_값의_근거가_아니다(self):
+        """
+        학명이 같아도 우리 목록의 다른 항목에 붙을 수 있다 — 실측에서
+        '귀리, 쌀귀리' 가 '큰쌀귀리씨앗' 에 붙었다. 후보 가점으로만 쓴다.
+        """
+        from v1.label.models import PublicFoodNutrition as P
+
+        f = P._meta.get_field('agri_product')
+        self.assertTrue(f.null)                       # 없어도 된다
+        self.assertEqual(f.remote_field.on_delete.__name__, 'SET_NULL')
+
+    def test_출처를_구별해_둔다(self):
+        """한 표에 둘을 담았다. 어느 쪽에서 왔는지 모르면 되돌릴 수 없다."""
+        from v1.label.models import PublicFoodNutrition as P
+
+        self.assertEqual(P.SOURCE_RDA, 'rda')
+        self.assertTrue(P._meta.get_field('source_db').db_index)
+
+    def test_전부_100g_기준으로_넣는다(self):
+        """
+        식약처 적재본은 100mL 가 15.3 % 섞여 있어 중량 배합에 못 쓰는 행을
+        골라내야 했다. 농진청 표는 전부 가식부 100g 당이라 그 분기가 없다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/label/management/commands/load_rda_nutrition.py').read_text(
+            encoding='utf-8')
+        self.assertIn("'basis_unit': P.BASIS_G", src)
+        self.assertIn("'basis_amount': 100.0", src)
+
+    def test_같은_파일을_두_번_넣어도_쌓이지_않는다(self):
+        """식품코드가 고유키다. 없는 행은 아예 넣지 않는다."""
+        from pathlib import Path
+
+        cmd = Path('v1/label/management/commands/load_rda_nutrition.py').read_text(
+            encoding='utf-8')
+        self.assertIn("update_or_create(food_cd=item['food_cd']", cmd)
+        svc = Path('v1/label/services/rda_nutrition.py').read_text(encoding='utf-8')
+        self.assertIn('if not code:', svc)

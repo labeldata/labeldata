@@ -923,6 +923,24 @@ class PublicFoodNutrition(models.Model):
                                     help_text='"3년 경과" 같은 오래됨 경고에 쓴다')
     update_date = models.CharField(max_length=20, null=True, blank=True, verbose_name='데이터수정일자')
 
+    # 어느 표에서 왔나. 비어 있으면 식약처 API 적재본(먼저 들어온 것)이다.
+    # 둘을 한 표에 두는 까닭은 후보 찾기·기여도·표시가 이미 이 표를 보기
+    # 때문이다 — 표를 나누면 같은 일을 하는 코드가 두 벌이 된다.
+    SOURCE_MFDS = 'mfds'
+    SOURCE_RDA = 'rda'
+    SOURCE_CHOICES = [(SOURCE_MFDS, '식약처 식품영양성분DB'),
+                      (SOURCE_RDA, '농진청 국가표준식품성분표')]
+    source_db = models.CharField(max_length=10, null=True, blank=True, db_index=True,
+                                 choices=SOURCE_CHOICES, verbose_name='출처 DB')
+
+    # 식품원료(A코드) 목록의 어느 항목인가. **값을 정하는 근거가 아니라
+    # 후보를 고를 때의 가점**이다 — 학명이 같아도 목록의 다른 항목에 붙을 수
+    # 있다(귀리 → '큰쌀귀리씨앗'). 자세한 것은 services/rda_nutrition.py 에.
+    agri_product = models.ForeignKey('label.AgriculturalProduct', null=True, blank=True,
+                                     on_delete=models.SET_NULL, db_index=True,
+                                     related_name='nutrition_rows',
+                                     verbose_name='식품원료(A코드)')
+
     # ── 검산 ────────────────────────────────────────────────────────────
     # AMT_NUM 번호를 하나 밀려 읽어도 예외가 나지 않는다. 그래서 적재할 때마다
     # 질량 합과 열량 재계산으로 스스로 재고, 그 결과를 행에 남긴다.
