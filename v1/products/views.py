@@ -801,9 +801,12 @@ def product_detail(request, product_id):
         #
         # share_id 가 없는 카드는 끌어다 놓으면 초대로 간다 — 화면의 dropPerson
         # 이 이미 그 경로를 갖고 있어 JS 는 고칠 것이 없다.
+        #  소유자 카드는 위에 따로 그려진다(label_owner). 여기서 본인을
+        #  다시 올리면 같은 사람이 두 번 보인다.
+        _me = (request.user.email or '').lower()
         for contact in UserContact.objects.filter(owner=request.user):
             email = (contact.email or '').lower()
-            if not email or email in seen_emails:
+            if not email or email in seen_emails or email == _me:
                 continue
             seen_emails.add(email)
             card = ProductShare(
@@ -912,21 +915,16 @@ def product_detail(request, product_id):
         can_upload_documents = True
         can_comment = True
         available_actions = _skip_aware_actions(status)
-    elif user_role == 'UPLOADER':
-        can_upload_documents = True
-        can_comment = True
-        if status == ProductMetadata.Status.REQUESTING:
-            available_actions = ['submitted']
-    elif user_role == 'REVIEWER':
-        can_comment = True
-        if status == ProductMetadata.Status.REVIEW:
-            available_actions = ['pending']
-    elif user_role == 'APPROVER':
-        can_comment = True
-        if status == ProductMetadata.Status.PENDING:
-            available_actions = ['confirmed']
+    elif user_role in ROLE_STATUS_ACTIONS:
+        _perm = SharePermission.objects.filter(share=shared_share).first() if shared_share else None
+        can_upload_documents = bool(_perm and _perm.can_upload_documents)
+        #  댓글도 역할 이름이 아니라 플래그로 본다. 예전에는 자료 제출자에게
+        #  입력창을 열어 주고 서버가 403 을 냈다 — 다 쓴 뒤에 막혔다.
+        can_comment = bool(_perm and _perm.can_comment)
+        available_actions = role_actions(user_role, status, _perm)
     else:  # VIEWER
-        can_comment = True
+        _perm = SharePermission.objects.filter(share=shared_share).first() if shared_share else None
+        can_comment = bool(_perm and _perm.can_comment)
     
     # 댓글 정보 조회
     comments = ProductComment.objects.filter(
@@ -1853,17 +1851,8 @@ def product_update_status(request, product_id):
         available_actions = status_actions_map_view.get(metadata.status, []) + skip_action_codes
     elif user_role == 'EDITOR':
         available_actions = status_actions_map_view.get(metadata.status, []) + skip_action_codes
-    elif user_role == 'UPLOADER':
-        available_actions = ['submitted'] if metadata.status == ProductMetadata.Status.REQUESTING else []
-    elif user_role == 'REVIEWER':
-        available_actions = {
-            ProductMetadata.Status.SUBMITTED: ['review'],              # 검토 시작
-            ProductMetadata.Status.REVIEW:    ['pending', 'submitted'],  # 넘김 / 반려
-        }.get(metadata.status, [])
-    elif user_role == 'APPROVER':
-        available_actions = {
-            ProductMetadata.Status.PENDING: ['confirmed', 'review'],   # 승인 / 반려
-        }.get(metadata.status, [])
+    elif user_role in ROLE_STATUS_ACTIONS:
+        available_actions = role_actions(user_role, metadata.status)
     else:
         available_actions = []
 
@@ -3179,6 +3168,46 @@ def use_as_ingredient(request, receipt_id):
     log_activity(request, 'sharing', 'share_use_ingredient', receipt_id)
     messages.success(request, '원료로 등록했습니다.')
     return redirect('products:inbox')
+
+
+# 담당 역할이 그 상태에서 할 수 있는 행동.
+#
+# **이 표가 두 곳에 있었다.** 단추를 그리는 GET(product_detail)과 눌렀을 때를
+# 검사하는 POST(product_update_status)가 각자 적고 있었고, 검토 시작·반려를
+# 넣을 때 POST 만 고쳤다. 그래서 서버는 허용하는데 **단추가 그려지지 않는**
+# 자리가 셋 남았다 — 이메일·알림·인박스가 검토자를 부르는데 들어가면 누를
+# 것이 없던 그 증상이 그대로였다.
+#
+# 소유자·공동편집자는 단계 건너뛰기까지 걸려 있어 여기 담지 않는다.
+ROLE_STATUS_ACTIONS = {
+    'UPLOADER': {
+        ProductMetadata.Status.REQUESTING: ['submitted'],
+    },
+    'REVIEWER': {
+        ProductMetadata.Status.SUBMITTED: ['review'],               # 검토 시작
+        ProductMetadata.Status.REVIEW:    ['pending', 'submitted'],  # 넘김 / 반려
+    },
+    'APPROVER': {
+        ProductMetadata.Status.PENDING: ['confirmed', 'review'],    # 승인 / 반려
+    },
+}
+
+
+def role_actions(user_role, status, permission=None):
+    """
+    담당 역할(소유자·공동편집자 제외)이 이 상태에서 누를 수 있는 행동.
+
+    permission 을 주면 can_review / can_approve 도 본다. 화면이 그 플래그를
+    무시하면, 관리자가 검토 체크를 풀어도 단추는 그대로 보이고 누르면 403 이
+    난다 — 화면이 거짓말을 하는 상태다.
+    """
+    actions = list(ROLE_STATUS_ACTIONS.get(user_role, {}).get(status, []))
+    if permission is None or not actions:
+        return actions
+    need = {'review': 'can_review', 'pending': 'can_review',
+            'confirmed': 'can_approve'}
+    return [a for a in actions
+            if not need.get(a) or getattr(permission, need[a], False)]
 
 
 # 소유자가 아닌 사람(공동 편집자)이 남에게 줄 수 있는 역할.
@@ -5241,6 +5270,15 @@ def _contact_rows(user):
 
     'sent' 는 이 사람에게 보낸 활성 공유 수다.
     """
+    #  **본인은 넣지 않는다.**
+    #
+    #  share_create 가 공유를 만들 때 UserContact 도 함께 만든다. 그래서
+    #  자기 이메일로 시험 공유를 한 번 해 보면 자기가 주소록에 들어앉고,
+    #  권한 설정 팔레트에도 소유자 카드와 **같은 사람이 두 번** 나온다.
+    #  '내 주소록' 에 내가 있을 이유는 없다.
+    me = {(user.email or '').lower()}
+    me.discard('')
+
     rows = {}
     sent_shares = (
         ProductShare.objects
@@ -5254,7 +5292,7 @@ def _contact_rows(user):
     )
     for share in sent_shares:
         email = (share.recipient_email or '').lower()
-        if not email:
+        if not email or email in me:
             continue
         if email in rows:
             rows[email]['sent'] += 1
@@ -5276,6 +5314,8 @@ def _contact_rows(user):
     # 주소록은 공유에서 온 행도 **채운다.** 건너뛰면 비고가 사라진다.
     for uc in UserContact.objects.filter(owner=user):
         email = uc.email.lower()
+        if email in me:
+            continue
         row = rows.get(email)
         if row is None:
             rows[email] = {

@@ -7343,3 +7343,89 @@ class PaletteSearchLooksAtWhatIsShownTests(TestCase):
 
     def test_소유자는_검색으로_사라지지_않는다(self):
         self.assertIn("card.dataset.isOwner === 'true'", self.src)
+
+
+class ActionButtonsActuallyRenderTests(TestCase):
+    """
+    앞서 검토 시작·반려를 넣었는데 **POST 만 고쳤다.** 단추를 그리는 GET 쪽
+    available_actions 는 예전 그대로여서, 서버는 허용하는데 화면에 단추가
+    없었다 — 이메일·알림·인박스 세 곳이 부르는데 들어가면 누를 것이 없던
+    그 증상이 그대로 남아 있었다.
+
+    표가 두 곳에 있었던 것이 원인이다. 이 시험은 **화면을 열어** 단추 글자가
+    나오는지 본다 — POST 만 보는 시험으로는 이 종류가 다시 잡히지 않는다.
+    """
+
+    def setUp(self):
+        from v1.products.models import ProductMetadata
+        self.Meta = ProductMetadata
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        self.meta = ProductMetadata.objects.create(
+            label=self.label, product_code='PRD-T-1',
+            status=ProductMetadata.Status.DRAFT)
+
+    def _member(self, role, email):
+        user = User.objects.create_user(role, password='x', email=email)
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email=email, recipient_user=user,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        perm = SharePermission.objects.create(share=share)
+        perm.apply_role_defaults(role_code=role, save=True)
+        return user, perm
+
+    def _page(self, user, status):
+        self.meta.status = status
+        self.meta.save(update_fields=['status'])
+        self.client.force_login(user)
+        return self.client.get(
+            reverse('products:product_detail', args=[self.label.my_label_id]))
+
+    def test_검토자가_제출_완료에서_검토_시작_단추를_본다(self):
+        rv, _ = self._member('REVIEWER', 'rv@x.com')
+        page = self._page(rv, self.Meta.Status.SUBMITTED)
+        self.assertIn('review', page.context['available_actions'])
+        self.assertContains(page, '검토 시작')
+
+    def test_검토자가_검토_중에서_반려_단추를_본다(self):
+        rv, _ = self._member('REVIEWER', 'rv@x.com')
+        page = self._page(rv, self.Meta.Status.REVIEW)
+        self.assertIn('submitted', page.context['available_actions'])
+        self.assertContains(page, '재검토')
+
+    def test_승인자가_승인_대기에서_반려_단추를_본다(self):
+        ap, _ = self._member('APPROVER', 'ap@x.com')
+        page = self._page(ap, self.Meta.Status.PENDING)
+        self.assertIn('review', page.context['available_actions'])
+        self.assertContains(page, '반려')
+
+    def test_검토_권한을_끄면_단추가_사라진다(self):
+        """화면이 플래그를 무시하면 눌러 놓고 403 을 받는다."""
+        rv, perm = self._member('REVIEWER', 'rv@x.com')
+        perm.can_review = False
+        perm.save()
+        page = self._page(rv, self.Meta.Status.SUBMITTED)
+        self.assertEqual(page.context['available_actions'], [])
+
+    def test_화면과_서버가_같은_표를_쓴다(self):
+        """GET 과 POST 가 갈라지면 한쪽만 고쳐진다 — 그래서 이 문제가 났다."""
+        from v1.products.views import ROLE_STATUS_ACTIONS, role_actions
+        for role, table in ROLE_STATUS_ACTIONS.items():
+            for status, expected in table.items():
+                self.assertEqual(role_actions(role, status), expected,
+                                 '%s/%s' % (role, status))
+
+    def test_자료_제출자에게_댓글창을_열어_주지_않는다(self):
+        """can_comment=False 인데 입력창이 열려 있어 다 쓴 뒤에 막혔다."""
+        up, perm = self._member('UPLOADER', 'up@x.com')
+        self.assertFalse(perm.can_comment)
+        page = self._page(up, self.Meta.Status.REQUESTING)
+        self.assertFalse(page.context['can_comment'])
+
+    def test_올릴_권한도_플래그를_따른다(self):
+        rv, _ = self._member('REVIEWER', 'rv@x.com')
+        page = self._page(rv, self.Meta.Status.REVIEW)
+        self.assertFalse(page.context['can_upload_documents'])
+        up, _ = self._member('UPLOADER', 'up2@x.com')
+        page = self._page(up, self.Meta.Status.REQUESTING)
+        self.assertTrue(page.context['can_upload_documents'])
