@@ -703,9 +703,13 @@
           + '<span class="ing-cons-name">' + f.label + '</span>'
           + '<span class="ing-cons-txt">'
           + (differ
-              ? (f.agreed
-                  ? '다수는 나와 같게 적었습니다 (' + f.same + ' / ' + f.others + '곳)'
-                  : '<b>다수는 다르게 적었습니다</b> (' + f.differ + ' / ' + f.others + '곳)')
+              ? (!f.has_majority
+                  /* 값이 곳마다 다 다르면 '다수' 라는 말 자체가 성립하지 않는다.
+                     그때 "다수는 다르게 적었습니다" 라고 하면 없는 다수를 지어낸다. */
+                  ? '곳마다 다르게 적었습니다 (' + f.others + '곳)'
+                  : (f.agreed
+                      ? '다수는 나와 같게 적었습니다 (' + f.same + ' / ' + f.others + '곳)'
+                      : '<b>다수는 다르게 적었습니다</b> (' + f.differ + ' / ' + f.others + '곳)'))
               : '다른 ' + f.others + '곳 모두 같게 적었습니다')
           + '</span></div>';
 

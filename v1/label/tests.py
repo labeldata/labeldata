@@ -17384,7 +17384,10 @@ class 다른_곳은_어떻게_적었는가(TestCase):
     def _ing(self, user, no=None, **kw):
         from v1.label.models import MyIngredient
 
-        kw.setdefault('prdlst_nm', '원료')
+        # 원료명은 등록 제품명과 닮아야 한다. 안 닮으면 '번호는 맞는데 딴
+        # 원료를 적어 둔 줄' 로 걸러진다 — 그게 옳은 동작이다.
+        kw.setdefault('prdlst_nm', '단팥빵')
+        kw.setdefault('prdlst_dcnm', '빵류')
         return MyIngredient.objects.create(
             user_id=user, prdlst_report_no=self.NO if no is None else no,
             delete_YN='N', **kw)
@@ -17588,3 +17591,103 @@ class 원료_상세에서도_성적서를_읽는다(TestCase):
         """칸을 따로 두면 영양성분 표 옆에 빈 상자가 늘 서 있게 된다."""
         panel = self.panel()
         self.assertIn("f.style.display = 'none';", panel)
+
+
+class 번호는_맞는데_딴_원료를_적어_둔_줄을_뺀다(TestCase):
+    """
+    운영에서 나온 실제 사례다. 번호 198301900201248 은 식약처에 **밀가루**
+    (강력밀가루 제빵용)로 등록돼 있는데, 같은 번호를 쓰는 다른 줄들이 이랬다.
+
+        원재료 표시명   대두 100% · 설탕 · 밀(밀/미국산, 호주산)
+        식품유형        설탕 · 혼합간장
+        알레르기        대두 · 밀 · 밀, 고등어
+
+    **혼합간장과 설탕은 밀가루가 아니다.** 그것을 "다른 곳은 이렇게 적었습니다"
+    로 보이면 밀가루를 등록한 사람에게 **간장의 알레르기**를 권하는 셈이 된다.
+
+    번호가 식약처에 있는지만 보는 것으로는 못 막는다 — 번호 자체는 실재한다.
+    **그 줄이 정말 그 품목인지**를 봐야 하고, 식약처 등록 정보가 그 잣대다.
+    """
+
+    NO = '198301900201248'
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import FoodItem
+
+        self.me = User.objects.create_user(username='me@example.com', password='x')
+        self.b = User.objects.create_user(username='b@example.com', password='x')
+        self.c = User.objects.create_user(username='c@example.com', password='x')
+        FoodItem.objects.create(prdlst_report_no=self.NO,
+                                prdlst_nm='강력밀가루 제빵용', prdlst_dcnm='밀가루')
+
+    def _ing(self, user, **kw):
+        from v1.label.models import MyIngredient
+
+        kw.setdefault('prdlst_nm', '강력밀가루')
+        kw.setdefault('prdlst_dcnm', '밀가루')
+        return MyIngredient.objects.create(
+            user_id=user, prdlst_report_no=self.NO, delete_YN='N', **kw)
+
+    def got(self, ing):
+        from v1.label.services import ingredient_consensus as ic
+        return ic.for_ingredient(ing)
+
+    def test_식품유형이_어긋난_줄은_뺀다(self):
+        mine = self._ing(self.me, allergens='밀')
+        self._ing(self.b, prdlst_nm='혼합간장', prdlst_dcnm='혼합간장', allergens='대두')
+        self._ing(self.c, allergens='밀')          # 멀쩡한 줄
+
+        got = self.got(mine)
+        self.assertEqual(got['owners'], 2)         # 나 + 멀쩡한 한 곳
+        row = [f for f in got['fields'] if f['key'] == 'allergens'][0]
+        self.assertEqual(row['differ'], 0)
+        self.assertNotIn('대두', [v['value'] for v in row['others_values']])
+
+    def test_원료명이_딴판인_줄도_뺀다(self):
+        mine = self._ing(self.me, allergens='밀')
+        # 유형은 비워 뒀지만 이름이 전혀 다르다
+        self._ing(self.b, prdlst_nm='백설탕', prdlst_dcnm='', allergens='대두')
+
+        self.assertIsNone(self.got(mine))          # 남는 곳이 나 하나뿐
+
+    def test_부기가_붙은_유형은_같은_말로_본다(self):
+        """빵류 ↔ 빵류[가열하여…] 를 다르다고 하면 멀쩡한 줄을 버린다."""
+        mine = self._ing(self.me, allergens='밀')
+        self._ing(self.b, prdlst_dcnm='밀가루 [강력분]', allergens='밀')
+        self.assertEqual(self.got(mine)['owners'], 2)
+
+    def test_내_줄은_빼지_않는다(self):
+        """
+        내가 적은 값은 내가 책임질 일이다. 여기서 거르려는 것은 **남의 잘못
+        낀 줄**이고, 내 줄을 빼면 견줄 기준 자체가 사라진다.
+        """
+        mine = self._ing(self.me, prdlst_nm='우리회사 밀가루A',
+                         prdlst_dcnm='혼합간장', allergens='밀')
+        self._ing(self.b, allergens='밀')
+        got = self.got(mine)
+        self.assertIsNotNone(got)
+
+    def test_다수가_없으면_다수라고_말하지_않는다(self):
+        """
+        값이 곳마다 다 다르면 '다수' 라는 말 자체가 성립하지 않는다. 그때
+        "다수는 다르게 적었습니다" 라고 하면 **없는 다수를 지어낸다.**
+        """
+        from django.contrib.auth.models import User
+
+        mine = self._ing(self.me, allergens='밀')
+        self._ing(self.b, allergens='밀, 대두')
+        d = User.objects.create_user(username='d@example.com', password='x')
+        self._ing(d, allergens='밀, 고등어')
+
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertFalse(row['has_majority'])
+
+    def test_화면이_그_경우를_따로_말한다(self):
+        from pathlib import Path
+
+        html = Path('v1/templates/label/my_ingredient_detail_partial.html').read_text(
+            encoding='utf-8')
+        self.assertIn('곳마다 다르게 적었습니다', html)
+        self.assertIn('f.has_majority', html)
