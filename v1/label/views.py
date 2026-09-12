@@ -5390,6 +5390,9 @@ def _row_brief(row):
         'method': row.crt_mth_nm,
         'source': row.sub_ref_name,
         'year': (row.research_ymd or '')[:4],
+        # 어느 표에서 왔나. 농진청 10.4 는 전부 분석값이라 '수집' 이 97 % 인
+        # 식약처 적재본보다 믿을 만하고, 화면이 그걸 보여 줘야 사람이 고른다.
+        'rda': row.source_db == row.SOURCE_RDA,
     }
 
 
@@ -5453,7 +5456,9 @@ def my_ingredient_nutrition_api(request, ingredient_id):
         'current': current,
         'auto': _row_brief(found['auto']) if found['auto'] is not None else None,
         'candidates': [dict(_row_brief(c['row']), reason=c['reason'],
-                            name_score=c['name_score']) for c in found['candidates']],
+                            name_score=c['name_score'],
+                            agri_match=bool(c.get('agri_match')))
+                       for c in found['candidates']],
         'warning': found['warning'],
     })
 

@@ -125,19 +125,34 @@
     }
 
     if (todo.length) {
-      var chips = todo.slice(0, 3).map(function (t) {
+      /* **여기서 바로 묻는다.**
+       *
+       * 예전에는 막는 원료를 새 탭 링크로 늘어놓았다. 그러면 원료 상세를
+       * 하나씩 열고, 거기서 후보를 고르고, 돌아와서 다시 계산해야 한다.
+       * 아무도 안 한다 — 실제로 운영에서 영양성분이 정해진 원료가 8.5 % 였다.
+       *
+       * 사용자가 원료의 영양성분을 원하는 **유일한 순간**이 지금이다. 그러니
+       * 지금 자리에서 연달아 묻는다. 물을 것은 이미 nutrition_contrib 이
+       * 걸러 두었다 — 표시값을 흔들 수 있는 원료만 남는다. 스무 번 물으면
+       * 아무도 안 끝내고, 대여섯 번이면 끝낸다. */
+      window.__bomNutTodo = todo;
+      var chips = todo.slice(0, 3).map(function (t, i) {
         var label = esc(t.name) + ' '
           + '<span class="bom-nut-dim">' + Number(t.ratio).toFixed(2) + '%</span>';
         var tip = ' title="' + esc(names(t.want)) + ' 이(가) 필요합니다"';
         return t.id
-          ? '<a href="/label/my-ingredient-detail/' + t.id + '/" target="_blank"'
-              + tip + '>' + label + '</a>'
+          ? '<button type="button" class="bom-nut-pickbtn" data-act="pick"'
+              + ' data-at="' + i + '"' + tip + '>' + label + '</button>'
           : '<span' + tip + '>' + label + '</span>';
       });
       if (todo.length > 3) {
         chips.push('<span class="bom-nut-dim">그 밖에 ' + (todo.length - 3) + '건</span>');
       }
       out.push('<span class="bom-nut-todo">' + chips.join(' · ') + '</span>');
+      if (todo.some(function (t) { return t.id; })) {
+        out.push('<button type="button" class="btn v2-btn-sm btn-primary"'
+          + ' data-act="pickall">값 정하기 (' + todo.length + '건)</button>');
+      }
     }
 
     (d.warnings || []).forEach(function (w) {
@@ -155,6 +170,8 @@
     if (!btn || !lastData) return;
     if (btn.dataset.act === 'calc') { render(lastData); }
     if (btn.dataset.act === 'gate') { renderGate(lastData); }
+    if (btn.dataset.act === 'pick') { startPicking(Number(btn.dataset.at) || 0); }
+    if (btn.dataset.act === 'pickall') { startPicking(0); }
   });
 
   /* 상세 창의 '영양성분' 줄을 채운다.
@@ -211,6 +228,143 @@
       out.push({bom_id: row.bom_id, usage_ratio: row.usage_ratio});
     });
     return out;
+  }
+
+  /* ── 값 정하기 ────────────────────────────────────────────────────────
+   *
+   * 막는 원료를 하나씩 지나가며 후보를 고르게 한다. 고른 것은 곧바로 저장되고
+   * (my_ingredient_nutrition_save), 다 지나가면 요약을 다시 읽는다.
+   *
+   * **자동으로 정하지 않는다.** '버터' 라는 이름으로 동명 항목이 열두 건인데
+   * 열량이 164~761 kcal(4.6 배)로 갈린다. 이름이 완전히 같아서 어떤 유사도로도
+   * 못 가른다. 사람이 한 번 고르면 그 선택을 남겨 다시 묻지 않는다.
+   * ─────────────────────────────────────────────────────────────────── */
+  var pickAt = 0;
+
+  function pickBox() {
+    var el = document.getElementById('bomNutPick');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'bomNutPick';
+    el.className = 'bom-nut-pick';
+    document.body.appendChild(el);
+    el.addEventListener('click', onPickClick);
+    return el;
+  }
+
+  function closePick() {
+    var el = document.getElementById('bomNutPick');
+    if (el) el.remove();
+  }
+
+  function startPicking(at) {
+    pickAt = at;
+    showPick();
+  }
+
+  function showPick() {
+    var todo = window.__bomNutTodo || [];
+    while (pickAt < todo.length && !todo[pickAt].id) pickAt += 1;   // 저장 전 원료는 건너뛴다
+    if (pickAt >= todo.length) { closePick(); load(); return; }
+
+    var t = todo[pickAt];
+    var box = pickBox();
+    box.innerHTML = '<div class="bom-nut-pick-head">'
+      + '<b>' + esc(t.name) + '</b> <span class="bom-nut-dim">'
+      + Number(t.ratio).toFixed(2) + '%</span>'
+      + '<span class="bom-nut-dim"> · ' + (pickAt + 1) + ' / ' + todo.length + '</span>'
+      + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="stop">그만</button>'
+      + '</div><div class="bom-nut-pick-body">후보를 찾는 중…</div>';
+
+    fetch('/label/my-ingredient/' + t.id + '/nutrition/')
+      .then(function (r) { return r.json(); })
+      .then(function (d) { drawPick(t, d); })
+      .catch(function () {
+        box.querySelector('.bom-nut-pick-body').innerHTML =
+          '<div class="bom-nut-warn">후보를 불러오지 못했습니다.</div>';
+      });
+  }
+
+  function drawPick(t, d) {
+    var box = document.getElementById('bomNutPick');
+    if (!box) return;
+    var cands = (d && d.candidates) || [];
+    var out = [];
+
+    if (d && d.warning) {
+      out.push('<div class="bom-nut-warn">' + esc(d.warning) + '</div>');
+    }
+    if (!cands.length) {
+      out.push('<div class="bom-nut-dim">이름으로 찾은 후보가 없습니다.'
+        + ' 원료 상세에서 성적서 값을 직접 넣으세요.</div>');
+    }
+
+    cands.forEach(function (c, i) {
+      /* 무엇을 보고 고르는가 — 값이 갈리는 것을 **눈으로 보고** 정하는 자리다.
+         그래서 열량·나트륨을 이름 옆에 바로 붙이고, 근거(분석/수집·출처·연도)를
+         함께 보인다. 농진청 10.4 는 전부 분석값이라 따로 표시한다. */
+      var tags = [];
+      if (c.rda) tags.push('<span class="bom-nut-tag ok">농진청 분석</span>');
+      if (c.agri_match) tags.push('<span class="bom-nut-tag">식품원료 목록 일치</span>');
+      if (c.method) tags.push('<span class="bom-nut-dim">' + esc(c.method) + '</span>');
+      if (c.year) tags.push('<span class="bom-nut-dim">' + esc(c.year) + '</span>');
+
+      out.push('<label class="bom-nut-cand">'
+        + '<input type="radio" name="bomNutCand" value="' + c.id + '"' + (i ? '' : ' checked') + '>'
+        + '<span class="bom-nut-cand-name">' + esc(c.name) + '</span>'
+        + '<span class="bom-nut-cand-num">' + (c.calories == null ? '-' : c.calories) + ' kcal</span>'
+        + '<span class="bom-nut-cand-num">Na ' + (c.natriums == null ? '-' : c.natriums) + '</span>'
+        + '<span class="bom-nut-cand-tags">' + tags.join(' ') + '</span>'
+        + '</label>');
+    });
+
+    out.push('<div class="bom-nut-pick-foot">'
+      + (cands.length
+         ? '<button type="button" class="btn v2-btn-sm btn-primary" data-p="save">이 값으로</button>'
+         : '')
+      /* 배합비가 작아 표시값을 못 움직이는 원료는 비워 둬도 된다. 물을 것을
+         줄이는 것이 이 화면의 일이라, 그 길을 여기서도 열어 둔다. */
+      + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="skip">'
+      + '이 원료는 값이 없어도 됩니다</button>'
+      + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="next">건너뛰기</button>'
+      + '<a class="bom-nut-go" href="/label/my-ingredient-detail/' + t.id
+      + '/" target="_blank">원료에서 직접 넣기 →</a>'
+      + '</div>');
+
+    box.querySelector('.bom-nut-pick-body').innerHTML = out.join('');
+  }
+
+  function savePick(kind) {
+    var todo = window.__bomNutTodo || [];
+    var t = todo[pickAt];
+    if (!t) { closePick(); return; }
+    var body = {kind: kind};
+    if (kind === 'picked') {
+      var sel = document.querySelector('input[name=bomNutCand]:checked');
+      if (!sel) return;
+      body.public_row_id = Number(sel.value);
+    }
+    fetch('/label/my-ingredient/' + t.id + '/nutrition/save/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success) { alert((d && d.error) || '저장하지 못했습니다.'); return; }
+        pickAt += 1;
+        showPick();
+      })
+      .catch(function () { alert('저장하지 못했습니다.'); });
+  }
+
+  function onPickClick(ev) {
+    var btn = ev.target.closest('[data-p]');
+    if (!btn) return;
+    var act = btn.dataset.p;
+    if (act === 'stop') { closePick(); load(); return; }
+    if (act === 'next') { pickAt += 1; showPick(); return; }
+    if (act === 'save') { savePick('picked'); return; }
+    if (act === 'skip') { savePick('negligible'); return; }
   }
 
   function load() {

@@ -16783,11 +16783,136 @@ class 농진청_성분표를_옮겨_적는다(TestCase):
         self.assertIn("'basis_amount': 100.0", src)
 
     def test_같은_파일을_두_번_넣어도_쌓이지_않는다(self):
-        """식품코드가 고유키다. 없는 행은 아예 넣지 않는다."""
+        """
+        식품코드가 고유키다. 없는 행은 아예 넣지 않는다.
+
+        한때 줄마다 update_or_create 를 불렀다. 개발 PC 는 DB 가 같은 기계라
+        순식간이었는데 운영은 DB 가 별도 호스트라 줄마다 왕복이 곱해져 5 분이
+        걸렸다. 지금은 있는 것을 먼저 읽고 bulk_create / bulk_update 로 묶는다 —
+        **묶어도 고유키로 가르는 것은 같아야 한다.**
+        """
         from pathlib import Path
 
         cmd = Path('v1/label/management/commands/load_rda_nutrition.py').read_text(
             encoding='utf-8')
-        self.assertIn("update_or_create(food_cd=item['food_cd']", cmd)
+        self.assertIn('P.objects.filter(food_cd__in=', cmd)   # 있는 것을 먼저 본다
+        self.assertIn('bulk_create', cmd)
+        self.assertIn('bulk_update', cmd)
         svc = Path('v1/label/services/rda_nutrition.py').read_text(encoding='utf-8')
-        self.assertIn('if not code:', svc)
+        self.assertIn('if not code:', svc)                    # 코드 없는 행은 안 넣는다
+
+    def test_왕복을_줄인다(self):
+        """
+        줄마다 트랜잭션을 열면 운영에서 5 분이 걸리고, 진행 표시가 없으면
+        사용자는 멎은 줄 안다. 실제로 그랬다.
+        """
+        from pathlib import Path
+
+        cmd = Path('v1/label/management/commands/load_rda_nutrition.py').read_text(
+            encoding='utf-8')
+        self.assertIn('넣는 중', cmd)
+        self.assertIn('고치는 중', cmd)
+
+
+class 원료_영양성분은_계산하려는_그_자리에서_묻는다(TestCase):
+    """
+    후보 고르기는 처음부터 만들어져 있었다. 그런데 묻는 자리가 **원료 상세
+    안쪽**이라 아무도 거기까지 가지 않았다 — 운영에서 영양성분이 정해진 원료가
+    885 중 75 개(8.5 %)뿐이었다.
+
+    사용자가 원료의 영양성분을 원하는 **유일한 순간**은 [계산하기] 를 눌렀을
+    때다. 그 자리에서 연달아 묻는다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import AgriculturalProduct, MyIngredient, PublicFoodNutrition
+
+        self.user = User.objects.create_user(username='u@example.com', password='x')
+        self.agri = AgriculturalProduct.objects.create(
+            rprsnt_rawmtrl_nm='귀리', scnm='Avena sativa L.')
+        self.row = PublicFoodNutrition.objects.create(
+            food_cd='RDA0001', food_nm_kr='귀리, 겉귀리, 도정, 생것',
+            basis_unit=PublicFoodNutrition.BASIS_G, calories=388,
+            crt_mth_nm='분석', source_db=PublicFoodNutrition.SOURCE_RDA,
+            agri_product=self.agri)
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='ㅇㅇ상사 오트', delete_YN='N',
+            food_category='agricultural', prdlst_dcnm='귀리')
+
+    def test_식품유형이_식품원료_목록이면_그_길로도_찾는다(self):
+        """
+        원료명은 거래처가 붙인 상품명일 때가 많아('ㅇㅇ상사 오트') 이름 척도가
+        아무 말도 못 한다. 그런데 식품유형은 우리 목록의 항목명 그 자체다.
+        """
+        from v1.label.services import nutrition_candidates as ncd
+
+        self.assertEqual(ncd.agri_product_id(self.ing), self.agri.pk)
+        found = ncd.for_ingredient(self.ing)
+        ids = [c['row'].pk for c in found['candidates']]
+        self.assertIn(self.row.pk, ids)
+
+    def test_식품원료로_찾은_것은_꼬리표가_붙는다(self):
+        from v1.label.services import nutrition_candidates as ncd
+
+        found = ncd.for_ingredient(self.ing)
+        hit = [c for c in found['candidates'] if c['row'].pk == self.row.pk][0]
+        self.assertTrue(hit.get('agri_match'))
+
+    def test_농수산물이_아니면_그_길을_쓰지_않는다(self):
+        from v1.label.models import MyIngredient
+        from v1.label.services import nutrition_candidates as ncd
+
+        other = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='가공품', delete_YN='N',
+            food_category='processed', prdlst_dcnm='귀리')
+        self.assertIsNone(ncd.agri_product_id(other))
+
+    def test_이름으로_찾은_것을_지우지_않는다(self):
+        """
+        종이 같아도 가공 정도가 다르면(생것·삶은것·말린것) 값이 몇 배씩
+        갈리고, 그건 이름이 가른다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/label/services/nutrition_candidates.py').read_text(encoding='utf-8')
+        block = src[src.index('def merge_agri'):]
+        self.assertIn('이름 쪽을 지우지 않는다', block)
+
+    def test_화면이_그_자리에서_묻는다(self):
+        """
+        새 탭으로 원료 상세를 열게 하면 돌아와서 다시 계산해야 한다.
+        아무도 안 한다.
+        """
+        from pathlib import Path
+
+        html = Path('v1/templates/products/_bom_nutrition_summary.html').read_text(
+            encoding='utf-8')
+        self.assertIn("data-act=\"pick\"", html)
+        self.assertIn('function startPicking', html)
+        self.assertIn("'/label/my-ingredient/' + t.id + '/nutrition/'", html)
+        self.assertIn("nutrition/save/", html)
+
+    def test_값이_없어도_되는_길을_함께_연다(self):
+        """
+        배합비가 작아 표시값을 못 움직이는 원료는 비워 둬도 된다. 물을 것을
+        줄이는 것이 이 화면이 하는 일이다.
+        """
+        from pathlib import Path
+
+        html = Path('v1/templates/products/_bom_nutrition_summary.html').read_text(
+            encoding='utf-8')
+        self.assertIn("savePick('negligible')", html)
+
+    def test_자동으로_정하지_않는다(self):
+        """
+        '버터' 동명 12 건에 열량이 164~761 kcal(4.6 배)로 갈린다. 이름이
+        완전히 같아 어떤 유사도로도 못 가른다.
+        """
+        from pathlib import Path
+
+        html = Path('v1/templates/products/_bom_nutrition_summary.html').read_text(
+            encoding='utf-8')
+        self.assertIn("data-p=\"save\"", html)          # 사람이 누른다
+        self.assertIn('input type="radio"', html)

@@ -422,6 +422,9 @@ def for_ingredient(ingredient, limit=TOP_N):
         return {'auto': auto, 'candidates': [], 'warning': None}
 
     cands = candidates(getattr(ingredient, 'prdlst_nm', '') or '', limit=limit)
+    # 원료명이 상품명이면 이름 척도가 아무 말도 못 한다. 식품유형이 식품원료
+    # 목록의 항목이면 그쪽으로도 찾아 얹는다.
+    cands = merge_agri(cands, ingredient, limit=limit)
     return {'auto': None, 'candidates': cands, 'warning': spread_warning(cands)}
 
 
@@ -508,3 +511,81 @@ def try_link_quietly(ingredient):
             '원료 %s 영양성분 자동 연결 실패', getattr(ingredient, 'pk', None),
             exc_info=True)
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 식품원료(A코드)로 후보를 찾는 길
+#
+# 신규 원료 등록에서 **농수산물**을 고르면 식품유형 칸에 식품원료 목록의 항목명이
+# 들어간다(food_category='agricultural', prdlst_dcnm='Abiu열매분말'). 그러면
+# 우리는 그 원료가 **어느 종(種)인지를 이미 알고 있다.**
+#
+# 이름으로 찾는 길이 막히는 자리가 바로 여기다. 원료명은 거래처가 붙인 상품명일
+# 때가 많아서("정제소금 NaCl-99", "ㅇㅇ") 이름 척도가 아무 말도 못 한다. 그런데
+# 식품유형은 우리 목록의 항목명 그 자체라 흔들리지 않는다.
+#
+# **값을 정하지는 않는다.** 학명이 같아도 목록의 다른 항목에 붙을 수 있어
+# (귀리 → '큰쌀귀리씨앗') 사람이 고르는 것은 그대로다. 다만 **후보에 올리고
+# 위로 세운다.**
+# ─────────────────────────────────────────────────────────────────────────────
+
+AGRI_CATEGORY = 'agricultural'
+# 이름이 아무 말도 못 해도 종이 같으면 후보로 올린다. 이름 점수를 이만큼 준다 —
+# 1 위를 빼앗을 만큼은 아니고, 목록에 남을 만큼이다.
+AGRI_FLOOR = 60
+
+
+def agri_product_id(ingredient):
+    """이 원료가 식품원료 목록의 어느 항목인가. 아니면 None."""
+    from v1.label.models import AgriculturalProduct
+
+    if (getattr(ingredient, 'food_category', '') or '') != AGRI_CATEGORY:
+        return None
+    name = (getattr(ingredient, 'prdlst_dcnm', '') or '').strip()
+    if not name:
+        return None
+    return (AgriculturalProduct.objects
+            .filter(rprsnt_rawmtrl_nm=name)
+            .values_list('pk', flat=True).first())
+
+
+def by_agri_product(agri_id, limit=TOP_N):
+    """그 항목에 이어 둔 성분표 행들. 적재할 때 학명으로 이어 둔 것이다."""
+    if not agri_id:
+        return []
+    rows = (PublicFoodNutrition.objects
+            .filter(agri_product_id=agri_id,
+                    basis_unit=PublicFoodNutrition.BASIS_G)
+            .exclude(calories__isnull=True)
+            .exclude(verify_status=PublicFoodNutrition.VERIFY_FAIL)
+            .order_by('-crt_mth_nm', '-research_ymd')[:limit])
+    return [{'row': r, 'name_score': AGRI_FLOOR,
+             'rank_score': _rank_score(r, AGRI_FLOOR) + 40,
+             'reason': '식품원료 목록과 같은 항목', 'agri_match': True}
+            for r in rows]
+
+
+def merge_agri(found, ingredient, limit=TOP_N):
+    """
+    이름으로 찾은 후보에 식품원료 길을 얹는다. 같은 행은 꼬리표만 단다.
+
+    이름 쪽을 지우지 않는다 — 종이 같아도 가공 정도가 다르면(생것·삶은것·
+    말린것) 값이 몇 배씩 갈리고, 그건 이름이 가른다.
+    """
+    agri_id = agri_product_id(ingredient)
+    if not agri_id:
+        return found
+
+    seen = {c['row'].pk: c for c in found}
+    for cand in by_agri_product(agri_id, limit=limit):
+        hit = seen.get(cand['row'].pk)
+        if hit is not None:
+            hit['agri_match'] = True
+            hit['rank_score'] = hit.get('rank_score', 0) + 40
+            hit['reason'] = (hit.get('reason') or '') + ' · 식품원료 목록과 같은 항목'
+        else:
+            found.append(cand)
+            seen[cand['row'].pk] = cand
+
+    found.sort(key=lambda c: c.get('rank_score', 0), reverse=True)
+    return found[:limit]

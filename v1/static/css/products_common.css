@@ -1757,3 +1757,59 @@ html.v2-max .v2-max-exit { display: flex; }
     word-break: break-all;
 }
 .cmp-extra i { margin-top: 2px; color: var(--ez-warning, #e67700); flex-shrink: 0; }
+
+/* ── 배합 영양성분: 그 자리에서 값 정하기 ───────────────────────────────
+   막는 원료를 새 탭으로 하나씩 열게 했더니 아무도 안 했다. 사용자가 원료의
+   영양성분을 원하는 유일한 순간이 [계산하기] 를 누른 직후라, 그 자리에서
+   연달아 묻는다. */
+.bom-nut-pickbtn {
+  border: 0; background: none; padding: 0; font: inherit;
+  color: var(--ez-link, #1a73e8); text-decoration: underline; cursor: pointer;
+}
+.bom-nut-pickbtn:hover { color: var(--ez-link-hover, #1765cc); }
+
+.bom-nut-pick {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 1085; width: min(620px, calc(100vw - 32px));
+  max-height: min(78vh, 680px); display: flex; flex-direction: column;
+  background: var(--ez-surface, #ffffff);
+  border: 1px solid var(--ez-border, #e6e9f2); border-radius: 10px;
+  box-shadow: 0 10px 34px rgba(32, 33, 36, .22);
+  font-size: 13px;
+}
+.bom-nut-pick-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 14px; border-bottom: 1px solid var(--ez-border, #e6e9f2);
+}
+.bom-nut-pick-head .btn { margin-left: auto; }
+.bom-nut-pick-body { padding: 10px 14px; overflow-y: auto; }
+.bom-nut-pick-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 14px; border-top: 1px solid var(--ez-border, #e6e9f2);
+}
+.bom-nut-pick-foot .bom-nut-go { margin-left: auto; }
+
+/* 후보 한 줄 — 값이 갈리는 것을 눈으로 보고 고르는 자리다. 그래서 열량과
+   나트륨을 이름 옆에 바로 붙인다. */
+.bom-nut-cand {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 6px; border-bottom: 1px solid var(--ez-border-weak, #f1f3f4);
+  cursor: pointer;
+}
+.bom-nut-cand:last-child { border-bottom: 0; }
+.bom-nut-cand:hover { background: var(--ez-surface-weak, #f8f9fa); }
+.bom-nut-cand-name { flex: 1 1 180px; min-width: 0; }
+.bom-nut-cand-num { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.bom-nut-cand-tags { flex: 1 1 100%; display: flex; gap: 6px; flex-wrap: wrap; }
+.bom-nut-tag {
+  font-size: 11px; padding: 1px 6px; border-radius: 10px;
+  background: var(--ez-surface-weak, #f1f3f4); color: var(--ez-text-dim, #5f6368);
+}
+.bom-nut-tag.ok {
+  background: var(--ez-success-bg, #e6f4ea);
+  color: var(--ez-success-on-bg, #137333);
+}
+
+@media (max-width: 480px) {
+  .bom-nut-pick { width: calc(100vw - 24px); }
+}

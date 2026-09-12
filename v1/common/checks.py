@@ -121,6 +121,10 @@ _OWN_SIZED_BUTTONS = frozenset({
     # 홈
     'app-strip-close', 'upd-strip-close', 'home-switch-btn', 'v2-auth-btn',
     # 제품·문서·BOM·연락처
+    # bom-nut-pickbtn: 배합 요약의 '막는 원료' 칩. 단추이지만 **글 속에 섞여
+    # 있는 이름표**라 v2-btn 크기 체계를 쓰면 줄이 무너진다. 링크였던 것을
+    # 단추로 바꾼 자리다(그 자리에서 바로 묻기 위해).
+    'bom-nut-pickbtn',
     'allergen-add-btn', 'allergen-chip', 'allergen-icon-btn',
     'allergen-selectall-btn', 'btn-apply', 'btn-storage-badge',
     'contacts-filter-btn', 'contacts-icon-btn', 'di-name', 'doc-ver-btn',

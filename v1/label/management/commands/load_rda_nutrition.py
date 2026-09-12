@@ -49,6 +49,48 @@ class Command(BaseCommand):
                             help='저장하지 않고 세기만 한다')
         parser.add_argument('--show', type=int, default=5, help='표본 개수')
 
+    # ── 쓰는 일 ──────────────────────────────────────────────────────────
+    #
+    # 처음에는 줄마다 update_or_create 를 부르고 그 줄마다 트랜잭션을 열었다.
+    # 개발 PC 는 DB 가 같은 기계라 순식간이었는데, 운영은 **DB 가 별도 호스트**
+    # 라 줄마다 왕복이 곱해진다. 3,366 줄이면 왕복이 1 만 번을 넘어 5~20 분이
+    # 걸렸고, 진행 표시가 없어서 사용자는 멎은 줄 알았다.
+    #
+    # 있는 것을 한 번에 읽어 두고 bulk_create / bulk_update 로 묶는다. 왕복이
+    # 1 만 번에서 몇십 번으로 준다.
+    CHUNK = 500
+
+    def _write(self, pending, w):
+        """(코드, 값) 목록을 묶어서 넣는다. 넣은 수를 돌려준다."""
+        codes = [code for code, _ in pending]
+        have = {}
+        for i in range(0, len(codes), self.CHUNK):
+            have.update({r.food_cd: r.pk
+                         for r in P.objects.filter(food_cd__in=codes[i:i + self.CHUNK])
+                                           .only('pk', 'food_cd')})
+
+        value_fields = sorted({k for _, f in pending for k in f})
+        new_rows, old_rows = [], []
+        for code, fields in pending:
+            pk = have.get(code)
+            if pk is None:
+                new_rows.append(P(food_cd=code, **fields))
+            else:
+                old_rows.append(P(pk=pk, food_cd=code, **fields))
+
+        done = 0
+        for i in range(0, len(new_rows), self.CHUNK):
+            with transaction.atomic():
+                P.objects.bulk_create(new_rows[i:i + self.CHUNK])
+            done += len(new_rows[i:i + self.CHUNK])
+            w('    넣는 중… %s' % f'{done:,}')
+        for i in range(0, len(old_rows), self.CHUNK):
+            with transaction.atomic():
+                P.objects.bulk_update(old_rows[i:i + self.CHUNK], value_fields)
+            done += len(old_rows[i:i + self.CHUNK])
+            w('    고치는 중… %s' % f'{done:,}')
+        return done
+
     def handle(self, *args, **opts):
         w = self.stdout.write
         try:
@@ -65,6 +107,7 @@ class Command(BaseCommand):
           % (f'{len(by_sci):,}', f'{len(by_name):,}'))
 
         saved = linked_sci = linked_name = 0
+        pending = []
         tally = {P.VERIFY_PASS: 0, P.VERIFY_FAIL: 0, P.VERIFY_SKIP: 0}
         no_chol = 0
         bad, samples = [], []
@@ -107,9 +150,10 @@ class Command(BaseCommand):
                 'source_db': P.SOURCE_RDA,
                 'agri_product_id': agri_id,
             })
-            with transaction.atomic():
-                P.objects.update_or_create(food_cd=item['food_cd'], defaults=fields)
-            saved += 1
+            pending.append((item['food_cd'], fields))
+
+        if not opts['dry_run']:
+            saved = self._write(pending, w)
 
         n = len(items)
         w('')
