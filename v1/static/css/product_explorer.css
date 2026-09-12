@@ -263,3 +263,23 @@
 .pe-note  { font-size: 12px; }
 .pe-chip  { padding: 2px 8px; font-size: 11px; }
 .pe-click { cursor: pointer; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   원료 동기화 뱃지 — 마크업보다 먼저 와야 한다
+═══════════════════════════════════════════════════════════════════════
+   product_explorer.html 424줄, 마크업 204개 태그 뒤에 있었다. 브라우저가
+   목록을 스타일 없이 한 번 그린 뒤 다시 그렸다. 이 파일은 head 에서 불린다.
+   ═══════════════════════════════════════════════════════════════════ */
+.ingredient-sync-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+    white-space: nowrap;
+    background-color: var(--ez-success-bg);
+    color: #1e7e34;
+    border: 1px solid #a8d5b5;
+}

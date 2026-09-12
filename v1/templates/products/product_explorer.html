@@ -421,21 +421,6 @@ const PE_CSRF_TOKEN = '{{ csrf_token }}';
 </script>
 <script src="{% static 'js/product_explorer.js' %}?v=20260222"></script>
 
-<style>
-.ingredient-sync-badge {
-    display: inline-block;
-    font-size: 10px;
-    padding: 1px 6px;
-    border-radius: 10px;
-    margin-left: 5px;
-    vertical-align: middle;
-    white-space: nowrap;
-    background-color: var(--ez-success-bg);
-    color: #1e7e34;
-    border: 1px solid #a8d5b5;
-}
-</style>
-
 <script>
 /* ── BOM/원료 동기화 알림 뱃지 (제품 탐색기) ────────────────────── */
 function _dismissProductBadge(productId) {

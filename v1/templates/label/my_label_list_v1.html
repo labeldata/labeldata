@@ -3,6 +3,71 @@
 {% block title %}표시사항 관리{% endblock %}
 
 {% block content %}
+<style>
+/* 마크업보다 먼저 와야 한다 — 문서 끝에 두면 브라우저가 화면을
+   스타일 없이 한 번 그린 뒤 다시 그린다(열 때 깜빡인다).
+   외부 CSS 링크 뒤이므로 우선순위는 그대로다. */
+/* 행 호버 효과 */
+.clickable-row:hover {
+    background-color: #f0f8ff !important;
+    transition: background-color 0.2s ease;
+}
+
+.clickable-row {
+    transition: background-color 0.2s ease;
+}
+
+/* 한 줄만 보이고 넘치면 ... 처리, 마우스오버시 title로 전체 표시 */
+.ellipsis-cell {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: pointer;
+}
+.table th, .table td {
+    vertical-align: middle !important;
+}
+
+/* 체크박스 셀 스타일 개선 */
+.checkbox-cell {
+    cursor: pointer;
+    padding: 8px !important;
+    text-align: center;
+    vertical-align: middle;
+    position: relative;
+}
+
+.checkbox-cell input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.checkbox-cell:hover {
+    background-color: var(--ez-gray-50);
+}
+
+/* 검색 필드 포커스 및 입력 효과 */
+.form-control:focus {
+    background-color: var(--ez-gray-50) !important;
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+}
+
+/* 입력값이 있는 경우 테두리 효과 */
+.form-control.has-value {
+    border-color: #28a745 !important;
+    border-width: 2px !important;
+}
+
+.form-control.has-value:focus {
+    background-color: var(--ez-gray-50) !important;
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+}
+</style>
+
 <div class="container mt-4">
     <h2 class="mb-1">표시사항 관리</h2>
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -179,68 +244,6 @@
 
     {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
 </div>
-
-<style>
-/* 행 호버 효과 */
-.clickable-row:hover {
-    background-color: #f0f8ff !important;
-    transition: background-color 0.2s ease;
-}
-
-.clickable-row {
-    transition: background-color 0.2s ease;
-}
-
-/* 한 줄만 보이고 넘치면 ... 처리, 마우스오버시 title로 전체 표시 */
-.ellipsis-cell {
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    vertical-align: middle;
-    cursor: pointer;
-}
-.table th, .table td {
-    vertical-align: middle !important;
-}
-
-/* 체크박스 셀 스타일 개선 */
-.checkbox-cell {
-    cursor: pointer;
-    padding: 8px !important;
-    text-align: center;
-    vertical-align: middle;
-    position: relative;
-}
-
-.checkbox-cell input[type="checkbox"] {
-    margin: 0;
-    cursor: pointer;
-}
-
-.checkbox-cell:hover {
-    background-color: var(--ez-gray-50);
-}
-
-/* 검색 필드 포커스 및 입력 효과 */
-.form-control:focus {
-    background-color: var(--ez-gray-50) !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-}
-
-/* 입력값이 있는 경우 테두리 효과 */
-.form-control.has-value {
-    border-color: #28a745 !important;
-    border-width: 2px !important;
-}
-
-.form-control.has-value:focus {
-    background-color: var(--ez-gray-50) !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-}
-</style>
 
 <script src="{% static 'js/label/my_label_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

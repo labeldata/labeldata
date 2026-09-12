@@ -549,6 +549,59 @@
         }
     }
 </style>
+
+<style>
+/* 마크업보다 먼저 와야 한다 — 문서 끝에 두면 브라우저가 목록을
+   스타일 없이 한 번 그린 뒤 다시 그린다(화면 열 때 깜빡인다).
+   외부 CSS 링크 뒤이므로 우선순위는 그대로다. */
+.dup-badge {
+    display: none;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--ez-danger, #ea4335);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+.dup-badge.on { display: inline-block; }
+.dup-group {
+    border: 1px solid var(--ez-border, #dadce0);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+.dup-group-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.dup-row {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 110px 90px;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 2px;
+    font-size: 12.5px;
+    border-top: 1px solid var(--ez-border-light, #f1f3f4);
+}
+.dup-row:first-of-type { border-top: 0; }
+.dup-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dup-meta { font-size: 11px; color: var(--ez-text-muted, #9aa0a6); }
+.dup-used { font-size: 11px; color: var(--ez-text-muted, #5f6368); text-align: right; }
+.dup-used.is-used { color: var(--v2-blue, #1a73e8); font-weight: 700; }
+.dup-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.dup-note { font-size: 11px; color: var(--ez-text-muted, #9aa0a6); margin-top: 6px; }
+.dup-group.is-done { background: var(--ez-gray-50, #f8f9fa); opacity: .75; }
+/* 붙여넣기 창 */
+.paste-grid { width: 100%; min-height: 300px; max-height: 46vh; overflow: auto; }
+.paste-report {
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--ez-gray-700, #5f6368);
+    min-height: 20px;
+}
+.paste-report b { color: var(--ez-gray-900, #202124); }
+.paste-report .warn { color: var(--ez-warning-on-bg, #b06000); }
+.paste-quota { font-size: 12px; color: var(--ez-gray-600, #80868b); }
+.paste-quota.tight { color: var(--ez-danger, #d93025); font-weight: 600; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -1278,43 +1331,6 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<style>
-.dup-badge {
-    display: none;
-    margin-left: 6px;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--ez-danger, #ea4335);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-}
-.dup-badge.on { display: inline-block; }
-.dup-group {
-    border: 1px solid var(--ez-border, #dadce0);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 10px;
-}
-.dup-group-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
-.dup-row {
-    display: grid;
-    grid-template-columns: 20px minmax(0, 1fr) 110px 90px;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 2px;
-    font-size: 12.5px;
-    border-top: 1px solid var(--ez-border-light, #f1f3f4);
-}
-.dup-row:first-of-type { border-top: 0; }
-.dup-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dup-meta { font-size: 11px; color: var(--ez-text-muted, #9aa0a6); }
-.dup-used { font-size: 11px; color: var(--ez-text-muted, #5f6368); text-align: right; }
-.dup-used.is-used { color: var(--v2-blue, #1a73e8); font-weight: 700; }
-.dup-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
-.dup-note { font-size: 11px; color: var(--ez-text-muted, #9aa0a6); margin-top: 6px; }
-.dup-group.is-done { background: var(--ez-gray-50, #f8f9fa); opacity: .75; }
-</style>
 
 <script>
 /*
@@ -1543,20 +1559,6 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
-<style>
-/* 붙여넣기 창 */
-.paste-grid { width: 100%; min-height: 300px; max-height: 46vh; overflow: auto; }
-.paste-report {
-    margin-top: 10px;
-    font-size: 12.5px;
-    color: var(--ez-gray-700, #5f6368);
-    min-height: 20px;
-}
-.paste-report b { color: var(--ez-gray-900, #202124); }
-.paste-report .warn { color: var(--ez-warning-on-bg, #b06000); }
-.paste-quota { font-size: 12px; color: var(--ez-gray-600, #80868b); }
-.paste-quota.tight { color: var(--ez-danger, #d93025); font-weight: 600; }
-</style>
 
 <script>
 /* ─────────────────────────────────────────────────────────────────────

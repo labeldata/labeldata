@@ -7100,10 +7100,28 @@ class RejectReasonUiExistsTests(TestCase):
     def test_어디에_남는지_알려_준다(self):
         self.assertIn('댓글과 활동 로그', self.src)
 
+    def test_스타일은_템플릿이_아니라_css_에_있다(self):
+        """
+        표시 항목 패널의 규칙이 이 템플릿 맨 아래 <style> 블록에 있었다.
+        마크업은 297줄인데 규칙은 3,894줄 — 3,600줄 아래다. 브라우저는 패널을
+        **스타일 없이 한 번 그린 뒤** 문서 끝의 <style> 을 만나 다시 그렸고,
+        화면을 열 때마다 그 사이가 눈에 보였다.
+
+        products_detail.css 는 head 에서 불린다. 거기에 있어야 한다.
+        """
+        self.assertNotIn('<style', self.src,
+                         'products_detail.css 로 옮기세요 (head 에서 불립니다)')
+
     def test_색은_토큰에서_온다(self):
         import re
-        block = re.search(r'\.rj-icon.*?\.rj-error[^\n]*\n', self.src, re.S)
-        self.assertIsNotNone(block)
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        css = (Path(dj.BASE_DIR) / 'static' / 'css'
+               / 'products_detail.css').read_text(encoding='utf-8')
+        block = re.search(r'\.rj-icon.*?\.rj-error[^\n]*\n', css, re.S)
+        self.assertIsNotNone(block, 'products_detail.css 에 반려 모달 규칙이 없다')
         self.assertNotRegex(block.group(0), r'#[0-9a-fA-F]{6}')
 
 
@@ -7188,3 +7206,49 @@ class SizeDeclarationsLiveInCssTests(TestCase):
     def test_빈_style_속성이_남지_않았다(self):
         for rel, text in self._texts():
             self.assertNotIn('style=""', text, rel)
+
+
+class StylesComeBeforeMarkupTests(TestCase):
+    """
+    스타일이 마크업 **뒤**에 있으면 브라우저는 화면을 한 번 스타일 없이 그린
+    뒤 다시 그린다. 화면을 열 때마다 그 사이가 눈에 보인다.
+
+    제품 상세의 표시 항목 패널이 그랬다 — 마크업은 297줄, 규칙은 3,894줄.
+    3,600줄 아래였다. 체크박스와 글자가 제자리를 못 찾고 흩어졌다가 들어갔다.
+    여덟 화면이 같은 모양이었다.
+
+    base 를 타는 문서만 본다. 단독 문서는 head 가 자기 안에 있어 판정 기준이
+    다르다.
+    """
+
+    #  앞선 태그가 이만큼 쌓인 뒤의 <style> 은 깜빡임이 눈에 보인다.
+    LIMIT = 40
+
+    def _late_styles(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        root = Path(dj.BASE_DIR) / 'templates'
+        found = []
+        for path in sorted(root.rglob('*.html')):
+            text = path.read_text(encoding='utf-8')
+            if '{% extends' not in text:
+                continue
+            start = text.find('{% block content %}')
+            if start < 0:
+                continue
+            for m in re.finditer(r'<style[^>]*>', text[start:]):
+                at = start + m.start()
+                before = len(re.findall(r'<(?!/|!|style|script)[a-z]', text[start:at]))
+                if before >= self.LIMIT:
+                    rel = str(path.relative_to(root)).replace(chr(92), '/')
+                    found.append('%s:%d (앞선 태그 %d개)'
+                                 % (rel, text.count(chr(10), 0, at) + 1, before))
+        return found
+
+    def test_마크업_뒤에_오는_스타일이_없다(self):
+        self.assertEqual(
+            self._late_styles(), [],
+            '스타일을 마크업 앞이나 head 에서 불리는 CSS 로 옮기세요')
