@@ -52,22 +52,6 @@ def as_fields(item):
     }
 
 
-# 화면에 칸이 없어 채울 수는 없지만, 사람이 알면 도움이 되는 것들. 조회 결과
-# 옆에 곁들여 보여 준다 — 버리기에는 아깝고 칸에 넣기에는 자리가 없다.
-def as_notes(item):
-    """{이름: 값}. 값이 있는 것만."""
-    pairs = (
-        ('업종', item.induty_cd_nm),
-        ('허가일자', item.prms_dt),
-        ('제품형태', item.dispos),
-        ('용도', item.prpos),
-        ('생산종료', '예' if (item.production or '') == 'Y' else ''),
-        ('고열량저영양', '해당' if (item.hieng_lntrt_dvs_yn or '') == 'Y' else ''),
-        ('어린이기호식품 품질인증', '있음' if (item.child_crtfc_yn or '') == 'Y' else ''),
-    )
-    return {k: str(v).strip() for k, v in pairs if str(v or '').strip()}
-
-
 def find_exact(text):
     """
     번호로 딱 맞는 품목 하나. 하이픈이 있고 없고는 따지지 않는다.

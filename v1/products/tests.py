@@ -5659,14 +5659,6 @@ class 번호로_찾으면_아는_것을_다_채운다(TestCase):
         self.assertEqual(f['pog_daycnt'], '')
         self.assertEqual(f['frmlc_mtrqlt'], '')
 
-    def test_칸이_없는_것은_곁들여_보인다(self):
-        """버리기에는 아깝고 칸에 넣기에는 자리가 없는 것들."""
-        from v1.label.services import item_lookup
-
-        notes = item_lookup.as_notes(self._item())
-        self.assertEqual(notes.get('업종'), '식품제조가공업')
-        self.assertEqual(notes.get('허가일자'), '19971027')
-        self.assertNotIn('용도', notes)          # 값이 없으면 넣지 않는다
 
 
 class 고를_것이_하나뿐이면_묻지_않는다(TestCase):
@@ -5728,3 +5720,88 @@ class 탭을_옮겨도_도움말_단추가_남는다(TestCase):
         engine = Path('v1/templates/includes/_coachmark.html').read_text(encoding='utf-8')
         self.assertNotIn('showNavButton', engine)
         self.assertIn('setTimeout(mountFab, 120)', engine)
+
+
+class 소분류를_넣으면_대분류도_함께_맞춘다(TestCase):
+    """
+    품목보고번호 조회와 사진 판독은 **소분류(식품유형) 하나만** 준다. 식약처가
+    그것만 갖고 있기 때문이다. 그런데 이 화면의 소분류 목록은 **대분류로
+    걸러져 있다.** 대분류가 다른 값으로 남아 있으면 그 소분류는 목록에 없어서
+    조용히 지워지고, 대분류가 빈 채로 저장되면 사용자는 나중에 대분류를 고르는
+    순간 제 소분류를 잃는다.
+    """
+
+    def _read(self, path):
+        from pathlib import Path
+        return Path(path).read_text(encoding='utf-8')
+
+    def test_소분류에서_대분류를_거꾸로_찾는다(self):
+        html = self._read('v1/templates/products/_tab_basic_info.html')
+        self.assertIn('window.syncFoodGroupFromType', html)
+        # 짝은 옵션의 data-group 이 이미 알고 있다
+        self.assertIn('data-group="{{ ft.food_group }}"', html)
+
+    def test_대분류를_먼저_바꾸고_소분류를_넣는다(self):
+        """순서를 뒤집으면 목록이 다시 그려지면서 방금 넣은 값이 지워진다."""
+        html = self._read('v1/templates/products/_tab_basic_info.html')
+        block = html[html.index('window.syncFoodGroupFromType'):]
+        block = block[:block.index('};')]
+        self.assertLess(block.index('filterFoodTypes(opt.group)'),
+                        block.index('_ftTypeSel.value = want'))
+
+    def test_판독도_그_길을_탄다(self):
+        js = self._read('v1/static/js/products/basic_info_ocr.js')
+        self.assertIn('window.syncFoodGroupFromType(derived.food_type)', js)
+
+    def test_조회도_그_길을_탄다(self):
+        """
+        조회는 사진을 읽지 않아 derived 가 없다. 소분류만이라도 흘려보내지
+        않으면 칸에는 들어가도 대분류가 빈 채로 남는다.
+        """
+        js = self._read('v1/static/js/products/import_modal.js')
+        self.assertIn('{food_type: lookupFields.food_type}', js)
+        ocr = self._read('v1/static/js/products/basic_info_ocr.js')
+        self.assertIn('function showModal(data, photoFile, apiMatch, snapInfo, derivedIn)', ocr)
+
+    def test_표시용은_건드리지_않는다(self):
+        """부기가 붙는 자리라, 덮으면 사람이 적어 둔 부기가 사라진다."""
+        html = self._read('v1/templates/products/_tab_basic_info.html')
+        block = html[html.index('window.syncFoodGroupFromType'):]
+        block = block[:block.index('};')]
+        self.assertNotIn('_ftPrdlstDcnm', block)
+
+
+class 떠날_때_치우는_주소는_url_태그로_만든다(TestCase):
+    """
+    주소를 손으로 이어 붙였더니 변수명을 틀려도 템플릿이 **조용히 빈 문자열**을
+    넣었다. 이 화면의 컨텍스트는 product 인데 label 로 적어서
+    '/products//discard-if-untouched/' 가 나갔고, 그래서 뒤로 가기를 해도
+    빈 제품이 그대로 남았다. 시험이 화면 문자열만 보고 실제 주소는 안 봐서
+    놓쳤다.
+    """
+
+    def test_주소를_손으로_잇지_않는다(self):
+        from pathlib import Path
+
+        html = Path('v1/templates/products/product_detail.html').read_text(encoding='utf-8')
+        self.assertIn("products:discard_if_untouched", html)
+        self.assertNotIn("'/products/{{ label", html)
+
+    def test_실제로_그_제품_번호가_들어간다(self):
+        """렌더링해서 본다 — 문자열만 보면 빈 주소를 못 잡는다."""
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        user = User.objects.create_user(username='u@example.com', password='pw12345!')
+        label = MyLabel.objects.create(user_id=user, my_label_name='제품', delete_YN='N')
+        self.client.force_login(user)
+
+        resp = self.client.get(reverse('products:product_detail', args=[label.pk]))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('PRODUCT_DISCARD_URL = "/products/%d/discard-if-untouched/"' % label.pk,
+                      body)
+        # 빈 주소가 실제로 나가지는 않는지. 주석에 적어 둔 예시 문자열과
+        # 섞이지 않게 **정의문 그대로** 견준다 — 앞의 assertIn 과 짝이다.
+        self.assertNotIn('PRODUCT_DISCARD_URL = "/products//', body)

@@ -733,7 +733,14 @@
 
   // 읽어낸 값이 맞는지는 결국 사진을 봐야 안다. 원본을 옆에 두고 비교한다.
   // photoFile 이 없으면(품목보고번호로 불러온 경우) 표만 그린다.
-  function showModal(data, photoFile, apiMatch, snapInfo) {
+  function showModal(data, photoFile, apiMatch, snapInfo, derivedIn) {
+    /* 품목보고번호 조회는 **사진을 읽지 않는다.** 그래서 derived(대분류·
+       장기보존·제조방법 같은 파생값)가 없다. 그런데 조회 결과에도 소분류가
+       들어 있으니, 그것만이라도 같은 길로 흘려보낸다 — 안 그러면 소분류가
+       칸에는 들어가도 **대분류가 빈 채로 남는다.** */
+    if (derivedIn) {
+      derived = Object.assign({}, derived || {}, derivedIn);
+    }
     // 모달을 먼저 만든다. 그 안의 요소를 먼저 찾으면 첫 실행에서 항상 null 이라
     // "Cannot set properties of null" 로 죽는다.
     var modalEl = ensureModal();
@@ -1301,8 +1308,24 @@
     if (derived.food_group && setSelect('field-food-group', derived.food_group)) {
       changed.push('식품유형 대분류');
     }
-    if (derived.food_type && setSelect('field-food-type', derived.food_type)) {
-      changed.push('소분류');
+    /* 소분류는 **대분류와 짝**이다.
+     *
+     * setSelect 는 지금 목록에 없는 값이면 그냥 실패한다. 소분류 목록은
+     * 대분류로 걸러져 있으므로, 대분류가 안 맞으면 멀쩡한 소분류가 조용히
+     * 안 들어간다. 게다가 품목보고번호 조회는 **소분류 하나만** 준다 —
+     * 식약처가 그것만 갖고 있기 때문이다.
+     *
+     * 그래서 소분류에서 대분류를 거꾸로 찾아 함께 맞추는 길을 먼저 탄다
+     * (_tab_basic_info 의 syncFoodGroupFromType). 그 화면이 아니면
+     * 예전처럼 넣는다. */
+    if (derived.food_type) {
+      var byPair = typeof window.syncFoodGroupFromType === 'function'
+        && window.syncFoodGroupFromType(derived.food_type);
+      if (byPair) {
+        changed.push('식품유형 대분류·소분류');
+      } else if (setSelect('field-food-type', derived.food_type)) {
+        changed.push('소분류');
+      }
     }
 
     if (derived.preservation_type) {

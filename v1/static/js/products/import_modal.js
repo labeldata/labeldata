@@ -459,7 +459,11 @@
       Object.keys(lookupFields).forEach(function (k) {
         if (lookupFields[k]) asOcr[k] = { value: lookupFields[k], confidence: 'high' };
       });
-      window.basicInfoOcrShow(asOcr);
+      /* 소분류를 따로 넘긴다. 화면의 소분류 목록은 대분류로 걸러져 있어서,
+         대분류를 함께 맞추지 않으면 조용히 안 들어간다. 조회는 소분류만
+         주므로(식약처가 그것만 갖고 있다) 거기서 대분류를 거꾸로 찾는다. */
+      window.basicInfoOcrShow(asOcr, null, null, null,
+        lookupFields.food_type ? {food_type: lookupFields.food_type} : null);
       return;
     }
 

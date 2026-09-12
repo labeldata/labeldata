@@ -1049,6 +1049,47 @@ function filterFoodTypes(selectedGroup) {
     }
 }
 
+/* ── 소분류만 받아도 대분류를 함께 맞춘다 ──────────────────────────────
+ *
+ * 품목보고번호 조회와 사진 판독은 **소분류(식품유형) 하나만** 준다. 식약처가
+ * 그것만 갖고 있기 때문이다. 그런데 이 화면의 소분류 목록은 **대분류로 걸러져
+ * 있다**(filterFoodTypes). 대분류가 비어 있으면 전부 보이니 값이 들어가긴
+ * 하지만, 대분류가 다른 값으로 남아 있으면 그 소분류는 목록에 없어서
+ * **조용히 지워진다**(위의 `if (!found && currentVal)`).
+ *
+ * 게다가 대분류가 빈 채로 저장되면 사용자는 나중에 대분류를 고르는 순간 제
+ * 소분류를 잃는다. 그러니 소분류를 넣을 때 대분류를 **거꾸로 찾아** 함께
+ * 맞춘다 — 짝이 맞는 값은 옵션의 data-group 이 이미 알고 있다.
+ *
+ * 표시용(prdlst_dcnm)까지 손대지는 않는다. 그건 부기가 붙는 자리라 조회값이
+ * 따로 오고, 여기서 덮으면 사람이 적어 둔 부기가 사라진다.
+ */
+window.syncFoodGroupFromType = function (foodType) {
+    var want = String(foodType || '').trim();
+    if (!want || !_ftTypeSel) return false;
+
+    var opt = null;
+    for (var i = 0; i < _allFoodTypeOpts.length; i++) {
+        if (_allFoodTypeOpts[i].value === want) { opt = _allFoodTypeOpts[i]; break; }
+    }
+    if (!opt || !opt.group) return false;
+
+    if (_ftGroupSel && _ftGroupSel.value !== opt.group) {
+        _ftGroupSel.value = opt.group;
+        if (typeof $ !== 'undefined' && $.fn && $.fn.select2 && $(_ftGroupSel).data('select2')) {
+            $(_ftGroupSel).val(opt.group).trigger('change.select2');
+        }
+    }
+    // 대분류가 바뀌었으니 소분류 목록을 다시 만든다. 그 뒤에 값을 넣어야
+    // 살아남는다 — 순서를 뒤집으면 방금 넣은 값이 지워진다.
+    filterFoodTypes(opt.group);
+    _ftTypeSel.value = want;
+    if (typeof $ !== 'undefined' && $.fn && $.fn.select2 && $(_ftTypeSel).data('select2')) {
+        $(_ftTypeSel).val(want).trigger('change.select2');
+    }
+    return true;
+};
+
 /* ── 알레르기 감지 (제품 기본정보 탭 전용) ──────────────── */
 (function() {
     // 19개 알레르기 키워드 (constants.js와 동일)

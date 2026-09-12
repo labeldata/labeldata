@@ -982,6 +982,11 @@ const CSRF_TOKEN = '{{ csrf_token }}';
 const PRODUCT_ID = '{{ product.my_label_id }}';
 const UPDATE_URL = "{% url 'products:product_update_fields' product_id=product.my_label_id %}";
 const STATUS_UPDATE_URL = "{% url 'products:product_update_status' product_id=product.my_label_id %}";
+// 손대지 않은 새 제품을 떠날 때 치우는 자리. 주소를 손으로 이어 붙이면
+// 변수명을 틀려도 템플릿이 조용히 빈 문자열을 넣는다 — 실제로 label 로
+// 적어서 '/products//discard-if-untouched/' 가 나갔다. url 태그는 이름이
+// 틀리면 그 자리에서 터지므로 다른 주소들과 같은 방식으로 만든다.
+const PRODUCT_DISCARD_URL = "{% url 'products:discard_if_untouched' product_id=product.my_label_id %}";
 const SHARE_CREATE_URL = "{% url 'products:share_create' label_id=product.my_label_id %}";
 const COMMENT_CREATE_URL = "{% url 'products:comment_create' label_id=product.my_label_id %}";
 const COMMENT_DELETE_URL = "{% url 'products:comment_delete' comment_id=0 %}";
@@ -1244,7 +1249,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 fd.append('csrfmiddlewaretoken', document.querySelector(
                     '[name=csrfmiddlewaretoken]').value);
                 navigator.sendBeacon(
-                    '/products/{{ label.my_label_id }}/discard-if-untouched/', fd);
+                    PRODUCT_DISCARD_URL, fd);
             } catch (e) {}
         });
     }
