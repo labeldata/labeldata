@@ -8374,3 +8374,118 @@ class ContactSearchScopeIsUnambiguousTests(TestCase):
         self.assertTrue(searchable <= opts,
                         '격자에 있는데 검색으로 못 고르는 칸: %s'
                         % sorted(searchable - opts))
+
+
+class SharedEditorReachesEditPathsTests(TestCase):
+    """
+    `_resolve_editable_label` 은 이름과 docstring 이 "편집 권한이 있는 공유
+    라벨" 을 포함한다고 말하는데 실제로는 **오너만** 봤다.
+
+    표시사항 탭은 can_edit 이면 [2차 검증] 단추를 보여 주는데, 그 단추가
+    부르는 design_compare_latest·record·grade 가 공동 편집자에게 조용히 404
+    를 냈다. 화면은 열어 주고 서버가 막는 자리였다.
+    """
+
+    def setUp(self):
+        from v1.products.models import ProductMetadata
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='브라우니', delete_YN='N')
+        ProductMetadata.objects.create(label=self.label, product_code='PRD-T-1')
+
+    def _member(self, role, email):
+        user = User.objects.create_user(role, password='x', email=email)
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email=email, recipient_user=user,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        perm = SharePermission.objects.create(share=share)
+        perm.apply_role_defaults(role_code=role, save=True)
+        return user
+
+    def _latest(self, user):
+        self.client.force_login(user)
+        return self.client.get(
+            reverse('products:design_compare_latest', args=[self.label.my_label_id]))
+
+    def test_공동_편집자는_들어간다(self):
+        self.assertEqual(self._latest(self._member('EDITOR', 'ed@x.com')).status_code, 200)
+
+    def test_주인은_들어간다(self):
+        self.assertEqual(self._latest(self.owner).status_code, 200)
+
+    def test_검토자는_못_들어간다(self):
+        """검토자는 can_edit_label 이 꺼져 있다 — 제품 정보를 고치지 못한다."""
+        self.assertEqual(self._latest(self._member('REVIEWER', 'rv@x.com')).status_code, 404)
+
+    def test_남은_못_들어간다(self):
+        stranger = User.objects.create_user('남', password='x', email='no@x.com')
+        self.assertEqual(self._latest(stranger).status_code, 404)
+
+    def test_공유가_끊기면_못_들어간다(self):
+        ed = self._member('EDITOR', 'ed@x.com')
+        ProductShare.objects.filter(label=self.label).update(active_yn=False)
+        self.assertEqual(self._latest(ed).status_code, 404)
+
+    def test_공동_편집자가_남의_제품을_지우지_못한다(self):
+        """
+        같은 함수를 discard_if_untouched 도 쓴다. 공유가 있는 제품은
+        has_children 이 '손댄 것' 으로 보므로 지워지지 않는다 — 그 안전이
+        우연이 아니라 규칙임을 여기서 잠근다.
+        """
+        temp = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='임시 - 제품명 - 1', delete_YN='N')
+        share = ProductShare.objects.create(
+            label=temp, recipient_email='ed@x.com', share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        perm = SharePermission.objects.create(share=share)
+        perm.apply_role_defaults(role_code='EDITOR', save=True)
+        ed = User.objects.create_user('편집자', password='x', email='ed@x.com')
+        share.recipient_user = ed
+        share.save()
+
+        self.client.force_login(ed)
+        r = self.client.post(
+            reverse('products:discard_if_untouched', args=[temp.my_label_id]))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()['discarded'])
+        self.assertTrue(MyLabel.objects.filter(pk=temp.pk).exists())
+
+
+class BomExcelSkipsInactiveRowsTests(TestCase):
+    """
+    bom_save_api 는 저장할 때마다 옛 행을 active_yn=False 로 눕힌다. 엑셀
+    다운로드에 그 조건이 없어 재작성 전 행까지 나갔다 — 배합비 합과 원재료명이
+    부풀려졌다. 화면의 BOM% 칸은 active_yn=True 만 센다. 둘이 다른 말을 했다.
+    """
+
+    def setUp(self):
+        from v1.bom.models import ProductBOM
+        from v1.products.models import ProductMetadata
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='브라우니', delete_YN='N')
+        ProductMetadata.objects.create(label=self.label, product_code='PRD-T-1')
+        ProductBOM.objects.create(
+            parent_label=self.label, level=1, ingredient_name='밀가루',
+            usage_ratio=60, active_yn=True, created_by=self.owner)
+        ProductBOM.objects.create(
+            parent_label=self.label, level=1, ingredient_name='옛원료',
+            usage_ratio=40, active_yn=False, created_by=self.owner)
+        self.client.force_login(self.owner)
+
+    def test_비활성_행은_안_나간다(self):
+        import io as _io
+        import json as _json
+
+        import openpyxl
+
+        r = self.client.post(
+            reverse('products:bulk_export_products_excel'),
+            data=_json.dumps({'product_ids': [self.label.my_label_id],
+                              'tabs': ['bom']}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        wb = openpyxl.load_workbook(_io.BytesIO(r.content))
+        names = [row[2] for row in wb['BOM'].iter_rows(min_row=2, values_only=True)]
+        self.assertIn('밀가루', names)
+        self.assertNotIn('옛원료', names)

@@ -2519,7 +2519,12 @@ def bulk_export_products_excel(request):
             ws.append(['번호', '제품명', '원재료명', '함량(%)', '원산지', '알레르기', '식품첨가물', '용도', '비고'])
             row_idx = 1
             for label in labels:
-                bom_items = BOM.objects.filter(parent_label=label, level=1).order_by('sort_order')
+                #  active_yn=True 를 빠뜨리고 있었다. bom_save_api 는 저장할 때마다
+                #  옛 행을 active_yn=False 로 눕히므로, 조건이 없으면 재작성 전
+                #  행까지 나가 배합비 합과 원재료명이 부풀려졌다. 화면의 BOM% 칸은
+                #  active_yn=True 만 센다 — 엑셀과 화면이 서로 다른 말을 했다.
+                bom_items = BOM.objects.filter(
+                    parent_label=label, level=1, active_yn=True).order_by('sort_order')
                 if bom_items.exists():
                     for bom in bom_items:
                         ws.append([
@@ -7071,8 +7076,36 @@ def design_compare_record(request, label_id):
 
 
 def _resolve_editable_label(request, label_id):
-    """내 라벨이거나 편집 권한이 있는 공유 라벨을 돌려준다."""
-    return get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+    """
+    내 라벨이거나 **편집 권한이 있는 공유 라벨**을 돌려준다.
+
+    이름과 docstring 은 공유를 포함한다고 말하는데 실제로는 오너만 봤다.
+    그래서 표시사항 탭이 can_edit 이면 [2차 검증] 단추를 보여 주는데,
+    그 단추가 부르는 design_compare_latest·record·grade 가 공동 편집자에게
+    **조용히 404** 를 냈다. 화면은 열어 주고 서버가 막는 자리였다.
+
+    공유 쪽은 can_edit_label 을 본다 — 검토자·승인자·자료 제출은 제품
+    정보를 고치지 못하므로 그 플래그가 꺼져 있다.
+    """
+    label = MyLabel.objects.filter(
+        my_label_id=label_id, user_id=request.user, delete_YN='N').first()
+    if label:
+        return label
+
+    share = ProductShare.objects.filter(
+        label__my_label_id=label_id,
+        active_yn=True,
+        share_mode='PRIVATE',
+        permission__can_edit_label=True,
+    ).filter(
+        Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+    ).filter(
+        Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+    ).select_related('label').first()
+    if share and share.label.delete_YN == 'N':
+        return share.label
+
+    raise Http404('편집할 수 있는 제품이 아닙니다.')
 
 
 
