@@ -34,7 +34,7 @@
     vertical-align: middle;
   }
   .fhelp:hover, .fhelp:focus-visible, .fhelp.is-on {
-    border-color: #1A73E8; color: #1A73E8; outline: none;
+    border-color: var(--ez-info); color: var(--ez-info); outline: none;
   }
 
   /* **어떤 상자에도 갇히지 않는다.**
@@ -50,7 +50,7 @@
     position: fixed; z-index: 2147483000;
     display: none; width: max-content; max-width: min(330px, calc(100vw - 24px));
     padding: 9px 11px; text-align: left;
-    background: #fff; color: #3c4043;
+    background: #fff; color: var(--ez-gray-800);
     border: 1px solid #d8dde5; border-radius: 6px;
     box-shadow: 0 4px 14px rgba(16, 24, 40, .13);
     font-size: .78rem; font-weight: 400; line-height: 1.55;
@@ -59,9 +59,9 @@
   .fhelp:hover .fhelp-p, .fhelp:focus-within .fhelp-p,
   .fhelp.is-on .fhelp-p { display: block; }
 
-  .fhelp-p b { display: block; margin-bottom: 3px; color: #202124; font-weight: 600; }
-  .fhelp-p strong { font-weight: 600; color: #202124; }
-  .fhelp-p i { font-style: normal; color: #1A73E8; font-weight: 500; }
+  .fhelp-p b { display: block; margin-bottom: 3px; color: var(--ez-gray-900); font-weight: 600; }
+  .fhelp-p strong { font-weight: 600; color: var(--ez-gray-900); }
+  .fhelp-p i { font-style: normal; color: var(--ez-info); font-weight: 500; }
   .fhelp-p em {
     display: block; margin-top: 5px; padding-top: 5px;
     border-top: 1px dashed #e4e8ee;

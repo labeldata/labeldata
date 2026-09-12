@@ -15,16 +15,18 @@
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
+  {# 이 화면은 base 를 타지 않고 단독으로 렌더된다 — 토큰을 직접 실어야 한다 #}
+  <link rel="stylesheet" href="{% static 'css/variables.css' %}?v={{ STATIC_BUILD_DATE }}">
   <style>
     /* Material Design 3 CSS Variables */
     :root {
-      --google-blue: #1a73e8;
+      --google-blue: var(--ez-info);
       --google-blue-hover: #1557b0;
-      --google-bg-light: #f8f9fa;
-      --google-border: #dadce0;
-      --text-primary: #202124;
-      --text-secondary: #5f6368;
-      --text-hint: #9aa0a6;
+      --google-bg-light: var(--ez-gray-50);
+      --google-border: var(--ez-gray-300);
+      --text-primary: var(--ez-gray-900);
+      --text-secondary: var(--ez-gray-700);
+      --text-hint: var(--ez-gray-500);
       
       --shadow-card: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
       --shadow-hover: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
@@ -115,7 +117,7 @@
     /* 탭 네비게이션 */
     .nav-tabs {
       border-bottom: 1px solid var(--google-border);
-      background: #f8f9fa;
+      background: var(--ez-gray-50);
       margin: 0;
       padding: 0 24px;
     }
@@ -183,7 +185,7 @@
     }
 
     .preview-container::-webkit-scrollbar-thumb:hover {
-      background: #bdc1c6;
+      background: var(--ez-gray-400);
       background-clip: padding-box;
     }
 
@@ -225,7 +227,7 @@
       overflow-y: auto;
     }
     .detail-grid::-webkit-scrollbar { width: 8px; }
-    .detail-grid::-webkit-scrollbar-thumb { background: #dadce0; border-radius: 4px; }
+    .detail-grid::-webkit-scrollbar-thumb { background: var(--ez-gray-300); border-radius: 4px; }
     .detail-grid dt {
       font-size: 11.5px;
       font-weight: 600;
@@ -284,7 +286,7 @@
     .detail-scroll::-webkit-scrollbar { width: 8px; }
     .detail-text::-webkit-scrollbar-thumb,
     .detail-scroll::-webkit-scrollbar-thumb {
-      background: #dadce0; border-radius: 4px;
+      background: var(--ez-gray-300); border-radius: 4px;
     }
 
     .info-card {
@@ -315,7 +317,7 @@
       width: 48px;
       height: 48px;
       border-radius: 12px;
-      background: #e8f0fe;
+      background: var(--ez-info-bg);
       color: var(--google-blue);
       display: flex;
       align-items: center;
@@ -397,7 +399,7 @@
     }
 
     .info-table tbody tr:hover {
-      background: #f8f9fa;
+      background: var(--ez-gray-50);
       transition: background 0.15s ease;
     }
 
@@ -431,7 +433,7 @@
     }
 
     .text-area-card::-webkit-scrollbar-thumb:hover {
-      background: #9aa0a6;
+      background: var(--ez-gray-500);
     }
 
     /* 패널 제목 */
@@ -520,7 +522,7 @@
     }
 
     .modal-footer .btn-secondary {
-      background: #f8f9fa;
+      background: var(--ez-gray-50);
       border: 1px solid var(--google-border);
       color: var(--text-secondary);
     }

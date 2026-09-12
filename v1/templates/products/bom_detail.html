@@ -11,34 +11,34 @@ body.in-iframe .bom-page-header { display: none !important; }
 
   /* ── 배합 요약의 영양성분 줄 ─────
      새 컴포넌트를 만들지 않는다. 공용 색 토큰만 쓴다. */
-  .bom-nut-ok    { color: #137333; font-weight: 600; }
-  .bom-nut-block { color: #c5221f; font-weight: 600; }
-  .bom-nut-dim   { color: #5f6368; font-size: .78rem; }
-  .bom-nut-warn  { color: #a35400; font-size: .78rem; }
+  .bom-nut-ok    { color: var(--ez-success-on-bg); font-weight: 600; }
+  .bom-nut-block { color: var(--ez-danger); font-weight: 600; }
+  .bom-nut-dim   { color: var(--ez-gray-700); font-size: .78rem; }
+  .bom-nut-warn  { color: var(--ez-warning-on-bg); font-size: .78rem; }
   /* 요약은 표 위에 붙어 있어 높이가 곧 표의 자리다. 다른 줄(알레르기·GMO)
      처럼 한 줄로 둔다 — 목록으로 늘어놓았더니 표가 요약 아래를 덮어
      줄이 반만 보였다. */
   .bom-nut-todo  { font-size: .8rem; }
   .bom-nut-todo li { margin: 1px 0; }
-  .bom-nut-todo a  { color: #1967d2; }
+  .bom-nut-todo a  { color: var(--ez-info-on-bg); }
 
 
   /* ── 행 머리의 '입력' 단추 ─────────────────────────────────────
      상세 창을 여는 길이 알레르기·GMO 칸뿐이라 모르는 사람에게는 없는
      기능이었다. 줄마다 눈에 보이는 자리를 둔다. */
   .bom-rowno  { display: inline-block; min-width: 16px; text-align: right;
-                color: #5f6368; font-size: 11px; }
+                color: var(--ez-gray-700); font-size: 11px; }
   .bom-rowbtn { border: none; background: none; padding: 0 2px; margin-left: 3px;
-                color: #9aa0a6; cursor: pointer; line-height: 1;
+                color: var(--ez-gray-500); cursor: pointer; line-height: 1;
                 font-size: 12px; vertical-align: middle; }
-  .bom-rowbtn:hover      { color: #1a73e8; }
-  .bom-rowbtn:focus-visible { outline: 2px solid #1a73e8; outline-offset: 1px; }
+  .bom-rowbtn:hover      { color: var(--ez-info); }
+  .bom-rowbtn:focus-visible { outline: 2px solid var(--ez-info); outline-offset: 1px; }
 
   /* 상세 창의 영양성분 줄 */
   .bom-nut-row   { display: flex; align-items: center; gap: 8px;
                    padding: 4px 0; font-size: .8rem; }
-  .bom-nut-state { color: #5f6368; }
-  .bom-nut-go    { color: #1967d2; text-decoration: none; }
+  .bom-nut-state { color: var(--ez-gray-700); }
+  .bom-nut-go    { color: var(--ez-info-on-bg); text-decoration: none; }
   .bom-nut-go:hover { text-decoration: underline; }
 
 </style>

@@ -244,7 +244,7 @@
                         {% elif s == 'SUBMITTED' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#e6f4ea;color:#0f9d58;font-weight:600;">제출 완료</span>
                         {% elif s == 'REVIEW' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#f3e8fd;color:#9334e9;font-weight:600;">검토 중</span>
                         {% elif s == 'PENDING' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#fff0e0;color:#e37400;font-weight:600;">승인 대기</span>
-                        {% elif s == 'CONFIRMED' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#e6f4ea;color:#1e8e3e;font-weight:600;">승인 완료</span>
+                        {% elif s == 'CONFIRMED' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#e6f4ea;color:var(--ez-success-on-bg);font-weight:600;">승인 완료</span>
                         {% endif %}
                         {% endwith %}
                     </td>
@@ -303,10 +303,10 @@
                     </td>
                     <td class="text-center" onclick="event.stopPropagation();">
                         {% if item.is_owned %}
-                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#e8f0fe;color:#1a73e8;font-weight:600;">소유자</span>
+                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#e8f0fe;color:var(--ez-info-on-bg);font-weight:600;">소유자</span>
                         {% elif item.my_role %}
                         <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;
-                            {% if item.my_role == 'EDITOR' %}background:#e6f4ea;color:#1e8e3e;
+                            {% if item.my_role == 'EDITOR' %}background:#e6f4ea;color:var(--ez-success-on-bg);
                             {% elif item.my_role == 'REVIEWER' %}background:#fef7e0;color:#c77700;
                             {% elif item.my_role == 'APPROVER' %}background:#f3e8fd;color:#9334e9;
                             {% elif item.my_role == 'UPLOADER' %}background:#e8f0fe;color:#1967d2;
@@ -430,7 +430,7 @@ const PE_CSRF_TOKEN = '{{ csrf_token }}';
     margin-left: 5px;
     vertical-align: middle;
     white-space: nowrap;
-    background-color: #e6f4ea;
+    background-color: var(--ez-success-bg);
     color: #1e7e34;
     border: 1px solid #a8d5b5;
 }

@@ -418,8 +418,8 @@
             gap:12px; margin-bottom:18px; }
 .fn-step { border:1px solid var(--ez-gray-200, #e8eaed);
            border-radius:var(--ez-radius-sm, 6px); padding:12px; }
-.fn-step-name { font-size:12px; color:#5f6368; margin-bottom:4px; }
-.fn-step-users { font-size:22px; font-weight:700; color:#202124;
+.fn-step-name { font-size:12px; color:var(--ez-gray-700); margin-bottom:4px; }
+.fn-step-users { font-size:22px; font-weight:700; color:var(--ez-gray-900);
                  font-variant-numeric:tabular-nums; }
 .fn-bar { height:4px; border-radius:2px; margin:8px 0 6px;
           background:var(--ez-gray-100, #f1f3f4); }
@@ -430,7 +430,7 @@
             gap:12px; }
 .fn-card { border:1px solid var(--ez-gray-200, #e8eaed);
            border-radius:var(--ez-radius-sm, 6px); padding:12px; }
-.fn-big { font-size:24px; font-weight:700; color:#202124;
+.fn-big { font-size:24px; font-weight:700; color:var(--ez-gray-900);
           font-variant-numeric:tabular-nums; line-height:1.2; }
 .fn-big .fn-dim { font-size:13px; font-weight:400; margin-left:2px; }
 .fn-sources { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;
@@ -444,11 +444,11 @@
    지우지는 않는다 — 안 본다는 것과 필요 없다는 것은 다르다. */
 .dash-fold > summary { cursor:pointer; list-style:none; user-select:none; }
 .dash-fold > summary::-webkit-details-marker { display:none; }
-.dash-fold > summary::after { content:'▾'; margin-left:auto; color:#9aa0a6;
+.dash-fold > summary::after { content:'▾'; margin-left:auto; color:var(--ez-gray-500);
                               font-size:12px; transition:transform .15s; }
 .dash-fold[open] > summary::after { transform:rotate(180deg); }
-.dash-fold > summary:hover { color:#1a73e8; }
-.dash-fold > summary .sub { font-weight:400; color:#5f6368; font-size:12px; }
+.dash-fold > summary:hover { color:var(--ez-info); }
+.dash-fold > summary .sub { font-weight:400; color:var(--ez-gray-700); font-size:12px; }
 
 /* 접힌 묶음 셋을 나란히. **펼치면 줄 전체를 쓴다.**
    처음에는 그 칸만 세로로 늘렸는데, 안쪽 내용(기능별 카드·최근 활동 목록)이

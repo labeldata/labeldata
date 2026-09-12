@@ -81,7 +81,7 @@
   }
 
   .nutrition-table .form-control:focus {
-    border-color: #1a73e8;
+    border-color: var(--ez-info);
     box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
     outline: none;
   }
@@ -102,7 +102,7 @@
     border-radius: 14px;
     font-weight: 600;
     transition: all 0.15s ease;
-    border: 1px solid #dadce0 !important;
+    border: 1px solid var(--ez-gray-300) !important;
     background: white !important;
     color: #374151 !important;
   }
@@ -110,7 +110,7 @@
   .allergy-btn.btn-outline-primary:hover,
   .gmo-btn.btn-outline-primary:hover {
     background-color: rgba(60,64,67,0.08) !important;
-    border-color: #5f6368 !important;
+    border-color: var(--ez-gray-700) !important;
     color: #111827 !important;
   }
 
@@ -120,15 +120,15 @@
     padding: 3px 10px;
     border-radius: 14px;
     font-weight: 600;
-    background-color: #1a73e8 !important;
-    border-color: #1a73e8 !important;
+    background-color: var(--ez-info-on-bg) !important;
+    border-color: var(--ez-info-on-bg) !important;
     color: #ffffff !important;
   }
 
   .allergy-btn.btn-primary:hover,
   .gmo-btn.btn-primary:hover {
-    background-color: #1765cc !important;
-    border-color: #1765cc !important;
+    background-color: var(--ez-info-hover) !important;
+    border-color: var(--ez-info-hover) !important;
   }
 
   /* 칩 옆의 자동감지·전체선택 토글. 칩과 같은 크기라야 한 줄로 나란히 앉는다.
@@ -151,22 +151,22 @@
 
   /* readonly 필드 */
   .readonly-bg {
-    background-color: #f1f3f4 !important;
+    background-color: var(--ez-gray-100) !important;
     border-color: #e6e9f2 !important;
-    color: #5f6368 !important;
+    color: var(--ez-gray-700) !important;
   }
 
   /* 버튼 스타일 정렬 */
   .btn-outline-cancel {
-    color: #5f6368;
-    border-color: #dadce0;
+    color: var(--ez-gray-700);
+    border-color: var(--ez-gray-300);
     background: white;
   }
 
   .btn-outline-cancel:hover {
-    background: #f1f3f4;
-    border-color: #5f6368;
-    color: #202124;
+    background: var(--ez-gray-100);
+    border-color: var(--ez-gray-700);
+    color: var(--ez-gray-900);
   }
 
   /* ===== M3 패널 버튼 ===== */
@@ -175,7 +175,7 @@
     font-weight: 500;
     padding: 5px 14px;
     border-radius: 20px;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--ez-gray-300);
     background: #ffffff;
     color: #444746;
     cursor: pointer;
@@ -186,29 +186,29 @@
     white-space: nowrap;
   }
   .panel-btn:hover {
-    background: #f1f3f4;
-    border-color: #bdc1c6;
+    background: var(--ez-gray-100);
+    border-color: var(--ez-gray-400);
   }
   .panel-btn.primary {
-    background: #1a73e8;
-    border-color: #1a73e8;
+    background: var(--ez-info);
+    border-color: var(--ez-info-on-bg);
     color: #ffffff;
     box-shadow: 0 1px 2px rgba(60,64,67,0.3);
   }
   .panel-btn.primary:hover {
-    background: #1765cc;
-    border-color: #1765cc;
+    background: var(--ez-info-hover);
+    border-color: var(--ez-info-hover);
   }
   .panel-btn.danger {
     border-color: #f28b82;
-    color: #c5221f;
+    color: var(--ez-danger);
   }
   .panel-btn.danger:hover {
-    background: #fce8e6;
+    background: var(--ez-danger-bg);
   }
   .panel-btn.linked {
     border-color: #e0e8ff;
-    color: #1a73e8;
+    color: var(--ez-info);
     background: #f0f4ff;
     font-size: 11px;
   }
@@ -276,38 +276,38 @@
     display: inline-block; min-width: 20px; text-align: center;
     font-weight: 700; font-size: .72rem; border-radius: 3px; padding: 1px 5px;
   }
-  .ing-nut-grade.g-A { background: #e6f4ea; color: #137333; }
-  .ing-nut-grade.g-B { background: #e8f0fe; color: #1967d2; }
-  .ing-nut-grade.g-C { background: #f1f3f4; color: #5f6368; }
-  .ing-nut-grade.g-none { background: #fef7e0; color: #a35400; }
+  .ing-nut-grade.g-A { background: var(--ez-success-bg); color: var(--ez-success-on-bg); }
+  .ing-nut-grade.g-B { background: var(--ez-info-bg); color: var(--ez-info-on-bg); }
+  .ing-nut-grade.g-C { background: var(--ez-gray-100); color: var(--ez-gray-700); }
+  .ing-nut-grade.g-none { background: var(--ez-warning-bg); color: var(--ez-warning-on-bg); }
 
   .ing-nut-values { color: #374060; }
-  .ing-nut-why    { color: #80868b; font-size: .74rem; }
+  .ing-nut-why    { color: var(--ez-gray-600); font-size: .74rem; }
 
   /* 후보 목록 — 값이 갈리는 것을 눈으로 보고 고르는 자리다.
      그래서 열량·지방을 이름 옆에 바로 붙인다. */
-  .ing-nut-cands { border: 1px solid #e8eaed; border-radius: 6px; margin-top: 6px; }
+  .ing-nut-cands { border: 1px solid var(--ez-gray-200); border-radius: 6px; margin-top: 6px; }
   .ing-nut-cand {
     display: flex; align-items: center; gap: 10px;
     padding: 6px 10px; font-size: .8rem; cursor: pointer;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--ez-gray-100);
   }
   .ing-nut-cand:last-child { border-bottom: none; }
-  .ing-nut-cand:hover      { background: #f8f9fa; }
+  .ing-nut-cand:hover      { background: var(--ez-gray-50); }
   .ing-nut-cand-name { flex: 1 1 auto; min-width: 0;
                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ing-nut-cand-num  { flex: 0 0 auto; color: #202124; font-variant-numeric: tabular-nums; }
-  .ing-nut-cand-why  { flex: 0 0 auto; color: #80868b; font-size: .72rem; }
+  .ing-nut-cand-num  { flex: 0 0 auto; color: var(--ez-gray-900); font-variant-numeric: tabular-nums; }
+  .ing-nut-cand-why  { flex: 0 0 auto; color: var(--ez-gray-600); font-size: .72rem; }
 
   .ing-nut-warn {
-    background: #fef7e0; color: #a35400; border-radius: 4px;
+    background: var(--ez-warning-bg); color: var(--ez-warning-on-bg); border-radius: 4px;
     padding: 5px 9px; font-size: .76rem; margin-top: 6px;
   }
   .ing-nut-actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
   .ing-nut-manual  { margin-top: 8px; display: none; }
   .ing-nut-manual table { width: 100%; }
   .ing-nut-manual th {
-    font-weight: 500; font-size: .76rem; color: #5f6368;
+    font-weight: 500; font-size: .76rem; color: var(--ez-gray-700);
     padding: 2px 6px 2px 0; white-space: nowrap; background: none; border: none;
   }
   .ing-nut-manual td { padding: 2px 8px 2px 0; border: none; }
@@ -326,13 +326,13 @@
   .ing-nut-cell { display: flex; justify-content: space-between; gap: 6px;
                   font-size: .78rem; padding: 1px 0; }
   .ing-nut-k { color: #6b7280; }
-  .ing-nut-v { color: #202124; font-variant-numeric: tabular-nums; }
+  .ing-nut-v { color: var(--ez-gray-900); font-variant-numeric: tabular-nums; }
   .ing-nut-cell.is-empty .ing-nut-v { color: #b9bfc7; }
 
   /* 이 구역만 고르는 즉시 저장된다. 그 사실을 그 자리에서 말한다. */
   .ing-nut-flash {
     display: inline-block; margin-left: 8px; font-size: .76rem;
-    color: #137333; opacity: 0; transition: opacity .18s;
+    color: var(--ez-success-on-bg); opacity: 0; transition: opacity .18s;
   }
   .ing-nut-flash.is-on { opacity: 1; }
 
@@ -344,8 +344,8 @@
     margin-top: 6px; font-size: .76rem; line-height: 1.6;
   }
   .ag-note span { display: block; }
-  .ag-note-add { color: #1E8E3E; font-weight: 500; }
-  .ag-note-dim { color: #80868b; }
+  .ag-note-add { color: var(--ez-success); font-weight: 500; }
+  .ag-note-dim { color: var(--ez-gray-600); }
   .ag-note-warn {
     margin-top: 4px; padding: 6px 9px;
     background: #FFF8E1; border: 1px solid #F0D48A; border-radius: 5px;
@@ -365,29 +365,29 @@
   .ing-fieldset:disabled .nutrition-table { opacity: .72; }
 
   /* 새 원료에는 영양성분 칸이 아예 없었다 — 언제 할 수 있는지 말한다. */
-  .ing-nut-later { font-size: .8rem; color: #5f6368; }
+  .ing-nut-later { font-size: .8rem; color: var(--ez-gray-700); }
 
   /* 별표가 아무것도 막지 않았다.
      모델이 blank=True 라 ModelForm 이 required=False 로 만들었고, 이 칸에도
      required 가 없어 브라우저조차 안 막았다 — 이름 없는 원료가 그대로
      저장됐다. 이제 셋이 다 막는다: 브라우저 · 화면 검사 · 폼. */
   #ingredientForm .is-invalid {
-    border-color: #C5221F;
+    border-color: var(--ez-danger);
     box-shadow: 0 0 0 .12rem rgba(197, 34, 31, .16);
   }
   .field-error {
-    margin-top: 4px; font-size: .76rem; color: #C5221F;
+    margin-top: 4px; font-size: .76rem; color: var(--ez-danger);
   }
 
   /* 저장 단추의 상태. 옷(panel-btn primary)은 그대로 두고 색만 바꾼다 —
      통째로 갈아입히면 단추 모양이 변하고 안의 글자 자리가 사라진다. */
   #ingSaveBtn.is-busy { background: #6b7280; border-color: #6b7280; }
-  #ingSaveBtn.is-ok   { background: #1E8E3E; border-color: #1E8E3E; }
-  #ingSaveBtn.is-bad  { background: #C5221F; border-color: #C5221F; }
+  #ingSaveBtn.is-ok   { background: var(--ez-success); border-color: var(--ez-success); }
+  #ingSaveBtn.is-bad  { background: var(--ez-danger); border-color: var(--ez-danger); }
 
   /* 나머지 칸은 [저장] 을 눌러야 남는다 — 값이 바뀌면 단추가 그렇게 말한다. */
   #ingSaveBtn.is-dirty {
-    background: #a35400; border-color: #a35400;
+    background: var(--ez-warning-on-bg); border-color: var(--ez-warning-on-bg);
   }
 
   /* 알레르기 19 칩 · GMO 6 칩이 세로의 37 % 를 쓰고 있었다. 둘 다 대개

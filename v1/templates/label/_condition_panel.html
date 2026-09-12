@@ -17,37 +17,37 @@
    =========================================================================
 {% endcomment %}
 <style>
-    .pv-cond { margin-top: 10px; padding: 12px 14px; background: #f8f9fa; border-radius: 10px; }
+    .pv-cond { margin-top: 10px; padding: 12px 14px; background: var(--ez-gray-50); border-radius: 10px; }
     .pv-cond[hidden] { display: none; }
     .pv-cond-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
     .pv-cond-row .pv-cond-field { width: 178px; flex-shrink: 0; font-size: 13px; }
     .pv-cond-row .pv-cond-op {
         flex-shrink: 0; width: 34px; text-align: center;
-        font-size: 11.5px; color: #5f6368;
+        font-size: 11.5px; color: var(--ez-gray-700);
     }
     .pv-cond-row .pv-cond-value { flex: 1; font-size: 13px; }
     .pv-cond-del {
-        flex-shrink: 0; border: none; background: none; color: #9aa0a6;
+        flex-shrink: 0; border: none; background: none; color: var(--ez-gray-500);
         font-size: 17px; line-height: 1; padding: 2px 7px; border-radius: 6px;
     }
-    .pv-cond-del:hover { background: #e8eaed; color: #d93025; }
+    .pv-cond-del:hover { background: var(--ez-gray-200); color: var(--ez-danger-bright); }
     .pv-cond-foot { display: flex; align-items: center; gap: 12px; margin-top: 3px; flex-wrap: wrap; }
     .pv-cond-add {
-        border: 1px dashed #b8bcc0; background: #fff; color: #1967d2;
+        border: 1px dashed #b8bcc0; background: #fff; color: var(--ez-info-on-bg);
         border-radius: 8px; padding: 5px 12px; font-size: 12.5px;
     }
-    .pv-cond-add:hover { border-color: #1967d2; background: #e8f0fe; }
-    .pv-cond-add:disabled { color: #9aa0a6; border-color: #dadce0; background: #f1f3f4; }
+    .pv-cond-add:hover { border-color: var(--ez-info-on-bg); background: var(--ez-info-bg); }
+    .pv-cond-add:disabled { color: var(--ez-gray-500); border-color: var(--ez-gray-300); background: var(--ez-gray-100); }
     .pv-cond-clear {
-        border: 1px solid #dadce0; background: #fff; color: #5f6368;
+        border: 1px solid var(--ez-gray-300); background: #fff; color: var(--ez-gray-700);
         border-radius: 8px; padding: 5px 12px; font-size: 12.5px;
     }
-    .pv-cond-clear:hover { border-color: #d93025; color: #d93025; background: #fce8e6; }
+    .pv-cond-clear:hover { border-color: var(--ez-danger-bright); color: var(--ez-danger-bright); background: var(--ez-danger-bg); }
     .pv-cond-clear:disabled {
-        color: #b8bcc0; border-color: #e8eaed; background: #fff;
+        color: #b8bcc0; border-color: var(--ez-gray-200); background: #fff;
         cursor: default;
     }
-    .pv-cond-clear:disabled:hover { border-color: #e8eaed; color: #b8bcc0; background: #fff; }
+    .pv-cond-clear:disabled:hover { border-color: var(--ez-gray-200); color: #b8bcc0; background: #fff; }
     /* 체크박스 묶음 (표시기준·용도처럼 한 갈래 안에서 여러 개를 고르는 조건) */
     .pv-cond-checks {
         display: flex; flex-wrap: wrap; gap: 4px 10px;
@@ -56,26 +56,26 @@
     }
     .pv-check {
         display: inline-flex; align-items: center; gap: 4px;
-        font-size: 12.5px; color: #3c4043; cursor: pointer;
+        font-size: 12.5px; color: var(--ez-gray-800); cursor: pointer;
         padding: 2px 4px; border-radius: 4px; white-space: nowrap;
     }
-    .pv-check:hover { background: #f1f3f4; }
+    .pv-check:hover { background: var(--ez-gray-100); }
     .pv-check input { cursor: pointer; margin: 0; }
-    .pv-check--on { color: #1558b0; font-weight: 600; }
-    .pv-cond-hint { font-size: 11.5px; color: #5f6368; }
+    .pv-check--on { color: var(--ez-info-strong); font-weight: 600; }
+    .pv-cond-hint { font-size: 11.5px; color: var(--ez-gray-700); }
     .pv-cond-warn { display: none; margin-top: 7px; font-size: 12px; color: #b3261e; }
     .pv-cond-warn.pv-cond-warn--on { display: block; }
     .pv-cond-field.pv-cond-field--bad { border-color: #b3261e; }
 
     .pv-cond-toggle {
         flex-shrink: 0; white-space: nowrap;
-        border: 1px solid #dadce0; background: #fff; color: #3c4043;
+        border: 1px solid var(--ez-gray-300); background: #fff; color: var(--ez-gray-800);
         border-radius: 20px; padding: 6px 14px; font-size: 13px;
     }
-    .pv-cond-toggle:hover { background: #f1f3f4; }
-    .pv-cond-toggle--on { background: #e8f0fe; border-color: #1967d2; color: #1558b0; }
+    .pv-cond-toggle:hover { background: var(--ez-gray-100); }
+    .pv-cond-toggle--on { background: var(--ez-info-bg); border-color: var(--ez-info-on-bg); color: var(--ez-info-strong); }
     .pv-cond-toggle .pv-cond-n {
-        background: #1967d2; color: #fff; font-size: 10px; font-weight: 700;
+        background: var(--ez-info-on-bg); color: #fff; font-size: 10px; font-weight: 700;
         border-radius: 9px; padding: 1px 6px; margin-left: 5px;
     }
 </style>

@@ -31,7 +31,7 @@
         height: calc(100vh - 140px);
         display: flex;
         flex-direction: column;
-        background: #f8f9fa;
+        background: var(--ez-gray-50);
     }
 
     /* 필터 툴바 - M3 스타일 */
@@ -61,7 +61,7 @@
     }
 
     .product-table thead th {
-        border-bottom: 2px solid #e8eaed;
+        border-bottom: 2px solid var(--ez-gray-200);
         border-left: none !important;
         border-right: none !important;
         font-weight: 500;
@@ -87,7 +87,7 @@
     }
 
     .product-table tbody tr:hover {
-        background-color: #f1f3f4;
+        background-color: var(--ez-gray-100);
     }
 
     .product-table tbody td {
@@ -121,21 +121,21 @@
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #dadce0;
+        background: var(--ez-gray-300);
         border-radius: 10px;
         border: 2px solid transparent;
         background-clip: padding-box;
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #bdc1c6;
+        background: var(--ez-gray-400);
         background-clip: padding-box;
     }
 
     /* 검색창 - M3 스타일 */
     .input-group .form-control,
     .input-group .input-group-text {
-        border: 1px solid #dadce0;
+        border: 1px solid var(--ez-gray-300);
         background: #ffffff;
         color: #1f1f1f;
         font-size: 14px;
@@ -143,17 +143,17 @@
     }
 
     .input-group .form-control:focus {
-        border-color: #1a73e8;
+        border-color: var(--ez-info);
         box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
     }
 
     .input-group .input-group-text {
-        background-color: #f8f9fa;
+        background-color: var(--ez-gray-50);
     }
 
     /* 신규 등록 버튼 - M3 FAB 스타일 */
     .btn-primary {
-        background: #1a73e8;
+        background: var(--ez-info);
         border: none;
         border-radius: 28px;
         font-weight: 500;
@@ -164,7 +164,7 @@
     }
 
     .btn-primary:hover {
-        background: #1765cc;
+        background: var(--ez-info-hover);
         box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
         transform: translateY(-1px);
     }
@@ -179,7 +179,7 @@
     }
 
     .text-muted {
-        color: #5f6368 !important;
+        color: var(--ez-gray-700) !important;
     }
 
     /* 엘립시스 셀 */
@@ -218,7 +218,7 @@
 
     .sort-btn:hover {
         background: #e8e8e8;
-        color: #1967d2;
+        color: var(--ez-info-on-bg);
     }
 
     /* 페이지네이션 규칙은 list_common.css 로 옮겼다 — 목록 화면 전부가 함께 쓴다 */
@@ -232,7 +232,7 @@
     /* 헤더 제목 */
     .page-header {
         padding: 24px 24px 0;
-        background: #f8f9fa;
+        background: var(--ez-gray-50);
     }
 
     .page-header h2 {
@@ -250,8 +250,8 @@
     /* 탭을 옮기며 두고 온 조건 안내 */
     .pv-moved {
         margin: 12px 24px 0; padding: 10px 14px;
-        background: #e8f0fe; border: 1px solid #c6dafc; border-radius: 8px;
-        font-size: 12.5px; color: #1558b0; line-height: 1.6;
+        background: var(--ez-info-bg); border: 1px solid #c6dafc; border-radius: 8px;
+        font-size: 12.5px; color: var(--ez-info-strong); line-height: 1.6;
     }
     .pv-moved .bi { margin-right: 5px; }
     .pv-moved b { color: #174ea6; }
@@ -259,7 +259,7 @@
     /* 빠른 조건이 없어 검색을 실행하지 않았을 때 */
     .pv-blocked {
         max-width: 720px; margin: 40px auto; padding: 22px 24px;
-        background: #fef7e0; border: 1px solid #fadf9a; border-radius: 12px;
+        background: var(--ez-warning-bg); border: 1px solid #fadf9a; border-radius: 12px;
         font-size: 13px; color: #7a5b06; line-height: 1.75;
     }
     .pv-blocked-title { font-size: 14.5px; font-weight: 700; margin-bottom: 8px; color: #5f4405; }
@@ -270,12 +270,12 @@
     .pv-intro { max-width: 860px; margin: 0 auto; padding: 34px 24px 40px; }
     .pv-intro-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 22px; }
     .pv-intro-head > .bi {
-        font-size: 26px; color: #1967d2; flex-shrink: 0;
-        background: #e8f0fe; width: 46px; height: 46px; border-radius: 12px;
+        font-size: 26px; color: var(--ez-info-on-bg); flex-shrink: 0;
+        background: var(--ez-info-bg); width: 46px; height: 46px; border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
     }
     .pv-intro-title { font-size: 17px; font-weight: 700; color: #1f1f1f; margin-bottom: 5px; }
-    .pv-intro-desc { font-size: 13px; color: #5f6368; line-height: 1.65; }
+    .pv-intro-desc { font-size: 13px; color: var(--ez-gray-700); line-height: 1.65; }
 
     .pv-intro-stats { display: flex; gap: 12px; margin-bottom: 24px; }
     .pv-stat {
@@ -283,12 +283,12 @@
         border-radius: 12px; padding: 14px 18px;
     }
     .pv-stat--on { border-color: #c4d3f8; background: #f7faff; }
-    .pv-stat-n { font-size: 22px; font-weight: 800; color: #1967d2; line-height: 1.15; }
-    .pv-stat-l { font-size: 12px; color: #3c4043; font-weight: 600; margin-top: 2px; }
+    .pv-stat-n { font-size: 22px; font-weight: 800; color: var(--ez-info-on-bg); line-height: 1.15; }
+    .pv-stat-l { font-size: 12px; color: var(--ez-gray-800); font-weight: 600; margin-top: 2px; }
 
     .pv-chips-label {
         display: flex; align-items: center; gap: 5px;
-        font-size: 12px; font-weight: 600; color: #5f6368; margin-bottom: 9px;
+        font-size: 12px; font-weight: 600; color: var(--ez-gray-700); margin-bottom: 9px;
     }
     .pv-chips-label .bi { color: #f9ab00; }
     .pv-chips { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -296,10 +296,10 @@
 
     .pv-intro-tip {
         margin-top: 26px; padding: 11px 14px;
-        background: #f8f9fa; border-radius: 8px;
-        font-size: 11.5px; color: #5f6368; line-height: 1.6;
+        background: var(--ez-gray-50); border-radius: 8px;
+        font-size: 11.5px; color: var(--ez-gray-700); line-height: 1.6;
     }
-    .pv-intro-tip .bi { color: #9aa0a6; margin-right: 4px; }
+    .pv-intro-tip .bi { color: var(--ez-gray-500); margin-right: 4px; }
 
     .page-header .text-muted {
         margin-top: 8px;

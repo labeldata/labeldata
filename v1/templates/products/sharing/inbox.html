@@ -177,7 +177,7 @@
                     <td>
                         {% with r=share.permission.role_code %}
                         <span class="status-badge-sm"
-                            style="{% if r == 'EDITOR' %}background:#e6f4ea;color:#1e8e3e;
+                            style="{% if r == 'EDITOR' %}background:#e6f4ea;color:var(--ez-success-on-bg);
                             {% elif r == 'REVIEWER' %}background:#fef7e0;color:#c77700;
                             {% elif r == 'APPROVER' %}background:#f3e8fd;color:#9334e9;
                             {% elif r == 'UPLOADER' %}background:#e8f0fe;color:#1967d2;
@@ -193,7 +193,7 @@
                         {% elif s == 'SUBMITTED' %}<span class="status-badge-sm" style="background:#e6f4ea;color:#0f9d58;">제출 완료</span>
                         {% elif s == 'REVIEW' %}<span class="status-badge-sm" style="background:#f3e8fd;color:#9334e9;">검토 중</span>
                         {% elif s == 'PENDING' %}<span class="status-badge-sm" style="background:#fff0e0;color:#e37400;">승인 대기</span>
-                        {% elif s == 'CONFIRMED' %}<span class="status-badge-sm" style="background:#e6f4ea;color:#1e8e3e;">승인 완료</span>
+                        {% elif s == 'CONFIRMED' %}<span class="status-badge-sm" style="background:#e6f4ea;color:var(--ez-success-on-bg);">승인 완료</span>
                         {% else %}<span class="text-muted">-</span>
                         {% endif %}
                         {% endwith %}
