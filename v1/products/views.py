@@ -7087,3 +7087,34 @@ def contact_sheet_template(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="contact_template.xlsx"'
     return response
+
+
+@login_required
+@require_POST
+def design_compare_grade(request, label_id):
+    """
+    시안에서 읽은 값과 내 표시사항을 **서버에서** 견준다.
+
+    판정이 화면 안에 있을 때는 `compareGrade` 하나가 모든 항목에 같은 규칙을
+    썼고, 그래서 `빵류 ↔ 빵류[가열하여…]` · `(주)○○ ↔ 주식회사 ○○` ·
+    `12.5g ↔ 12.50g` 이 전부 '다름' 으로 떨어졌다. 항목마다 견주는 법이
+    다르다는 것은 이미 `value_match` 가 알고 있었는데, 그 앎이 파이썬에만
+    있어서 이 화면은 쓰지 못했다.
+
+    값만 받고 **아무것도 저장하지 않는다.** 기록은 사람이 결과를 보고
+    확인을 눌렀을 때 `design_compare_record` 가 남긴다.
+    """
+    from v1.label.services import design_match
+
+    label = _resolve_editable_label(request, label_id)   # 남의 라벨이면 404
+    try:
+        pairs = json.loads(request.body.decode('utf-8') or '{}').get('fields') or {}
+    except (ValueError, TypeError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'message': '읽을 수 없는 요청입니다.'},
+                            status=400)
+    if not isinstance(pairs, dict):
+        return JsonResponse({'success': False, 'message': '형식이 올바르지 않습니다.'},
+                            status=400)
+
+    logger.debug('시안 대조 판정 label=%s 항목=%s', label.pk, len(pairs))
+    return JsonResponse({'success': True, 'grades': design_match.grade_all(pairs)})

@@ -137,3 +137,98 @@ def compare(left, right, mode):
         # 그걸 "틀렸다" 고 하면 매번 울리는 경고가 된다.
         return score, 'conflict'
     return score, 'unsure'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 수치 — 표기만 고르고, 값이 다르면 무조건 다르다
+#
+# 시안 대조에서 가장 자주 나오던 오탐이 이것이었다.
+#
+#     12.5g  ↔  12.50g       같은 값인데 "다름"
+#     100 g  ↔  100그램       같은 값인데 "다름"
+#     500mL  ↔  500㎖         같은 값인데 "다름"
+#
+# **느슨하게 만드는 것이 아니다.** 표기를 고르게 펼 뿐이고, 값이 다르면
+# 12.5 와 12.6 처럼 한 끗이라도 "다르다" 로 간다. 인쇄물의 수치가 틀린 것이
+# 이 기능이 막으려는 것 중 가장 나쁜 것이라, 여기만은 절대 눅이지 않는다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 같은 단위의 다른 표기. NFKC 가 ㎖→ml 은 펴 주지만 한글 표기는 못 편다.
+_UNIT_ALIAS = {
+    '그램': 'g', 'g': 'g', '밀리그램': 'mg', 'mg': 'mg', '킬로그램': 'kg', 'kg': 'kg',
+    '밀리리터': 'ml', 'ml': 'ml', '리터': 'l', 'l': 'l',
+    '킬로칼로리': 'kcal', 'kcal': 'kcal', '칼로리': 'kcal',
+    '개': '개', '개입': '개', '매': '매', '%': '%', '인분': '인분',
+}
+_NUM_UNIT = re.compile(
+    r'(\d+(?:\.\d+)?)\s*'
+    r'(밀리그램|킬로그램|킬로칼로리|밀리리터|그램|칼로리|리터|개입|인분|kcal|mg|kg|ml|개|매|[gl%])',
+    re.IGNORECASE)
+
+
+def numbers_with_units(text):
+    """
+    글에서 (값, 단위) 를 순서대로 뽑는다. 단위 표기는 하나로 모은다.
+
+    값은 float 이 아니라 **문자열을 정규화**해 견준다 — 12.50 과 12.5 는 같고,
+    0.1+0.2 같은 부동소수점 문제를 아예 만들지 않는다.
+    """
+    out = []
+    for raw, unit in _NUM_UNIT.findall(unicodedata.normalize('NFKC', str(text or ''))):
+        u = _UNIT_ALIAS.get(unit.lower(), unit.lower())
+        # 12.50 -> 12.5, 100.0 -> 100
+        v = raw.rstrip('0').rstrip('.') if '.' in raw else raw
+        out.append((v or '0', u))
+    return out
+
+
+def compare_numbers(left, right):
+    """(점수, 판정). 수치가 하나라도 다르면 conflict."""
+    a, b = numbers_with_units(left), numbers_with_units(right)
+    if not a and not b:
+        return ratio(left, right, 'loose'), 'unsure'   # 잴 수치가 없다
+    if a == b:
+        return 100, 'agree'
+    return 0, 'conflict'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 문장 — 줄바꿈 자리가 다르다고 통째로 "다름" 이 되면 안 된다
+#
+# 주의사항은 여러 문장이고, 시안은 폭에 맞춰 줄을 접는다. 글자로 견주면
+# 문구가 다 맞는데도 통째로 "다름" 이 된다. 문장으로 쪼개 집합으로 보면
+# **어느 문장이 빠졌는지**까지 짚을 수 있다 — 오탐이 줄면서 지적이 정확해진다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_SENT_SPLIT = re.compile(r'[\n\r]+|(?<=[.。])\s+|(?<=니다)\s+|(?<=하세요)\s+')
+
+
+def sentences(text):
+    """문장 단위로 쪼개 비교용 형태로. 빈 조각과 중복은 버린다."""
+    out, seen = [], set()
+    for part in _SENT_SPLIT.split(str(text or '')):
+        key = squeeze(part)
+        if len(key) < 2 or key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def compare_sentences(left, right):
+    """
+    (점수, 판정, 빠진 문장들). 한쪽이 다른 쪽에 통째로 들어 있으면 '덜 읽힌' 것이다.
+    """
+    a, b = set(sentences(left)), set(sentences(right))
+    if not a and not b:
+        return 100, 'agree', []
+    if a == b:
+        return 100, 'agree', []
+    if a and b and (a <= b or b <= a):
+        # 시안이 작게 들어가 절반만 읽히는 일이 잦다. 그건 시안이 틀린 것이
+        # 아니라 우리가 덜 읽은 것이라, 같은 무게로 짚으면 안 된다.
+        return 90, 'partial', sorted(a ^ b)
+    common = len(a & b)
+    total = len(a | b) or 1
+    score = int(common * 100 / total)
+    return score, ('conflict' if score < CONFLICT_SCORE else 'unsure'), sorted(a ^ b)

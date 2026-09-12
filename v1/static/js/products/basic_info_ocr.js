@@ -301,7 +301,7 @@
    * 가 한 화면에서 섞인다. 대조는 무엇이 다른지 알아내는 일이고, 고치는 것은
    * 원본 자료를 보고 결정할 일이다.
    */
-  function compareRowHtml(field, item, meta, grade) {
+  function compareRowHtml(field, item, meta, grade, why) {
     var target = document.getElementById(meta.id);
     var mine = target ? (target.value || '').trim() : '';
     var theirs = (item.value || '').trim();
@@ -310,6 +310,9 @@
     var cls = COMPARE_GRADES[grade].cls;
     if (grade === 'diff' && !theirs) state = '시안에서 못 읽음';
     if (grade === 'diff' && !mine) state = '내 값이 없음';
+    /* 같게 본 까닭을 적는다. 조용히 넘어가는 것과 "부기라서 같게 봤다" 는
+       다른 일이다 — 사람이 우리 판단을 되짚을 수 있어야 한다. */
+    if (why) state = state + ' · ' + why;
 
     // 둘 다 값이 있고 정말 다를 때만 어디가 다른지 짚는다. 한쪽이 비었으면
     // 짚을 것이 없고, 띄어쓰기 차이는 짚어 봐야 눈만 어지럽다.
@@ -928,7 +931,42 @@
     });
   }
 
+  /* ── 판정은 서버가 한다 ────────────────────────────────────────────
+   *
+   * 예전에는 이 화면 안의 compareGrade 하나가 **모든 항목에 같은 규칙**을
+   * 썼다. 그래서 `빵류 ↔ 빵류[가열하여…]`, `(주)○○ ↔ 주식회사 ○○`,
+   * `12.5g ↔ 12.50g` 이 전부 '다름' 으로 떨어졌다 — 전부 순수한 오탐이고
+   * 사용자가 가장 자주 만나는 것들이다.
+   *
+   * 항목마다 견주는 법이 다르다는 것은 파이썬의 value_match 가 이미 알고
+   * 있었는데, 그 앎이 서버에만 있어 이 화면은 쓰지 못했다. 규칙 표를 여기에
+   * 베껴 오면 두 벌이 되고, 두 벌은 언젠가 한쪽만 고쳐진다. 그래서 묻는다.
+   * ───────────────────────────────────────────────────────────────── */
   function showCompare(modalEl, body, data, photoFile, apiMatch) {
+    var pairs = {};
+    Object.keys(FIELD_MAP).forEach(function (field) {
+      var item = data[field];
+      var target = document.getElementById(FIELD_MAP[field].id);
+      var mine = target ? (target.value || '').trim() : '';
+      var theirs = (item && item.confidence !== 'none' && item.value)
+        ? String(item.value).trim() : '';
+      if (!mine && !theirs) return;      // 대조할 것이 없는 줄
+      pairs[field] = { mine: mine, design: theirs };
+    });
+
+    body.innerHTML = '<div class="text-center py-4 text-muted">시안과 대조하는 중…</div>';
+    postJson('/products/labels/' + labelId() + '/design-compare/grade/', { fields: pairs })
+      .then(function (res) {
+        drawCompare(modalEl, body, data, photoFile, apiMatch, (res && res.grades) || {});
+      })
+      .catch(function () {
+        /* 서버가 답하지 않아도 대조는 이어져야 한다. 규칙이 거친 채로 보이는
+           것이, 올린 시안을 통째로 못 보는 것보다 낫다. */
+        drawCompare(modalEl, body, data, photoFile, apiMatch, {});
+      });
+  }
+
+  function drawCompare(modalEl, body, data, photoFile, apiMatch, grades) {
     var diff = [];        // 정말 다른 것 — 사람이 봐야 한다
     var minor = [];       // 띄어쓰기만 다른 것 — 접어 둔다
     var same = [];
@@ -946,8 +984,11 @@
       // 양쪽 다 비어 있으면 대조할 것이 없다
       if (!mine && !theirs) return;
 
-      var grade = compareGrade(mine, theirs);
-      var html = compareRowHtml(field, item || {}, meta, grade);
+      /* 서버가 답하지 않았을 때만 화면 판정으로 버틴다. 그때는 규칙이
+         거칠어질 뿐 대조는 계속된다. */
+      var verdict = grades[field] || { grade: compareGrade(mine, theirs), reason: '' };
+      var grade = verdict.grade;
+      var html = compareRowHtml(field, item || {}, meta, grade, verdict.reason || '');
 
       /* 글은 같아 보여도 **숫자가 다르면** 따로 세운다. 같은 항목 뭉치에
          묻히면 아무도 안 본다 — 인쇄물의 수치가 틀린 것이 가장 나쁘다. */

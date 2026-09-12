@@ -1950,8 +1950,14 @@ class DesignCompareModeTests(TestCase):
         self.assertIn('cmp-theirs', block)
 
     def compare_body(self):
-        """showCompare 한 덩이. 길이로 자르면 함수가 자랄 때마다 끊긴다."""
-        head = self.ocr.index('function showCompare')
+        """
+        대조 화면을 **그리는** 한 덩이. 길이로 자르면 함수가 자랄 때마다 끊긴다.
+
+        한때 showCompare 하나였다. 판정을 서버로 옮기면서 showCompare 는
+        "값을 모아 묻는" 일만 하고, 그리는 일은 drawCompare 로 갈라졌다.
+        여기서 보려는 것은 그리는 쪽이다.
+        """
+        head = self.ocr.index('function drawCompare')
         return self.ocr[head:self.ocr.index(chr(10) + '  }', head)]
 
     def test_반영_단추를_감춘다(self):
@@ -5381,3 +5387,83 @@ class 네비_순서는_튜토리얼_차례와_같다(TestCase):
         self.assertEqual(nav, steps)
         self.assertEqual(nav, ['products', 'ingredients', 'lookup', 'additives',
                                'collab', 'contacts', 'regulatory', 'board'])
+
+
+class 시안_대조_판정은_서버가_한다(TestCase):
+    """
+    규칙 표를 화면에 베껴 두면 파이썬 쪽과 두 벌이 되고, 두 벌은 언젠가
+    한쪽만 고쳐진다. 이 저장소가 실제로 여러 번 당한 실패다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        self.me = User.objects.create_user(username='me@example.com', password='pw12345!')
+        self.other = User.objects.create_user(username='you@example.com', password='pw12345!')
+        self.label = MyLabel.objects.create(user_id=self.me, prdlst_nm='제품')
+        self.url = reverse('products:design_compare_grade', args=[self.label.pk])
+
+    def _post(self, fields):
+        return self.client.post(self.url, data=json.dumps({'fields': fields}),
+                                content_type='application/json')
+
+    def test_항목마다_다른_자로_판정해_돌려준다(self):
+        self.client.force_login(self.me)
+        resp = self._post({
+            'prdlst_dcnm':    {'mine': '빵류', 'design': '빵류 [가열하여 섭취하는 냉동식품]'},
+            'content_weight': {'mine': '12.5g', 'design': '12.50g'},
+            'bssh_nm':        {'mine': '(주)○○식품', 'design': '주식회사 ○○식품'},
+        })
+        self.assertEqual(resp.status_code, 200)
+        grades = resp.json()['grades']
+        for field in ('prdlst_dcnm', 'content_weight', 'bssh_nm'):
+            self.assertNotEqual(grades[field]['grade'], 'diff', field)
+
+    def test_수치가_다르면_다르다고_한다(self):
+        self.client.force_login(self.me)
+        grades = self._post({'content_weight': {'mine': '12.5g', 'design': '12.6g'}}).json()['grades']
+        self.assertEqual(grades['content_weight']['grade'], 'diff')
+
+    def test_남의_라벨은_404(self):
+        """403 은 그 id 가 있다고 알려 준다."""
+        self.client.force_login(self.other)
+        self.assertEqual(self._post({}).status_code, 404)
+
+    def test_로그인하지_않으면_못_부른다(self):
+        resp = self._post({})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login', resp['Location'])
+
+    def test_GET_으로는_안_된다(self):
+        self.client.force_login(self.me)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_망가진_요청에도_터지지_않는다(self):
+        self.client.force_login(self.me)
+        resp = self.client.post(self.url, data='{{{', content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_아무것도_저장하지_않는다(self):
+        """기록은 사람이 결과를 보고 확인을 눌렀을 때 design_compare_record 가 남긴다."""
+        from v1.products.models import ProductDocument
+
+        self.client.force_login(self.me)
+        before = ProductDocument.objects.count()
+        self._post({'prdlst_nm': {'mine': 'A', 'design': 'B'}})
+        self.assertEqual(ProductDocument.objects.count(), before)
+
+    def test_화면이_서버에_묻는다(self):
+        """
+        묻지 않고 제 안에서 판정하면 이 작업 전으로 되돌아간 것이다.
+        화면에 남은 compareGrade 는 **서버가 답하지 않았을 때의 버팀목**이라
+        그 자리에만 있어야 한다.
+        """
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.assertIn("design-compare/grade/", js)
+        self.assertIn('grades[field] ||', js)
+        # 판정을 곧바로 쓰는 자리가 남아 있으면 안 된다
+        self.assertNotIn('var grade = compareGrade(', js)

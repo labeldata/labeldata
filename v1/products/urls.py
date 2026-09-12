@@ -139,6 +139,10 @@ urlpatterns = [
     # 디자인 시안 대조 기록 — 파일은 문서함에, 결과는 그 파일에 붙는다
     path('labels/<int:label_id>/design-compare/', views.design_compare_record,
          name='design_compare_record'),
+    # 시안 값 대조 판정. 규칙은 서버에만 둔다 — 화면에 두면 파이썬 쪽과
+    # 두 벌이 되고, 두 벌은 언젠가 한쪽만 고쳐진다
+    path('labels/<int:label_id>/design-compare/grade/', views.design_compare_grade,
+         name='design_compare_grade'),
     # 마지막으로 올린 시안. 2 차 검증에서 "저장된 것으로" 를 내어 주려고 본다
     path('labels/<int:label_id>/design-compare/latest/', views.design_compare_latest,
          name='design_compare_latest'),

@@ -16462,3 +16462,107 @@ class 고를_것이_없으면_묻지_않고_붙인다(TestCase):
         self.assertIn('ncd.link_by_report_no(', src)
         # 저장 로직이 명령 쪽에 다시 적혀 있으면 안 된다
         self.assertNotIn('SOURCE_REPORT_NO,', src)
+
+
+class 시안_대조는_항목마다_다른_자를_쓴다(TestCase):
+    """
+    판정이 화면(JS) 안에 있을 때는 compareGrade 하나가 **모든 항목에 같은
+    규칙**을 썼다. 그래서 아래 것들이 전부 '다름' 으로 떨어졌다.
+
+    셋 다 순수한 오탐이고 사용자가 가장 자주 만나는 것들이다. 그리고 오탐은
+    놓침보다 비싸다 — 놓침은 한 번 겪으면 기능을 더 믿게 되지만, 오탐은 세 번
+    겪으면 기능을 닫는다. 닫힌 기능은 놓침도 못 막는다.
+    """
+
+    def g(self, field, mine, theirs):
+        from v1.label.services import design_match
+        return design_match.grade_field(field, mine, theirs)
+
+    # ── 예전에 '다름' 으로 떨어지던 것들 ──────────────────────────────────
+    def test_식품유형의_부기는_같은_말이다(self):
+        r = self.g('prdlst_dcnm', '빵류', '빵류 [가열하여 섭취하는 냉동식품]')
+        self.assertNotEqual(r['grade'], 'diff')
+        self.assertIn('부기', r['reason'])
+
+    def test_법인격_표기는_같은_회사다(self):
+        r = self.g('bssh_nm', '(주)○○식품', '주식회사 ○○식품')
+        self.assertNotEqual(r['grade'], 'diff')
+
+    def test_소수점_꼬리는_같은_값이다(self):
+        for mine, theirs in (('12.5g', '12.50g'), ('100 g', '100그램'),
+                             ('500mL', '500㎖'), ('100g', '100.0g')):
+            with self.subTest(mine + ' / ' + theirs):
+                r = self.g('content_weight', mine, theirs)
+                self.assertNotEqual(r['grade'], 'diff', '%s ↔ %s' % (mine, theirs))
+
+    def test_줄바꿈_자리만_다른_주의사항은_같다(self):
+        mine = '직사광선을 피해 보관하세요.\n개봉 후 냉장 보관하세요.'
+        theirs = '직사광선을 피해 보관하세요. 개봉 후 냉장 보관하세요.'
+        r = self.g('cautions', mine, theirs)
+        self.assertNotEqual(r['grade'], 'diff')
+
+    # ── 눅이면 안 되는 것들 ──────────────────────────────────────────────
+    def test_수치가_다르면_한_끗이라도_다르다(self):
+        """
+        인쇄물의 수치가 틀린 것이 이 기능이 막으려는 것 중 가장 나쁘다.
+        표기만 고르고 값은 절대 눅이지 않는다.
+        """
+        for mine, theirs in (('12.5g', '12.6g'), ('100g', '110g'), ('500mL', '50mL')):
+            with self.subTest(mine + ' / ' + theirs):
+                r = self.g('content_weight', mine, theirs)
+                self.assertEqual(r['grade'], 'diff', '%s ↔ %s' % (mine, theirs))
+
+    def test_단위가_다르면_다르다(self):
+        r = self.g('content_weight', '100g', '100mL')
+        self.assertEqual(r['grade'], 'diff')
+
+    def test_다른_식품유형은_다르다(self):
+        r = self.g('prdlst_dcnm', '빵류', '과자')
+        self.assertEqual(r['grade'], 'diff')
+
+    def test_한쪽이_비면_빠진_것이다(self):
+        """표기 차이가 아니라 아예 없는 것이다. 접어 두면 안 된다."""
+        r = self.g('cautions', '개봉 후 냉장 보관하세요.', '')
+        self.assertEqual(r['grade'], 'diff')
+
+    def test_문장이_빠지면_어느_것인지_짚는다(self):
+        mine = '직사광선을 피해 보관하세요.\n개봉 후 냉장 보관하세요.'
+        theirs = '직사광선을 피해 보관하세요.'
+        r = self.g('cautions', mine, theirs)
+        self.assertEqual(r['grade'], 'partial')
+        self.assertTrue(r['missing'], '빠진 문장을 짚어야 한다')
+
+    # ── 판단을 되짚을 수 있어야 한다 ──────────────────────────────────────
+    def test_같게_본_까닭을_남긴다(self):
+        """
+        조용히 넘어가는 것과 "부기라서 같게 봤다" 는 다른 일이다. 사람이
+        우리 판단을 되짚을 수 있어야 한다.
+        """
+        self.assertTrue(self.g('prdlst_dcnm', '빵류', '빵류(가열)')['reason'])
+        self.assertTrue(self.g('content_weight', '12.5g', '12.50g')['reason'])
+
+    def test_양쪽_다_비면_줄을_그리지_않는다(self):
+        from v1.label.services import design_match
+        out = design_match.grade_all({
+            'prdlst_nm': {'mine': '', 'design': ''},
+            'prdlst_dcnm': {'mine': '빵류', 'design': '빵류'},
+        })
+        self.assertNotIn('prdlst_nm', out)
+        self.assertIn('prdlst_dcnm', out)
+
+    def test_규칙_표가_화면의_항목을_모두_덮는다(self):
+        """
+        화면이 아는 항목인데 규칙 표에 없으면 조용히 exact 로 떨어진다 —
+        그러면 이 작업 전으로 되돌아간 것과 같다.
+        """
+        import re
+        from pathlib import Path
+
+        from v1.label.services import design_match
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        block = js[js.index('var FIELD_MAP = {'):]
+        block = block[:block.index('};')]
+        fields = set(re.findall(r'^\s*([a-z_]+):\s*\{', block, re.M))
+        self.assertTrue(fields, 'FIELD_MAP 을 읽지 못했다')
+        self.assertEqual(fields - set(design_match.FIELD_MODE), set())
