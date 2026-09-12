@@ -1244,12 +1244,14 @@ document.addEventListener('DOMContentLoaded', function() {
      * 것과 실제로 저장된 것은 다를 수 있다(붙여넣기·자동 저장·다른 탭). */
     if (__start && navigator.sendBeacon) {
         window.addEventListener('pagehide', function () {
+            // 토큰은 CSRF_TOKEN 을 쓴다. [name=csrfmiddlewaretoken] 입력칸은
+            // **이 화면에 늘 있는 것이 아니라서**, 찾으면 null 이 나오고 그
+            // 자리에서 예외가 났다. try/catch 가 그걸 조용히 삼켜서 요청이
+            // 아예 안 나갔다 — 서버는 멀쩡한데 빈 제품이 남던 진짜 까닭이다.
             try {
                 var fd = new FormData();
-                fd.append('csrfmiddlewaretoken', document.querySelector(
-                    '[name=csrfmiddlewaretoken]').value);
-                navigator.sendBeacon(
-                    PRODUCT_DISCARD_URL, fd);
+                fd.append('csrfmiddlewaretoken', CSRF_TOKEN);
+                navigator.sendBeacon(PRODUCT_DISCARD_URL, fd);
             } catch (e) {}
         });
     }

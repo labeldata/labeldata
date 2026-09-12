@@ -5559,20 +5559,25 @@ class 손대지_않은_제품은_떠날_때_치운다(TestCase):
 
     def test_빈_제품은_목록에서_사라진다(self):
         self.client.force_login(self.user)
+        from v1.label.models import MyLabel
+
         resp = self.client.post(self.url)
         self.assertTrue(resp.json()['discarded'])
-        self.assertEqual(self._refresh().delete_YN, 'Y')
+        self.assertFalse(MyLabel.objects.filter(pk=self.label.pk).exists())
 
-    def test_지우지_않고_숨긴다(self):
+    def test_정말로_지운다(self):
         """
-        MyLabel 을 실제로 지우면 BOM·문서함·공유·알림까지 CASCADE 로 함께
-        사라진다. 잘못 골랐을 때 되돌릴 수 있어야 한다.
+        처음에는 숨기기만 했다(delete_YN='Y'). MyLabel 을 지우면 BOM·문서함·
+        공유까지 CASCADE 로 함께 사라지기 때문이었다. 그런데 **여기서 지우는
+        것은 그 조건을 이미 통과한 것들**이라 딸려 갈 것이 없다. 숨기기만
+        하면 휴지통에 빈 제품이 쌓이는데, 열어만 보고 닫은 것을 되살릴 일은
+        없다.
         """
         from v1.label.models import MyLabel
 
         self.client.force_login(self.user)
         self.client.post(self.url)
-        self.assertTrue(MyLabel.objects.filter(pk=self.label.pk).exists())
+        self.assertFalse(MyLabel.objects.filter(pk=self.label.pk).exists())
 
     def test_한_글자라도_넣었으면_남긴다(self):
         self.client.force_login(self.user)
@@ -5805,3 +5810,42 @@ class 떠날_때_치우는_주소는_url_태그로_만든다(TestCase):
         # 빈 주소가 실제로 나가지는 않는지. 주석에 적어 둔 예시 문자열과
         # 섞이지 않게 **정의문 그대로** 견준다 — 앞의 assertIn 과 짝이다.
         self.assertNotIn('PRODUCT_DISCARD_URL = "/products//', body)
+
+
+class 정리_요청이_실제로_나간다(TestCase):
+    """
+    서버는 끝에서 끝까지 멀쩡했는데 빈 제품이 남았다. 화면이 요청을 **아예
+    안 보내고 있었다** — CSRF 토큰을 [name=csrfmiddlewaretoken] 입력칸에서
+    찾았는데 이 화면에는 그 칸이 늘 있는 것이 아니다. querySelector 가 null 을
+    주고 그 자리에서 예외가 났으며, try/catch 가 그것을 조용히 삼켰다.
+
+    조용히 실패하는 것이 가장 오래 간다. 그래서 시험은 **렌더링해서** 본다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        self.user = User.objects.create_user(username='u@example.com', password='pw12345!')
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='제품', delete_YN='N')
+        self.client.force_login(self.user)
+
+    def _body(self):
+        resp = self.client.get(reverse('products:product_detail', args=[self.label.pk]))
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode('utf-8')
+
+    def test_화면에_늘_있는_토큰을_쓴다(self):
+        body = self._body()
+        self.assertIn("fd.append('csrfmiddlewaretoken', CSRF_TOKEN)", body)
+        self.assertNotIn("fd.append('csrfmiddlewaretoken', document.querySelector", body)
+
+    def test_그_토큰이_실제로_값을_갖는다(self):
+        import re
+
+        body = self._body()
+        m = re.search(r"const CSRF_TOKEN = '([^']*)'", body)
+        self.assertIsNotNone(m, 'CSRF_TOKEN 정의를 못 찾았다')
+        self.assertTrue(m.group(1), 'CSRF_TOKEN 이 비어 있다')

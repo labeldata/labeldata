@@ -82,15 +82,18 @@ def is_untouched(label):
 
 def discard(label):
     """
-    **지우지 않는다. delete_YN 을 'Y' 로 바꿀 뿐이다.**
+    **정말로 지운다.**
 
-    MyLabel 을 실제로 지우면 BOM·문서함·공유·알림까지 CASCADE 로 함께
-    사라진다. 앱은 어차피 delete_YN='N' 만 보여 주므로 화면에서 사라지는
-    결과는 같고, 잘못 골랐을 때 되돌릴 수 있다.
+    처음에는 delete_YN 만 'Y' 로 바꿨다. MyLabel 을 지우면 BOM·문서함·공유·
+    알림까지 CASCADE 로 함께 사라지기 때문이었다. 그런데 **여기서 지우는 것은
+    그 조건을 이미 통과한 것들**이다 — is_untouched 가 BOM 줄도, 문서도,
+    공유도 없다는 것을 보고 온다. 딸려 갈 것이 아무것도 없다.
+
+    숨기기만 하면 휴지통에 빈 제품이 쌓인다. 열어만 보고 닫은 것을 되살릴
+    일은 없는데, 되살릴 수 있게 두느라 쓰레기가 남는다.
+
+    **반드시 is_untouched 를 통과한 것만 넘긴다.** 이 함수는 다시 묻지 않는다.
     """
-    from django.utils import timezone
-
-    label.delete_YN = 'Y'
-    label.delete_datetime = timezone.now().strftime('%Y%m%d')
-    label.save(update_fields=['delete_YN', 'delete_datetime'])
-    logger.info('빈 제품 정리: label=%s', label.pk)
+    pk = label.pk
+    label.delete()
+    logger.info('빈 제품 삭제: label=%s', pk)
