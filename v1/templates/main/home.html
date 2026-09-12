@@ -204,7 +204,7 @@ html, body {
 
 /* 미리보기 설정 패널 - 컴팩트 버전 */
 #settingsPanelDemo {
-    background: #f8f9fa;
+    background: var(--ez-gray-50);
     padding: 0.6rem 0.8rem;
     border-radius: 6px;
 }
@@ -252,7 +252,7 @@ html, body {
     min-width: 150px !important;
     max-width: 150px !important;
     white-space: nowrap;
-    background-color: #f8f9fa;
+    background-color: var(--ez-gray-50);
     text-align: center;
     font-weight: 500;
     padding: 6px 10px;
@@ -309,7 +309,7 @@ html, body {
 
 .form-tab:hover {
     color: #0d6efd;
-    background: #f8f9fa;
+    background: var(--ez-gray-50);
 }
 
 .form-tab.active {
@@ -616,7 +616,7 @@ html, body {
                                             <label class="form-label mb-0 label-danger">
                                                 원재료 사용 알레르기 물질
                                             </label>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="manualDetectAllergens()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" title="알레르기 물질 다시 감지">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm lc-btn-xs" onclick="manualDetectAllergens()" title="알레르기 물질 다시 감지">
                                                 <i class="fas fa-sync-alt me-1"></i>새로고침
                                             </button>
                                         </div>
@@ -636,25 +636,25 @@ html, body {
                                         <!-- 직접 추가 버튼 (모든 항목) -->
                                         <div class="mt-2" style="display: flex; flex-wrap: wrap; gap: 5px; align-items: center;">
                                             <span class="text-xs" style="margin-right: 4px;">직접 추가:</span>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="알류" style="font-size: 0.7rem;">알류</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="우유" style="font-size: 0.7rem;">우유</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="메밀" style="font-size: 0.7rem;">메밀</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="땅콩" style="font-size: 0.7rem;">땅콩</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="대두" style="font-size: 0.7rem;">대두</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="밀" style="font-size: 0.7rem;">밀</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="고등어" style="font-size: 0.7rem;">고등어</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="게" style="font-size: 0.7rem;">게</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="새우" style="font-size: 0.7rem;">새우</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="돼지고기" style="font-size: 0.7rem;">돼지고기</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="복숭아" style="font-size: 0.7rem;">복숭아</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="토마토" style="font-size: 0.7rem;">토마토</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="아황산류" style="font-size: 0.7rem;">아황산류</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="호두" style="font-size: 0.7rem;">호두</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="잣" style="font-size: 0.7rem;">잣</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="닭고기" style="font-size: 0.7rem;">닭고기</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="쇠고기" style="font-size: 0.7rem;">쇠고기</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="오징어" style="font-size: 0.7rem;">오징어</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="조개류" style="font-size: 0.7rem;">조개류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="알류">알류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="우유">우유</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="메밀">메밀</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="땅콩">땅콩</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="대두">대두</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="밀">밀</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="고등어">고등어</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="게">게</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="새우">새우</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="돼지고기">돼지고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="복숭아">복숭아</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="토마토">토마토</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="아황산류">아황산류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="호두">호두</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="잣">잣</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="닭고기">닭고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="쇠고기">쇠고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="오징어">오징어</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="조개류">조개류</button>
                                         </div>
                                         
                                         <!-- 숨겨진 입력 필드 (선택된 알레르기 저장) -->
@@ -668,34 +668,34 @@ html, body {
                                                 제조시설 혼입 우려 물질 (선택)
                                             </label>
                                             <div class="btn-group btn-group-sm" role="group">
-                                                <button type="button" id="toggleAllAllergensBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAllergens()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                <button type="button" id="toggleAllAllergensBtn" class="btn btn-outline-secondary btn-sm lc-btn-xs" onclick="toggleAllAllergens()">
                                                     <i class="fas fa-check-double me-1"></i>전체 선택
                                                 </button>
-                                                <button type="button" id="toggleAllergenWarningBtn" class="btn btn-outline-primary btn-sm" onclick="toggleAllergenWarning()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                <button type="button" id="toggleAllergenWarningBtn" class="btn btn-outline-primary btn-sm lc-btn-xs" onclick="toggleAllergenWarning()">
                                                     <i class="fas fa-arrow-right me-1"></i>주의사항에 추가
                                                 </button>
                                             </div>
                                         </div>
                                         <div class="allergen-selection" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px;">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="알류" style="font-size: 0.7rem;">알류</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="우유" style="font-size: 0.7rem;">우유</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="메밀" style="font-size: 0.7rem;">메밀</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="땅콩" style="font-size: 0.7rem;">땅콩</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="대두" style="font-size: 0.7rem;">대두</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="밀" style="font-size: 0.7rem;">밀</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="고등어" style="font-size: 0.7rem;">고등어</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="게" style="font-size: 0.7rem;">게</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="새우" style="font-size: 0.7rem;">새우</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="돼지고기" style="font-size: 0.7rem;">돼지고기</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="복숭아" style="font-size: 0.7rem;">복숭아</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="토마토" style="font-size: 0.7rem;">토마토</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="아황산류" style="font-size: 0.7rem;">아황산류</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="호두" style="font-size: 0.7rem;">호두</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="잣" style="font-size: 0.7rem;">잣</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="닭고기" style="font-size: 0.7rem;">닭고기</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="쇠고기" style="font-size: 0.7rem;">쇠고기</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="오징어" style="font-size: 0.7rem;">오징어</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="조개류" style="font-size: 0.7rem;">조개류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="알류">알류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="우유">우유</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="메밀">메밀</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="땅콩">땅콩</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="대두">대두</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="밀">밀</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="고등어">고등어</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="게">게</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="새우">새우</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="돼지고기">돼지고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="복숭아">복숭아</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="토마토">토마토</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="아황산류">아황산류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="호두">호두</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="잣">잣</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="닭고기">닭고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="쇠고기">쇠고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="오징어">오징어</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="조개류">조개류</button>
                                         </div>
                                         <input type="hidden" id="selected_cross_contamination_allergens" name="cross_contamination_allergens">
                                     </div>
@@ -726,35 +726,35 @@ html, body {
                                             <i class="fas fa-info-circle me-1"></i>빠른 입력 버튼
                                         </span>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTexts('cautions')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                            <button type="button" class="btn btn-outline-success btn-sm lc-btn-xs" onclick="addAllQuickTexts('cautions')">
                                                 <i class="fas fa-plus-circle me-1"></i>전체 추가
                                             </button>
-                                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTexts('cautions')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                            <button type="button" class="btn btn-outline-danger btn-sm lc-btn-xs" onclick="clearAllQuickTexts('cautions')">
                                                 <i class="fas fa-eraser me-1"></i>일괄 해제
                                             </button>
                                         </div>
                                     </div>
                                     <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; width: 100%; margin-bottom: 3px;">
                                         <!-- 법정 필수 경고 -->
-                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)" style="font-size: 0.7rem;"><i class="fas fa-phone-alt me-1"></i>1399</button>
-                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시" style="font-size: 0.7rem;"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)"><i class="fas fa-phone-alt me-1"></i>1399</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
                                         
                                         <!-- 일반 관리 경고 -->
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급" style="font-size: 0.7rem;"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건" style="font-size: 0.7rem;"><i class="fas fa-sun me-1"></i>직사광선</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지" style="font-size: 0.7rem;"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의" style="font-size: 0.7rem;"><i class="fas fa-box-tissue me-1"></i>용기파손</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건"><i class="fas fa-sun me-1"></i>직사광선</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의"><i class="fas fa-box-tissue me-1"></i>용기파손</button>
                                         
                                         <!-- 안전 주의사항 -->
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의" style="font-size: 0.7rem;"><i class="fas fa-child me-1"></i>어린이</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의" style="font-size: 0.7rem;"><i class="fas fa-lungs me-1"></i>질식</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의" style="font-size: 0.7rem;"><i class="fas fa-fire me-1"></i>화상</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의" style="font-size: 0.7rem;"><i class="fas fa-spray-can me-1"></i>튐주의</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의"><i class="fas fa-child me-1"></i>어린이</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의"><i class="fas fa-lungs me-1"></i>질식</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의"><i class="fas fa-fire me-1"></i>화상</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의"><i class="fas fa-spray-can me-1"></i>튐주의</button>
                                         
                                         <!-- 건강기능식품 관련 -->
-                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의" style="font-size: 0.7rem;"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
-                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의" style="font-size: 0.7rem;"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
-                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고" style="font-size: 0.7rem;"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="cautions" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
                                     </div>
                                     <textarea name="cautions" class="form-control auto-resize" rows="1" placeholder="주의사항을 입력하세요" id="cautions_textarea" style="width: 100%;"></textarea>
                                 </div>
@@ -773,37 +773,37 @@ html, body {
                                             <i class="fas fa-info-circle me-1"></i>빠른 입력 버튼
                                         </span>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTexts('additional_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                            <button type="button" class="btn btn-outline-success btn-sm lc-btn-xs" onclick="addAllQuickTexts('additional_info')">
                                                 <i class="fas fa-plus-circle me-1"></i>전체 추가
                                             </button>
-                                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTexts('additional_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                            <button type="button" class="btn btn-outline-danger btn-sm lc-btn-xs" onclick="clearAllQuickTexts('additional_info')">
                                                 <i class="fas fa-eraser me-1"></i>일괄 해제
                                             </button>
                                         </div>
                                     </div>
                                     <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; width: 100%; margin-bottom: 3px;">
                                         <!-- 소비자 행정/품질 관련 (법정 필수) -->
-                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실 (법정 필수)" style="font-size: 0.7rem;"><i class="fas fa-headset me-1"></i>상담센터</button>
-                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증 (분쟁해결기준)" style="font-size: 0.7rem;"><i class="fas fa-certificate me-1"></i>품질보증</button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실 (법정 필수)"><i class="fas fa-headset me-1"></i>상담센터</button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증 (분쟁해결기준)"><i class="fas fa-certificate me-1"></i>품질보증</button>
                                         
                                         <!-- 인증 마크 (조건부 필수) -->
-                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="HACCP 인증 제품" title="HACCP 인증" style="font-size: 0.7rem;"><i class="fas fa-check-circle me-1"></i>HACCP</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="ISO 22000 인증" title="ISO 22000" style="font-size: 0.7rem;"><i class="fas fa-award me-1"></i>ISO22000</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="유기농 인증 제품" title="유기농 인증" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>유기농</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="KS 인증 제품" title="KS 인증" style="font-size: 0.7rem;"><i class="fas fa-stamp me-1"></i>KS</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="전통식품 품질인증" title="전통식품" style="font-size: 0.7rem;"><i class="fas fa-landmark me-1"></i>전통식품</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="우수식품인증(GMP)" title="GMP" style="font-size: 0.7rem;"><i class="fas fa-star me-1"></i>GMP</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="저탄소 인증 제품" title="저탄소 인증 (온실가스 배출량 감축)" style="font-size: 0.7rem;"><i class="fas fa-seedling me-1"></i>저탄소</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="HACCP 인증 제품" title="HACCP 인증"><i class="fas fa-check-circle me-1"></i>HACCP</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="ISO 22000 인증" title="ISO 22000"><i class="fas fa-award me-1"></i>ISO22000</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="유기농 인증 제품" title="유기농 인증"><i class="fas fa-leaf me-1"></i>유기농</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="KS 인증 제품" title="KS 인증"><i class="fas fa-stamp me-1"></i>KS</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="전통식품 품질인증" title="전통식품"><i class="fas fa-landmark me-1"></i>전통식품</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="우수식품인증(GMP)" title="GMP"><i class="fas fa-star me-1"></i>GMP</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="저탄소 인증 제품" title="저탄소 인증 (온실가스 배출량 감축)"><i class="fas fa-seedling me-1"></i>저탄소</button>
                                         
                                         <!-- 규제된 자발적 클레임 (기준 충족 필수) -->
-                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="무 글루텐 (Gluten Free)" title="총 글루텐 함량 1kg당 20mg 이하" style="font-size: 0.7rem;"><i class="fas fa-wheat-awn me-1"></i>무글루텐</button>
-                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="비건 인증 (Vegan)" title="동물 유래 성분 불포함" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>비건</button>
-                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증" style="font-size: 0.7rem;"><i class="fas fa-moon me-1"></i>할랄</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="무 글루텐 (Gluten Free)" title="총 글루텐 함량 1kg당 20mg 이하"><i class="fas fa-wheat-awn me-1"></i>무글루텐</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="비건 인증 (Vegan)" title="동물 유래 성분 불포함"><i class="fas fa-leaf me-1"></i>비건</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증"><i class="fas fa-moon me-1"></i>할랄</button>
                                         
                                         <!-- 일반 자발적 표시 -->
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가" style="font-size: 0.7rem;"><i class="fas fa-ban me-1"></i>무첨가</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="Non-GMO 제품" title="Non-GMO" style="font-size: 0.7rem;"><i class="fas fa-dna me-1"></i>Non-GMO</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="저나트륨 제품" title="저나트륨" style="font-size: 0.7rem;"><i class="fas fa-heart me-1"></i>저나트륨</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가"><i class="fas fa-ban me-1"></i>무첨가</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="Non-GMO 제품" title="Non-GMO"><i class="fas fa-dna me-1"></i>Non-GMO</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="additional_info" data-text="저나트륨 제품" title="저나트륨"><i class="fas fa-heart me-1"></i>저나트륨</button>
                                     </div>
                                     <textarea name="additional_info" class="form-control auto-resize" rows="1" placeholder="기타 표시사항을 입력하세요" style="width: 100%;"></textarea>
                                 </div>
@@ -947,7 +947,7 @@ html, body {
                         <div class="row g-2 align-items-end">
                             <div class="col">
                                 <label class="form-label mb-1 text-xs" for="widthInput">가로(cm)</label>
-                                <input type="number" class="form-control form-control-sm" id="widthInput" value="10" min="4" max="50" step="1" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                                <input type="number" class="form-control form-control-sm lc-input-sm" id="widthInput" value="10" min="4" max="50" step="1">
                             </div>
                             <div class="col">
                                 <label class="form-label mb-1 text-xs">세로(cm)</label>
@@ -959,7 +959,7 @@ html, body {
                             </div>
                             <div class="col">
                                 <label class="form-label mb-1 text-xs" for="fontFamilySelect">글꼴</label>
-                                <select class="form-select form-select-sm" id="fontFamilySelect" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                                <select class="form-select form-select-sm lc-input-sm" id="fontFamilySelect">
                                     <option value="'Noto Sans KR', sans-serif" selected>노토 산스</option>
                                     <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
                                     <option value="'Nanum Myeongjo', serif">나눔명조</option>
@@ -967,15 +967,15 @@ html, body {
                             </div>
                             <div class="col">
                                 <label class="form-label mb-1 text-xs" for="fontSizeInput">크기(pt)</label>
-                                <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="7" max="20" step="0.5" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                                <input type="number" class="form-control form-control-sm lc-input-sm" id="fontSizeInput" value="10" min="7" max="20" step="0.5">
                             </div>
                             <div class="col">
                                 <label class="form-label mb-1 text-xs" for="letterSpacingInput">자간(%)</label>
-                                <input type="number" class="form-control form-control-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                                <input type="number" class="form-control form-control-sm lc-input-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1">
                             </div>
                             <div class="col">
                                 <label class="form-label mb-1 text-xs" for="lineHeightInput">줄간격</label>
-                                <input type="number" class="form-control form-control-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                                <input type="number" class="form-control form-control-sm lc-input-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1">
                             </div>
                         </div>
                     </div>

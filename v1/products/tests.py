@@ -7106,3 +7106,85 @@ class RejectReasonUiExistsTests(TestCase):
         self.assertIsNotNone(block)
         self.assertNotRegex(block.group(0), r'#[0-9a-fA-F]{6}')
 
+
+class SizeDeclarationsLiveInCssTests(TestCase):
+    """
+    같은 글씨 크기 선언이 세 화면에 **198곳** 인라인으로 흩어져 있었다 —
+    home · label_creation · label_creation_v1 의 알레르기·문구 빠른 선택 단추.
+    크기 하나 바꾸려면 198곳을 고쳐야 했고, 어느 날 한쪽만 고쳐진다.
+
+    요소에는 이미 클래스가 붙어 있었다. 새 체계를 세운 것이 아니라 이미 있던
+    이름으로 선언을 옮긴 것뿐이다.
+
+    폭·간격(width·gap·flex)처럼 그 자리에서만 쓰는 배치값은 그대로 둔다 —
+    클래스로 옮겨 봐야 이름만 늘어난다.
+    """
+
+    SCREENS = ['templates/main/home.html',
+               'templates/label/label_creation.html',
+               'templates/label/label_creation_v1.html']
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.base = Path(dj.BASE_DIR)
+
+    def _texts(self):
+        return [(rel, (self.base / rel).read_text(encoding='utf-8'))
+                for rel in self.SCREENS]
+
+    #  뽑아낸 선언들. 이것이 인라인으로 다시 나타나면 실패한다.
+    EXTRACTED = [
+        'font-size: 0.7rem',
+        'font-size: 0.7rem; padding: 0.2rem 0.6rem',
+        'font-size: 0.7rem; padding: 0.2rem 0.5rem',
+        'font-size: 0.8rem; padding: 0.25rem 0.3rem',
+        'font-size:0.8rem',
+    ]
+
+    def test_뽑아낸_선언이_인라인으로_돌아오지_않았다(self):
+        import re
+        want = {re.sub(r'\s+', ' ', d).lower() for d in self.EXTRACTED}
+        for rel, text in self._texts():
+            for raw in re.findall(r'style="([^"]+)"', text):
+                key = '; '.join(x.strip() for x in raw.split(';') if x.strip())
+                self.assertNotIn(re.sub(r'\s+', ' ', key).lower(), want,
+                                 '%s: %s 는 CSS 에 있다' % (rel, key))
+
+    def test_되풀이되는_크기_선언이_남지_않았다(self):
+        """
+        같은 크기 선언이 세 번 넘게 되풀이되면 클래스로 뽑을 때다.
+
+        남아 있는 것들(0.75em·0.78rem·0.85rem·0.875rem·0.9rem·0.95rem…)은
+        **저마다 다른 값**이라 뽑는 문제가 아니라 눈금을 정하는 문제다 —
+        그건 화면이 어떻게 보일지를 바꾸는 결정이라 따로 다룬다.
+        """
+        import re
+        from collections import Counter
+        for rel, text in self._texts():
+            c = Counter()
+            for raw in re.findall(r'style="([^"]+)"', text):
+                if 'font-size' not in raw:
+                    continue
+                c[';'.join(sorted(x.strip() for x in raw.split(';') if x.strip()))] += 1
+            worst = [(n, k) for k, n in c.items() if n > 3]
+            self.assertEqual(worst, [], '%s 에서 되풀이된다' % rel)
+
+    def test_선언은_css_한_곳에_있다(self):
+        css = (self.base / 'static/css/label_creation.css').read_text(encoding='utf-8')
+        for rule in ('.quick-text-toggle', '.quick-allergen-btn', '.allergen-toggle',
+                     '.quick-allergen-btn-label', '.allergen-toggle-label',
+                     '.quick-text-toggle-label', '.lc-btn-xs',
+                     '.lc-input-sm', '.lc-label-sm'):
+            self.assertIn(rule, css, rule)
+
+    def test_class_가_두_번_붙은_태그가_없다(self):
+        # 두 번 붙으면 HTML 은 앞의 것만 본다 — 뒤에 넣은 것이 조용히 사라진다
+        import re
+        pat = re.compile(r'<[a-zA-Z][^>]*?class="[^"]*"[^>]*?\sclass="')
+        for rel, text in self._texts():
+            self.assertEqual(pat.findall(text), [], rel)
+
+    def test_빈_style_속성이_남지_않았다(self):
+        for rel, text in self._texts():
+            self.assertNotIn('style=""', text, rel)
