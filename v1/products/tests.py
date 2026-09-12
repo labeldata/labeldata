@@ -5910,3 +5910,116 @@ class 시안의_어디에서_읽었는지_보여_준다(TestCase):
     def test_어느_면에서_읽었는지도_말한다(self):
         js = self._read('v1/static/js/products/basic_info_ocr.js')
         self.assertIn('item.box_from', js)
+
+
+class 성적서는_어디서_넣느냐에_따라_다른_곳에_붙는다(TestCase):
+    """
+    문서함은 **제품에 딸린다**(ProductDocument.label). 거기 올라온 성적서는
+    대개 완제품을 시험한 것이라 배합으로 계산할 것이 없다 — 시험한 값이
+    계산한 값을 이긴다.
+
+    원료 성적서는 다르다. 원료는 여러 제품이 함께 쓰는 것이라 한 제품의
+    문서함에 매다는 것이 맞지 않고, **그 원료를 쓰는 다른 제품에서는 안 보인다.**
+    그래서 원료 쪽은 값만 받고 파일을 남기지 않는다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyIngredient, MyLabel
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.me = User.objects.create_user(username='me@example.com', password='pw12345!')
+        self.other = User.objects.create_user(username='you@example.com', password='pw12345!')
+        self.label = MyLabel.objects.create(
+            user_id=self.me, my_label_name='제품', delete_YN='N')
+        dt, _ = DocumentType.objects.get_or_create(
+            type_code='SPEC', defaults={'type_name': '영양성분 성적서'})
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dt, original_filename='성적서.jpg')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.me, prdlst_nm='밀가루', delete_YN='N')
+        self.client.force_login(self.me)
+
+    VALUES = {'calories': 380, 'natriums': 420, 'proteins': 8.1}
+
+    # ── 제품 쪽 ────────────────────────────────────────────────────────
+    def test_문서함_성적서는_제품_영양성분이_된다(self):
+        from v1.label.models import MyLabel
+
+        resp = self.client.post(
+            reverse('products:document_spec_nutrition_save', args=[self.doc.pk]),
+            data=json.dumps({'values': self.VALUES}), content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+
+        label = MyLabel.objects.get(pk=self.label.pk)
+        self.assertEqual(str(label.calories), '380')
+        self.assertEqual(str(label.natriums), '420')
+
+    def test_성적서에_없는_칸은_지우지_않는다(self):
+        """모르는 것과 없는 것은 다르다. 빈 값으로 덮으면 있던 값을 잃는다."""
+        from v1.label.models import MyLabel
+
+        MyLabel.objects.filter(pk=self.label.pk).update(sugars='12')
+        self.client.post(
+            reverse('products:document_spec_nutrition_save', args=[self.doc.pk]),
+            data=json.dumps({'values': {'calories': 380}}),
+            content_type='application/json')
+        self.assertEqual(MyLabel.objects.get(pk=self.label.pk).sugars, '12')
+
+    def test_제품_값은_배합_계산을_거치지_않는다(self):
+        """
+        산출하는 길과 섞이면 어느 값이 표시되는지 알 수 없게 된다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/products/views.py').read_text(encoding='utf-8')
+        block = src[src.index('def document_spec_nutrition_save'):]
+        block = block[:block.index('def ingredient_spec_nutrition')]
+        self.assertIn('계산을 거치지 않는다', block)
+        self.assertNotIn('nutrition_calc', block)
+
+    # ── 원료 쪽 ────────────────────────────────────────────────────────
+    def test_원료_성적서는_파일을_남기지_않는다(self):
+        from v1.label.models import MyIngredientNutrition
+
+        resp = self.client.post(
+            reverse('label:ingredient_spec_nutrition_save', args=[self.ing.pk]),
+            data=json.dumps({'values': self.VALUES, 'filename': '밀가루성적서.jpg'}),
+            content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+
+        nut = MyIngredientNutrition.objects.get(ingredient=self.ing)
+        self.assertEqual(nut.source_kind, MyIngredientNutrition.SOURCE_SPEC_OCR)
+        self.assertIsNone(nut.source_document)          # 파일을 안 남긴다
+        self.assertIn('밀가루성적서.jpg', nut.source_note)   # 무엇을 봤는지는 남는다
+
+    def test_사람이_승인한_것으로_남는다(self):
+        """자동 판단이 아니다. 등급 A 는 사람이 봤다는 뜻이기도 하다."""
+        from v1.label.models import MyIngredientNutrition
+
+        self.client.post(
+            reverse('label:ingredient_spec_nutrition_save', args=[self.ing.pk]),
+            data=json.dumps({'values': self.VALUES}), content_type='application/json')
+        nut = MyIngredientNutrition.objects.get(ingredient=self.ing)
+        self.assertEqual(nut.picked_by, self.me)
+
+    def test_남의_원료에는_못_붙인다(self):
+        self.client.force_login(self.other)
+        resp = self.client.post(
+            reverse('label:ingredient_spec_nutrition_save', args=[self.ing.pk]),
+            data=json.dumps({'values': self.VALUES}), content_type='application/json')
+        self.assertEqual(resp.status_code, 404)      # 403 은 그 id 가 있다고 알려 준다
+
+    def test_남의_문서에는_못_붙인다(self):
+        self.client.force_login(self.other)
+        resp = self.client.post(
+            reverse('products:document_spec_nutrition_save', args=[self.doc.pk]),
+            data=json.dumps({'values': self.VALUES}), content_type='application/json')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_값이_하나도_없으면_저장하지_않는다(self):
+        resp = self.client.post(
+            reverse('label:ingredient_spec_nutrition_save', args=[self.ing.pk]),
+            data=json.dumps({'values': {}}), content_type='application/json')
+        self.assertEqual(resp.status_code, 400)

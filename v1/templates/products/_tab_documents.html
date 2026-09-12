@@ -1311,8 +1311,8 @@ async function submitImportCompanyDoc() {
             + ' 을 <b>100' + (body.basis_unit || 'g') + ' 당</b>으로 바꾼 값입니다.</div>'
             + list
             + '<div class="text-muted mt-2" style="font-size:11px;">'
-            + '어느 원료에 붙일지 고르면 저장됩니다. 저장하면 그 원료의 출처가 '
-            + '<b>업체 시험성적서(등급 A)</b> 가 되고, 이 문서가 근거로 매달립니다.</div>'
+            + '확인 후 저장하면 <b>이 제품의 영양성분</b>으로 들어갑니다. '
+            + '배합 계산을 거치지 않고 시험한 값을 그대로 씁니다.</div>'
             + '</div>';
 
         if (typeof window.openSpecNutritionPicker === 'function') {
@@ -1489,9 +1489,10 @@ async function submitImportCompanyDoc() {
                     <span class="badge bg-success-subtle text-success-emphasis" style="font-size:10px;">등급 A</span>
                 </div>
                 <div class="text-muted mb-2" style="font-size:11px; line-height:1.5;">
-                    영양성분 성적서의 값은 <b>가장 정확한 출처</b>입니다.
-                    공공 DB 로 채운 값은 "일반적인 그 원료" 라 등급이 낮습니다.
-                    읽은 값은 <b>확인한 뒤에</b> 원료에 붙습니다.
+                    완제품을 시험한 값이라 <b>배합으로 계산할 것이 없습니다</b> —
+                    시험한 값이 계산한 값을 이깁니다. 읽은 값은 <b>확인한 뒤에</b>
+                    이 제품의 영양성분으로 들어갑니다.
+                    (원료 성적서는 <b>원료 상세</b>에서 넣습니다.)
                 </div>
                 <button class="btn btn-outline-success v2-btn-sm w-100"
                         onclick="readSpecNutrition(${docId})">

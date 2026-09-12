@@ -11,7 +11,7 @@ from v1.common.media_access import (
 from django.http import JsonResponse
 from django.conf import settings
 from django.db.models import Q, Count, Prefetch, Sum, Case, When, IntegerField
-from django.db import models
+from django.db import models, transaction
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -7202,29 +7202,127 @@ def document_spec_nutrition(request, document_id):
     })
 
 
+# 제품에 그대로 넣는 성분. MyLabel 이 표시용 칸을 직접 들고 있다.
+_LABEL_NUTRITION_FIELDS = (
+    'calories', 'carbohydrates', 'sugars', 'proteins', 'fats',
+    'saturated_fats', 'trans_fats', 'cholesterols', 'natriums',
+)
+
+
 @login_required
 @require_POST
 def document_spec_nutrition_save(request, document_id):
     """
-    확인한 값을 원료에 붙인다. 출처는 **등급 A**(업체 시험성적서).
+    확인한 값을 **이 제품의 영양성분**으로 넣는다.
 
-    원본 파일을 그 값에 연결해 둔다. 나중에 "이 숫자 어디서 왔죠" 에 종이를
-    댈 수 있어야 A 등급이 의미가 있다.
+    왜 원료가 아니라 제품인가
+    -------------------------
+    문서함은 **제품에 딸린다**(ProductDocument.label). 여기 올라온 성적서는
+    대개 완제품을 시험한 것이고, 그러면 배합으로 계산할 것이 없다 — 시험한
+    값이 계산한 값을 이긴다. 그 값을 그대로 표시에 쓰면 된다.
+
+    원료 성적서는 다른 자리에서 받는다(ingredient_spec_nutrition). 거기서는
+    파일을 남기지 않는다 — 원료에는 서류를 붙일 곳이 없고, 제품 문서함에
+    넣으면 **그 원료를 쓰는 다른 제품에서는 안 보인다.**
+
+    **계산을 거치지 않는다.** 배합에서 산출하는 길과 섞이면 어느 값이
+    표시되는지 알 수 없게 된다. 시험한 값을 그대로 덮어쓴다.
     """
-    from v1.label.models import MyIngredient, MyIngredientNutrition
     from v1.products.models import ProductDocument
 
     doc = get_object_or_404(
         ProductDocument, pk=document_id, label__user_id=request.user)
+    label = doc.label
 
     try:
         body = json.loads(request.body.decode('utf-8') or '{}')
     except (ValueError, UnicodeDecodeError):
         return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
 
+    values = body.get('values') or {}
+    wrote = []
+    for field in _LABEL_NUTRITION_FIELDS:
+        v = values.get(field)
+        if v is None:
+            continue      # 성적서에 없는 것은 건드리지 않는다. 지우지도 않는다
+        setattr(label, field, str(v))
+        wrote.append(field)
+
+    if not wrote:
+        return JsonResponse({'success': False, 'error': '저장할 값이 없습니다.'},
+                            status=400)
+
+    # 근거를 남긴다. 이 표가 어디서 왔는지 못 대면 감사에서 설명할 수 없다.
+    if hasattr(label, 'nutrition_source_note'):
+        label.nutrition_source_note = (
+            '영양성분 성적서 판독 - %s' % (doc.original_filename or doc.pk))
+        wrote.append('nutrition_source_note')
+
+    with transaction.atomic():
+        label.save(update_fields=wrote)
+
+    logger.info('성적서 -> 제품 영양성분: label=%s document=%s 칸=%s',
+                label.pk, doc.pk, len(wrote))
+    return JsonResponse({'success': True, 'fields': wrote})
+
+
+@login_required
+@require_POST
+def ingredient_spec_nutrition(request, ingredient_id):
+    """
+    원료 상세에서 성적서를 **올려서 읽기만** 한다. 파일은 남기지 않는다.
+
+    원료에는 서류를 붙일 곳이 없다(ProductDocument 는 제품에 딸린다). 제품
+    문서함에 넣으면 **그 원료를 쓰는 다른 제품에서는 안 보인다** — 원료는
+    여러 제품이 함께 쓰는 것이라 한 제품에 매다는 것이 맞지 않는다.
+
+    그래서 값만 받고 파일은 흘려보낸다. 근거는 source_note 에 파일 이름으로
+    남긴다 — 종이 자체는 못 대지만 **무엇을 보고 넣었는지**는 남는다.
+    """
+    from v1.label.models import MyIngredient
+    from v1.label.services import spec_nutrition
+
     ingredient = get_object_or_404(
-        MyIngredient, pk=body.get('ingredient_id') or 0,
-        user_id=request.user)           # 남의 원료에는 못 붙인다
+        MyIngredient, pk=ingredient_id, user_id=request.user)   # 남의 원료면 404
+
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'success': False, 'error': '파일이 없습니다.'}, status=400)
+
+    usage = quota.consume(request.user, 'ocr_label')
+    if not usage.get('ok'):
+        return JsonResponse({'success': False, 'error': usage['message']}, status=429)
+
+    try:
+        got = spec_nutrition.read(upload)
+    except Exception as exc:
+        logger.exception('원료 성적서 판독 실패 (ingredient=%s)', ingredient.pk)
+        return JsonResponse({'success': False, 'error': str(exc)}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'values': got['values'],
+        'basis_amount': got['basis_amount'],
+        'basis_unit': got['basis_unit'],
+        'error': got['error'],
+        'filename': getattr(upload, 'name', ''),
+        'ingredient_id': ingredient.pk,
+    })
+
+
+@login_required
+@require_POST
+def ingredient_spec_nutrition_save(request, ingredient_id):
+    """확인한 값을 원료에 붙인다. 출처는 **등급 A**, 파일은 남기지 않는다."""
+    from v1.label.models import MyIngredient, MyIngredientNutrition
+
+    ingredient = get_object_or_404(
+        MyIngredient, pk=ingredient_id, user_id=request.user)
+
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
 
     values = body.get('values') or {}
     fields = {f: values.get(f) for f in MyIngredientNutrition.VALUE_FIELDS}
@@ -7232,17 +7330,19 @@ def document_spec_nutrition_save(request, document_id):
         return JsonResponse({'success': False, 'error': '저장할 값이 없습니다.'},
                             status=400)
 
+    name = (body.get('filename') or '').strip()
     fields.update({
         'source_kind': MyIngredientNutrition.SOURCE_SPEC_OCR,
         'public_row': None,
+        'source_document': None,        # 파일을 남기지 않는다
         'picked_by': request.user,      # 사람이 승인했다. 자동 판단이 아니다
         'picked_at': timezone.now(),
-        'source_note': '영양성분 성적서 판독 — %s' % (doc.original_filename or doc.pk),
-        'source_document': doc,
+        'source_note': ('영양성분 성적서 판독 - %s' % name) if name
+                       else '영양성분 성적서 판독',
     })
     with transaction.atomic():
         MyIngredientNutrition.objects.update_or_create(
             ingredient=ingredient, defaults=fields)
 
-    logger.info('성적서 영양성분 저장: ingredient=%s document=%s', ingredient.pk, doc.pk)
+    logger.info('성적서 -> 원료 영양성분: ingredient=%s', ingredient.pk)
     return JsonResponse({'success': True, 'grade': 'A'})

@@ -1,5 +1,6 @@
 ﻿from django.urls import path
 from . import views
+from v1.products import views as products_views
 from . import views_ocr_lab
 
 app_name = 'label'
@@ -65,6 +66,14 @@ urlpatterns = [
     # 내 원료의 영양성분 — 후보 조회와 확정
     path('my-ingredient/<int:ingredient_id>/nutrition/',
          views.my_ingredient_nutrition_api, name='my_ingredient_nutrition'),
+    # 영양성분 성적서를 올려 읽는다. **파일은 남기지 않는다** — 원료에는
+    # 서류를 붙일 곳이 없고, 제품 문서함에 넣으면 그 원료를 쓰는 다른
+    # 제품에서는 안 보인다.
+    path('my-ingredient/<int:ingredient_id>/spec-nutrition/',
+         products_views.ingredient_spec_nutrition, name='ingredient_spec_nutrition'),
+    path('my-ingredient/<int:ingredient_id>/spec-nutrition/save/',
+         products_views.ingredient_spec_nutrition_save,
+         name='ingredient_spec_nutrition_save'),
     path('my-ingredient/<int:ingredient_id>/nutrition/save/',
          views.my_ingredient_nutrition_save, name='my_ingredient_nutrition_save'),
     path('bulk-delete-my-ingredients/', views.bulk_delete_my_ingredients, name='bulk_delete_my_ingredients'),
