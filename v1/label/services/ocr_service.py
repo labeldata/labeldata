@@ -1285,7 +1285,7 @@ def region_instructions(regions):
 def extract_label_from_parts(parts, model=None, prompt_version=None,
                              use_hints=True, layout='grid', read_freetext=None,
                              use_ground=None, use_hybrid=None, drop_tiles=None,
-                             verify_companies=None):
+                             verify_companies=None, want_boxes=False):
     """
     표시면별로 잘라 온 사진들에서 한 번에 필드를 뽑는다.
 
@@ -1353,6 +1353,9 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         system = active_prompt(prompt_version)
         if use_hints:
             system += learned_hints()
+        if want_boxes:
+            from v1.label.services.ocr_boxes import PROMPT_ADDENDUM
+            system += PROMPT_ADDENDUM
 
         response = client.chat.completions.create(
             model=model or getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
@@ -1391,6 +1394,14 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
                "regions": [r['label'] for r in regions]}
         if ground_report:
             out['ground'] = ground_report
+
+        if want_boxes:
+            # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이
+            # 계산은 확실하다 — 틀릴 여지는 모델이 준 상자 쪽에만 있다.
+            from v1.label.services.ocr_boxes import attach
+            result, located = attach(result, regions)
+            out['data'] = result
+            out['boxes_found'] = located
         return out
 
     except Exception as e:

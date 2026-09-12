@@ -1813,3 +1813,28 @@ html.v2-max .v2-max-exit { display: flex; }
 @media (max-width: 480px) {
   .bom-nut-pick { width: calc(100vw - 24px); }
 }
+
+/* ── 시안의 어디에서 읽었는지 ───────────────────────────────────────────
+   대조는 "시안에 이렇게 적혀 있습니다" 라고 말한다. 사용자가 그 말을 확인할
+   길이 없으면 믿거나 말거나가 되고, 우리가 엉뚱한 칸을 읽었어도 알 수 없다.
+   그 자리를 오려 보여 준다 — 값을 고치는 것이 아니라 보고 판단하게 한다. */
+.cmp-where {
+  margin-left: 6px; padding: 0 6px; font-size: 11px; line-height: 1.6;
+  border: 1px solid var(--ez-gray-300, #dadce0);
+  border-radius: 10px; background: #fff;
+  color: var(--ez-gray-700, #5f6368); cursor: pointer;
+}
+.cmp-where:hover {
+  border-color: var(--ez-info, #1a73e8); color: var(--ez-info, #1a73e8);
+}
+.cmp-where-row {
+  padding: 8px 10px; background: var(--ez-gray-50, #f8f9fa);
+  border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
+}
+.cmp-where-row canvas {
+  max-width: 100%; height: auto; display: block;
+  border: 1px solid var(--ez-gray-300, #dadce0); border-radius: 4px;
+}
+.cmp-where-from {
+  margin-top: 4px; font-size: 11px; color: var(--ez-gray-600, #80868b);
+}

@@ -16629,8 +16629,9 @@ class 시안에_없는_글자를_있다고_말하지_않는다(TestCase):
 
         src = Path('v1/label/views.py').read_text(encoding='utf-8')
         self.assertIn("ground = (purpose == 'compare') or None", src)
-        self.assertIn('extract_label_from_image(image_files[0], use_ground=ground)', src)
-        self.assertIn('extract_label_from_parts(parts, use_ground=ground)', src)
+        # 좌표(want_boxes)도 대조에서만 켜면서 인자가 하나 늘었다
+        self.assertIn('extract_label_from_image(image_files[0], use_ground=ground,', src)
+        self.assertIn('extract_label_from_parts(parts, use_ground=ground,', src)
 
     def test_화면도_그_등급을_안다(self):
         """서버만 알고 화면이 모르면 판정이 조용히 '다름' 으로 보인다."""

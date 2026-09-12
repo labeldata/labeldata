@@ -305,7 +305,7 @@
    * 가 한 화면에서 섞인다. 대조는 무엇이 다른지 알아내는 일이고, 고치는 것은
    * 원본 자료를 보고 결정할 일이다.
    */
-  function compareRowHtml(field, item, meta, grade, why) {
+  function compareRowHtml(field, item, meta, grade, why, box) {
     var target = document.getElementById(meta.id);
     var mine = target ? (target.value || '').trim() : '';
     var theirs = (item.value || '').trim();
@@ -332,7 +332,13 @@
       + '  <div class="ocr-current" title="' + esc(mine) + '">'
       + (mine ? shown.mine : '<span class="ocr-empty">비어 있음</span>')
       + '  </div>'
-      + '  <div class="ocr-arrow"><span class="' + cls + '">' + state + '</span></div>'
+      + '  <div class="ocr-arrow"><span class="' + cls + '">' + state + '</span>'
+      /* 읽은 자리를 짚어 준다. 지금까지 대조는 "시안에 이렇게 적혀 있습니다"
+         라고 말만 했고, 사용자가 그 말을 확인할 길이 없어 **믿거나 말거나**가
+         됐다. 우리가 엉뚱한 칸을 읽었으면 그림을 보면 한눈에 안다. */
+      + (box ? '<button type="button" class="cmp-where" data-where="' + field
+               + '" title="시안에서 읽은 자리를 봅니다">어디서?</button>' : '')
+      + '</div>'
       + '  <div class="ocr-control cmp-theirs">'
       + (theirs ? shown.theirs : '<span class="ocr-empty">읽히지 않음</span>')
       + apiNoteHtml(item) + '</div>'
@@ -784,7 +790,16 @@
         + rows.join('')
         + '</div>'
         + extrasHtml(data);
-      window.photoViewerLayout(body, photoFile, table);
+      loadWhereImage(photoFile);
+    window.photoViewerLayout(body, photoFile, table);
+
+    // '어디서?' — 줄 아래에 그 자리를 오려 붙인다
+    body.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('[data-where]');
+      if (!btn) return;
+      var row = btn.closest('.cmp-row');
+      if (row) toggleWhere(row, btn.dataset.where, data);
+    });
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
 
       wireItemPick(body);
@@ -980,6 +995,77 @@
       });
   }
 
+  /* ── 시안의 어디에서 읽었는지 ────────────────────────────────────────
+   *
+   * 대조는 "시안에 이렇게 적혀 있습니다" 라고 말한다. 그런데 사용자가 그 말을
+   * 확인할 길이 없어서 **믿거나 말거나**가 된다. 우리가 엉뚱한 칸을 읽었어도
+   * 알 수가 없고, 그러면 멀쩡한 시안을 고치러 간다.
+   *
+   * 좌표(ocr_boxes)가 오면 **그 자리를 오려서 보여 준다.** 값을 고치는 것이
+   * 아니라 **보고 판단하게** 하는 것이고, 이 기능에서 계속 지켜 온 방향과 같다.
+   *
+   * 사진 뷰어에 상자를 겹치지 않는다. 그쪽은 확대·회전 변환이 걸려 있어서
+   * 좌표를 따라가려면 변환을 뒤집어야 하는데, 그 계산이 틀리면 **맞는 값에
+   * 틀린 상자**가 된다 — 없느니만 못하다. 원본에서 잘라 내는 쪽은 계산이
+   * 한 번뿐이라 틀릴 여지가 적다.
+   * ───────────────────────────────────────────────────────────────── */
+  var whereImage = null;      // 원본 사진 한 장. 오릴 때마다 다시 읽지 않는다
+
+  function loadWhereImage(photoFile) {
+    whereImage = null;
+    if (!photoFile) return;
+    try {
+      var url = (typeof photoFile === 'string')
+        ? photoFile : URL.createObjectURL(photoFile);
+      var img = new Image();
+      img.onload = function () { whereImage = img; };
+      img.src = url;
+    } catch (e) { /* 못 읽으면 '어디서?' 가 안 뜰 뿐이다 */ }
+  }
+
+  function cropBox(box, pad) {
+    if (!whereImage || !box || box.length !== 4) return null;
+    var w = whereImage.naturalWidth, h = whereImage.naturalHeight;
+    var m = Math.round(Math.max(w, h) * (pad || 0.02));
+    var x1 = Math.max(0, Math.min(box[0], box[2]) - m);
+    var y1 = Math.max(0, Math.min(box[1], box[3]) - m);
+    var x2 = Math.min(w, Math.max(box[0], box[2]) + m);
+    var y2 = Math.min(h, Math.max(box[1], box[3]) + m);
+    if (x2 - x1 < 4 || y2 - y1 < 4) return null;
+
+    var cv = document.createElement('canvas');
+    /* 가로를 420 으로 맞춘다. 6pt 글자를 원본 크기로 보면 못 읽는다 —
+       확인하라고 보여 주는 것이니 읽히는 크기여야 한다. */
+    var scale = Math.min(3, Math.max(1, 420 / (x2 - x1)));
+    cv.width = Math.round((x2 - x1) * scale);
+    cv.height = Math.round((y2 - y1) * scale);
+    var ctx = cv.getContext('2d');
+    ctx.drawImage(whereImage, x1, y1, x2 - x1, y2 - y1, 0, 0, cv.width, cv.height);
+    return cv;
+  }
+
+  function toggleWhere(row, field, data) {
+    var open = row.nextElementSibling;
+    if (open && open.classList.contains('cmp-where-row')) { open.remove(); return; }
+
+    var item = (data || {})[field] || {};
+    var cv = cropBox(item.box);
+    var holder = document.createElement('div');
+    holder.className = 'cmp-where-row';
+    if (cv) {
+      holder.appendChild(cv);
+      if (item.box_from) {
+        var tag = document.createElement('div');
+        tag.className = 'cmp-where-from';
+        tag.textContent = item.box_from + ' 에서 읽었습니다';
+        holder.appendChild(tag);
+      }
+    } else {
+      holder.textContent = '읽은 자리를 오려 내지 못했습니다.';
+    }
+    row.parentNode.insertBefore(holder, row.nextSibling);
+  }
+
   function drawCompare(modalEl, body, data, photoFile, apiMatch, grades) {
     var diff = [];        // 정말 다른 것 — 사람이 봐야 한다
     var minor = [];       // 띄어쓰기만 다른 것 — 접어 둔다
@@ -1002,7 +1088,8 @@
          거칠어질 뿐 대조는 계속된다. */
       var verdict = grades[field] || { grade: compareGrade(mine, theirs), reason: '' };
       var grade = verdict.grade;
-      var html = compareRowHtml(field, item || {}, meta, grade, verdict.reason || '');
+      var html = compareRowHtml(field, item || {}, meta, grade, verdict.reason || '',
+                                item && item.box);
 
       /* 글은 같아 보여도 **숫자가 다르면** 따로 세운다. 같은 항목 뭉치에
          묻히면 아무도 안 본다 — 인쇄물의 수치가 틀린 것이 가장 나쁘다. */

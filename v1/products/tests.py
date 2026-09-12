@@ -1945,8 +1945,10 @@ class DesignCompareModeTests(TestCase):
 
     def test_대조_창에는_채우기가_없다(self):
         """고칠 수 있으면 "시안이 이렇다" 와 "내 값을 바꾸겠다" 가 섞인다."""
+        # 길이로 자르면 함수가 자랄 때마다 끊긴다. '어디서?' 단추를 더하자
+        # 1,600 자를 넘어 cmp-theirs 가 잘려 나갔다 — 함수 끝까지 본다.
         head = self.ocr.index('function compareRowHtml')
-        block = self.ocr[head:head + 1600]
+        block = self.ocr[head:self.ocr.index(chr(10) + '  }', head)]
         self.assertNotIn('ocr-pick', block)      # 체크박스
         self.assertNotIn('ocr-value', block)     # 고칠 칸
         self.assertIn('cmp-theirs', block)
@@ -5849,3 +5851,62 @@ class 정리_요청이_실제로_나간다(TestCase):
         m = re.search(r"const CSRF_TOKEN = '([^']*)'", body)
         self.assertIsNotNone(m, 'CSRF_TOKEN 정의를 못 찾았다')
         self.assertTrue(m.group(1), 'CSRF_TOKEN 이 비어 있다')
+
+
+class 시안의_어디에서_읽었는지_보여_준다(TestCase):
+    """
+    대조는 "시안에 이렇게 적혀 있습니다" 라고 **단정**한다. 그런데 사용자가
+    그 말을 확인할 길이 없으면 믿거나 말거나가 되고, 우리가 엉뚱한 칸을
+    읽었어도 알 수 없다 — 그러면 멀쩡한 시안을 고치러 간다.
+
+    좌표(ocr_boxes)는 처음부터 있었다. **대조에서 켜지 않았을 뿐이다.**
+    """
+
+    def _read(self, path):
+        from pathlib import Path
+        return Path(path).read_text(encoding='utf-8')
+
+    def test_대조에서만_좌표를_켠다(self):
+        """
+        상자를 달라고 하면 프롬프트가 길어지고 응답도 커진다. 채우기는 사람이
+        한 칸씩 보며 적용하므로 그 자리가 이미 확인 절차다.
+        """
+        src = self._read('v1/label/views.py')
+        self.assertIn("boxes = (purpose == 'compare')", src)
+        self.assertIn('want_boxes=boxes', src)
+
+    def test_조각으로_올린_시안도_좌표를_받는다(self):
+        """
+        예전에는 한 장짜리 경로에만 want_boxes 가 있었다. 시안은 면을 나눠
+        올리는 일이 흔하다.
+        """
+        src = self._read('v1/label/services/ocr_service.py')
+        head = src.index('def extract_label_from_parts')
+        block = src[head:src.index('def extract_label_from_image')]
+        self.assertIn('want_boxes=False', block)
+        self.assertIn('PROMPT_ADDENDUM', block)
+        self.assertIn('attach(result, regions)', block)
+
+    def test_사진_뷰어에_상자를_겹치지_않는다(self):
+        """
+        뷰어는 확대·회전 변환이 걸려 있다. 좌표를 따라가려면 그 변환을
+        뒤집어야 하는데, 계산이 틀리면 **맞는 값에 틀린 상자**가 된다 —
+        없느니만 못하다. 원본에서 잘라 내는 쪽은 계산이 한 번뿐이다.
+        """
+        js = self._read('v1/static/js/products/basic_info_ocr.js')
+        self.assertIn('function cropBox', js)
+        self.assertIn('drawImage(whereImage', js)
+
+    def test_상자가_있는_줄에만_단추가_붙는다(self):
+        """못 잡은 자리에 '어디서?' 를 달면 눌러도 아무 일이 없다."""
+        js = self._read('v1/static/js/products/basic_info_ocr.js')
+        self.assertIn("(box ? '<button type=\"button\" class=\"cmp-where\"", js)
+
+    def test_읽히는_크기로_키운다(self):
+        """6pt 글자를 원본 크기로 보면 못 읽는다. 확인하라고 보여 주는 것이다."""
+        js = self._read('v1/static/js/products/basic_info_ocr.js')
+        self.assertIn('420 / (x2 - x1)', js)
+
+    def test_어느_면에서_읽었는지도_말한다(self):
+        js = self._read('v1/static/js/products/basic_info_ocr.js')
+        self.assertIn('item.box_from', js)

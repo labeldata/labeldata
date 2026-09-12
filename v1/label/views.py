@@ -3046,10 +3046,26 @@ def ocr_extract(request):
         # 훨씬 드물게 돌고, 무엇보다 **일부러 검증하려고 누른 자리**라 호출
         # 하나를 더 쓸 값이 있다.
         ground = (purpose == 'compare') or None
+        # ── 시안 대조에서는 **어디서 읽었는지**도 함께 받는다 ────────────
+        #
+        # 지금까지 대조는 "이 값이 시안에 이렇게 적혀 있습니다" 라고 말만 했다.
+        # 사용자가 그 말을 확인할 길이 없어서 **믿거나 말거나**가 된다.
+        #
+        # 좌표가 있으면 그 자리를 짚어 줄 수 있다. 우리가 잘못 읽었을 때
+        # 사용자가 **한눈에 안다** — 엉뚱한 칸을 짚고 있으면 그게 보인다.
+        # 값을 고치는 것이 아니라 **보고 판단하게** 하는 것이고, 이 기능에서
+        # 계속 지켜 온 방향과 같다.
+        #
+        # 채우기에는 켜지 않는다. 상자를 달라고 하면 프롬프트가 길어지고
+        # 응답도 커지는데, 채우기는 사람이 한 칸씩 보며 적용하므로 그 자리가
+        # 이미 확인 절차다.
+        boxes = (purpose == 'compare')
         if len(parts) == 1 and parts[0][1] in ('whole', ''):
-            result = extract_label_from_image(image_files[0], use_ground=ground)
+            result = extract_label_from_image(image_files[0], use_ground=ground,
+                                              want_boxes=boxes)
         else:
-            result = extract_label_from_parts(parts, use_ground=ground)
+            result = extract_label_from_parts(parts, use_ground=ground,
+                                              want_boxes=boxes)
     except Exception as exc:
         logger.exception('OCR 처리 중 예외 (user=%s, file=%s, 영역=%s)',
                          request.user, name, len(parts))
