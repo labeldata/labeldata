@@ -16916,3 +16916,43 @@ class 원료_영양성분은_계산하려는_그_자리에서_묻는다(TestCase
             encoding='utf-8')
         self.assertIn("data-p=\"save\"", html)          # 사람이 누른다
         self.assertIn('input type="radio"', html)
+
+
+class 원료를_고치러_가면_원료관리_화면이_나온다(TestCase):
+    """
+    배합 영양성분 요약의 '원료에서 직접 넣기 →' 가 단독 상세 페이지로 보냈다.
+    입력 폼은 같은 partial 인데 **주변 틀이 달라서** 다른 화면처럼 보였다 —
+    원료관리는 왼쪽 목록 + 오른쪽 상세인데 거기는 폼만 덩그러니 있었다.
+
+    화면을 새로 맞추는 대신 원료관리로 데려온다. 고치는 김에 옆 원료로
+    옮겨 갈 수도 있다.
+    """
+
+    def _read(self, path):
+        from pathlib import Path
+        return Path(path).read_text(encoding='utf-8')
+
+    def test_요약은_원료관리로_보낸다(self):
+        html = self._read('v1/templates/products/_bom_nutrition_summary.html')
+        self.assertIn('/label/my-ingredient-list-combined/?open=', html)
+        self.assertNotIn('/label/my-ingredient-detail/', html)
+
+    def test_주소로_그_원료를_연다(self):
+        html = self._read('v1/templates/label/my_ingredient_list_combined.html')
+        self.assertIn("get('open')", html)
+        self.assertIn('function openFromQuery', html)
+
+    def test_목록에_없어도_오른쪽은_채운다(self):
+        """
+        검색·거르개·쪽 넘김 때문에 그 원료가 목록에 없을 수 있다. 값을 고치러
+        온 사람에게 "목록에 없습니다" 는 쓸모가 없다.
+        """
+        html = self._read('v1/templates/label/my_ingredient_list_combined.html')
+        block = html[html.index('function openFromQuery'):]
+        block = block[:block.index('// 검색 (서버사이드)')]
+        self.assertIn('loadIngredientDetail(detailContent, html)', block)
+
+    def test_두_화면이_같은_입력_폼을_쓴다(self):
+        """틀만 달랐지 폼은 하나다. 폼을 두 벌로 만들면 언젠가 갈라진다."""
+        page = self._read('v1/templates/label/my_ingredient_detail.html')
+        self.assertIn("label/my_ingredient_detail_partial.html", page)

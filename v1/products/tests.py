@@ -5467,3 +5467,33 @@ class 시안_대조_판정은_서버가_한다(TestCase):
         self.assertIn('grades[field] ||', js)
         # 판정을 곧바로 쓰는 자리가 남아 있으면 안 된다
         self.assertNotIn('var grade = compareGrade(', js)
+
+
+class 눌러도_아무_일이_없으면_안_된다(TestCase):
+    """
+    '처음이신가요?' 띠의 [보기] 가 안 눌렸다. button() 이 addEventListener 로
+    매는 순간 **첫 인자는 클릭 이벤트**가 되는데, start(scope, from) 을 그대로
+    넘겨서 scope 자리에 MouseEvent 가 들어갔다. holder(scope) 가 아무것도 못
+    찾고 조용히 돌아서므로 **터지지도 않는다.** 그래서 오래 몰랐다.
+    """
+
+    def engine(self):
+        from pathlib import Path
+        return Path('v1/templates/includes/_coachmark.html').read_text(encoding='utf-8')
+
+    def test_보기는_갈래를_적어_부른다(self):
+        engine = self.engine()
+        self.assertIn("start('detail');", engine)
+        # 함수를 그대로 넘기면 이벤트가 첫 인자가 된다
+        self.assertNotIn("button('보기', 'ezc-btn primary', start)", engine)
+
+    def test_핸들러로_함수를_그대로_넘기지_않는다(self):
+        """
+        같은 사고가 날 수 있는 자리를 통째로 막는다. button(...) 의 세 번째
+        인자는 **이름 없는 함수**이거나 인자를 안 받는 함수여야 한다.
+        """
+        import re
+
+        engine = self.engine()
+        bad = re.findall(r"button\([^,]+,[^,]+,\s*(start|go|place|draw)\s*\)", engine)
+        self.assertEqual(bad, [], '인자를 받는 함수를 핸들러로 그대로 넘겼다: %s' % bad)

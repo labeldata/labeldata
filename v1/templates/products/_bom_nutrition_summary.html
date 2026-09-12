@@ -193,8 +193,8 @@
     }
 
     var link = row.ingredient_id
-      ? ' <a class="bom-nut-go" href="/label/my-ingredient-detail/' + row.ingredient_id
-        + '/" target="_blank">원료에서 정하기 →</a>'
+      ? ' <a class="bom-nut-go" href="/label/my-ingredient-list-combined/?open='
+        + row.ingredient_id + '" target="_blank">원료에서 정하기 →</a>'
       : '';
 
     var want = (d.needed || {})[row.name] || [];
@@ -327,8 +327,8 @@
       + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="skip">'
       + '이 원료는 값이 없어도 됩니다</button>'
       + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="next">건너뛰기</button>'
-      + '<a class="bom-nut-go" href="/label/my-ingredient-detail/' + t.id
-      + '/" target="_blank">원료에서 직접 넣기 →</a>'
+      + '<a class="bom-nut-go" href="/label/my-ingredient-list-combined/?open=' + t.id
+      + '" target="_blank">원료에서 직접 넣기 →</a>'
       + '</div>');
 
     box.querySelector('.bom-nut-pick-body').innerHTML = out.join('');

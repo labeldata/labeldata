@@ -901,6 +901,41 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    /* ── 주소로 특정 원료를 연다 (?open=<id>) ─────────────────────────
+     *
+     * 배합 영양성분 요약의 '원료에서 직접 넣기 →' 가 예전에는 단독 상세
+     * 페이지(/label/my-ingredient-detail/<id>/)로 보냈다. 입력 폼은 같은
+     * partial 이지만 **주변 틀이 달라서** 다른 화면처럼 보였다 — 원료관리는
+     * 왼쪽 목록 + 오른쪽 상세인데 거기는 폼만 덩그러니 있었다.
+     *
+     * 화면을 새로 맞추는 대신 **여기로 데려온다.** 그러면 고치는 김에 옆
+     * 원료로 옮겨 갈 수도 있다.
+     *
+     * 목록에 그 원료가 없을 수 있다(검색·거르개·쪽 넘김 때문에). 그때는
+     * 오른쪽 패널만 채운다 — 값을 고치러 온 사람에게 "목록에 없습니다" 는
+     * 쓸모가 없다. */
+    (function openFromQuery() {
+        var want = new URLSearchParams(window.location.search).get('open');
+        if (!want) return;
+
+        var row = null;
+        ingredientRows.forEach(function (r) { if (r.dataset.id === want) row = r; });
+        if (row) {
+            row.click();
+            try { row.scrollIntoView({block: 'center', behavior: 'smooth'}); } catch (e) {}
+            return;
+        }
+        fetch('/label/my-ingredient-detail/' + encodeURIComponent(want) + '/', {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(function (res) { return res.ok ? res.text() : Promise.reject(res.status); })
+        .then(function (html) { loadIngredientDetail(detailContent, html); })
+        .catch(function () {
+            detailContent.innerHTML =
+                '<div style="padding:16px;color:#d32f2f;">정보를 불러올 수 없습니다.</div>';
+        });
+    })();
+
     // 검색 (서버사이드)
     // 이 화면의 검색창은 폼 안에 있지 않아 주소를 직접 고쳐 이동한다.
     // 엔터 처리는 공용 스크립트(list_common.js)가 data-search-enter 를 보고
