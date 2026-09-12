@@ -150,6 +150,21 @@
     line-height: 17px; text-align: center; margin-right: 5px; padding: 0 4px;
 }
 .truth-key { cursor: pointer; }
+/* 정답 칸 바로 밑에 붙는 시안 대조 두 칸. 들여쓰기와 옅은 왼쪽 선으로
+   **딸린 것**임을 보인다 — 나란히 두면 어느 것이 정답인지 흐려진다. */
+.truth-cmp {
+  display: flex; gap: 6px; align-items: center;
+  margin: 3px 0 0 10px; padding-left: 8px;
+  border-left: 2px solid var(--ez-gray-200, #e8eaed);
+}
+.truth-cmp .truth-mine { flex: 1 1 auto; min-width: 0; font-size: 12px; }
+.truth-diff {
+  flex: 0 0 auto; font-size: 11.5px; white-space: nowrap;
+  color: var(--ez-gray-700, #5f6368); cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+}
+.truth-diff input:checked + span,
+.truth-cmp .truth-isdiff:checked { accent-color: #c5221f; }
 .truth-key-on { color: #b06000; font-weight: 700; }
 .truth-key-on .bx-num { background: #f9ab00; color: #fff; }
 .bx-target { border-color: #1e8e3e !important; }

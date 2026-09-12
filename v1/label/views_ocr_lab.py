@@ -361,6 +361,10 @@ def _case_json(case):
         'crop_box': case.crop_box,
         'expected': case.expected or {},
         'expected_boxes': case.expected_boxes or {},
+        # 다시 열었을 때 적어 둔 것이 그대로 보여야 한다. 안 돌려주면
+        # 칸이 비어 보이고, 그대로 저장하면 적어 둔 것이 지워진다.
+        'label_values': case.label_values or {},
+        'expected_diff': case.expected_diff or [],
         'source': case.get_source_display(),
         'verified': case.verified,
         'note': case.note,

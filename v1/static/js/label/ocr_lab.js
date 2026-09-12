@@ -201,16 +201,40 @@
     return keys;
   }
 
-  function fieldRowHtml(key, index, value) {
+  /* ── 시안 대조 채점에 쓰는 두 칸 ──────────────────────────────────
+   *
+   * 판독 채점은 묻는 것이 하나다 — "사진에서 값을 정확히 읽었나". 시안 대조는
+   * **두 쪽**이 있어야 한다.
+   *
+   *     정답(expected)      시안에 인쇄된 값
+   *     내 표시사항(mine)   이 제품에 우리가 확정해 둔 값
+   *
+   * 그 둘을 견줘 "어디가 다른가" 를 내는 것이 시안 대조이고, 채점은 그 판정이
+   * 맞았는지를 본다. 그래서 정답이 하나 더 필요하다 — **이 항목이 정말
+   * 다른가**(다름 체크). 사람이 눈으로 정해 표시한다.
+   *
+   * 두 칸을 나란히 두는 까닭은 **견주면서 적어야** 하기 때문이다. 따로 떨어진
+   * 화면에서 적으면 무엇과 무엇을 견주는지 매번 다시 찾게 된다.
+   * ───────────────────────────────────────────────────────────────── */
+  function fieldRowHtml(key, index, value, mine, isDiff) {
+    mine = mine || '';
     var long = value.length > 40 || value.indexOf('\n') !== -1;
     var control = long
       ? '<textarea class="form-control form-control-sm truth-val" data-key="' + esc(key) + '" rows="'
         + Math.min(10, Math.max(2, Math.ceil(value.length / 60))) + '">' + esc(value) + '</textarea>'
       : '<input type="text" class="form-control form-control-sm truth-val" data-key="' + esc(key)
         + '" value="' + esc(value) + '">';
+    var mineCtl = '<input type="text" class="form-control form-control-sm truth-mine"'
+      + ' data-key="' + esc(key) + '" value="' + esc(mine) + '"'
+      + ' placeholder="내 표시사항 (비우면 채점 안 함)">';
+    var diffCtl = '<label class="truth-diff" title="이 항목이 정말 다른가 — 채점의 정답입니다">'
+      + '<input type="checkbox" class="truth-isdiff" data-key="' + esc(key) + '"'
+      + (isDiff ? ' checked' : '') + '> 다름</label>';
     return '<div class="truth-key" data-pick="' + esc(key) + '">'
       + '<span class="bx-num">' + (index + 1) + '</span>' + esc(key) + '</div>'
-      + '<div>' + control + '</div>';
+      + '<div>' + control
+      + '<div class="truth-cmp">' + mineCtl + diffCtl + '</div>'
+      + '</div>';
   }
 
   function openCase(c) {
@@ -219,8 +243,11 @@
     boxDetected = {};
     boxKeys = caseFieldKeys(c);
 
+    var diffSet = {};
+    (c.expected_diff || []).forEach(function (k) { diffSet[k] = 1; });
     var rows = boxKeys.map(function (k, i) {
-      return fieldRowHtml(k, i, (c.expected || {})[k] || '');
+      return fieldRowHtml(k, i, (c.expected || {})[k] || '',
+                          (c.label_values || {})[k] || '', !!diffSet[k]);
     }).join('');
 
     var form = ''
@@ -444,8 +471,21 @@
       return;
     }
 
+    // 시안 대조 채점에 쓰는 두 가지. 비운 칸은 **보내지 않는다** — 빈 문자열을
+    // 보내면 "표시사항이 빈 값" 이 되어 전부 어긋남으로 잡힌다.
+    var mine = {};
+    document.querySelectorAll('#caseBody .truth-mine').forEach(function (el) {
+      if (el.value.trim()) mine[el.dataset.key] = el.value;
+    });
+    var diffs = [];
+    document.querySelectorAll('#caseBody .truth-isdiff').forEach(function (el) {
+      if (el.checked) diffs.push(el.dataset.key);
+    });
+
     var payload = {
       expected: expected,
+      label_values: mine,
+      expected_diff: diffs,
       name: document.getElementById('caseName').value,
       report_no: document.getElementById('caseReportNo').value,
       crop_box: crop,
