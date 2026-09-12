@@ -1049,14 +1049,36 @@ def product_detail(request, product_id):
     # 슬롯 상태 업데이트 (만료일 기준)
     for slot in document_slots:
         slot.update_status()
+
+    #  **못 보는 문서를 가리키는 슬롯은 비어 있는 것으로 다룬다.**
+    #
+    #  문서 목록은 visible_documents 로 걸렀는데 슬롯 목록은 안 걸렀다.
+    #  그래서 자료 제출(협력사, can_view_all_documents=False)에게 "시험성적서
+    #  ✓ 갖춤" 칩이 보이는데 누르면 documentData 에 없어 "문서 정보를 찾을 수
+    #  없습니다" 가 떴다. 필수 문서 카운터도 자기가 못 보는 것까지 세어 목록
+    #  (0건)과 어긋났다.
+    _visible_doc_ids = set(documents.values_list('document_id', flat=True))
+    document_slots = list(document_slots)
+    for slot in document_slots:
+        if (slot.current_document_id
+                and slot.current_document_id not in _visible_doc_ids):
+            slot.current_document = None
+            slot.current_document_id = None
+            slot.status = DocumentSlot.SlotStatus.EMPTY
     
     # 슬롯 통계 계산 (숨겨지지 않은 슬롯만)
-    total_slots = document_slots.count()
-    filled_slots = document_slots.exclude(status=DocumentSlot.SlotStatus.EMPTY).count()
+    #
+    #  **조정된 목록에서 센다.** DB 로 다시 세면 위에서 '못 보는 문서' 를
+    #  비워 둔 것이 무시되고, 카운터가 목록(0건)과 어긋난다.
+    _EMPTY = DocumentSlot.SlotStatus.EMPTY
+    total_slots = len(document_slots)
+    filled_slots = sum(1 for s in document_slots if s.status != _EMPTY)
     compliance_rate = (filled_slots / total_slots * 100) if total_slots > 0 else 0
-    empty_count = document_slots.filter(status=DocumentSlot.SlotStatus.EMPTY).count()
-    expiring_count = document_slots.filter(status=DocumentSlot.SlotStatus.EXPIRING).count()
-    expired_count = document_slots.filter(status=DocumentSlot.SlotStatus.EXPIRED).count()
+    empty_count = sum(1 for s in document_slots if s.status == _EMPTY)
+    expiring_count = sum(1 for s in document_slots
+                         if s.status == DocumentSlot.SlotStatus.EXPIRING)
+    expired_count = sum(1 for s in document_slots
+                        if s.status == DocumentSlot.SlotStatus.EXPIRED)
     
     context = {
         'product': label,  # 템플릿에서 product로 참조
@@ -3136,10 +3158,21 @@ def received_share_accept(request, receipt_id):
 def use_as_ingredient(request, receipt_id):
     """원료로 사용"""
     receipt = get_object_or_404(
-        SharedProductReceipt.objects.select_related('share__label'),
+        SharedProductReceipt.objects.select_related('share__label', 'share__permission'),
         receipt_id=receipt_id,
         receiver=request.user,
     )
+
+    #  **권한 플래그를 본다.**
+    #
+    #  can_use_as_ingredient 를 어디서도 검사하지 않았다. 그런데 공유 알림
+    #  메일은 "✗ 원료로 사용 가능" 이라고 적어 보낸다 — 안 된다고 통보받은
+    #  사람이 단추를 누르면 그대로 됐다. 화면이 이메일과 반대로 동작했다.
+    _perm = getattr(receipt.share, 'permission', None)
+    if not getattr(_perm, 'can_use_as_ingredient', False):
+        messages.warning(request, '이 제품은 원료로 사용할 수 없도록 공유되었습니다.')
+        return redirect('products:inbox')
+
     receipt.used_as_ingredient_yn = True
     receipt.save()
 

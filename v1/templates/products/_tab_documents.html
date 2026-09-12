@@ -469,7 +469,13 @@ async function submitImportCompanyDoc() {
         }
     }
 
-    if (anyFailed) {
+    /* 말을 **새로고침 너머로** 넘긴다.
+       예전에는 스낵바를 띄운 직후 location.reload() 라, 5건 중 3건이 실패해도
+       경고가 즉시 사라졌다. 몇 건이 들어왔는지 사용자가 직접 세어 봐야 했다.
+       같은 파일의 다른 경로들은 showSavedAfterReload 를 쓰고 있었다. */
+    if (anyFailed && typeof showSavedAfterReload === 'function') {
+        showSavedAfterReload('일부 서류를 불러오지 못했습니다. 목록을 확인해 주세요.', 'error');
+    } else if (anyFailed) {
         showSnackbar('일부 서류 불러오기에 실패했습니다.', 'error');
     }
     bootstrap.Modal.getInstance(document.getElementById('importCompanyDocModal')).hide();

@@ -8123,3 +8123,106 @@ class DocumentTabRespectsPermissionTests(TestCase):
         i = self.src.index('window.handleSlotClick')
         j = self.src.index('window.openUploadForUpdate')
         self.assertIn('CAN_UPLOAD_DOCUMENTS', self.src[i:j])
+
+
+class SlotsFollowDocumentVisibilityTests(TestCase):
+    """
+    문서 목록은 visible_documents 로 걸렀는데 **슬롯 목록은 안 걸렀다.**
+
+    그래서 자료 제출(협력사, can_view_all_documents=False)에게 "시험성적서
+    ✓ 갖춤" 칩이 보이는데 누르면 "문서 정보를 찾을 수 없습니다" 가 떴다.
+    필수 문서 카운터도 자기가 못 보는 것까지 세어 목록(0건)과 어긋났다.
+    """
+
+    def setUp(self):
+        from v1.products.models import (DocumentSlot, DocumentType,
+                                        ProductDocument, ProductMetadata)
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.sup = User.objects.create_user('협력사', password='x', email='sup@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        ProductMetadata.objects.create(label=self.label, product_code='PRD-T-1')
+        dtype = DocumentType.objects.create(type_code='T', type_name='성적서')
+        from django.core.files.base import ContentFile
+        self.theirs = ProductDocument.objects.create(
+            label=self.label, document_type=dtype,
+            file=ContentFile(b'secret', name='b.pdf'),
+            original_filename='남의규격서.pdf', uploaded_by=self.owner)
+        self.slot = DocumentSlot.objects.create(
+            label=self.label, document_type=dtype, current_document=self.theirs)
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email='sup@x.com', recipient_user=self.sup,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        perm = SharePermission.objects.create(share=share)
+        perm.apply_role_defaults(role_code='UPLOADER', save=True)
+
+    def _page(self, user):
+        self.client.force_login(user)
+        return self.client.get(
+            reverse('products:product_detail', args=[self.label.my_label_id]))
+
+    def test_못_보는_문서를_가리키는_슬롯은_비어_있다(self):
+        page = self._page(self.sup)
+        slots = page.context['document_slots']
+        self.assertTrue(all(s.current_document is None for s in slots))
+
+    def test_카운터도_목록과_맞는다(self):
+        page = self._page(self.sup)
+        self.assertEqual(page.context['filled_slots'], 0)
+        self.assertEqual(page.context['documents'].count(), 0)
+
+    def test_주인에게는_그대로_보인다(self):
+        page = self._page(self.owner)
+        slots = list(page.context['document_slots'])
+        self.assertEqual([s.current_document_id for s in slots],
+                         [self.theirs.document_id])
+        self.assertEqual(page.context['filled_slots'], 1)
+
+
+class UseAsIngredientFollowsThePermissionTests(TestCase):
+    """
+    can_use_as_ingredient 를 어디서도 검사하지 않았다. 그런데 공유 알림
+    메일은 "✗ 원료로 사용 가능" 이라고 적어 보낸다 — **안 된다고 통보받은
+    사람이 단추를 누르면 그대로 됐다.** 화면이 이메일과 반대로 동작했다.
+    """
+
+    def setUp(self):
+        from v1.products.models import SharedProductReceipt
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.sup = User.objects.create_user('협력사', password='x', email='sup@x.com')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='브라우니', prdlst_nm='브라우니')
+        self.share = ProductShare.objects.create(
+            label=self.label, recipient_email='sup@x.com', recipient_user=self.sup,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        self.perm = SharePermission.objects.create(share=self.share)
+        self.receipt = SharedProductReceipt.objects.create(
+            share=self.share, receiver=self.sup)
+        self.client.force_login(self.sup)
+
+    def _post(self):
+        return self.client.post(
+            reverse('products:use_as_ingredient', args=[self.receipt.receipt_id]))
+
+    def test_못_쓰게_공유했으면_막는다(self):
+        from v1.label.models import MyIngredient
+        self.perm.apply_role_defaults(role_code='REVIEWER', save=True)
+        self.perm.can_use_as_ingredient = False
+        self.perm.save()
+        self._post()
+        self.receipt.refresh_from_db()
+        self.assertFalse(self.receipt.used_as_ingredient_yn)
+        self.assertFalse(MyIngredient.objects.filter(user_id=self.sup).exists())
+
+    def test_쓸_수_있게_공유했으면_된다(self):
+        self.perm.apply_role_defaults(role_code='EDITOR', save=True)
+        self.assertTrue(self.perm.can_use_as_ingredient)
+        self._post()
+        self.receipt.refresh_from_db()
+        self.assertTrue(self.receipt.used_as_ingredient_yn)
+
+    def test_화면도_같은_조건을_본다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        src = (Path(dj.BASE_DIR) / 'templates' / 'products' / 'sharing'
+               / 'inbox.html').read_text(encoding='utf-8')
+        self.assertIn('share.permission.can_use_as_ingredient', src)

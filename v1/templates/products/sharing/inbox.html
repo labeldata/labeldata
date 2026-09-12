@@ -231,8 +231,18 @@
                         </div>
                     </td>
                     <td onclick="event.stopPropagation()">
+                        {% comment %}
+                        원료로 쓸 수 있게 공유된 것만 단추를 보여 준다.
+                        공유 알림 메일이 "✗ 원료로 사용 가능" 이라고 적어 보내는데
+                        화면은 단추를 그렸고 서버도 막지 않았다 — 안 된다고
+                        통보받은 사람이 누르면 그대로 됐다.
+                        {% endcomment %}
                         {% if share.my_receipt %}
-                            {% if not share.my_receipt.used_as_ingredient_yn %}
+                            {% if not share.permission.can_use_as_ingredient %}
+                            <span class="badge bg-light text-muted"
+                                  style="border-radius:16px;font-size:11px;padding:4px 8px;"
+                                  title="원료로 사용할 수 없도록 공유되었습니다">원료 사용 불가</span>
+                            {% elif not share.my_receipt.used_as_ingredient_yn %}
                             <form method="post" action="{% url 'products:use_as_ingredient' share.my_receipt.receipt_id %}">
                                 {% csrf_token %}
                                 <button type="submit"
