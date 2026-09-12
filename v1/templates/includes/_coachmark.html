@@ -338,7 +338,7 @@
     count.textContent = (at + 1) + ' / ' + steps.length;
     foot.appendChild(count);
 
-    foot.appendChild(button('그만두기', 'ezc-btn quiet', stop));
+    foot.appendChild(button('닫기', 'ezc-btn quiet', stop));
     if (at > 0) {
       foot.appendChild(button('이전', 'ezc-btn', function () { go(at - 1); }));
     }

@@ -1259,7 +1259,7 @@ async function submitImportCompanyDoc() {
     }
 
     window.readSpecNutrition = async function (docId) {
-        showSnackbar('성적서를 읽는 중입니다...', 'info');
+        showSnackbar('성적서를 판독하는 중입니다...', 'info');
         let body;
         try {
             const res = await fetch(`/products/documents/${docId}/spec-nutrition/`, {
@@ -1268,12 +1268,12 @@ async function submitImportCompanyDoc() {
             });
             body = await res.json();
             if (!res.ok || !body.success) {
-                showSnackbar(body.error || '읽지 못했습니다.', 'error');
+                showSnackbar(body.error || '판독하지 못했습니다.', 'error');
                 return;
             }
         } catch (err) {
             console.error(err);
-            showSnackbar('읽는 중 오류가 발생했습니다.', 'error');
+            showSnackbar('판독 중 오류가 발생했습니다.', 'error');
             return;
         }
 
@@ -1301,14 +1301,14 @@ async function submitImportCompanyDoc() {
             return '<div class="d-flex justify-content-between border-bottom py-1">'
                 + '<span>' + r[1] + '</span>'
                 + '<span>' + (val == null
-                    ? '<span class="text-muted" style="font-size:11px;">성적서에 없음</span>'
+                    ? '<span class="text-muted" style="font-size:11px;">미기재</span>'
                     : val + ' ' + r[2]) + '</span></div>';
         }).join('');
 
         const html = '<div style="font-size:12px;">'
             + '<div class="text-muted mb-2">성적서 기준량 '
             + (body.basis_amount || '-') + (body.basis_unit || '')
-            + ' 을 <b>100' + (body.basis_unit || 'g') + ' 당</b>으로 바꾼 값입니다.</div>'
+            + ' 기준을 <b>100' + (body.basis_unit || 'g') + ' 당</b>으로 환산한 값입니다.</div>'
             + list
             + '<div class="text-muted mt-2" style="font-size:11px;">'
             + '확인 후 저장하면 <b>이 제품의 영양성분</b>으로 들어갑니다. '
@@ -1336,18 +1336,18 @@ async function submitImportCompanyDoc() {
     }
 
     window.previewIngredientPhoto = async function (docId) {
-        showSnackbar('사진을 읽는 중입니다...', 'info');
+        showSnackbar('사진을 판독하는 중입니다...', 'info');
         let body;
         try {
             const res = await fetch(`/products/documents/${docId}/ingredient-photo/preview/`);
             body = await res.json();
             if (!res.ok || !body.success) {
-                showSnackbar(body.error || '사진을 읽지 못했습니다.', 'error');
+                showSnackbar(body.error || '사진을 판독하지 못했습니다.', 'error');
                 return;
             }
         } catch (err) {
             console.error(err);
-            showSnackbar('사진을 읽는 중 오류가 발생했습니다.', 'error');
+            showSnackbar('사진 판독 중 오류가 발생했습니다.', 'error');
             return;
         }
 
@@ -1507,12 +1507,12 @@ async function submitImportCompanyDoc() {
                     <i class="bi bi-box-seam me-1"></i>원료 표시사항
                 </div>
                 <div class="text-muted mb-2" style="font-size:11px; line-height:1.5;">
-                    사진을 읽어 BOM 탭에 원료로 등록합니다.
-                    ${doc.ingredientBomId ? '이미 등록된 사진입니다.' : '함량(%)은 사진에 없어 BOM에서 직접 넣으셔야 합니다.'}
+                    사진을 판독해 BOM 탭에 원료로 등록합니다.
+                    ${doc.ingredientBomId ? '이미 등록된 사진입니다.' : '함량(%)은 사진에 없으므로 BOM 탭에서 직접 입력해야 합니다.'}
                 </div>
                 <button class="btn btn-outline-primary v2-btn-sm w-100"
                         onclick="previewIngredientPhoto(${docId})">
-                    <i class="bi bi-magic"></i>${doc.ingredientBomId ? '다시 읽기' : '사진 읽어서 BOM에 추가'}
+                    <i class="bi bi-magic"></i>${doc.ingredientBomId ? '다시 판독' : '사진 판독 후 BOM 등록'}
                 </button>
             </div>
             ` : ''}

@@ -151,7 +151,7 @@
       out.push('<span class="bom-nut-todo">' + chips.join(' · ') + '</span>');
       if (todo.some(function (t) { return t.id; })) {
         out.push('<button type="button" class="btn v2-btn-sm btn-primary"'
-          + ' data-act="pickall">값 정하기 (' + todo.length + '건)</button>');
+          + ' data-act="pickall">영양성분 확정 (' + todo.length + '건)</button>');
       }
     }
 
@@ -273,15 +273,15 @@
       + '<b>' + esc(t.name) + '</b> <span class="bom-nut-dim">'
       + Number(t.ratio).toFixed(2) + '%</span>'
       + '<span class="bom-nut-dim"> · ' + (pickAt + 1) + ' / ' + todo.length + '</span>'
-      + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="stop">그만</button>'
-      + '</div><div class="bom-nut-pick-body">후보를 찾는 중…</div>';
+      + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="stop">닫기</button>'
+      + '</div><div class="bom-nut-pick-body">후보 조회 중…</div>';
 
     fetch('/label/my-ingredient/' + t.id + '/nutrition/')
       .then(function (r) { return r.json(); })
       .then(function (d) { drawPick(t, d); })
       .catch(function () {
         box.querySelector('.bom-nut-pick-body').innerHTML =
-          '<div class="bom-nut-warn">후보를 불러오지 못했습니다.</div>';
+          '<div class="bom-nut-warn">후보를 조회하지 못했습니다.</div>';
       });
   }
 
@@ -295,8 +295,8 @@
       out.push('<div class="bom-nut-warn">' + esc(d.warning) + '</div>');
     }
     if (!cands.length) {
-      out.push('<div class="bom-nut-dim">이름으로 찾은 후보가 없습니다.'
-        + ' 원료 상세에서 성적서 값을 직접 넣으세요.</div>');
+      out.push('<div class="bom-nut-dim">이름으로 조회된 후보가 없습니다.'
+        + ' 원료 상세에서 성적서 값을 직접 입력하세요.</div>');
     }
 
     cands.forEach(function (c, i) {
@@ -320,15 +320,15 @@
 
     out.push('<div class="bom-nut-pick-foot">'
       + (cands.length
-         ? '<button type="button" class="btn v2-btn-sm btn-primary" data-p="save">이 값으로</button>'
+         ? '<button type="button" class="btn v2-btn-sm btn-primary" data-p="save">선택 값 저장</button>'
          : '')
       /* 배합비가 작아 표시값을 못 움직이는 원료는 비워 둬도 된다. 물을 것을
          줄이는 것이 이 화면의 일이라, 그 길을 여기서도 열어 둔다. */
       + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="skip">'
-      + '이 원료는 값이 없어도 됩니다</button>'
-      + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="next">건너뛰기</button>'
+      + '영향 없음으로 확정</button>'
+      + '<button type="button" class="btn v2-btn-sm btn-light border" data-p="next">다음 원료</button>'
       + '<a class="bom-nut-go" href="/label/my-ingredient-list-combined/?open=' + t.id
-      + '" target="_blank">원료에서 직접 넣기 →</a>'
+      + '" target="_blank">원료 상세에서 직접 입력 →</a>'
       + '</div>');
 
     box.querySelector('.bom-nut-pick-body').innerHTML = out.join('');

@@ -1753,7 +1753,7 @@ function showValidationBlock(newStatus, result) {
         const field = reachable(i);
         const go = field
             ? '<button type="button" class="vb-go" data-field="' + escapeHtml(field) + '">'
-              + '고치러 가기 <i class="bi bi-arrow-right-short"></i></button>'
+              + '수정하러 가기 <i class="bi bi-arrow-right-short"></i></button>'
             : '';
         return '<li class="' + cls + '"><div class="vb-msg">'
              + escapeHtml(i.message || '') + '</div>' + sug + go + '</li>';

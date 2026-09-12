@@ -4843,7 +4843,7 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         script = self.engine[self.engine.index('<script>'):]
         # 엔진이 제 입으로 말하는 것은 단추 이름뿐이다
         self.assertIn("'다음'", script)
-        self.assertIn("'그만두기'", script)
+        self.assertIn("'닫기'", script)      # '그만두기' 에서 바꿨다
         for word in ('품목보고번호', '알레르기', '배합비'):
             self.assertNotIn(word, script, '화면 문구가 엔진에 새어 들어갔다')
 

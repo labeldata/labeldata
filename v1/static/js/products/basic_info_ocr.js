@@ -162,7 +162,7 @@
       // 정보 순서 맞추기가 각각 다른 이유로 값을 바꾼다. 여기서 다시 판단하면
       // 어느 날 한쪽만 맞는 설명이 붙는다.
       notes += '<div class="ocr-api-note">사진에서는 "' + esc(item.snapped_from) + '" 로 읽었습니다. '
-        + esc(item.snapped_note || '표시기준 목록에 맞춰 고쳤습니다.') + '</div>';
+        + esc(item.snapped_note || '표시기준 목록에 맞춰 수정했습니다.') + '</div>';
     }
     // 괄호 짝이 안 맞는 자리. 값은 고치지 않는다 - 어느 쪽을 잘못 읽었는지는
     // 사진을 봐야 안다. 다시 볼 자리를 짚어 줄 뿐이다.
@@ -338,7 +338,7 @@
          라고 말만 했고, 사용자가 그 말을 확인할 길이 없어 **믿거나 말거나**가
          됐다. 우리가 엉뚱한 칸을 읽었으면 그림을 보면 한눈에 안다. */
       + (box ? '<button type="button" class="cmp-where" data-where="' + field
-               + '" title="시안에서 읽은 자리를 봅니다">어디서?</button>' : '')
+               + '" title="시안에서 인식한 위치를 확인합니다">위치 확인</button>' : '')
       + '</div>'
       + '  <div class="ocr-control cmp-theirs">'
       + (theirs ? shown.theirs : '<span class="ocr-empty">읽히지 않음</span>')
@@ -774,8 +774,8 @@
     if (!rows.length) {
       body.innerHTML =
         '<div class="text-center text-muted py-4">' +
-        '사진에서 읽어낸 항목이 없습니다.<br>' +
-        '표시사항이 또렷하게 나온 사진인지 확인해 주세요.</div>';
+        '사진에서 인식된 항목이 없습니다.<br>' +
+        '표시사항이 선명하게 촬영된 사진인지 확인해 주세요.</div>';
       modalEl.querySelector('#basicInfoOcrApply').disabled = true;
     } else {
       var table =
@@ -840,7 +840,7 @@
     var applyBtn = modalEl.querySelector('#basicInfoOcrApply');
     if (applyBtn) applyBtn.style.display = '';
     var foot = modalEl.querySelector('.modal-footer .me-auto');
-    if (foot) foot.textContent = '체크한 항목만 채웁니다. 저장은 아래 저장 버튼으로 하세요.';
+    if (foot) foot.textContent = '선택한 항목만 입력됩니다. 저장은 아래 저장 버튼을 누르세요.';
     var head = modalEl.querySelector('.modal-title');
     if (head) head.innerHTML = '<i class="bi bi-camera me-2 text-primary"></i>사진에서 읽은 항목';
 
@@ -1086,11 +1086,11 @@
       if (item.box_from) {
         var tag = document.createElement('div');
         tag.className = 'cmp-where-from';
-        tag.textContent = item.box_from + ' 에서 읽었습니다';
+        tag.textContent = '인식 위치 — ' + item.box_from;
         holder.appendChild(tag);
       }
     } else {
-      holder.textContent = '읽은 자리를 오려 내지 못했습니다.';
+      holder.textContent = '인식 위치를 표시할 수 없습니다.';
     }
     row.parentNode.insertBefore(holder, row.nextSibling);
   }
@@ -1153,10 +1153,10 @@
       + '</div>';
 
     var tally = '';
-    if (minor.length) tally += ' 띄어쓰기만 다른 것 ' + minor.length + '개는 아래에 접어 뒀습니다.';
-    if (numDiff.length) tally += ' 수치가 다른 항목 ' + numDiff.length + '개가 있습니다.';
+    if (minor.length) tally += ' 띄어쓰기만 다른 항목 ' + minor.length + '건은 아래에 접어 뒀습니다.';
+    if (numDiff.length) tally += ' 수치가 다른 항목 ' + numDiff.length + '건이 있습니다.';
     if (groundlessTexts(data).length) {
-      tally += ' 시안에만 있는 문구 ' + groundlessTexts(data).length + '개를 모았습니다.';
+      tally += ' 시안에만 있는 문구 ' + groundlessTexts(data).length + '건을 확인했습니다.';
     }
 
     /*
@@ -1175,9 +1175,9 @@
     var weak = record.length >= 3 && thin >= Math.ceil(record.length / 2);
     var advice = weak
       ? '<div class="cmp-advice"><i class="bi bi-crop me-1"></i>'
-        + '<strong>덜 읽힌 것으로 보입니다.</strong> ' + thin + '개 항목이 내 값보다 짧게 읽혔습니다 — '
+        + '<strong>일부만 인식된 것으로 보입니다.</strong> ' + thin + '건이 내 표시사항보다 짧게 인식됐습니다 — '
         + '시안 전체보다 <strong>표시사항 표 부분만 잘라</strong> 다시 올리면 훨씬 정확합니다. '
-        + '아래 결과는 그 상태로 견준 것입니다.</div>'
+        + '아래 결과는 그 상태로 대조한 것입니다.</div>'
       : '';
 
     /* 봐야 할 것을 **한 수로** 센다. 항목이 같아도 수치가 다르거나 근거 없는
@@ -1189,7 +1189,7 @@
       + '<div class="cmp-summary ' + (toCheck ? 'cmp-summary-diff' : 'cmp-summary-ok') + '">'
       + (toCheck
           ? '<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>' + toCheck
-            + '곳을 확인하세요.</strong> 어느 쪽이 맞는지는 원본 자료를 보고 정합니다 — '
+            + '건을 확인하세요.</strong> 어느 쪽이 맞는지는 원본 자료를 근거로 판단합니다 — '
             + '이 창은 값을 고치지 않습니다.' + tally
           : '<i class="bi bi-check-circle-fill me-1"></i><strong>확인할 항목이 없습니다.</strong> '
             + '시안과 표시사항이 같습니다.' + tally)
@@ -1285,7 +1285,7 @@
     if (apply) apply.style.display = 'none';
     var footNote = modalEl.querySelector('.modal-footer .me-auto');
     if (footNote) {
-      footNote.textContent = '대조만 합니다. 값은 바뀌지 않습니다.';
+      footNote.textContent = '대조만 수행하며 값은 변경되지 않습니다.';
     }
     var title = modalEl.querySelector('.modal-title');
     if (title) {
@@ -1959,7 +1959,7 @@
           ? '<strong>' + esc(meta.filename) + '</strong> 을 문서함에 저장했습니다. '
           : '')
       + '읽은 값입니다. 틀린 곳은 고친 뒤 등록하세요. '
-      + '함량(%)은 BOM 탭에서 넣으셔야 합니다.</div>';
+      + '함량(%)은 BOM 탭에서 입력해야 합니다.</div>';
 
     if (meta && meta.matched_existing) {
       head += '<div class="alert alert-success py-2 px-3 mb-3" style="font-size:12px;">'

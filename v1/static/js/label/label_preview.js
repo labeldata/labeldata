@@ -3536,7 +3536,7 @@ function vrProblemsHtml(problems) {
            내려가야 했다. */
         const editField = (row.fields || [])[0];
         const edit = editField
-            ? `<button type="button" class="vr-edit vr-where-btn" data-edit="${editField}">고치러 가기 <i class="fas fa-arrow-right"></i></button>`
+            ? `<button type="button" class="vr-edit vr-where-btn" data-edit="${editField}">수정하러 가기 <i class="fas fa-arrow-right"></i></button>`
             : '';
         /* 권고는 "고치면 좋다" 이지 "틀렸다" 가 아니다. 확정도 막지 않는다.
            같은 무게로 보이면 진짜 지적이 그 안에 묻힌다. */
