@@ -16956,3 +16956,82 @@ class 원료를_고치러_가면_원료관리_화면이_나온다(TestCase):
         """틀만 달랐지 폼은 하나다. 폼을 두 벌로 만들면 언젠가 갈라진다."""
         page = self._read('v1/templates/label/my_ingredient_detail.html')
         self.assertIn("label/my_ingredient_detail_partial.html", page)
+
+
+class 공용_원료_풀은_만들기_전에_먼저_잰다(TestCase):
+    """
+    설계를 먼저 하고 데이터를 나중에 본 적이 있다(3장, 식품구분 4분류).
+    통째로 버렸다. 순서를 뒤집으면 **아무도 안 쓰는 표를 운영하게 된다.**
+
+    그래서 1 단계는 재기만 한다. 알아야 할 것은 셋이다 — 겹치는 원료가 몇
+    개인가, 값이 실제로 같은가, 갈린다면 얼마나. 겹치는 것이 열 개뿐이면 이
+    기능은 값이 없고, 심하게 갈리면 보여 주는 것 자체가 위험하다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.a = User.objects.create_user(username='a@example.com', password='x')
+        self.b = User.objects.create_user(username='b@example.com', password='x')
+
+    def _ing(self, user, no, **kw):
+        from v1.label.models import MyIngredient
+
+        kw.setdefault('prdlst_nm', '원료')
+        return MyIngredient.objects.create(
+            user_id=user, prdlst_report_no=no, delete_YN='N', **kw)
+
+    def _run(self, **opts):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('measure_ingredient_pool', stdout=out, **opts)
+        return out.getvalue()
+
+    def test_한_사람만_등록한_것은_겹친_것이_아니다(self):
+        self._ing(self.a, '12345')
+        self._ing(self.a, '12345')          # 같은 사람이 두 번
+        out = self._run()
+        self.assertIn('두 곳 이상이 등록한 번호: 0개', out)
+
+    def test_두_곳이_등록하면_겹친다(self):
+        self._ing(self.a, '12345', allergens='우유')
+        self._ing(self.b, '12345', allergens='우유')
+        self.assertIn('두 곳 이상이 등록한 번호: 1개', self._run())
+
+    def test_갈린_값을_짚어_준다(self):
+        self._ing(self.a, '12345', allergens='우유')
+        self._ing(self.b, '12345', allergens='우유, 대두')
+        out = self._run()
+        self.assertIn('갈림', out)
+        self.assertIn('12345', out)
+
+    def test_공백_차이로_갈렸다고_하지_않는다(self):
+        self._ing(self.a, '12345', allergens='우유, 대두')
+        self._ing(self.b, '12345', allergens='우유,  대두 ')
+        out = self._run()
+        self.assertIn('알레르기           같음    1', out)
+
+    def test_아무것도_저장하지_않는다(self):
+        from v1.label.models import MyIngredient
+
+        self._ing(self.a, '12345')
+        self._ing(self.b, '12345')
+        before = list(MyIngredient.objects.values_list('pk', 'allergens'))
+        self._run()
+        self.assertEqual(list(MyIngredient.objects.values_list('pk', 'allergens')), before)
+
+    def test_배합비나_거래처는_보지도_않는다(self):
+        """
+        나눌 수 있는 것은 공시 정보와 그 파생뿐이다. 하나라도 새면 서비스가
+        끝난다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/label/management/commands/measure_ingredient_pool.py').read_text(
+            encoding='utf-8')
+        block = src[src.index('COMPARE = ('):src.index(')', src.index('COMPARE = ('))]
+        for forbidden in ('ratio', '배합', '단가', 'price'):
+            self.assertNotIn(forbidden, block)

@@ -136,6 +136,15 @@ def dashboard_view(request):
     total_stats['total_labels_change'] = period_stats.get('new_labels_change', 0.0)
     total_stats['total_ingredients_change'] = period_stats.get('new_ingredients_change', 0.0)
     
+    # 지표 계산이 실패해도 대시보드는 떠야 한다. 여기가 죽으면 관리자가
+    # 기존 통계마저 못 본다 — 곁들이 때문에 본체를 잃을 이유가 없다.
+    try:
+        from v1.common.services import funnel as funnel_svc
+        funnel_snapshot = funnel_svc.snapshot(90)
+    except Exception:
+        logger.exception('[대시보드] 깔때기 지표를 내지 못했다')
+        funnel_snapshot = None
+
     context = {
         'period': period,
         'period_display': period_display,
@@ -158,6 +167,10 @@ def dashboard_view(request):
         # 연도 선택
         'available_years': available_years,
         'selected_year': target_year,
+        # 깔때기 넷. 지금까지 이 화면은 **얼마나 쌓였는지**만 보여 줬다 —
+        # 제품 몇 건, 원료 몇 건. 그런데 고칠 곳을 알려 주는 것은 "어디서
+        # 새는가" 다. 넷만 둔다(services/funnel).
+        'funnel': funnel_snapshot,
     }
     
     return render(request, 'admin/dashboard.html', context)

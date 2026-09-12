@@ -733,3 +733,110 @@ class 가져오기는_사람이_눌러야_한다(TestCase):
         self._sign_in_with_pending()
         resp = self.client.get(reverse('user_management:promote_guest_data'))
         self.assertEqual(resp.status_code, 405)
+
+
+class 어디까지_오고_어디서_새는가(TestCase):
+    """
+    지금까지 **아무것도 재지 않았다.** 기능을 고치고 "좋아졌을 것" 이라고
+    말해 왔는데, 좋아졌는지 나빠졌는지 알 방법이 없었다. 넷만 둔다 — 늘리면
+    아무도 안 본다.
+    """
+
+    def setUp(self):
+        from django.utils import timezone
+
+        from v1.activity_log.models import UserActivityLog
+
+        self.now = timezone.now()
+        self.u = User.objects.create_user(username='a@example.com', password='x')
+        User.objects.filter(pk=self.u.pk).update(
+            date_joined=self.now - timezone.timedelta(days=40))
+        self.u.refresh_from_db()
+        self.log = UserActivityLog
+
+    def _act(self, user, action, days_after=0):
+        from django.utils import timezone
+
+        row = self.log.objects.create(user=user, category='product', action=action)
+        self.log.objects.filter(pk=row.pk).update(
+            created_at=user.date_joined + timezone.timedelta(days=days_after))
+        return row
+
+    def test_단계마다_사람_수를_센다(self):
+        """
+        행동 수가 아니다. 제품을 백 개 만든 한 사람과 한 개씩 만든 백 사람은
+        전혀 다른 이야기인데, 행동을 세면 둘이 같아 보인다.
+        """
+        from v1.common.services import funnel
+
+        for _ in range(5):
+            self._act(self.u, 'product_create')
+
+        steps = {s['name']: s['users'] for s in funnel.funnel(90)['steps']}
+        self.assertEqual(steps['첫 제품'], 1)
+
+    def test_게스트는_빼고_센다(self):
+        """24시간 뒤에 사라지는 계정이 재방문율을 영문 모르게 끌어내린다."""
+        from v1.common.guest import create_guest
+        from v1.common.services import funnel
+
+        create_guest()
+        self.assertEqual(funnel.funnel(90)['base'], 1)
+
+    def test_가입_당일은_재방문이_아니다(self):
+        """그날은 누구나 쓴다."""
+        from v1.common.services import funnel
+
+        self._act(self.u, 'product_create', days_after=0)
+        self.assertEqual(funnel.return_rate(90)[7]['came'], 0)
+
+        self._act(self.u, 'product_create', days_after=3)
+        self.assertEqual(funnel.return_rate(90)[7]['came'], 1)
+
+    def test_창이_안_닫힌_사람은_분모에서_뺀다(self):
+        """
+        가입 이틀째인 사람을 "28일 안에 안 왔다" 고 세면 비율이 영문 모르게
+        낮아진다.
+        """
+        from django.utils import timezone
+
+        from v1.common.services import funnel
+
+        fresh = User.objects.create_user(username='new@example.com', password='x')
+        User.objects.filter(pk=fresh.pk).update(
+            date_joined=timezone.now() - timezone.timedelta(days=2))
+
+        self.assertEqual(funnel.return_rate(90)[28]['base'], 1)   # 40일 된 사람만
+        self.assertEqual(funnel.return_rate(90)[7]['base'], 1)
+
+    def test_첫_검증까지는_중앙값으로_본다(self):
+        """
+        평균이면 한 사람이 반년 뒤에 들어와 검증할 때 통째로 끌려간다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/common/services/funnel.py').read_text(encoding='utf-8')
+        self.assertIn('중앙값', src)
+        self.assertNotIn('avg(', src.lower())
+
+    def test_영양성분은_출처와_등급을_함께_본다(self):
+        """
+        공공 DB 로 채운 값은 영원히 C 등급이고, A 를 만드는 길은 성적서뿐이다.
+        비율만 보면 그 차이가 안 보인다.
+        """
+        from v1.common.services import funnel
+
+        got = funnel.nutrition_coverage()
+        self.assertIn('by_source', got)
+        self.assertIn('rate', got)
+
+    def test_지표가_죽어도_대시보드는_뜬다(self):
+        """곁들이 때문에 본체를 잃을 이유가 없다."""
+        from unittest.mock import patch
+
+        staff = User.objects.create_user(username='s@example.com', password='pw12345!',
+                                         is_staff=True)
+        self.client.force_login(staff)
+        with patch('v1.common.services.funnel.snapshot', side_effect=RuntimeError('터짐')):
+            resp = self.client.get('/dashboard/')
+        self.assertEqual(resp.status_code, 200)
