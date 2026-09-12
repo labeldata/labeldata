@@ -27,25 +27,18 @@ from django.utils import timezone
 
 from v1.label.models import MyLabel
 
-TEMP_PREFIX = '임시 - 제품명 - '
 
-# 내용과 무관한 필드. 이것들이 달라도 "손댔다" 고 보지 않는다.
-SKIP_FIELDS = {
-    'my_label_id', 'user_id', 'my_label_name',
-    'create_datetime', 'update_datetime',
-    'delete_YN', 'delete_datetime',
-    'display_order',
-}
+# 판정은 services/temp_label 한 곳에 있다. 화면이 떠날 때 부르는 즉시 정리
+# (products.discard_if_untouched)와 **같은 기준**이어야 한다 — 둘이 갈라지면
+# 한쪽이 지운 것을 다른 쪽이 안 지우거나 그 반대가 된다.
+from v1.label.services.temp_label import (  # noqa: F401
+    SKIP_FIELDS, TEMP_PREFIX, fields_untouched,
+)
 
 
 def untouched_fields_match(label, blank):
     """저장 안 한 기본값 인스턴스와 견줘 하나라도 다르면 False."""
-    for field in MyLabel._meta.fields:
-        if field.name in SKIP_FIELDS:
-            continue
-        if getattr(label, field.attname, None) != getattr(blank, field.attname, None):
-            return False
-    return True
+    return fields_untouched(label, blank)
 
 
 class Command(BaseCommand):

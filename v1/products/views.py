@@ -1368,8 +1368,18 @@ def product_create(request):
     # 열리자마자 불러오기 창을 띄운다. 이 표시를 안 넘기면 사용자는 빈 제품
     # 화면에 떨어져서 어느 버튼이 사진 읽기인지 다시 찾아야 한다.
     target = reverse('products:product_detail_new', args=[label.my_label_id])
+    # 새 제품이면 **시작 방법을 먼저 묻는다.**
+    #
+    # 지금까지는 빈 칸 서른 개짜리 기본 정보 탭으로 곧장 떨어뜨렸다. 사람은
+    # 빈 양식을 받으면 닫는다. 번호로 채우는 길과 사진으로 읽는 길이 둘 다
+    # 이미 있었는데 **첫 화면에 안 보였을 뿐**이다.
+    #
+    # 막지는 않는다 — 번호도 사진도 없는 사람이 갇히면 그게 더 나쁘다.
+    # 창에 '직접 입력하기' 문을 크게 달아 둔다.
     if request.GET.get('import') == '1':
-        target += '?import=1'
+        target += '?import=1'      # 홈의 '사진으로 시작' — 곧바로 사진 칸으로
+    else:
+        target += '?start=1'       # 그냥 [새로 만들기] — 시작 방법을 묻는다
     return redirect(target)
 
 
@@ -7118,3 +7128,28 @@ def design_compare_grade(request, label_id):
 
     logger.debug('시안 대조 판정 label=%s 항목=%s', label.pk, len(pairs))
     return JsonResponse({'success': True, 'grades': design_match.grade_all(pairs)})
+
+
+@login_required
+@require_POST
+def discard_if_untouched(request, product_id):
+    """
+    손대지 않은 새 제품을 **떠날 때 그 자리에서** 치운다.
+
+    [새로 만들기] 는 그 순간 MyLabel 을 만든다. 열어만 보고 닫은 사용자에게
+    빈 제품이 목록에 남고, 그게 쌓이면 제 목록이 쓰레기로 보인다. 지금까지는
+    `cleanup_temp_labels` 가 30 일 뒤에 치웠는데, 그동안 보이는 것이 문제다.
+
+    **판정은 services/temp_label 한 곳에서만 한다.** 배치와 즉시 정리가 서로
+    다른 기준을 쓰면 한쪽이 지운 것을 다른 쪽이 안 지운다.
+
+    화면이 떠나면서 sendBeacon 으로 부른다 — 답을 기다리지 않는다. 그래서
+    **실패해도 조용해야 하고**, 놓친 것은 배치가 나중에 훑는다.
+    """
+    from v1.label.services import temp_label
+
+    label = _resolve_editable_label(request, product_id)   # 남의 제품이면 404
+    if temp_label.is_untouched(label):
+        temp_label.discard(label)
+        return JsonResponse({'success': True, 'discarded': True})
+    return JsonResponse({'success': True, 'discarded': False})

@@ -1589,7 +1589,9 @@ class HomePhotoEntryTests(TestCase):
         detail = (Path(dj.BASE_DIR) / 'templates/products/product_detail.html'
                   ).read_text(encoding='utf-8')
         self.assertIn("get('import') === '1'", detail)
-        self.assertIn('window.openImportModal()', detail)
+        # 새 제품('start')도 같은 창을 쓰므로 인자를 하나 받게 됐다.
+        # 홈에서 온 경우에는 start 가 꺼져 '직접 입력하기' 띠가 안 뜬다.
+        self.assertIn('window.openImportModal({start: __start})', detail)
 
 
 class HomeUpdateStripTests(TestCase):
@@ -5497,3 +5499,118 @@ class 눌러도_아무_일이_없으면_안_된다(TestCase):
         engine = self.engine()
         bad = re.findall(r"button\([^,]+,[^,]+,\s*(start|go|place|draw)\s*\)", engine)
         self.assertEqual(bad, [], '인자를 받는 함수를 핸들러로 그대로 넘겼다: %s' % bad)
+
+
+class 새_제품은_빈_양식으로_시작하지_않는다(TestCase):
+    """
+    [새로 만들기] 를 누르면 빈 칸 서른 개짜리 기본 정보 탭이 나왔다. 사람은
+    빈 양식을 받으면 닫는다. 번호로 채우는 길과 사진으로 읽는 길이 **둘 다
+    이미 있었는데 첫 화면에 안 보였을 뿐**이다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        self.user = User.objects.create_user(username='u@example.com', password='pw12345!')
+        self.client.force_login(self.user)
+
+    def test_새로_만들면_시작_방법을_먼저_묻는다(self):
+        resp = self.client.get(reverse('products:product_create'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('start=1', resp['Location'])
+
+    def test_사진으로_시작은_곧바로_사진_칸으로(self):
+        """홈에서 '사진으로 시작' 을 누른 사람에게 다시 묻는 것은 군말이다."""
+        resp = self.client.get(reverse('products:product_create') + '?import=1')
+        self.assertIn('import=1', resp['Location'])
+        self.assertNotIn('start=1', resp['Location'])
+
+    def test_가두지_않는다(self):
+        """번호도 사진도 없는 사람이 갇히면 그게 더 나쁘다."""
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/import_modal.js').read_text(encoding='utf-8')
+        self.assertIn('직접 입력하기', js)
+        self.assertIn('import-start', js)
+        self.assertIn("opts && opts.start", js)
+
+
+class 손대지_않은_제품은_떠날_때_치운다(TestCase):
+    """
+    [새로 만들기] 는 그 순간 제품을 만든다. 열어만 보고 닫으면 빈 제품이
+    목록에 남고, 쌓이면 제 목록이 쓰레기로 보인다. 배치가 30 일 뒤에 치웠는데
+    그동안 보이는 것이 문제다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+        from v1.label.services.temp_label import TEMP_PREFIX
+
+        self.user = User.objects.create_user(username='u@example.com', password='pw12345!')
+        self.other = User.objects.create_user(username='x@example.com', password='pw12345!')
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name=TEMP_PREFIX + '1', delete_YN='N')
+        self.url = reverse('products:discard_if_untouched', args=[self.label.pk])
+
+    def _refresh(self):
+        from v1.label.models import MyLabel
+        return MyLabel.objects.get(pk=self.label.pk)
+
+    def test_빈_제품은_목록에서_사라진다(self):
+        self.client.force_login(self.user)
+        resp = self.client.post(self.url)
+        self.assertTrue(resp.json()['discarded'])
+        self.assertEqual(self._refresh().delete_YN, 'Y')
+
+    def test_지우지_않고_숨긴다(self):
+        """
+        MyLabel 을 실제로 지우면 BOM·문서함·공유·알림까지 CASCADE 로 함께
+        사라진다. 잘못 골랐을 때 되돌릴 수 있어야 한다.
+        """
+        from v1.label.models import MyLabel
+
+        self.client.force_login(self.user)
+        self.client.post(self.url)
+        self.assertTrue(MyLabel.objects.filter(pk=self.label.pk).exists())
+
+    def test_한_글자라도_넣었으면_남긴다(self):
+        self.client.force_login(self.user)
+        self.label.prdlst_nm = '초코쿠키'
+        self.label.save()
+        self.assertFalse(self.client.post(self.url).json()['discarded'])
+        self.assertEqual(self._refresh().delete_YN, 'N')
+
+    def test_이름을_바꿨으면_남긴다(self):
+        self.client.force_login(self.user)
+        self.label.my_label_name = '내 제품'
+        self.label.save()
+        self.assertFalse(self.client.post(self.url).json()['discarded'])
+
+    def test_BOM_에_원료가_있으면_남긴다(self):
+        """표시사항 칸은 비었어도 배합을 붙여 넣었을 수 있다. 그건 손댄 것이다."""
+        from v1.bom.models import ProductBOM
+
+        self.client.force_login(self.user)
+        ProductBOM.objects.create(parent_label=self.label)
+        self.assertFalse(self.client.post(self.url).json()['discarded'])
+
+    def test_남의_제품은_404(self):
+        """403 은 그 id 가 있다고 알려 준다."""
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(self.url).status_code, 404)
+
+    def test_GET_으로는_안_된다(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_배치와_같은_기준을_쓴다(self):
+        """
+        둘이 갈라지면 한쪽이 지운 것을 다른 쪽이 안 지우거나 그 반대가 된다.
+        """
+        from pathlib import Path
+
+        cmd = Path('v1/label/management/commands/cleanup_temp_labels.py').read_text(
+            encoding='utf-8')
+        self.assertIn('from v1.label.services.temp_label import', cmd)
+        self.assertNotIn('SKIP_FIELDS = {', cmd)      # 두 벌로 적지 않는다

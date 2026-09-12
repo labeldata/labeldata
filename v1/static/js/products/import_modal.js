@@ -107,6 +107,23 @@
       + '        </h5>'
       + '        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>'
       + '      </div>'
+      /* 새 제품으로 들어온 사람에게만 보이는 띠.
+       *
+       * [새로 만들기] 를 누르면 빈 칸 서른 개짜리 기본 정보 탭이 나왔다.
+       * 사람은 빈 양식을 받으면 닫는다. 번호로 채우는 길과 사진으로 읽는
+       * 길이 **둘 다 이미 있었는데 첫 화면에 안 보였다.**
+       *
+       * 그래서 새 제품이면 이 창을 먼저 띄운다. 다만 **막지는 않는다** —
+       * 번호도 사진도 없는 사람이 갇히면 그게 더 나쁘다. 나가는 문을 크게 단다. */
+      + '      <div class="import-start alert alert-light border mb-0 rounded-0 d-none">'
+      + '        <div class="d-flex align-items-center gap-2 flex-wrap">'
+      + '          <span style="font-size:13px;">'
+      + '            <b>새 제품입니다.</b> 번호나 사진이 있으면 표시사항을 한 번에 채울 수 있습니다.'
+      + '          </span>'
+      + '          <button type="button" class="btn btn-outline-secondary v2-btn-sm ms-auto"'
+      + '                  data-bs-dismiss="modal">직접 입력하기</button>'
+      + '        </div>'
+      + '      </div>'
       + '      <div class="modal-body">'
       + '        <div class="border rounded p-3 mb-3 import-way import-way-first">'
       + '          <div class="d-flex align-items-center gap-2 mb-2">'
@@ -444,9 +461,13 @@
     });
   }
 
-  window.openImportModal = function () {
+  window.openImportModal = function (opts) {
     var modalEl = ensureModal();
     note('');
+    /* 새 제품으로 들어왔는가. 그때만 '직접 입력하기' 띠를 보인다 — 이미
+       만들던 제품에서 부른 경우에는 나갈 문이 따로 필요 없다. */
+    var strip = modalEl.querySelector('.import-start');
+    if (strip) strip.classList.toggle('d-none', !(opts && opts.start));
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   };
 })();

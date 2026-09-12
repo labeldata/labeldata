@@ -21,6 +21,9 @@ urlpatterns = [
     path('<int:product_id>/update/', views.product_update, name='product_update'),
     path('<int:product_id>/update-fields/', views.product_update_fields, name='product_update_fields'),
     path('<int:product_id>/delete/', views.product_delete, name='product_delete'),
+    # 손대지 않은 새 제품을 떠날 때 그 자리에서 치운다 (sendBeacon)
+    path('<int:product_id>/discard-if-untouched/', views.discard_if_untouched,
+         name='discard_if_untouched'),
     
     # ==================== 제품 편집기 (Editors) ====================
     path('labels/<int:label_id>/nutrition/', views.nutrition_workspace, name='nutrition_editor'),

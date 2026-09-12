@@ -1210,16 +1210,43 @@ document.addEventListener('DOMContentLoaded', function() {
     // 이 표시가 없으면 사용자는 빈 제품 화면에 떨어져서 어느 버튼이 사진
     // 읽기인지 다시 찾아야 한다. 스크립트가 아직 안 실려 있을 수 있어
     // 준비될 때까지 잠깐 기다렸다 연다.
-    if (new URLSearchParams(window.location.search).get('import') === '1') {
+    const __q = new URLSearchParams(window.location.search);
+    const __import = __q.get('import') === '1';
+    const __start = __q.get('start') === '1';
+    if (__import || __start) {
         let tries = 0;
         const openWhenReady = function () {
             if (typeof window.openImportModal === 'function') {
-                window.openImportModal();
+                // start 로 들어오면 '직접 입력하기' 문이 함께 뜬다
+                window.openImportModal({start: __start});
                 return;
             }
             if (++tries < 40) setTimeout(openWhenReady, 100);
         };
         openWhenReady();
+    }
+
+    /* ── 손대지 않은 새 제품은 떠날 때 치운다 ─────────────────────────
+     *
+     * [새로 만들기] 는 그 순간 제품을 만든다. 그래서 열어만 보고 닫은
+     * 사용자에게 빈 제품이 목록에 남는다. 지금까지는 배치가 30 일 뒤에
+     * 치웠는데, 그동안 보이는 것이 문제다 — 제 목록이 쓰레기로 보인다.
+     *
+     * sendBeacon 은 화면이 닫히는 중에도 나간다. 답을 기다리지 않으므로
+     * **실패해도 조용하다.** 놓친 것은 배치가 나중에 훑는다.
+     *
+     * 빈지 아닌지는 **서버가 판단한다.** 화면이 "아무것도 안 했다" 고 믿는
+     * 것과 실제로 저장된 것은 다를 수 있다(붙여넣기·자동 저장·다른 탭). */
+    if (__start && navigator.sendBeacon) {
+        window.addEventListener('pagehide', function () {
+            try {
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', document.querySelector(
+                    '[name=csrfmiddlewaretoken]').value);
+                navigator.sendBeacon(
+                    '/products/{{ label.my_label_id }}/discard-if-untouched/', fd);
+            } catch (e) {}
+        });
     }
 
     // 초기 해시 기반 iframe 로딩
