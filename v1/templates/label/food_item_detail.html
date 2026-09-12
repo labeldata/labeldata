@@ -192,7 +192,12 @@
     /* 정보 카드 */
     /* ── 제품 상세: 스크롤 없이 한 화면에 ──────────────────────────
        상단(제목 + 항목표)은 내용만큼만 차지하고, 길이를 예측할 수 없는
-       원재료명이 남은 공간을 모두 가져가 그 안에서만 스크롤한다. */
+       원재료명이 남은 공간을 모두 가져가 그 안에서만 스크롤한다.
+
+       **글씨를 작게 두고 창을 키우던 것을 뒤집었다.** 이 배치에서 창이 커지면
+       원재료명 박스의 빈자리만 커진다 — 한 줄짜리 원재료명 아래로 600px 이
+       비어 있었다. 창은 내용만큼만 열고(food_item_list.js), 그 안의 글씨를
+       키운다. 오래 읽는 것은 원재료명이라 거기를 가장 크게 둔다. */
     .detail-head {
       padding-bottom: 8px;
       border-bottom: 1px solid var(--google-border);
@@ -201,14 +206,14 @@
     }
     .detail-title {
       margin: 0;
-      font-size: 17px;
+      font-size: 20px;
       font-weight: 600;
       color: var(--text-primary);
       line-height: 1.3;
       word-break: keep-all;
     }
     .detail-sub {
-      font-size: 12px;
+      font-size: 12.5px;
       color: var(--text-secondary);
       margin-top: 3px;
     }
@@ -217,28 +222,28 @@
     .detail-grid {
       display: grid;
       grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
-      gap: 6px 10px;
-      margin: 0 0 12px;
+      gap: 9px 12px;
+      margin: 0 0 14px;
       flex-shrink: 0;
       align-items: baseline;
       /* 용법처럼 유난히 긴 값이 원재료명 자리를 다 먹지 않도록 상단 영역을 제한한다.
          핵심 6개 항목은 이 높이 안에 충분히 들어가고, 넘칠 때만 여기서 스크롤된다. */
-      max-height: 42%;
+      max-height: 46%;
       overflow-y: auto;
     }
     .detail-grid::-webkit-scrollbar { width: 8px; }
     .detail-grid::-webkit-scrollbar-thumb { background: var(--ez-gray-300); border-radius: 4px; }
     .detail-grid dt {
-      font-size: 11.5px;
+      font-size: 12.5px;
       font-weight: 600;
       color: var(--text-secondary);
       white-space: nowrap;
     }
     .detail-grid dd {
       margin: 0;
-      font-size: 13px;
+      font-size: 14.5px;
       color: var(--text-primary);
-      line-height: 1.45;
+      line-height: 1.5;
       word-break: break-word;
     }
     @media (max-width: 720px) {
@@ -256,7 +261,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 12.5px;
+      font-size: 13.5px;
       font-weight: 600;
       color: var(--text-primary);
       margin-bottom: 6px;
@@ -270,9 +275,9 @@
       background: var(--google-grey-50, #f8f9fa);
       border: 1px solid var(--google-border);
       border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 13px;
-      line-height: 1.65;
+      padding: 12px 14px;
+      font-size: 14.5px;
+      line-height: 1.7;
       color: var(--text-primary);
       white-space: pre-wrap;
       word-break: break-word;

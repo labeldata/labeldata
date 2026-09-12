@@ -17826,3 +17826,53 @@ class 시안_대조를_정답지로_잰다(TestCase):
         self.assertIn('놓침률', html)
         self.assertIn('오탐률', html)
         self.assertLess(html.index('놓침률'), html.index('오탐률'))
+
+
+class ProductDetailPopupFitsContentTests(TestCase):
+    """
+    제품 조회에서 여는 상세 팝업이 1200x920 까지 벌어졌다. 그런데 이 화면의
+    원재료명 박스는 flex:1 로 남은 높이를 모두 가져간다 — 창이 클수록
+    **빈 박스만 커졌다.** 한 줄짜리 원재료명 아래로 600px 이 비어 있었다.
+
+    창은 내용만큼만 열고, 그 안의 글씨를 키운다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        self.js = Path('v1/static/js/label/food_item_list.js').read_text(encoding='utf-8')
+        self.html = Path('v1/templates/label/food_item_detail.html').read_text(
+            encoding='utf-8')
+
+    def test_창을_화면만큼_벌리지_않는다(self):
+        import re
+        m = re.search(r'Math\.min\((\d+),\s*Math\.max\(\d+,\s*avail\b', self.js)
+        self.assertIsNotNone(m, '높이 계산을 못 찾았다')
+        self.assertLessEqual(int(m.group(1)), 700, '팝업 높이가 너무 크다')
+        m = re.search(r'Math\.min\((\d+),\s*Math\.max\(\d+,\s*availW\b', self.js)
+        self.assertIsNotNone(m)
+        self.assertLessEqual(int(m.group(1)), 900, '팝업 너비가 너무 크다')
+
+    def test_창을_늘릴_수는_있다(self):
+        """긴 원재료명을 넓게 보고 싶은 사람을 막지는 않는다."""
+        self.assertIn('resizable=yes', self.js)
+
+    def test_오래_읽는_글이_가장_크다(self):
+        """원재료명 > 항목 값 > 항목 이름 순이어야 한다."""
+        import re
+
+        def size(selector):
+            i = self.html.index(selector)
+            m = re.search(r'font-size:\s*([\d.]+)px', self.html[i:i + 400])
+            return float(m.group(1))
+
+        text = size('.detail-text {')
+        value = size('.detail-grid dd {')
+        name = size('.detail-grid dt {')
+        self.assertGreaterEqual(text, value)
+        self.assertGreater(value, name)
+        self.assertGreaterEqual(name, 12, '이 저장소의 본문 최소치는 12px 이다')
+
+    def test_바깥_스크롤은_없다(self):
+        """스크롤은 원재료명 박스 안에서만 — 창을 줄인 뒤에도 그렇다."""
+        self.assertIn('overflow: hidden', self.html)
+        self.assertIn('overflow-y: auto', self.html)

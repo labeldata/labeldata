@@ -179,11 +179,21 @@ document.addEventListener('DOMContentLoaded', function() {
  * 많아 넓혀도 줄 수가 거의 안 줄어들어(중앙 20줄 그대로) 크게 키우지 않는다.
  * 작은 노트북(768p)에서도 화면을 넘지 않도록 availHeight 기준으로 상한을 둔다.
  */
+/* 창은 **내용만큼만.**
+ *
+ * 예전에는 1200x920 까지 벌렸다(화면에서 가로 240 · 세로 120 만 뺐다).
+ * 이 화면이 보여주는 것은 제목 한 줄, 항목 여섯 개, 원재료명 한 덩어리다.
+ * 그런데 원재료명 박스가 flex:1 로 남은 높이를 모두 가져가므로, 창이 클수록
+ * **빈 박스만 커졌다.** 한 줄짜리 원재료명 아래로 600px 이 비어 있었다.
+ *
+ * 작은 창에 글씨를 키우는 쪽이 읽기 쉽다 — 긴 원재료명은 박스 안에서
+ * 스크롤되고, 더 보고 싶으면 창을 늘리면 된다(resizable).
+ */
 function openProductDetailPopup(url, title) {
     const avail = window.screen.availHeight || window.screen.height || 800;
     const availW = window.screen.availWidth || window.screen.width || 1280;
-    const height = Math.min(920, Math.max(520, avail - 120));
-    const width = Math.min(1200, Math.max(880, availW - 240));
+    const height = Math.min(660, Math.max(480, avail - 260));
+    const width = Math.min(820, Math.max(600, availW - 480));
     const left = Math.max(0, (availW - width) / 2);
     const top = Math.max(0, (avail - height) / 2);
 
@@ -193,7 +203,11 @@ function openProductDetailPopup(url, title) {
         `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
     );
     if (!popup || popup.closed || typeof popup.closed === "undefined") {
-        alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
+        if (typeof showSnackbar === "function") {
+            showSnackbar("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.", "warning");
+        } else {
+            alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
+        }
         return null;
     }
     popup.focus();
