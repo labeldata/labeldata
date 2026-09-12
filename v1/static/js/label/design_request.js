@@ -174,13 +174,35 @@
     var url = (window.DESIGN_REQUEST_SAVE_URL || '');
     var csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value;
     if (!url || !csrf) return;
-    window.DESIGN_REQUEST.notes = notes;
+
+    /* 예전에는 여기서 곧바로 window.DESIGN_REQUEST.notes 를 갈아 끼우고
+       응답을 아예 안 봤다(`.catch(function () {})`). 서버가 400 을 줘도
+       ('남길 것이 없습니다.') 사용자는 저장된 줄 알고, **다음 의뢰서는 옛
+       값으로 열린다** — 그때는 왜 되돌아갔는지 알 길이 없다.
+       화면에 남는 값은 서버가 받아 준 뒤에 바꾼다. */
     fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
       body: JSON.stringify({ notes: notes })
-    }).catch(function () {});   // 못 남겨도 이번 의뢰서는 이미 그 값이다
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (data) {
+      if (data && data.success) {
+        window.DESIGN_REQUEST.notes = data.notes || notes;
+        return;
+      }
+      say((data && data.error) || '규정 메모를 계정에 남기지 못했습니다. '
+          + '이번 의뢰서에는 적용됩니다.');
+    }).catch(function () {
+      say('서버에 연결할 수 없어 규정 메모를 남기지 못했습니다. '
+          + '이번 의뢰서에는 적용됩니다.');
+    });
+  }
+
+  function say(msg) {
+    if (typeof window.showPreviewToast === 'function') window.showPreviewToast(msg, 'warning');
+    else if (typeof window.showSnackbar === 'function') window.showSnackbar(msg, 'warning');
   }
 
   /* ── 워드로 ──────────────────────────────────────────────────────────── */

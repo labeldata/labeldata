@@ -194,12 +194,21 @@
         if (spec.type === 'choice') {
             el = document.createElement('select');
             el.className = 'form-select form-select-sm pv-cond-value';
+            /* 빈 항목이 없어서 필드를 고르는 순간 첫 선택지가 값이 됐다.
+               지우는 방법은 행 삭제뿐이었고, choice 는 빠른 조건이 아니라
+               (product_search 의 fast) 그 순간 anyValue 는 참·hasFast 는
+               거짓이 되어 **검색 자체가 막혔다.** 고른 적 없는 조건 때문에. */
+            var blank = document.createElement('option');
+            blank.value = '';
+            blank.textContent = '(선택 안 함)';
+            el.appendChild(blank);
             (spec.choices || []).forEach(function (ch) {
                 var o = document.createElement('option');
                 o.value = ch; o.textContent = ch;
                 if (ch === value) o.selected = true;
                 el.appendChild(o);
             });
+            if (!value) blank.selected = true;
         } else {
             el = document.createElement('input');
             el.className = 'form-control form-control-sm pv-cond-value';
@@ -294,10 +303,14 @@
     }
 
     // 체크박스 묶음은 스스로 갱신하므로 input 이벤트를 걸 필요가 없다 (div 라 focus 도 없다)
-    function bindValue(el) {
+    //
+    // focus 는 **사람이 [조건 추가] 를 눌렀을 때만** 준다. 예전에는 조건 없이
+    // 늘 줬는데, 페이지를 열 때 저장된 조건을 다시 그리면서도 불리므로
+    // (아래 ACTIVE.forEach) 결과를 보러 온 화면이 조건 패널로 끌려 올라갔다.
+    function bindValue(el, focus) {
         if (el.classList.contains('pv-cond-checks')) return;
         el.addEventListener('input', refreshWarn);
-        el.focus();
+        if (focus && el.focus) el.focus();
     }
 
     function syncButtons() {
@@ -343,7 +356,7 @@
 
     addBtn.addEventListener('click', function () {
         var row = addRow();
-        if (row) bindValue(row.querySelector('.pv-cond-value'));
+        if (row) bindValue(row.querySelector('.pv-cond-value'), true);
     });
 
     // 조건 초기화 — 행을 모두 비우고 빈 줄 하나만 남긴다.
@@ -357,7 +370,11 @@
         if (hadApplied) {
             // requestSubmit 이라야 submit 핸들러(빈 행 제외)가 함께 돈다.
             // form.submit() 은 핸들러를 건너뛰어 f=&v= 가 URL 에 남는다.
-            if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+            // 문서가 요구하는 대로 양쪽 다 지킨다 — 한쪽만 지키면 나중에
+            // 이 조각을 form 밖에서 쓰는 날 그 자리에서 터진다
+            if (form) {
+                if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+            }
         } else {
             var first = rows.querySelector('.pv-cond-value');
             if (first && first.focus) first.focus();
@@ -376,6 +393,17 @@
             }
         });
     }
+
+    function enableAllRows() {
+        Array.prototype.forEach.call(rows.children, function (row) {
+            var raw = rawInput(row);
+            if (raw) raw.disabled = false;
+            var field = row.querySelector('.pv-cond-field');
+            if (field) field.disabled = false;
+        });
+    }
+    // 뒤로 가기로 되살아난 화면도 손댈 수 있어야 한다
+    window.addEventListener('pageshow', enableAllRows);
 
     if (form) {
         form.addEventListener('submit', function (e) {
@@ -398,6 +426,10 @@
                 rawInput(row).disabled = empty;
                 row.querySelector('.pv-cond-field').disabled = empty;
             });
+            /* 되돌리는 곳이 없었다. 브라우저가 뒤로 가기로 이 DOM 을 그대로
+               되살리면(bfcache) 빈 행의 select·입력칸이 비활성인 채 남아
+               손댈 수가 없다 — 새로고침해야 풀렸다. */
+            setTimeout(enableAllRows, 0);
             if (countBadge) {
                 countBadge.textContent = Array.prototype.filter.call(rows.children, function (row) {
                     return valueOf(row);

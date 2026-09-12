@@ -18375,3 +18375,116 @@ class 미리보기_스크립트도_배포하면_갱신된다(TestCase):
         line = tpl[i:i + 120]
         self.assertNotIn('?v=86.0', line)
         self.assertIn('STATIC_BUILD_DATE', line)
+
+
+class 조건_패널이_고르지_않은_조건을_걸지_않는다(TestCase):
+    """
+    · **choice 조건은 값을 비울 수 없었다.** 필드를 '생산종료여부' 로 바꾸면
+      값이 자동으로 첫 선택지가 되고, 지우는 방법은 행 삭제뿐이었다.
+      게다가 choice 는 빠른 조건이 아니라(product_search 의 fast) 그 순간
+      anyValue 는 참·hasFast 는 거짓이 되어 **검색 자체가 막혔다** —
+      고른 적 없는 조건 때문에.
+    · **제출 때 끈 입력칸을 되돌리지 않았다.** 뒤로 가기로 DOM 이 그대로
+      되살아나면 빈 행의 select·입력칸이 비활성인 채 남아 손댈 수 없었다.
+    · **열자마자 포커스가 조건칸으로 튀었다.** 결과를 보러 왔는데 화면이
+      조건 패널로 끌려 올라간다.
+    """
+
+    PANEL = 'templates/label/_condition_panel.html'
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / self.PANEL).read_text(encoding='utf-8')
+        text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_choice_에_비우는_선택지가_있다(self):
+        js = self._js()
+        i = js.index("if (spec.type === 'choice')")
+        block = js[i:i + 900]
+        self.assertIn("blank.value = ''", block)
+        self.assertIn('el.appendChild(blank)', block)
+
+    def test_값이_없으면_빈_항목이_골라져_있다(self):
+        js = self._js()
+        i = js.index("if (spec.type === 'choice')")
+        self.assertIn('if (!value) blank.selected = true;', js[i:i + 900])
+
+    def test_제출_뒤_끈_칸을_되돌린다(self):
+        js = self._js()
+        self.assertIn('function enableAllRows(', js)
+        self.assertIn("window.addEventListener('pageshow', enableAllRows)", js)
+        # 주석은 걷어냈으니 코드에 닻을 내린다
+        i = js.index('rawInput(row).disabled = empty;')
+        self.assertIn('enableAllRows', js[i:i + 400])
+
+    def test_열자마자_포커스를_뺏지_않는다(self):
+        js = self._js()
+        i = js.index('function bindValue(')
+        block = js[i:js.index('function syncButtons(')]
+        # 조건 없이 focus() 를 부르지 않는다
+        self.assertIn('if (focus && el.focus) el.focus();', block)
+        self.assertNotIn('\n        el.focus();', block)
+
+    def test_사람이_행을_더할_때는_포커스를_준다(self):
+        js = self._js()
+        i = js.index("addBtn.addEventListener('click'")
+        self.assertIn('bindValue(row.querySelector', js[i:i + 300])
+        self.assertIn(', true)', js[i:i + 300])
+
+    def test_form_널_방어가_양쪽_같다(self):
+        js = self._js()
+        i = js.index('form.requestSubmit')
+        # 그 호출 직전에 form 검사가 있어야 한다
+        self.assertIn('if (form)', js[max(0, i - 250):i])
+
+
+class 의뢰서_규정_메모는_서버가_받은_뒤에_바뀐다(TestCase):
+    """
+    `remember()` 가 화면의 값을 먼저 갈아 끼우고 응답을 아예 안 봤다
+    (`.catch(function () {})`). 서버가 400 을 줘도('남길 것이 없습니다.')
+    사용자는 저장된 줄 알고, 다음 의뢰서는 옛 값으로 열린다 — 그때는 왜
+    되돌아갔는지 알 길이 없다.
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'static/js/label/design_request.js'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_성공한_뒤에_화면_값을_바꾼다(self):
+        js = self._js()
+        i = js.index('function remember(')
+        block = js[i:js.index('function say(')]
+        at_fetch = block.index('fetch(')
+        # 보내기 전에 갈아 끼우지 않는다
+        self.assertNotIn('window.DESIGN_REQUEST.notes = notes;', block[:at_fetch])
+        self.assertIn('data.success', block)
+        self.assertIn('window.DESIGN_REQUEST.notes = data.notes', block)
+
+    def test_실패를_말한다(self):
+        js = self._js()
+        i = js.index('function remember(')
+        block = js[i:js.index('function say(')]
+        self.assertIn('say(', block)
+        self.assertNotIn('.catch(function () {});', block)
+
+    def test_서버가_이유를_준다(self):
+        """화면이 읽을 error 키가 실제로 오는지."""
+        user = User.objects.create_user(username='drmemo', password='x')
+        self.client.force_login(user)
+        r = self.client.post(reverse('label:design_request_prefs'),
+                             data=json.dumps({}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(r.json().get('error'))
