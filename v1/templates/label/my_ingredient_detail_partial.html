@@ -131,15 +131,56 @@
     border-color: var(--ez-info-hover) !important;
   }
 
-  /* 칩 옆의 자동감지·전체선택 토글. 칩과 같은 크기라야 한 줄로 나란히 앉는다.
+  /* 칩 옆의 자동감지·고르기·전체선택. 칩과 같은 크기라야 한 줄로 나란히 앉는다.
      예전에는 버튼마다 인라인으로 0.7rem/0.15rem 을 적어 두어 칩(11px/3px 10px)과
-     미묘하게 어긋나 있었다. */
+     미묘하게 어긋나 있었다.
+
+     ── 색 ─────────────────────────────────────────────────────────────
+     셋은 **성격이 다른데 똑같이 생겨 있었다** — 부트스트랩 btn-outline-secondary
+     회색 그대로였다. 그래서 이 줄에서 무엇을 먼저 눌러야 하는지가 안 보였다.
+
+       자동감지  이 줄에서 **권하는 행동**이다. 원재료명을 훑어 찾아 준다
+       고르기    펼치기/접기. 지금 열려 있는지가 보여야 한다
+       전체선택  전체 선택/해제. 글자가 바뀌어 상태를 말한다(전체해제)
+
+     칩의 '선택됨' 이 파랑 **채움**이므로, 자동감지는 파랑 **테두리**로 둔다 —
+     같은 파랑이어도 채움과 테두리는 다른 말이다. 글자는 흰 바탕에서 대비가
+     오르는 --ez-info-strong 을 쓴다(11px 굵은 글씨다).
+     ─────────────────────────────────────────────────────────────────── */
   .ag-toggle-btn {
     font-size:     11px;
     padding:       3px 10px;
     border-radius: 14px;
     font-weight:   600;
     white-space:   nowrap;
+    /* 부트스트랩 기본 회색(#6c757d)은 11px 굵은 글씨에서 흐리다 */
+    color:         var(--ez-gray-800) !important;
+    border-color:  var(--ez-gray-300) !important;
+    background:    #fff !important;
+  }
+  .ag-toggle-btn:hover,
+  .ag-toggle-btn:focus-visible {
+    background:    var(--ez-gray-100) !important;
+    border-color:  var(--ez-gray-400) !important;
+  }
+
+  /* 권하는 행동 — 이 줄에서 유일하게 색을 가진다 */
+  #allergyAutoDetectBtn {
+    color:        var(--ez-info-strong) !important;
+    border-color: var(--ez-info-border) !important;
+  }
+  #allergyAutoDetectBtn:hover,
+  #allergyAutoDetectBtn:focus-visible {
+    background:   var(--ez-info-bg) !important;
+    border-color: var(--ez-info-on-bg) !important;
+  }
+  #allergyAutoDetectBtn .fa-sync-alt { margin-right: 3px; }
+
+  /* 펼쳐져 있는 동안은 눌린 것으로 보인다. 글자(접기)만으로는 약하다 */
+  .ag-fold-btn.is-on {
+    background:   var(--ez-gray-200) !important;
+    border-color: var(--ez-gray-500) !important;
+    color:        var(--ez-gray-900) !important;
   }
 
   /* 선택 표시 텍스트 */
@@ -694,7 +735,7 @@
                                         <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyAutoDetectBtn" title="원재료명으로 알레르기 자동감지">
                                             <i class="fas fa-sync-alt"></i> 자동감지
                                         </button>
-                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="allergyBtnList">고르기</button>
+                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="allergyBtnList" aria-expanded="false">고르기</button>
                                         <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyToggleBtn">전체선택</button>
                                     </div>
                                 </div>
@@ -714,8 +755,16 @@
                             <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div id="gmoSelectedDisplay" class="selected-display">선택된 항목 없음</div>
-                                    <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="gmoBtnList">고르기</button>
-                                    <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="gmoToggleBtn">전체선택</button>
+                                    {% comment %}
+                                    단추는 하나로 묶는다. 래퍼 없이 두면
+                                    justify-content-between 이 표시 텍스트와 단추
+                                    둘을 균등 분배해서, 위 알레르기 줄과 세로가
+                                    안 맞는다.
+                                    {% endcomment %}
+                                    <div class="d-flex gap-1">
+                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn ag-fold-btn" data-fold="gmoBtnList" aria-expanded="false">고르기</button>
+                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="gmoToggleBtn">전체선택</button>
+                                    </div>
                                 </div>
                                 <div id="gmoBtnList" class="mb-1 ag-fold">
                                     {% for gmo in gmo_list %}
@@ -791,10 +840,16 @@
     var id = btn.dataset.fold;
     var box = document.getElementById(id);
     if (!box) return;
-    if (chosen(id)) { box.classList.add('is-open'); btn.textContent = '접기'; }
+    if (chosen(id)) {
+      box.classList.add('is-open');
+      btn.textContent = '접기';
+      btn.classList.add('is-on');
+    }
     btn.addEventListener('click', function () {
       var open = box.classList.toggle('is-open');
       btn.textContent = open ? '접기' : '고르기';
+      btn.classList.toggle('is-on', open);   /* 색으로도 열림을 말한다 */
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
   });
 })();
