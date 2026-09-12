@@ -5413,10 +5413,23 @@ def contacts_api_update(request):
     """연락처 정보 업데이트 API - 이메일 수정 지원"""
     old_email = request.POST.get('old_email', '').strip().lower()  # 기존 이메일
     new_email = request.POST.get('email', '').strip().lower()      # 새 이메일
-    name = request.POST.get('name', '').strip()
-    company = request.POST.get('company', '').strip()
-    license_no = request.POST.get('license_no', '').strip()
-    memo = request.POST.get('memo', '').strip()
+
+    #  **보낸 칸만 손댄다.**
+    #
+    #  예전에는 안 보낸 칸을 '빈 값' 으로 읽어 그대로 덮었다. 격자 저장이
+    #  memo 를 빠뜨리고 있었으므로, 회사명 한 글자만 고쳐도 엑셀에서 옮겨 둔
+    #  전화번호·부서(비고)가 통째로 지워졌다. 화면이 한 칸을 빠뜨리는 일은
+    #  또 생긴다 — 그때 데이터가 사라지지 않는 쪽이 맞다.
+    #
+    #  손으로 비운 칸은 빈 문자열로 **오므로** 지워진다. 안 온 것과 빈 것은
+    #  다르다.
+    _sent = {f: request.POST[f].strip()
+             for f in ('name', 'company', 'license_no', 'memo')
+             if f in request.POST}
+    name = _sent.get('name', '')
+    company = _sent.get('company', '')
+    license_no = _sent.get('license_no', '')
+    memo = _sent.get('memo', '')
 
     if not old_email or not new_email:
         return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
@@ -5446,17 +5459,17 @@ def contacts_api_update(request):
         .filter(recipient_email__iexact=old_email, share_mode='PRIVATE', active_yn=True)
         .distinct()
     )
-    fields = {
-        'recipient_name': name or None,
-        'recipient_company': company or None,
-        'recipient_license_no': license_no or None,
-    }
+    _SHARE_FIELD = {'name': 'recipient_name', 'company': 'recipient_company',
+                    'license_no': 'recipient_license_no'}
+    fields = {_SHARE_FIELD[f]: (v or None)
+              for f, v in _sent.items() if f in _SHARE_FIELD}
     if email_changed:
         fields['recipient_email'] = new_email
         # 새 이메일의 회원 계정으로 다시 잇는다. 회원이 아니면 끊어 둔다 —
         # 남겨 두면 전임자 계정이 그대로 문을 여는 열쇠가 된다.
         fields['recipient_user'] = User.objects.filter(email__iexact=new_email).first()
-    updated = shares.update(**fields)
+    #  보낸 칸이 하나도 없으면 update() 가 인수 없이 불려 SQL 이 깨진다
+    updated = shares.update(**fields) if fields else 0
 
     # ② UserContact 동기화
     #
@@ -5466,12 +5479,7 @@ def contacts_api_update(request):
     UserContact.objects.update_or_create(
         owner=request.user,
         email=new_email,
-        defaults={
-            'name': name or None,
-            'company': company or None,
-            'license_no': license_no or None,
-            'memo': memo or None,
-        },
+        defaults={f: (v or None) for f, v in _sent.items()},
     )
     if email_changed:
         UserContact.objects.filter(owner=request.user, email__iexact=old_email).delete()
@@ -5843,6 +5851,13 @@ def api_update_doc_request_label(request, req_id):
     except DocumentRequest.DoesNotExist:
         return JsonResponse({'error': '요청을 찾을 수 없습니다.'}, status=404)
 
+    #  label 을 먼저 None 으로 둔다.
+    #
+    #  해제 분기(빈 값)를 나중에 넣으면서 아래 소급 등록의 `if label:` 가드를
+    #  같이 고치지 않아, **연결을 해제하려고 저장할 때마다 UnboundLocalError
+    #  로 500** 이 났다. 인라인 UI 에 '연결 안 함' 항목이 없어 빈 값으로
+    #  저장하는 것이 해제의 유일한 길인데, 그 길이 늘 막혀 있었다.
+    label = None
     label_id = request.POST.get('linked_label_id') or None
     if label_id:
         label = _MyLabel.objects.filter(
@@ -5850,9 +5865,7 @@ def api_update_doc_request_label(request, req_id):
         ).first()
         if not label:
             return JsonResponse({'error': '해당 제품을 찾을 수 없습니다.'}, status=404)
-        dr.linked_label = label
-    else:
-        dr.linked_label = None
+    dr.linked_label = label
     dr.save(update_fields=['linked_label', 'updated_datetime'])
 
     # 새로 제품이 연결된 경우, 이미 제출된 문서를 ProductDocument로 소급 등록

@@ -547,7 +547,8 @@ async function loadReceivedDocRequests() {
 
         const STATUS_STYLE = {
             PENDING:   { icon: 'bi-clock', color: '#e37400', bg: '#fce8b2', label: '대기 중' },
-            ACCEPTED:  { icon: 'bi-check-circle', color: '#137333', bg: '#e6f4ea', label: '수락 완료' },
+            ACCEPTED:  { icon: 'bi-hourglass-split', color: '#a35400', bg: '#fef7e0', label: '수락 (제출 전)' },
+            SUBMITTED: { icon: 'bi-check-circle', color: '#137333', bg: '#e6f4ea', label: '제출 완료' },
             REJECTED:  { icon: 'bi-x-circle', color: '#c5221f', bg: '#fce8b2', label: '거절됨' },
             CANCELLED: { icon: 'bi-slash-circle', color: '#80868b', bg: '#f1f3f4', label: '취소됨' },
         };
@@ -931,12 +932,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     // 이메일 변경 여부에 따라 API 결정
                     if (emailChanged) {
                         // 이메일 변경: UPDATE (old_email 포함)
+                        /* memo 를 반드시 함께 보낸다.
+                           빠뜨리면 서버가 없는 값을 '지우라는 뜻' 으로 읽어
+                           비고가 통째로 사라졌다 — 회사명 한 글자만 고쳐도. */
                         const body = new URLSearchParams({
                             old_email:  (currentEmailInAll || '').toLowerCase(),
                             email:      newEmail,
                             name:       rowData.name       || '',
                             company:    rowData.company    || '',
                             license_no: rowData.license_no || '',
+                            memo:       rowData.memo       || '',
                         });
                         fetch(CONTACTS_API_UPDATE, {
                             method: 'POST',
@@ -995,10 +1000,17 @@ document.addEventListener('DOMContentLoaded', function () {
             const filled = this.countRows() - this.countEmptyRows(true);
             document.getElementById('contactCount').textContent = filled;
         },
+        /* 잠글 열은 **이름으로** 고른다.
+         *
+         * 예전에는 `col === 5 || col === 6` 이었다. 비고(memo)가 5번에
+         * 끼어들면서 그 인덱스가 밀렸고, 그래서 **비고가 잠기고** 자료요청은
+         * 편집 가능해졌다. 엑셀 양식과 안내는 비고를 채우라고 하는데 칸이
+         * 안 열렸다. 열을 끌어 옮길 수도 있으니 인덱스로 잡으면 또 어긋난다. */
         cells: function (row, col) {
-            if (col === 5 || col === 6) return { readOnly: true }; // 공유, 자료요청 컬럼
-            // ✅ 이메일 컬럼 수정 가능하도록 변경
-            // (이전: 기존 이메일은 수정 불가 → 현재: 모두 수정 가능)
+            const READ_ONLY = ['sent', 'doc_pending'];   // 서버가 세는 값
+            const meta = (this.instance || hot) && (this.instance || hot).getSettings().columns;
+            const key = meta && meta[col] ? meta[col].data : null;
+            if (key && READ_ONLY.indexOf(key) !== -1) return { readOnly: true };
         }
     });
 
@@ -1281,7 +1293,20 @@ async function sendDocRequest() {
         let data;
         try { data = await res.json(); } catch(_) { data = {}; }
         if (res.ok && data.success) {
-            showSnackbar(`${data.created}명에게 자료 요청을 보냈습니다. 목록의 '자료요청' 열에서 현황을 볼 수 있습니다.`, 'success');
+            /* 메일이 안 나간 주소는 **말해 준다.**
+               서버는 email_errors 로 실패 주소를 돌려주는데 화면이 그 키를
+               읽지 않았다. 초록 성공 스낵바만 뜨고 요청 이력도 생겨서,
+               며칠 뒤 "왜 안 보내셨어요" 를 듣는 자리였다. */
+            const failed = data.email_errors || [];
+            if (failed.length) {
+                showSnackbar(
+                    `${data.created}건을 등록했지만 ${failed.length}곳에 메일이 가지 않았습니다: `
+                    + failed.slice(0, 3).join(', ')
+                    + (failed.length > 3 ? ` 외 ${failed.length - 3}곳` : '')
+                    + '. 주소를 확인해 주세요.', 'warning');
+            } else {
+                showSnackbar(`${data.created}명에게 자료 요청을 보냈습니다. 목록의 '자료요청' 열에서 현황을 볼 수 있습니다.`, 'success');
+            }
             // 로컬 행 데이터 카운트 증가
             recipients.forEach(r => {
                 const em = (r.email || '').toLowerCase();
@@ -1293,6 +1318,10 @@ async function sendDocRequest() {
             });
             hot.getSourceData().forEach(row => { row._checked = false; });
             hot.render();
+            /* 체크를 직접 비웠으니 선택 액션 바도 직접 갱신한다 — 예전에는
+               "3개" 배지와 단추가 남아, 다시 누르면 "연락처를 체크하세요"
+               라고 거절했다(갱신은 afterChange 훅이 하는 일이다). */
+            if (typeof updateSelectionUI === 'function') updateSelectionUI();
             closeDocRequestPanel();
         } else {
             showSnackbar(data.error || `오류가 발생했습니다. (HTTP ${res.status})`, 'error');
@@ -1370,7 +1399,8 @@ async function loadDocRequests(email) {
 
         const STATUS_STYLE = {
             PENDING:   { icon: 'bi-clock', color: '#e37400', bg: '#fce8b2', label: '대기 중' },
-            ACCEPTED:  { icon: 'bi-check-circle', color: '#137333', bg: '#e6f4ea', label: '완료' },
+            ACCEPTED:  { icon: 'bi-hourglass-split', color: '#a35400', bg: '#fef7e0', label: '수락 (제출 전)' },
+            SUBMITTED: { icon: 'bi-check-circle', color: '#137333', bg: '#e6f4ea', label: '제출 완료' },
             REJECTED:  { icon: 'bi-x-circle', color: '#c5221f', bg: '#fce8b2', label: '거절' },
             CANCELLED: { icon: 'bi-slash-circle', color: '#80868b', bg: '#f1f3f4', label: '취소됨' },
         };

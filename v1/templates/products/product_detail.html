@@ -2607,49 +2607,14 @@ function openQuickInvite() {
 // 권한 설정 탭 함수들은 _permission_tab.html에서 처리됨
 
 // 인물 삭제 - 최종 확인 후 리로드
-async function deletePerson() {
-    if (!window.selectedShareId) {
-        showSnackbar('이 사용자는 현재 제품에 공유되지 않았습니다.', 'warning');
-        return;
-    }
-    
-    if (window.selectedIsOwner) {
-        showSnackbar('이 사용자는 현재 제품에 공유되지 않았습니다.', 'warning');
-        return;
-    }
-    
-    if (selectedIsOwner) {
-        showSnackbar('Owner는 삭제할 수 없습니다.', 'warning');
-        return;
-    }
-    
-    if (!confirm('정말로 이 사용자의 공유를 완전히 삭제하시겠습니까?\n\n이 작업은 취소할 수 없으며, 팔레트에서도 제거됩니다.\n다시 추가하려면 새로 초대해야 합니다.')) {
-        return;
-    }
-    
-    try {
-        const revokeUrl = `/v2/products/share/${selectedShareId}/revoke/`;
-        
-        const response = await fetch(revokeUrl, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': CSRF_TOKEN
-            }
-        });
-        
-        const result = await response.json();
-        if (result.success) {
-            showSnackbar('공유가 완전히 삭제되었습니다.', 'success');
-            sessionStorage.setItem('returnToTab', 'share');
-            location.reload();
-        } else {
-            showSnackbar(result.error || '삭제에 실패했습니다.', 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showSnackbar('삭제 중 오류가 발생했습니다: ' + error.message, 'error');
-    }
-}
+// deletePerson 은 _tab_permissions.html 에 있다.
+//
+// 여기에도 같은 이름이 있었고, 문서 순서상 이쪽이 이겨서 **삭제가 항상
+// 실패했다.** 이 판은 window.selectedShareId 를 보는데 그 변수를 대입하는
+// 코드가 저장소에 없었다 — 어떤 멤버를 골라 삭제를 눌러도 "이 사용자는
+// 현재 제품에 공유되지 않았습니다." 만 떴다.
+// _tab_permissions.html 판은 #delete-person-btn 의 dataset.shareId 를
+// 제대로 읽는다.
 
 
 // 모바일 사이드바 토글

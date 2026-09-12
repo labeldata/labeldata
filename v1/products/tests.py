@@ -7510,3 +7510,222 @@ class ActionButtonsActuallyRenderTests(TestCase):
         up, _ = self._member('UPLOADER', 'up2@x.com')
         page = self._page(up, self.Meta.Status.REQUESTING)
         self.assertTrue(page.context['can_upload_documents'])
+
+
+class OneDefinitionPerPageTests(TestCase):
+    """
+    같은 페이지에 같은 이름의 function 이 둘 있으면 **뒤에 파싱된 것이 이긴다.**
+    어느 쪽이 이기는지는 include 위치에만 달려 있어 아무도 의도하지 않는다.
+
+    실제로 `deletePerson` 이 그랬다 — 이기는 판이 window.selectedShareId 를
+    보는데 그 변수를 대입하는 코드가 저장소에 없었고, 어떤 멤버를 골라 삭제를
+    눌러도 "이 사용자는 현재 제품에 공유되지 않았습니다." 만 떴다. 공유를
+    지우는 길이 아예 없었다.
+
+    toggleLeftPanel · toggleRightPanel · openQuickInvite 도 두 벌이었다. 지금
+    이기는 판이 우연히 정상이라 동작하지만, include 위치가 바뀌면 죽는다.
+    """
+
+    #  구현만 다르고 동작이 같은 것들. 어느 판이 이겨도 결과가 같다.
+    EQUIVALENT = {
+        'esc',            # 같은 5글자를 이스케이프한다 (방식만 다름)
+        'getCsrf',        # 쿠키에서 csrftoken — 세 판이 동일
+        'getCsrfToken',   # 전역 우선 / input 우선. 둘 다 토큰을 돌려준다
+    }
+
+    def _duplicates(self):
+        import re
+        from collections import defaultdict
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        root = Path(dj.BASE_DIR) / 'templates'
+        text = {str(p.relative_to(root)).replace(chr(92), '/'): p.read_text(encoding='utf-8')
+                for p in root.rglob('*.html')}
+        inc = re.compile(r'{%\s*include\s+["\']([^"\']+)["\']')
+        fn = re.compile(r'^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(', re.M)
+
+        def family(rel, seen=None):
+            seen = seen if seen is not None else set()
+            if rel in seen or rel not in text:
+                return seen
+            seen.add(rel)
+            for child in inc.findall(text[rel]):
+                family(child, seen)
+            return seen
+
+        found = defaultdict(set)
+        for rel, t in text.items():
+            if '{% extends' not in t or '{% block content %}' not in t:
+                continue
+            where = defaultdict(set)
+            for member in family(rel):
+                for name in set(fn.findall(text[member])):
+                    where[name].add(member)
+            for name, files in where.items():
+                if len(files) > 1:
+                    found[name] |= files
+        return found
+
+    def test_한_페이지에_같은_이름의_함수가_둘_있지_않다(self):
+        extra = {n: sorted(f) for n, f in self._duplicates().items()
+                 if n not in self.EQUIVALENT}
+        self.assertEqual(extra, {},
+                         '뒤에 파싱된 판이 이긴다 — 하나만 남기거나 '
+                         '동작이 같음을 확인해 EQUIVALENT 에 적으세요')
+
+    def test_삭제는_버튼의_share_id_를_읽는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+               / '_tab_permissions.html').read_text(encoding='utf-8')
+        self.assertIn("getElementById('delete-person-btn')", src)
+        self.assertNotIn('window.selectedShareId', src)
+
+
+class ContactSaveTouchesOnlySentFieldsTests(TestCase):
+    """
+    안 보낸 칸을 '빈 값' 으로 읽어 그대로 덮고 있었다. 격자 저장이 memo 를
+    빠뜨리고 있었으므로 **회사명 한 글자만 고쳐도** 엑셀에서 옮겨 둔
+    전화번호·부서(비고)가 통째로 지워졌다.
+
+    앞서 목록 쪽(조회)만 고쳤고 저장 쪽은 그대로였다. 화면이 한 칸을
+    빠뜨리는 일은 또 생긴다 — 그때 데이터가 사라지지 않는 쪽이 맞다.
+    """
+
+    def setUp(self):
+        from v1.products.models import UserContact
+        self.UserContact = UserContact
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.uc = UserContact.objects.create(
+            owner=self.owner, email='sup@x.com', name='협력사',
+            company='A식품', license_no='123', memo='전화 010-1234')
+        self.client.force_login(self.owner)
+
+    def _post(self, **kw):
+        payload = {'old_email': 'sup@x.com', 'email': 'sup@x.com'}
+        payload.update(kw)
+        return self.client.post(reverse('products:contacts_api_update'), payload)
+
+    def test_안_보낸_칸은_그대로_둔다(self):
+        self._post(company='B식품')
+        self.uc.refresh_from_db()
+        self.assertEqual(self.uc.company, 'B식품')
+        self.assertEqual(self.uc.memo, '전화 010-1234')
+        self.assertEqual(self.uc.name, '협력사')
+        self.assertEqual(self.uc.license_no, '123')
+
+    def test_손으로_비운_칸은_지워진다(self):
+        """안 온 것과 빈 것은 다르다."""
+        self._post(memo='')
+        self.uc.refresh_from_db()
+        self.assertIsNone(self.uc.memo)
+
+    def test_이메일만_바꿔도_터지지_않는다(self):
+        r = self._post(old_email='sup@x.com', email='new@x.com')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(
+            self.UserContact.objects.filter(owner=self.owner, email='new@x.com').exists())
+
+    def test_공유_레코드도_안_보낸_칸을_안_덮는다(self):
+        label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        share = ProductShare.objects.create(
+            label=label, recipient_email='sup@x.com', recipient_name='협력사',
+            recipient_license_no='123', share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=share)
+        self._post(company='B식품')
+        share.refresh_from_db()
+        self.assertEqual(share.recipient_license_no, '123')
+        self.assertEqual(share.recipient_name, '협력사')
+
+
+class ContactGridSendsEveryEditableColumnTests(TestCase):
+    """
+    격자가 보내는 키와 열 목록이 어긋나면 안 보낸 칸이 지워진다(서버가
+    막아 주지만, 화면도 제 몫을 해야 한다). 그리고 잠글 열은 인덱스가 아니라
+    이름으로 골라야 한다 — 비고가 5번에 끼어들면서 인덱스가 밀려 **비고가
+    잠기고** 자료요청이 편집 가능해졌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / 'contacts.html').read_text(encoding='utf-8')
+
+    def test_저장에_memo_가_실린다(self):
+        i = self.src.index('const body = new URLSearchParams({')
+        self.assertIn('memo:', self.src[i:i + 700])
+
+    def test_잠금은_이름으로_고른다(self):
+        i = self.src.index('cells: function (row, col)')
+        block = self.src[i:i + 700]
+        self.assertNotIn('col === 5', block)
+        self.assertIn("READ_ONLY = ['sent', 'doc_pending']", block)
+
+    def test_편집_가능한_열이_전부_전송된다(self):
+        import re
+        cols = re.findall(r"\{ data: '(\w+)'", self.src)
+        editable = [c for c in cols
+                    if c not in ('_checked', 'sent', 'doc_pending')]
+        i = self.src.index('const body = new URLSearchParams({')
+        body = self.src[i:i + 700]
+        for c in editable:
+            self.assertIn(c, body, '%s 열이 저장에서 빠졌다' % c)
+
+
+class DocRequestScreenTellsTheTruthTests(TestCase):
+    """
+    자료 요청 화면이 사실과 다른 것을 말하던 자리들.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentRequest
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.DR = DocumentRequest
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / 'contacts.html').read_text(encoding='utf-8')
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.client.force_login(self.owner)
+
+    def test_제출_완료가_대기_중으로_보이지_않는다(self):
+        """상태 표 두 곳에 SUBMITTED 가 없어 || PENDING 으로 떨어졌다."""
+        self.assertEqual(self.src.count('SUBMITTED:'), 2)
+
+    def test_수락은_제출_전임을_밝힌다(self):
+        """'수락 완료' 는 다 끝난 것처럼 읽힌다 — 아직 자료가 안 왔다."""
+        self.assertIn("label: '수락 (제출 전)'", self.src)
+        self.assertNotIn("label: '수락 완료'", self.src)
+
+    def test_메일_실패를_숨기지_않는다(self):
+        self.assertIn('data.email_errors', self.src)
+        self.assertIn('메일이 가지 않았습니다', self.src)
+
+    def test_요청_전송_뒤_선택_바를_갱신한다(self):
+        i = self.src.index('closeDocRequestPanel();')
+        self.assertIn('updateSelectionUI()', self.src[max(0, i - 500):i])
+
+    def test_연결_제품_해제가_500_이_아니다(self):
+        """label 을 먼저 None 으로 두지 않아 UnboundLocalError 가 났다."""
+        dr = self.DR.objects.create(requester=self.owner, recipient_email='sup@x.com')
+        r = self.client.post(
+            reverse('products:api_update_doc_request_label', args=[dr.request_id]),
+            {'linked_label_id': ''})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        dr.refresh_from_db()
+        self.assertIsNone(dr.linked_label)
+
+    def test_연결_제품_지정도_된다(self):
+        label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        dr = self.DR.objects.create(requester=self.owner, recipient_email='sup@x.com')
+        r = self.client.post(
+            reverse('products:api_update_doc_request_label', args=[dr.request_id]),
+            {'linked_label_id': label.my_label_id})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        dr.refresh_from_db()
+        self.assertEqual(dr.linked_label, label)

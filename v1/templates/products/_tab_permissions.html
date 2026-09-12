@@ -1094,15 +1094,13 @@ function deletePerson() {
 
 /* ── 패널 토글 ── */
 
-function toggleLeftPanel() {
-    var palette = document.querySelector('.people-palette');
-    if (palette) palette.classList.toggle('collapsed');
-}
-
-function toggleRightPanel() {
-    var panel = document.querySelector('.person-detail-panel');
-    if (panel) panel.classList.toggle('collapsed');
-}
+/* toggleLeftPanel · toggleRightPanel 은 product_detail.html 에 있다.
+ *
+ * 여기에도 같은 이름이 있었는데 .collapsed 를 토글했다 — 그 클래스의 CSS 는
+ * .workspace-sidebar.collapsed 뿐이어서 팔레트·상세 패널에는 아무 그림이
+ * 없었다. 문서 순서상 product_detail 판(.panel-collapsed, 규칙 있음)이 이겨
+ * 지금은 동작하지만, 이 판이 이기는 순간 패널 접기가 죽는다. 걷어낸다.
+ */
 
 /* ── 팔레트 검색 필터 ── */
 
@@ -1130,19 +1128,7 @@ function filterPalette() {
 
 /* ── 간편 초대 ── */
 
-function openQuickInvite() {
-    var email = prompt('초대할 이메일 주소를 입력하세요:');
-    if (email === null) return;
-    if (!email || !email.includes('@')) { showSnackbar('유효한 이메일을 입력하세요.', 'warning'); return; }
+/* openQuickInvite 은 product_detail.html 에 있다 — #quickInviteModal 을 연다.
+ * 여기 있던 판은 prompt() 한 줄이었고 실행되지 않았다. 걷어낸다. */
 
-    var labelId = _labelId();
-    if (!labelId) { showSnackbar('라벨 ID를 찾을 수 없습니다. 새로고침 후 다시 시도하세요.', 'error'); return; }
-
-    _permPost('/products/share/create/' + labelId + '/', { email: email, role: 'VIEWER' })
-    .then(function(data) {
-        if (data.success) { showSnackbar(email + ' 을(를) 초대했습니다.', 'success'); _reloadToPermissions(); }
-        else showSnackbar(data.error || '초대에 실패했습니다.', 'error');
-    })
-    .catch(function(err) { showSnackbar('초대 오류: ' + (err && err.message ? err.message : err), 'error'); });
-}
 </script>
