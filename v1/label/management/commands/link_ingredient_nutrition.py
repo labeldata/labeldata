@@ -88,17 +88,9 @@ class Command(BaseCommand):
             if dry:
                 continue
 
-            fields = {f: getattr(row, f, None) for f in NUTRITION_INPUT_FIELDS}
-            fields.update({
-                'source_kind': MyIngredientNutrition.SOURCE_REPORT_NO,
-                'public_row': row,
-                'picked_by': None,          # 사람이 고른 것이 아니다
-                'picked_at': timezone.now(),
-                'source_note': '품목보고번호 자동 연결',
-            })
-            with transaction.atomic():
-                MyIngredientNutrition.objects.update_or_create(
-                    ingredient=ing, defaults=fields)
+            # 붙이는 일은 services 가 한다. 원료를 저장하는 순간에도 같은
+            # 함수를 부르므로, 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+            ncd.link_by_report_no(ing, force=opts['force'])
 
         w('')
         w('  붙음            %s%s' % (f'{linked:,}', '  (--dry-run: 저장하지 않았다)' if dry else ''))

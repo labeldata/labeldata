@@ -16353,3 +16353,112 @@ class ListPaginationIsOneShapeTests(TestCase):
         for path in Path(dj.BASE_DIR).glob('templates/**/*.html'):
             text = io.open(path, encoding='utf-8').read()
             self.assertNotIn('--ez-fab-size', text, str(path))
+
+
+class 고를_것이_없으면_묻지_않고_붙인다(TestCase):
+    """
+    품목보고번호가 맞으면 같은 품목이다 — 사람이 고를 것이 없다. 그런데
+    지금까지는 원료 상세를 하나씩 열어 눌러야 저장되는 구조였고, 실서버에서
+    값이 정해진 원료가 **0 개**였다. 고를 것이 없는데 손을 기다리고 있었다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import PublicFoodNutrition
+
+        self.user = User.objects.create_user(username='u@example.com', password='x')
+        self.row = PublicFoodNutrition.objects.create(
+            food_cd='TEST0001', food_nm_kr='시험용 밀가루',
+            item_report_no='19990101', basis_unit=PublicFoodNutrition.BASIS_G,
+            calories=364)
+
+    def _make(self, **kw):
+        from v1.label.models import MyIngredient
+
+        kw.setdefault('prdlst_nm', '밀가루')
+        kw.setdefault('delete_YN', 'N')
+        return MyIngredient.objects.create(user_id=self.user, **kw)
+
+    def test_저장하는_순간_붙는다(self):
+        from v1.label.models import MyIngredientNutrition
+
+        ing = self._make(prdlst_report_no='19990101')
+
+        nut = MyIngredientNutrition.objects.get(ingredient=ing)
+        self.assertEqual(nut.source_kind, MyIngredientNutrition.SOURCE_REPORT_NO)
+        self.assertEqual(nut.public_row, self.row)
+        self.assertIsNone(nut.picked_by)      # 사람이 고른 것이 아니다
+
+    def test_번호가_없으면_아무_일도_없다(self):
+        from v1.label.models import MyIngredientNutrition
+
+        ing = self._make(prdlst_report_no='')
+        self.assertFalse(MyIngredientNutrition.objects.filter(ingredient=ing).exists())
+
+    def test_숫자가_아닌_번호는_쓰지_않는다(self):
+        """
+        '2020_DNSP_04044' 같은 값이 있다. 우리 쪽은 숫자만 들고 있어 억지로
+        맞추면 엉뚱한 원료에 붙는다.
+        """
+        from v1.label.models import MyIngredientNutrition
+
+        ing = self._make(prdlst_report_no='2020_DNSP_04044')
+        self.assertFalse(MyIngredientNutrition.objects.filter(ingredient=ing).exists())
+
+    def test_사람이_정한_값을_덮지_않는다(self):
+        """성적서를 넣었거나 후보를 고른 것을 자동 판단으로 덮으면 사람이 한 일이 사라진다."""
+        from v1.label.models import MyIngredientNutrition
+
+        ing = self._make(prdlst_report_no='19990101')
+        nut = MyIngredientNutrition.objects.get(ingredient=ing)
+        nut.source_kind = MyIngredientNutrition.SOURCE_SPEC_OCR
+        nut.calories = 999
+        nut.save()
+
+        ing.prdlst_nm = '밀가루(수정)'
+        ing.save()
+
+        nut.refresh_from_db()
+        self.assertEqual(nut.source_kind, MyIngredientNutrition.SOURCE_SPEC_OCR)
+        self.assertEqual(nut.calories, 999)
+
+    def test_부피_기준은_붙이지_않는다(self):
+        """
+        100 mL 는 중량 배합에 그대로 쓸 수 없다. 물은 넘어가지만
+        식용유(0.92)·시럽(1.3)은 10~30 % 어긋난다.
+        """
+        from v1.label.models import MyIngredientNutrition, PublicFoodNutrition
+
+        PublicFoodNutrition.objects.filter(pk=self.row.pk).update(
+            basis_unit=PublicFoodNutrition.BASIS_ML)
+
+        ing = self._make(prdlst_report_no='19990101')
+        self.assertFalse(MyIngredientNutrition.objects.filter(ingredient=ing).exists())
+
+    def test_붙이다_실패해도_원료는_저장된다(self):
+        """
+        영양성분을 붙이는 것은 곁다리다. 그것 때문에 원료 저장이 통째로
+        실패하면 사용자는 제가 한 일을 잃는다.
+        """
+        from v1.label.models import MyIngredient
+        from v1.label.services import nutrition_candidates as ncd
+
+        with patch.object(ncd, 'link_by_report_no', side_effect=RuntimeError('터짐')):
+            ing = self._make(prdlst_report_no='19990101')
+
+        self.assertTrue(MyIngredient.objects.filter(pk=ing.pk).exists())
+
+    def test_명령과_저장이_같은_함수를_쓴다(self):
+        """
+        두 벌로 두면 어느 날 한쪽만 고쳐진다. source_kind·source_note 는
+        나중에 "이 값이 어디서 왔는가" 를 대는 근거라 특히 갈리면 안 된다.
+        """
+        from pathlib import Path
+
+        import v1.label.management.commands.link_ingredient_nutrition as cmd
+
+        src = Path(cmd.__file__).read_text(encoding='utf-8')
+        self.assertIn('ncd.link_by_report_no(', src)
+        # 저장 로직이 명령 쪽에 다시 적혀 있으면 안 된다
+        self.assertNotIn('SOURCE_REPORT_NO,', src)

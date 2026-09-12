@@ -428,3 +428,83 @@ def for_ingredient(ingredient, limit=TOP_N):
 def row_values(row, fields):
     """식약처 행에서 우리 성분 이름으로 값을 뽑는다."""
     return {f: getattr(row, f, None) for f in fields}
+
+
+def link_by_report_no(ingredient, force=False):
+    """
+    품목보고번호로 찾아지는 영양성분을 **그 자리에서** 붙인다. 붙였으면 그 행을,
+    아니면 None 을 돌려준다.
+
+    왜 함수로 빼는가
+    ────────────────
+    같은 일을 두 곳에서 한다 — 주기적으로 도는 관리 명령
+    (`link_ingredient_nutrition`)과, 원료를 저장하는 순간이다. 두 벌로 두면
+    어느 날 한쪽만 고쳐진다. 특히 `source_kind` 와 `source_note` 는 나중에
+    "이 값이 어디서 왔는가" 를 대는 근거라, 두 곳이 다른 말을 적으면 그
+    근거가 무너진다.
+
+    왜 저장하는 순간에도 하는가
+    ───────────────────────────
+    배치를 기다릴 이유가 없다. 번호가 있고 딱 맞는 행이 있으면 **고를 것이
+    없는 건**이다 — 같은 번호는 같은 품목이다. 그런데 지금까지는 원료 상세를
+    하나씩 열어 눌러야 저장됐고, 아무도 안 눌러서 실서버에서 값이 정해진
+    원료가 **0 개**였다. 고를 것이 없는데 손을 기다리는 구조였다.
+
+    사람이 정한 값은 건드리지 않는다
+    ────────────────────────────────
+    이미 MyIngredientNutrition 이 있으면 지나간다. 성적서를 넣었거나 후보를
+    고른 것을 자동 판단으로 덮으면 사람이 한 일이 조용히 사라진다.
+    """
+    from django.db import transaction
+    from django.utils import timezone
+
+    from v1.label.models import MyIngredientNutrition
+
+    # 번호부터 본다. **질의 없이** 끝나는 검사라 저장 경로에서 가장 싸다 —
+    # 원료의 92.6 % 가 여기서 곧바로 돌아선다.
+    no = (getattr(ingredient, 'prdlst_report_no', '') or '').strip()
+    if not no or not no.isdigit():
+        return None
+
+    if not force and MyIngredientNutrition.objects.filter(ingredient=ingredient).exists():
+        return None
+
+    row = auto_link(ingredient)
+    if row is None:
+        return None
+    # auto_link 가 이미 100 g 기준만 돌려주지만, 조건이 바뀌어도 부피 기준이
+    # 새어 들어오지 않게 한 번 더 막는다. 100 mL 는 중량 배합에 그대로 쓸 수
+    # 없다 — 물은 넘어가지만 식용유(0.92)·시럽(1.3)은 10~30 % 어긋난다.
+    if row.basis_unit != row.BASIS_G:
+        return None
+
+    fields = {f: getattr(row, f, None) for f in MyIngredientNutrition.VALUE_FIELDS}
+    fields.update({
+        'source_kind': MyIngredientNutrition.SOURCE_REPORT_NO,
+        'public_row': row,
+        'picked_by': None,          # 사람이 고른 것이 아니다
+        'picked_at': timezone.now(),
+        'source_note': '품목보고번호 자동 연결',
+    })
+    with transaction.atomic():
+        MyIngredientNutrition.objects.update_or_create(
+            ingredient=ingredient, defaults=fields)
+    return row
+
+
+def try_link_quietly(ingredient):
+    """
+    저장 경로에서 부르는 껍데기. **실패해도 저장을 망치지 않는다.**
+
+    영양성분을 붙이는 것은 곁다리다. 그것 때문에 원료 저장이 통째로 실패하면
+    사용자는 제가 한 일을 잃는다 — 얻으려던 것과 견줘 잃는 것이 너무 크다.
+    """
+    import logging
+
+    try:
+        return link_by_report_no(ingredient)
+    except Exception:
+        logging.getLogger(__name__).warning(
+            '원료 %s 영양성분 자동 연결 실패', getattr(ingredient, 'pk', None),
+            exc_info=True)
+        return None
