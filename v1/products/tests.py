@@ -8025,3 +8025,101 @@ class ContactDeleteReachesTheServerTests(TestCase):
                / 'contacts.html').read_text(encoding='utf-8')
         self.assertIn('CONTACTS_API_DELETE', src)
         self.assertIn('fetch(CONTACTS_API_DELETE', src)
+
+
+class SpecNutritionCanBeSavedTests(TestCase):
+    """
+    "성적서에서 영양성분 읽기" 가 완전한 막다른 길이었다. 패널이 "확인 후
+    저장하면 이 제품의 영양성분으로 들어갑니다" 라고 말하는데 누를 단추가
+    없었다 — `window.openSpecNutritionPicker` 를 부르는데 **그 함수는 저장소
+    어디에도 없었다.** 서버 뷰는 처음부터 있었다.
+
+    붙일 자리도 틀렸다. `#documentEditPanel` / `.doc-edit-panel` 로 찾는데
+    실제 요소는 `#doc-edit-panel` 이라, 둘 다 못 찾고 document.body 맨 앞 —
+    문서함 탭 밖, 화면 최상단 — 에 초록 상자가 끼어들었다.
+    """
+
+    def setUp(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / '_tab_documents.html').read_text(encoding='utf-8')
+        # 주석 안의 언급(왜 그랬는지를 적어 두었다)은 세지 않는다
+        self.code = re.sub(r'/\*.*?\*/|\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}',
+                           '', self.src, flags=re.S)
+
+    def test_없는_함수를_부르지_않는다(self):
+        self.assertNotIn('openSpecNutritionPicker', self.code)
+
+    def test_저장_단추가_있다(self):
+        self.assertIn('specNutSaveBtn', self.src)
+        self.assertIn('/spec-nutrition/save/', self.src)
+
+    def test_덮어쓰기_전에_묻는다(self):
+        i = self.src.index('specNutSaveBtn')
+        self.assertIn('confirm(', self.src[i:i + 1500])
+
+    def test_붙일_자리가_실재한다(self):
+        self.assertIn("getElementById('doc-edit-panel')", self.code)
+        self.assertNotIn('documentEditPanel', self.code)
+
+
+class DocumentTabRespectsPermissionTests(TestCase):
+    """
+    문서 패널이 권한과 무관하게 저장·업로드 단추를 그렸고, 서버는 소유자만
+    조회했다. 두 쪽이 서로를 몰랐다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        from v1.products.models import DocumentType, ProductDocument
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / '_tab_documents.html').read_text(encoding='utf-8')
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        dtype = DocumentType.objects.create(type_code='T', type_name='성적서')
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dtype, original_filename='a.pdf')
+
+    def _member(self, role, email):
+        user = User.objects.create_user(role, password='x', email=email)
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email=email, recipient_user=user,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        perm = SharePermission.objects.create(share=share)
+        perm.apply_role_defaults(role_code=role, save=True)
+        return user
+
+    def _save(self, user, **data):
+        import json
+        self.client.force_login(user)
+        return self.client.post(
+            reverse('products:document_update', args=[self.doc.document_id]),
+            data=json.dumps(data or {'description': '메모'}),
+            content_type='application/json')
+
+    def test_올릴_권한이_있는_공유자는_고칠_수_있다(self):
+        editor = self._member('EDITOR', 'ed@x.com')
+        r = self._save(editor)
+        self.assertEqual(r.status_code, 200, r.content[:200])
+
+    def test_올릴_권한이_없으면_사람_말로_막는다(self):
+        rv = self._member('REVIEWER', 'rv@x.com')
+        r = self._save(rv)
+        self.assertEqual(r.status_code, 403)
+        self.assertIn('권한이 없습니다', r.json()['error'])
+
+    def test_영어_원문을_사용자에게_보내지_않는다(self):
+        """Http404 가 except Exception 에 삼켜져 영어가 스낵바에 떴다."""
+        stranger = User.objects.create_user('남', password='x', email='no@x.com')
+        r = self._save(stranger)
+        self.assertIn(r.status_code, (403, 404))
+        self.assertNotIn('ProductDocument', r.json().get('error', ''))
+
+    def test_읽기_전용은_슬롯_칩으로_업로드_창을_열지_않는다(self):
+        self.assertIn('window.CAN_UPLOAD_DOCUMENTS', self.src)
+        i = self.src.index('window.handleSlotClick')
+        j = self.src.index('window.openUploadForUpdate')
+        self.assertIn('CAN_UPLOAD_DOCUMENTS', self.src[i:j])

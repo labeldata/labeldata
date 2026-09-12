@@ -4737,13 +4737,35 @@ def document_update(request, document_id):
     """문서 메타데이터 업데이트 (구분, 발행일, 만료일, 설명)"""
     import json
     
+    #  **올릴 권한이 있는 공유자도 고칠 수 있다.**
+    #
+    #  예전에는 label__user_id=request.user 로 소유자만 찾았다. 그런데 오른쪽
+    #  문서 패널은 권한과 무관하게 저장·업로드 단추를 그렸고, 공동 편집자가
+    #  만료일을 고쳐 저장하면 Http404 가 아래 except Exception 에 삼켜져
+    #  `No ProductDocument matches the given query.` 라는 **영어 원문**이
+    #  스낵바에 떴다.
+    document = (ProductDocument.objects
+                .select_related('label')
+                .filter(document_id=document_id, active_yn=True)
+                .first())
+    if not document:
+        return JsonResponse(
+            {'success': False, 'error': '문서를 찾을 수 없습니다.'}, status=404)
+    if document.label.user_id_id != request.user.id:
+        _share = ProductShare.objects.filter(
+            label=document.label, active_yn=True, share_mode='PRIVATE',
+            permission__can_upload_documents=True,
+        ).filter(
+            Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+        ).filter(
+            Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+        ).first()
+        if not _share:
+            return JsonResponse(
+                {'success': False, 'error': '이 문서를 수정할 권한이 없습니다.'},
+                status=403)
+
     try:
-        document = get_object_or_404(
-            ProductDocument,
-            document_id=document_id,
-            label__user_id=request.user
-        )
-        
         data = json.loads(request.body)
         
         # 문서 타입 변경 (슬롯 재연결 포함)
@@ -4847,10 +4869,13 @@ def document_update(request, document_id):
             }
         })
         
-    except Exception as e:
+    except Exception:
+        #  예외 원문을 화면에 그대로 보내면 영어와 내부 이름이 사용자에게
+        #  간다. 무엇이 났는지는 로그로 남기고, 화면에는 사람 말을 보낸다.
+        logger.exception('[문서 수정] 실패: document_id=%s', document_id)
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': '문서를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
         }, status=500)
 
 

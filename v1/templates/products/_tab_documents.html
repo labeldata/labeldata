@@ -1315,24 +1315,70 @@ async function submitImportCompanyDoc() {
             + '배합 계산을 거치지 않고 시험한 값을 그대로 씁니다.</div>'
             + '</div>';
 
-        if (typeof window.openSpecNutritionPicker === 'function') {
-            window.openSpecNutritionPicker(docId, body, html);
-            return;
-        }
-        /* 고르는 창이 아직 없으면 **읽은 값을 그 자리에서 보여 준다.**
-           스낵바로 "읽었습니다" 만 띄우면 정작 값을 못 본다. 게다가 이 화면의
-           success 스낵바는 새로고침에 삼켜진다(showSavedAfterReload 주석). */
+        /* ── 확인하고 저장한다 ──────────────────────────────────────────
+         *
+         * 예전에는 `window.openSpecNutritionPicker` 가 있으면 넘기고, 없으면
+         * 값만 그려 두었다. 그런데 **그 함수는 저장소 어디에도 없었다.**
+         * 게다가 붙일 자리를 `#documentEditPanel` / `.doc-edit-panel` 로
+         * 찾았는데 실제 요소는 `#doc-edit-panel` 이라, 둘 다 못 찾고
+         * document.body 맨 앞 — 문서함 탭 밖, 화면 최상단 — 에 초록 상자가
+         * 끼어들었다.
+         *
+         * 패널이 "확인 후 저장하면 이 제품의 영양성분으로 들어갑니다" 라고
+         * 말하는데 누를 단추가 없었다. 서버 뷰
+         * (document_spec_nutrition_save)는 처음부터 있었다.
+         * ──────────────────────────────────────────────────────────── */
         var box = document.getElementById('specNutritionResult');
         if (!box) {
             box = document.createElement('div');
             box.id = 'specNutritionResult';
             box.className = 'border rounded p-2 mb-3';
-            box.style.background = 'var(--ez-success-bg, #e6f4ea)';
-            var panel = document.getElementById('documentEditPanel')
-                     || document.querySelector('.doc-edit-panel') || document.body;
+            box.style.background = 'var(--ez-success-bg)';
+            var panel = document.getElementById('doc-edit-panel') || document.body;
             panel.insertBefore(box, panel.firstChild);
         }
-        box.innerHTML = html;
+        box.innerHTML = html
+            + '<div class="d-flex gap-1 mt-2">'
+            + '<button type="button" class="btn v2-btn-sm btn-primary" '
+            + 'id="specNutSaveBtn">이 제품의 영양성분으로 저장</button>'
+            + '<button type="button" class="btn v2-btn-sm btn-outline-secondary" '
+            + 'id="specNutCancelBtn">닫기</button>'
+            + '</div>';
+
+        document.getElementById('specNutCancelBtn').onclick = function () {
+            box.remove();
+        };
+        document.getElementById('specNutSaveBtn').onclick = function () {
+            var btn = this;
+            if (!confirm('성적서에서 읽은 값으로 이 제품의 영양성분을 덮어씁니다.\n'
+                         + '배합 계산을 거치지 않고 시험한 값을 그대로 씁니다.')) return;
+            btn.disabled = true;
+            btn.textContent = '저장 중…';
+            fetch('/products/documents/' + docId + '/spec-nutrition/save/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json',
+                          'X-CSRFToken': getCsrfToken()},
+                body: JSON.stringify({values: body.values || {},
+                                      filename: body.filename || ''})
+            }).then(function (r) { return r.json().catch(function () { return {}; }); })
+              .then(function (res) {
+                  if (!res.success) {
+                      showSnackbar(res.error || '저장하지 못했습니다.', 'error');
+                      btn.disabled = false;
+                      btn.textContent = '이 제품의 영양성분으로 저장';
+                      return;
+                  }
+                  if (typeof showSavedAfterReload === 'function') {
+                      showSavedAfterReload('성적서 값을 영양성분에 저장했습니다.');
+                  }
+                  location.reload();
+              })
+              .catch(function (e) {
+                  showSnackbar('저장 오류: ' + e.message, 'error');
+                  btn.disabled = false;
+                  btn.textContent = '이 제품의 영양성분으로 저장';
+              });
+        };
     }
 
     window.previewIngredientPhoto = async function (docId) {
@@ -1650,12 +1696,26 @@ async function submitImportCompanyDoc() {
     };
 
     // 슬롯 카드 클릭 처리
+    /* 읽기 전용 사용자는 업로드 창으로 보내지 않는다.
+     *
+     * 툴바 업로드 단추는 템플릿 조건으로 감춰지고 "읽기 전용" 배지가 뜨는데,
+     * 필수 문서 칩의 onclick 에는 그 조건이 없었다. 검토자·뷰어가
+     * "없음" 칩을 누르면 업로드 창이 열려 파일을 고르고 등록까지 눌렀다가
+     * "문서 업로드 권한이 없습니다" 로 되돌아왔다. */
+    /* 서버가 계산한 권한을 JS 로 넘긴다. 템플릿 조건은 마크업만 감추고,
+       onclick 안쪽까지는 닿지 않는다. */
+    window.CAN_UPLOAD_DOCUMENTS = {{ can_upload_documents|yesno:"true,false" }};
+
     window.handleSlotClick = function(slotId, docTypeName, docTypeId, documentId) {
         if (documentId) {
             // 문서가 있으면 오른쪽 패널 열기
             openEditPanel(documentId);
         } else {
-            // 문서가 없으면 업로드 모달 열기
+            // 문서가 없으면 업로드 모달 열기 — 권한이 있을 때만
+            if (!(window.CAN_UPLOAD_DOCUMENTS)) {
+                showSnackbar('문서를 올릴 권한이 없습니다. 이 제품에서는 조회만 할 수 있습니다.', 'warning');
+                return;
+            }
             if (typeof openUploadModal === 'function') {
                 openUploadModal(slotId, docTypeName, docTypeId);
             } else {
