@@ -102,7 +102,7 @@
                 <div class="tab-pane fade" id="palette-recent">
                     <div class="palette-list" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
                         {% for share in shares|slice:":5" %}
-                        <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)" data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}" data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="{{ share.permission_record.role_code }}" data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
+                        <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)" data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}" data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="{{ share.permission_record.role_code }}" data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}" data-license-no="{{ share.recipient_license_no|default:'' }}">
                             <div class="avatar bg-primary text-white">
                                 {{ share.display_name|slice:":1"|upper }}
                             </div>
@@ -168,7 +168,7 @@
                         <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                             data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
                             data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="EDITOR"
-                            data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
+                            data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}" data-license-no="{{ share.recipient_license_no|default:'' }}">
                             <div class="avatar bg-success text-white">{{ share.display_name|slice:":1"|upper }}</div>
                             <div class="person-info">
                                 <div class="person-name">{{ share.display_name }}</div>
@@ -202,7 +202,7 @@
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
                         data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="UPLOADER"
-                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
+                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}" data-license-no="{{ share.recipient_license_no|default:'' }}">
                         <div class="avatar bg-primary text-white">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
                             <div class="person-name">{{ share.display_name }}</div>
@@ -235,7 +235,7 @@
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
                         data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="REVIEWER"
-                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
+                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}" data-license-no="{{ share.recipient_license_no|default:'' }}">
                         <div class="avatar bg-warning text-dark">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
                             <div class="person-name">{{ share.display_name }}</div>
@@ -268,7 +268,7 @@
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
                         data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="APPROVER"
-                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
+                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}" data-license-no="{{ share.recipient_license_no|default:'' }}">
                         <div class="avatar bg-danger text-white">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
                             <div class="person-name">{{ share.display_name }}</div>
@@ -300,7 +300,7 @@
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
                         data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="VIEWER"
-                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
+                        data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}" data-license-no="{{ share.recipient_license_no|default:'' }}">
                         <div class="avatar bg-info text-white">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
                             <div class="person-name">{{ share.display_name }}</div>
@@ -412,6 +412,15 @@
      전체를 끌림 그림으로 잡는다 — 화면이 통째로 흐릿하게 따라다녔다.
      그래서 스냅샷이 끝난 다음 프레임에 이 클래스를 건다(dragStart 참고). */
   .person-card.is-dragging { opacity: .45; }
+
+  /* 고른 카드. selectPerson 이 .selected 를 붙이는데 그 그림이 없었다 —
+     멤버가 여러 명일 때 오른쪽 패널에 뜬 사람이 왼쪽 누구인지 알 수 없었고,
+     이웃 카드를 눌렀는지 확신할 수 없어 남의 정보를 고치기 쉬웠다. */
+  .person-card.selected {
+    border-color: var(--ez-info-on-bg) !important;
+    box-shadow: inset 3px 0 0 var(--ez-info-on-bg);
+    background: var(--ez-info-bg);
+  }
 
   /* 드롭 대상 강조. 인라인 스타일로 켜던 시절에는 드롭이 일어난 요소에
      dragleave 가 오지 않아 파란 배경이 지워지지 않고 남았다. */
@@ -666,14 +675,24 @@ function _makeDropzoneCard(data, role) {
     div.dataset.role     = role;
     div.dataset.name     = data.name;
     div.dataset.company  = data.company;
+    /* 서버가 그린 카드와 같은 것을 실어야 한다. 빠지면 이 카드를 눌러
+       저장할 때 그 칸이 빈 값으로 올라가 지워진다. */
+    div.dataset.licenseNo = data.licenseNo || '';
+    div.dataset.seeAll    = data.seeAll || '';
     var displayName = data.name || data.username || data.email;
     var initial     = (displayName || '?').charAt(0).toUpperCase();
     var colors = _roleColors[role] || ['bg-primary', 'text-white'];
+    /* 이름은 사용자가 적은 값이다 — 이스케이프해서 넣는다 */
+    function _esc(t) {
+        return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
     div.innerHTML =
-        '<div class="avatar ' + colors[0] + ' ' + colors[1] + '">' + initial + '</div>' +
+        '<div class="avatar ' + colors[0] + ' ' + colors[1] + '">' + _esc(initial) + '</div>' +
         '<div class="person-info">' +
-            '<div class="person-name">' + displayName + '</div>' +
-            '<div class="person-email">' + data.email + '</div>' +
+            '<div class="person-name">' + _esc(displayName) + '</div>' +
+            '<div class="person-email">' + _esc(data.email) + '</div>' +
         '</div>';
     return div;
 }
@@ -723,20 +742,39 @@ function _syncSkipStyles(role) {
 }
 
 /* 팔레트 카드의 역할 뱃지 갱신 */
+/* 팔레트 카드의 역할 칩을 갱신한다.
+ *
+ * 두 가지가 어긋나 있었다.
+ *
+ *   1. 지울 칩을 `.badge:not(.bg-secondary)` 로 찾았는데, 마크업의 역할 칩은
+ *      9px 글씨 정리(257d94b) 이후 `.role-tag` 다. **하나도 안 지워졌다** —
+ *      공유를 취소해도 칩이 남아 "안 됐네" 하고 다시 끌게 되고, 역할을 바꾸면
+ *      옛 칩 옆에 새 칩이 하나 더 붙어 둘이 나란히 보였다.
+ *   2. querySelector(단수)라 전체 탭 카드만 잡혔다. 최근 탭도 .palette-list
+ *      라서 그쪽은 새로고침 전까지 옛 역할로 남았다.
+ */
 function _updatePaletteBadge(shareId, role) {
-    var card = document.querySelector('.palette-list .person-card[data-share-id="' + shareId + '"]');
-    if (!card) return;
+    var cards = document.querySelectorAll(
+        '.palette-list .person-card[data-share-id="' + shareId + '"]');
+    if (!cards.length) return;
+    cards.forEach(function (card) { _paintRoleTag(card, role); });
+}
+
+function _paintRoleTag(card, role) {
     card.dataset.role = role || '';
-    var old = card.querySelector('.badge:not(.bg-secondary)');
-    if (old) old.remove();
+    card.querySelectorAll('.role-tag:not(.role-owner), .badge:not(.bg-secondary)')
+        .forEach(function (el) { el.remove(); });
     if (role) {
-        var labels = { UPLOADER:'자료제출', EDITOR:'편집', REVIEWER:'검토', APPROVER:'승인', VIEWER:'뷰어' };
-        var badgeClasses = { UPLOADER:'bg-primary', EDITOR:'bg-success', REVIEWER:'bg-warning text-dark', APPROVER:'bg-danger', VIEWER:'bg-info' };
-        var b = document.createElement('span');
-        b.className = 'badge ' + (badgeClasses[role] || 'bg-secondary');
-        b.style.fontSize = '9px';
-        b.textContent = labels[role] || role;
-        card.appendChild(b);
+        /* 서버 렌더와 **같은 체계**로 붙인다.
+           예전에는 부트스트랩 .badge 에 9px 인라인이어서, 마크업의 .role-tag
+           (12px, 역할별 색) 와 생김새가 달랐다 — 끌어다 놓은 직후의 칩만
+           작고 색이 다르고, 새로고침하면 바뀌었다. */
+        var labels = { UPLOADER:'자료제출', EDITOR:'편집', REVIEWER:'검토',
+                       APPROVER:'승인', VIEWER:'뷰어' };
+        var tag = document.createElement('span');
+        tag.className = 'role-tag role-' + role.toLowerCase();
+        tag.textContent = labels[role] || role;
+        card.appendChild(tag);
     }
 }
 
@@ -881,6 +919,13 @@ function dropPerson(event, role) {
             return;
         }
         _syncSeeAll(shareId, res.see_all_documents);
+        /* 열려 있는 상세 패널도 새 역할로 맞춘다.
+         *
+         * 예전에는 드롭존·팔레트만 갱신했다. 그래서 뷰어를 검토자 칸으로
+         * 끌어 성공한 뒤 이름 오타를 고치려고 저장을 누르면, 패널의 역할
+         * select 가 아직 '뷰어' 여서 **조용히 다시 뷰어가 됐다.** 무엇이
+         * 되돌렸는지 알 방법이 없었다. */
+        _syncDetailRole(shareId, role);
         if (res.see_all_changed) {
             showSnackbar(res.see_all_documents
                 ? '문서함 전체 보기가 켜졌습니다. 이 역할의 기본값입니다.'
@@ -957,6 +1002,20 @@ function _syncRoleSummary(role) {
 }
 
 /* 서버가 돌려준 문서함 전체 보기 값을 카드와 상세 패널에 반영한다. */
+/* 상세 패널이 지금 이 사람을 열어 두고 있으면 역할을 맞춘다. */
+function _syncDetailRole(shareId, role) {
+    var content = document.getElementById('person-detail-content');
+    if (!content || content.style.display === 'none') return;
+    var sel = document.getElementById('detail-role-select');
+    if (!sel) return;
+    var card = document.querySelector('.person-card[data-share-id="' + shareId + '"]');
+    var emailEl = document.getElementById('detail-email');
+    if (!card || !emailEl) return;
+    if ((emailEl.textContent || '').trim() !== (card.dataset.email || '').trim()) return;
+    sel.value = role;
+    _syncRoleSummary(role);
+}
+
 function _syncSeeAll(shareId, value) {
     if (typeof value !== 'boolean') return;
     document.querySelectorAll('[data-share-id="' + shareId + '"]').forEach(function (el) {

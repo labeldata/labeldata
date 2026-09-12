@@ -7729,3 +7729,123 @@ class DocRequestScreenTellsTheTruthTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content[:200])
         dr.refresh_from_db()
         self.assertEqual(dr.linked_label, label)
+
+
+class EveryCardCarriesTheSameDataTests(TestCase):
+    """
+    같은 사람을 그리는 카드가 7종인데 실린 data-* 가 종류마다 달랐다.
+    인허가번호는 전체 팔레트 카드에만 있었다.
+
+    selectPerson 은 card.dataset.licenseNo → undefined → '' 로 입력칸을
+    비우고, 저장은 그 빈 값을 보내고, 서버는 NULL 로 덮고 **같은 이메일의
+    모든 공유 레코드에 전파**했다. 드롭존 카드(자기 역할 칸 — 가장 자연스러운
+    클릭 위치)에서 회사명만 고치면 그 사람의 인허가번호가 모든 제품에서
+    사라졌고, 지웠다는 말은 어디에도 없었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / '_tab_permissions.html').read_text(encoding='utf-8')
+
+    def test_모든_카드가_같은_것을_싣는다(self):
+        import re
+        cards = re.findall(r'<div class="person-card"[^>]*?>', self.src, re.S)
+        self.assertGreaterEqual(len(cards), 7)
+        for card in cards:
+            if 'data-is-owner="true"' in card:
+                continue          # 소유자 카드는 편집 대상이 아니다
+            for attr in ('data-email', 'data-name', 'data-company',
+                         'data-license-no'):
+                self.assertIn(attr, card, '%s 가 없다: %s' % (attr, card[:90]))
+
+    def test_클라이언트가_만든_카드도_같다(self):
+        i = self.src.index('function _makeDropzoneCard')
+        block = self.src[i:i + 1400]
+        for key in ('licenseNo', 'seeAll'):
+            self.assertIn(key, block)
+
+    def test_클라이언트_카드도_같은_칩_체계를_쓴다(self):
+        i = self.src.index('function _paintRoleTag')
+        block = self.src[i:i + 900]
+        self.assertIn("'role-tag role-'", block)
+        self.assertNotIn("'badge '", block)
+
+    def test_이름을_이스케이프한다(self):
+        i = self.src.index('function _makeDropzoneCard')
+        self.assertIn('_esc(', self.src[i:i + 1600])
+
+
+class PaletteStateFollowsTheServerTests(TestCase):
+    """
+    역할 칩과 선택 표시가 화면에서 따라오지 않던 자리들.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / '_tab_permissions.html').read_text(encoding='utf-8')
+
+    def test_역할_칩을_실제_클래스로_찾는다(self):
+        """`.badge:not(.bg-secondary)` 로 찾아 하나도 안 지워졌다."""
+        i = self.src.index('function _paintRoleTag')
+        self.assertIn('.role-tag', self.src[i:i + 400])
+
+    def test_두_탭의_카드를_모두_갱신한다(self):
+        """querySelector(단수)라 최근 탭은 옛 역할로 남았다."""
+        i = self.src.index('function _updatePaletteBadge')
+        block = self.src[i:i + 700]
+        self.assertIn('querySelectorAll(', block)
+
+    def test_고른_카드에_표시가_있다(self):
+        self.assertIn('.person-card.selected {', self.src)
+
+    def test_드롭_뒤_상세_패널의_역할도_맞춘다(self):
+        """패널이 옛 역할을 들고 있어 저장하면 조용히 되돌아갔다."""
+        self.assertIn('function _syncDetailRole', self.src)
+        i = self.src.index('_syncSeeAll(shareId, res.see_all_documents)')
+        self.assertIn('_syncDetailRole(shareId, role)', self.src[i:i + 700])
+
+
+class ShareInfoSaveTouchesOnlySentFieldsTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        self.share = ProductShare.objects.create(
+            label=self.label, recipient_email='sup@x.com', recipient_name='협력사',
+            recipient_company='A식품', recipient_license_no='123',
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=self.share)
+        self.client.force_login(self.owner)
+
+    def test_안_보낸_칸은_그대로_둔다(self):
+        r = self.client.post(
+            reverse('products:share_update_info', args=[self.share.share_id]),
+            {'company': 'B식품'})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.share.refresh_from_db()
+        self.assertEqual(self.share.recipient_company, 'B식품')
+        self.assertEqual(self.share.recipient_license_no, '123')
+        self.assertEqual(self.share.recipient_name, '협력사')
+
+    def test_다른_제품의_같은_사람에게도_안_덮는다(self):
+        other = MyLabel.objects.create(user_id=self.owner, my_label_name='쿠키')
+        twin = ProductShare.objects.create(
+            label=other, recipient_email='sup@x.com', recipient_license_no='123',
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=twin)
+        self.client.post(
+            reverse('products:share_update_info', args=[self.share.share_id]),
+            {'company': 'B식품'})
+        twin.refresh_from_db()
+        self.assertEqual(twin.recipient_license_no, '123')
+        self.assertEqual(twin.recipient_company, 'B식품')
+
+    def test_손으로_비운_칸은_지워진다(self):
+        self.client.post(
+            reverse('products:share_update_info', args=[self.share.share_id]),
+            {'license_no': ''})
+        self.share.refresh_from_db()
+        self.assertIsNone(self.share.recipient_license_no)

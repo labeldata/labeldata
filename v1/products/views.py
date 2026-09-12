@@ -3570,10 +3570,19 @@ def share_update_info(request, share_id):
     role_code = request.POST.get('role', '').strip()
 
     # 이름·회사·인허가번호: 라벨 오너만 수정 가능
+    #
+    #  **보낸 칸만 손댄다.** 같은 사람을 그리는 카드가 7종인데 실린 data-*
+    #  가 종류마다 달랐다. 인허가번호는 전체 팔레트 카드에만 있어서, 드롭존
+    #  카드(가장 자연스러운 클릭 위치)에서 회사명만 고쳐 저장하면 그 번호가
+    #  빈 값으로 올라와 **그 사람의 모든 공유에서** 지워졌다. 카드 쪽도
+    #  고쳤지만, 한 칸이 빠지는 일은 또 생긴다.
+    _sent = {f: request.POST[f].strip()
+             for f in ('name', 'company', 'license_no') if f in request.POST}
     if is_label_owner:
-        share.recipient_name = name or None
-        share.recipient_company = company or None
-        share.recipient_license_no = license_no or None
+        _MAP = {'name': 'recipient_name', 'company': 'recipient_company',
+                'license_no': 'recipient_license_no'}
+        for f, v in _sent.items():
+            setattr(share, _MAP[f], v or None)
     share.save()
 
     # 동일 이메일의 다른 공유 레코드에도 이름·회사·인허가번호 전파 (오너만)
@@ -3584,11 +3593,9 @@ def share_update_info(request, share_id):
             recipient_email__iexact=share.recipient_email,
             share_mode='PRIVATE',
             active_yn=True
-        ).exclude(share_id=share.share_id).update(
-            recipient_name=name or None,
-            recipient_company=company or None,
-            recipient_license_no=license_no or None,
-        )
+        ).exclude(share_id=share.share_id).update(**{
+            _MAP[f]: (v or None) for f, v in _sent.items()
+        }) if _sent else None
     
     # 역할 업데이트
     if role_code and role_code in dict(SharePermission.ROLE_CHOICES):
