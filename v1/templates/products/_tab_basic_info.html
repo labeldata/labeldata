@@ -1010,7 +1010,6 @@ function updatePrdlstDcnm(force) {
 /* ── 식품유형 필터링 (전역 - Select2 블록에서도 호출 가능) ── */
 var _ftGroupSel      = document.getElementById('field-food-group');
 var _ftTypeSel       = document.getElementById('field-food-type');
-var _ftPrdlstDcnm    = document.getElementById('field-prdlst-dcnm');
 var _allFoodTypeOpts = [];
 
 if (_ftTypeSel) {
@@ -1044,8 +1043,21 @@ function filterFoodTypes(selectedGroup) {
         }
     });
     if (!found && currentVal) {
+        /* 새 대분류에 없는 소분류는 비운다 — 거기까지는 맞다.
+           그런데 예전에는 **식품유형(표시용)까지 통째로 지웠다.** 그 칸은
+           라벨에 인쇄되는 값이고 부기를 손으로 다듬는 자리다. 대분류만
+           확인하려고 잠깐 바꿨다가 되돌려도 적어 둔 문구가 사라졌고,
+           경고도 없었다.
+
+           표시용은 updatePrdlstDcnm 가 정한다 — 그 함수는 자동 생성된 값만
+           덮고 사람이 쓴 것은 그대로 둔다. 그 규칙을 여기서 건너뛰면 안 된다. */
         _ftTypeSel.value = '';
-        if (_ftPrdlstDcnm) _ftPrdlstDcnm.value = '';
+        _ftTypeSel.dispatchEvent(new Event('change', { bubbles: true }));
+        if (typeof updatePrdlstDcnm === 'function') updatePrdlstDcnm(false);
+        if (typeof showSnackbar === 'function') {
+            showSnackbar('바꾼 대분류에 «' + currentVal + '» 이(가) 없어 소분류를 비웠습니다. '
+                         + '소분류가 비면 그 항목의 규정 검사는 건너뜁니다.', 'warning');
+        }
     }
     // Select2 UI를 val()로 명시적으로 동기화 (단순 trigger('change.select2')만으로는
     // innerHTML 재구성 직후 Select2 내부 캐시가 빈 상태를 기억할 수 있음)
@@ -1259,7 +1271,7 @@ window.syncFoodGroupFromType = function (foodType) {
         });
 
         // hidden input 업데이트
-        if (hiddenInput) hiddenInput.value = Array.from(_productAllergens.keys()).join(',');
+        setFieldValue(hiddenInput, Array.from(_productAllergens.keys()).join(','));
 
         // 혼입 우려 버튼 상태 동기화 (원재료 사용 알레르기 비활성화)
         updateCrossContaminationUIProduct();
@@ -1439,11 +1451,33 @@ function toggleStorageBadge(btn) {
     if (!isActive) btn.classList.add('active');
     syncStorageMethod();
 }
+/*
+ * 값을 **코드로** 넣을 때 쓰는 자리.
+ *
+ * 변경 감지(product_detail.html 의 checkFormChanges)는 폼 요소의
+ * input/change 리스너로만 돈다. `el.value = …` 로만 바꾸면 그 리스너가
+ * 울리지 않으므로
+ *   · 이탈 경고가 안 뜨고 (저장 안 한 채 닫으면 값이 사라진다)
+ *   · 탭을 옮길 때 도는 자동 저장(flushBasicInfo)이 통째로 건너뛰어지고
+ *   · 검증 전에 값을 밀어 넣는 일도 건너뛴다 — 보관방법을 "냉동" 으로
+ *     골라 놓고 검증을 누르면 "보관방법이 비어 있습니다" 가 나왔다
+ *
+ * 같은 파일의 applyRawmtrlDisplay 가 이미 올바르게 하고 있었다. 네 곳만
+ * 그 규약에서 빠져 있었으므로 여기로 모은다.
+ */
+function setFieldValue(el, value) {
+    if (!el) return;
+    if (el.value === value) return;      // 같은 값이면 "변경됨" 으로 세지 않는다
+    el.value = value;
+    el.dispatchEvent(new Event('input',  { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+window.setFieldValue = setFieldValue;
+
 function syncStorageMethod() {
     var badges = document.querySelectorAll('.btn-storage-badge.active');
     var selected = Array.from(badges).map(function(b) { return b.dataset.storageValue; });
-    var txt = document.getElementById('field-storage-method');
-    if (txt) txt.value = selected.join('·');
+    setFieldValue(document.getElementById('field-storage-method'), selected.join('·'));
 }
 
 /* 
@@ -1573,11 +1607,26 @@ function copyVerifiedDataInline() {
         if (d[key]) {
             var el = document.getElementById(map[key]);
             if (el) {
-                el.value = d[key];
-                el.style.backgroundColor = '#e3f2fd';
+                setFieldValue(el, d[key]);
+                el.style.backgroundColor = 'var(--ez-info-bg)';
             }
         }
     });
+    /* 검증이 규칙을 고르는 키는 소분류(food_type)다. 도움말은 "식품유형이
+       채워집니다" 라고 하는데 실제로 채우던 것은 인쇄용(prdlst_dcnm)뿐이라,
+       사용자는 복사가 다 해 준 줄 알고 넘어갔다 — 소분류가 비면 그 검사는
+       통과한 것이 아니라 **안 본 것**이다.
+       사진 판독 경로는 이미 이 함수를 부른다. 두 입구를 맞춘다. */
+    if (d.food_type && typeof window.syncFoodGroupFromType === 'function') {
+        window.syncFoodGroupFromType(d.food_type);
+        var ftSel = document.getElementById('field-food-type');
+        if (ftSel) {
+            ftSel.style.backgroundColor = 'var(--ez-info-bg)';
+            /* Select2 로 감싸 놓아 select 의 change 만으로는 추적기가 못 본다 —
+               채운 뒤 직접 울린다. */
+            ftSel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
     var copyBtn = document.getElementById('copyProductDataBtn');
     if (copyBtn) copyBtn.style.display = 'none';
     var btn = document.getElementById('verifyReportNoBtn');
@@ -1787,8 +1836,10 @@ function syncCustomFieldsJson() {
         var v = row.querySelector('.cf-value').value.trim();
         if (n || v) data.push({ name: n, value: v });
     });
-    var jsonInput = document.getElementById('field-custom-fields-json');
-    if (jsonInput) jsonInput.value = JSON.stringify(data);
+    /* 이 hidden 은 폼 안에 있으므로 추적 대상이다. 이벤트만 울려 주면
+       [항목 추가] 로 새로 만든 줄(리스너가 안 붙은 줄)의 입력도 함께 잡힌다. */
+    setFieldValue(document.getElementById('field-custom-fields-json'),
+                  JSON.stringify(data));
 }
 
 /* ── 주의사항/기타표시사항 빠른 입력 버튼 기능 ─────────────────── */

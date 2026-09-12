@@ -8578,3 +8578,455 @@ class 대시보드_카드는_그_숫자의_목록으로_간다(TestCase):
         html = self.client.get('/home/').content.decode()
         self.assertIn('?filter=ALL&amp;starred=1', html)
         self.assertIn('?filter=MINE&amp;status=CONFIRMED', html)
+
+
+class 기본_정보_저장이_화면과_같은_말을_한다(TestCase):
+    """
+    제품 상세 · 기본 정보 탭의 저장 경로에 세 가지가 겹쳐 있었다.
+
+    1. **포장 형태를 고르고 저장해도 저장되지 않는다.** 화면의 payload 목록
+       (textFieldMap)에도, 뷰의 allowed_fields 에도 `package_form` 이 없다.
+       그 값을 저장하는 코드는 어느 화면도 안 쓰는 레거시 뷰 한 줄뿐이었다.
+       표시사항 검증은 계속 "포장 형태가 정해지지 않아…" 를 낸다.
+
+    2. **고칠 수는 있는데 저장은 못 하는 사람이 있다.** 화면은 역할 이름 표로
+       (UPLOADER@REQUESTING, APPROVER@PENDING 을 허용), 서버는 다른 표로
+       판정했다. 정작 모델은 "정보 수정"(`can_edit_label`) 플래그를 두고
+       EDITOR 에게만 기본 True 를 준다 — 세 벌 중 플래그가 맞다.
+       바로 옆 댓글 권한이 이미 그 원칙으로 고쳐져 있다(views.py 의 주석).
+
+    3. **실패 이유가 절대 안 나온다.** 뷰는 `error` 키로 주는데 화면은
+       `data.message` 를 읽어 언제나 폴백 문구만 떴다.
+    """
+
+    def setUp(self):
+        from v1.products.models import ProductMetadata
+
+        self.owner = User.objects.create_user(username='biowner', password='x')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='기본정보', delete_YN='N')
+        self.meta = ProductMetadata.objects.create(
+            label=self.label, product_code='BI-1',
+            status=ProductMetadata.Status.DRAFT)
+        self.client.force_login(self.owner)
+
+    def _save(self, payload):
+        return self.client.post(
+            reverse('products:product_update_fields', args=[self.label.my_label_id]),
+            data=json.dumps(payload), content_type='application/json')
+
+    # ── 1. 포장 형태 ────────────────────────────────────────────────────────
+    def test_포장_형태가_저장된다(self):
+        r = self._save({'package_form': 'box'})
+        self.assertEqual(r.status_code, 200)
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.package_form, 'box')
+
+    def test_화면이_포장_형태를_실제로_보낸다(self):
+        """뷰가 받아도 화면이 안 보내면 그대로다."""
+        html = self.client.get(
+            reverse('products:product_detail_new',
+                    args=[self.label.my_label_id])).content.decode()
+        i = html.index('const textFieldMap')
+        self.assertIn("'package_form'", html[i:i + 2000])
+
+    def test_안_보낸_칸은_덮지_않는다(self):
+        """package_form 을 allowed_fields 에 넣었다고 빈 값으로 밀면 안 된다."""
+        self.label.package_form = 'box'
+        self.label.save(update_fields=['package_form'])
+        self._save({'prdlst_nm': '이름만'})
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.package_form, 'box')
+
+    # ── 2. 화면과 서버가 같은 표를 본다 ──────────────────────────────────────
+    def _share(self, role, status=None, **flags):
+        from v1.products.models import (
+            ProductMetadata, ProductShare, SharePermission,
+        )
+
+        other = User.objects.create_user(
+            username='bi_' + role.lower(), password='x',
+            email=f'{role.lower()}@example.com')
+        share = ProductShare.objects.create(
+            label=self.label, created_by=self.owner, recipient_user=other,
+            recipient_email=other.email, active_yn=True)
+        perm = SharePermission.objects.create(share=share, role_code=role)
+        perm.apply_role_defaults(save=False)
+        for k, v in flags.items():
+            setattr(perm, k, v)
+        perm.save()
+        if status is not None:
+            self.meta.status = status
+            self.meta.save(update_fields=['status'])
+        return other
+
+    def _can_edit_on_screen(self, user):
+        self.client.force_login(user)
+        r = self.client.get(reverse('products:product_detail_new',
+                                    args=[self.label.my_label_id]))
+        return r.context['can_edit']
+
+    def _can_save(self, user):
+        self.client.force_login(user)
+        return self._save({'prdlst_nm': '고침'}).status_code == 200
+
+    def test_자료_제출자는_화면도_서버도_닫혀_있다(self):
+        from v1.products.models import ProductMetadata
+
+        u = self._share('UPLOADER', ProductMetadata.Status.REQUESTING)
+        self.assertFalse(self._can_edit_on_screen(u))
+        self.assertFalse(self._can_save(u))
+
+    def test_최종_승인자도_마찬가지다(self):
+        from v1.products.models import ProductMetadata
+
+        u = self._share('APPROVER', ProductMetadata.Status.PENDING)
+        self.assertFalse(self._can_edit_on_screen(u))
+        self.assertFalse(self._can_save(u))
+
+    def test_공동_작성자는_둘_다_열려_있다(self):
+        from v1.products.models import ProductMetadata
+
+        u = self._share('EDITOR', ProductMetadata.Status.REQUESTING)
+        self.assertTrue(self._can_edit_on_screen(u))
+        self.assertTrue(self._can_save(u))
+
+    def test_공동_작성자도_제출_뒤에는_둘_다_닫힌다(self):
+        from v1.products.models import ProductMetadata
+
+        u = self._share('EDITOR', ProductMetadata.Status.SUBMITTED)
+        self.assertFalse(self._can_edit_on_screen(u))
+        self.assertFalse(self._can_save(u))
+
+    def test_정보_수정을_켜_주면_그_사람도_고칠_수_있다(self):
+        """
+        판정 근거는 역할 이름이 아니라 '정보 수정' 플래그다 — 권한 설정에서
+        그 칸을 켰다면 화면과 서버가 함께 열려야 한다.
+        """
+        from v1.products.models import ProductMetadata
+
+        u = self._share('REVIEWER', ProductMetadata.Status.DRAFT,
+                        can_edit_label=True)
+        self.assertTrue(self._can_edit_on_screen(u))
+        self.assertTrue(self._can_save(u))
+
+    def test_주인은_어느_상태에서도_고친다(self):
+        from v1.products.models import ProductMetadata
+
+        self.meta.status = ProductMetadata.Status.CONFIRMED
+        self.meta.save(update_fields=['status'])
+        self.assertTrue(self._can_edit_on_screen(self.owner))
+        self.assertTrue(self._can_save(self.owner))
+
+    # ── 3. 실패 이유가 화면에 닿는다 ────────────────────────────────────────
+    def test_거절_이유를_화면이_읽는_키로_준다(self):
+        from v1.products.models import ProductMetadata
+
+        u = self._share('VIEWER', ProductMetadata.Status.DRAFT)
+        self.client.force_login(u)
+        r = self._save({'prdlst_nm': '고침'})
+        self.assertEqual(r.status_code, 403)
+        body = r.json()
+        self.assertTrue(body.get('message'), '화면은 data.message 를 읽는다')
+
+    def test_예외_원문을_사용자에게_보내지_않는다(self):
+        from unittest.mock import patch
+
+        with patch('v1.products.views.MyLabel.save',
+                   side_effect=RuntimeError('SELECT * FROM secret')):
+            r = self._save({'prdlst_nm': 'x'})
+        blob = r.content.decode()
+        self.assertNotIn('secret', blob)
+        self.assertNotIn('RuntimeError', blob)
+
+
+class 코드로_넣은_값도_변경으로_잡힌다(TestCase):
+    """
+    변경 감지(checkFormChanges)는 폼 요소의 input/change 리스너로만 돈다.
+    `el.value = …` 로만 바꾸는 네 곳은 그 리스너를 울리지 않아
+      · 이탈 경고가 안 뜨고 (저장 안 한 채 닫으면 값이 사라진다)
+      · 탭을 옮길 때 도는 자동 저장(flushBasicInfo)이 통째로 건너뛰어지고
+      · 검증 전에 값을 밀어 넣는 일도 건너뛴다
+
+    보관방법 배지로 "냉동" 을 고르고 바로 표시사항 검증을 누르면, 서버는
+    저장 전 값을 보고 "보관방법이 비어 있습니다" 라고 답했다. 화면에는 분명히
+    냉동이라고 적혀 있는데.
+
+    같은 파일의 applyRawmtrlDisplay 가 이미 올바르게 하고 있었다.
+    """
+
+    TAB = 'templates/products/_tab_basic_info.html'
+
+    def _tab(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / self.TAB).read_text(encoding='utf-8')
+
+    def _fn(self, text, name):
+        """함수 하나의 본문만 잘라 낸다 (다음 최상위 정의 전까지)."""
+        import re
+
+        m = re.search(r'\n(?:window\.)?(?:function\s+)?' + re.escape(name)
+                      + r'\s*(?:=\s*function\s*)?\(', text)
+        self.assertIsNotNone(m, name + ' 를 찾지 못했다')
+        rest = text[m.end():]
+        nxt = re.search(r'\n(?:function\s+\w|window\.\w+\s*=\s*function|/\* ──)', rest)
+        return rest[:nxt.start()] if nxt else rest
+
+    def test_공용_세터가_두_이벤트를_모두_울린다(self):
+        body = self._fn(self._tab(), 'setFieldValue')
+        self.assertIn("new Event('input'", body)
+        self.assertIn("new Event('change'", body)
+        self.assertIn('bubbles: true', body)
+
+    def test_보관방법_배지가_공용_세터를_쓴다(self):
+        self.assertIn('setFieldValue(', self._fn(self._tab(), 'syncStorageMethod'))
+
+    def test_맞춤항목_json_이_공용_세터를_쓴다(self):
+        self.assertIn('setFieldValue(', self._fn(self._tab(), 'syncCustomFieldsJson'))
+
+    def test_알레르기_hidden_이_공용_세터를_쓴다(self):
+        text = self._tab()
+        i = text.index('// hidden input 업데이트')
+        self.assertIn('setFieldValue(', text[i:i + 200])
+
+    def test_복사하기가_공용_세터를_쓴다(self):
+        body = self._fn(self._tab(), 'copyVerifiedDataInline')
+        self.assertIn('setFieldValue(', body)
+        self.assertNotIn('el.value = d[key]', body)
+
+    def test_같은_값이면_변경으로_세지_않는다(self):
+        """모든 재계산마다 '변경됨' 이 켜지면 이탈 경고가 늘 뜬다."""
+        self.assertIn('if (el.value === value) return;',
+                      self._fn(self._tab(), 'setFieldValue'))
+
+    def test_대분류를_바꿔도_인쇄_문구를_지우지_않는다(self):
+        """
+        식품유형(표시용)은 라벨에 인쇄되고 부기를 손으로 다듬는 칸이다.
+        대분류만 확인하려고 잠깐 바꿨다가 되돌려도 적어 둔 문구가 사라졌다.
+        표시용을 정하는 규칙은 updatePrdlstDcnm 한 곳뿐이어야 한다 —
+        그 함수는 자동 생성된 값만 덮고 사람이 쓴 것은 그대로 둔다.
+        """
+        text = self._tab()
+        self.assertNotIn('_ftPrdlstDcnm', text)
+        i = text.index("if (!found && currentVal)")
+        block = text[i:i + 1200]
+        self.assertIn('updatePrdlstDcnm(false)', block)
+        self.assertIn('showSnackbar', block)   # 말없이 비우지 않는다
+
+    def test_죽은_저장_바가_남아_있지_않다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        for rel in ('templates/products/product_detail.html',
+                    'static/css/products_detail.css'):
+            text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+            self.assertNotIn('id="floating-save-bar"', text)
+            self.assertNotIn('.floating-save-bar {', text)
+        detail = (Path(dj.BASE_DIR) / 'templates/products/product_detail.html'
+                  ).read_text(encoding='utf-8')
+        self.assertNotIn('function discardChanges(', detail)
+
+
+class 내_문구가_실패했을_때_말한다(TestCase):
+    """
+    담기·고치기·빼기 셋 다 `.catch(function () {})` 였고 success:false 도
+    안 봤다. 서버는 이유를 제대로 준다 — '문구가 비어 있습니다.'·'없는
+    문구입니다.'·'요청을 읽지 못했습니다.' — 전부 버려졌다.
+
+    더 나쁜 쪽은 목록 조회 실패다. draw() 를 못 불러 그 줄이 통째로 비고,
+    문구를 담는 [+ 내 문구 추가] 단추까지 사라져 복구할 길이 화면에 없었다.
+    """
+
+    JS = 'static/js/label/my_phrases.js'
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / self.JS).read_text(encoding='utf-8')
+
+    def test_조용히_삼키는_곳이_없다(self):
+        self.assertNotIn('.catch(function () {});', self._js())
+
+    def test_목록을_못_읽어도_담는_자리는_남는다(self):
+        js = self._js()
+        i = js.index('function load(')
+        block = js[i:js.index('function draw(')]
+        self.assertIn('draw(box, field, [], [], opts)', block)
+
+    def test_거절_이유를_그대로_보여_준다(self):
+        js = self._js()
+        i = js.index('function sendThenReload(')
+        block = js[i:i + 600]
+        self.assertIn('data.error', block)
+        self.assertIn('say(', block)
+
+
+class 번호검증_복사가_검증의_기준값까지_채운다(TestCase):
+    """
+    품목보고번호 도움말은 "[복사하기] 로 제품명·**식품유형**·원재료명·
+    제조사·용기포장재질이 한 번에 채워집니다" 라고 적어 두었다.
+
+    실제로 채워지던 「식품유형」은 인쇄용(prdlst_dcnm)뿐이고, **검증이 규칙을
+    고르는 키인 소분류(food_type)는 그대로 빈 칸**이었다. 소분류가 비면 그
+    검사는 통과한 것이 아니라 안 본 것이다 — 화면의 도움말도 그렇게 적어
+    놓았는데, 사용자는 복사가 다 해 준 줄 알고 넘어간다.
+    """
+
+    def setUp(self):
+        from v1.label.models import FoodItem
+        from v1.products.models import FoodType
+
+        self.user = User.objects.create_user(username='vfy', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='검증', delete_YN='N')
+        FoodType.objects.create(
+            food_group='과자류', food_type='과자', prdlst_dcnm='과자')
+        FoodItem.objects.create(
+            prdlst_report_no='19990101010101', prdlst_nm='초코과자',
+            prdlst_dcnm='과자', bssh_nm='○○식품', frmlc_mtrqlt='폴리프로필렌')
+
+    def test_응답이_소분류를_함께_준다(self):
+        r = self.client.post(
+            reverse('label:verify_report_no'),
+            data=json.dumps({'label_id': self.label.my_label_id,
+                             'prdlst_report_no': '19990101010101'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['product_data']['food_type'], '과자')
+
+    def test_짝을_못_찾으면_빈_문자열이다(self):
+        """없는 값을 억지로 넣으면 select 가 조용히 안 맞는 값을 갖는다."""
+        from v1.label.views import _food_type_for_dcnm
+
+        self.assertEqual(_food_type_for_dcnm('있을 리 없는 유형'), '')
+        self.assertEqual(_food_type_for_dcnm(''), '')
+        self.assertEqual(_food_type_for_dcnm(None), '')
+
+    def test_화면이_그_값을_쓴다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+                ).read_text(encoding='utf-8')
+        i = text.index('function copyVerifiedDataInline')
+        block = text[i:i + 2500]
+        self.assertIn('d.food_type', block)
+        self.assertIn('syncFoodGroupFromType', block)
+
+
+class 문서_타입_화면이_말한_일을_할_수_있다(TestCase):
+    """
+    이 화면은 대놓고 "문서 타입은 관리자 페이지에서 등록할 수 있습니다" 라고
+    안내하고 [관리자 페이지로 이동] 을 준다. 그 링크가 **404** 였다.
+    두 군데가 동시에 틀렸다 —
+      · admin 은 `/admin/` 이 아니라 `/lbdt-manage/` 에 있다(URL 난독화)
+      · DocumentType 은 `documents` 가 아니라 `products` 앱이다
+    다른 길은 화면에 없으니, 시키는 일을 할 방법이 없었다.
+
+    거기에 둘이 더 겹쳐 있었다.
+      · 뷰가 `active_yn=True` 로만 뽑는데 화면은 활성/비활성 배지를 그렸다 —
+        '비활성' 배지는 도달할 수 없고, 비활성을 찾으러 온 관리자는
+        "하나도 없다" 로 잘못 읽는다
+      · 이 화면으로 링크하는 곳이 저장소에 0곳이었다
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.staff = User.objects.create_user(
+            username='dtstaff', password='x', is_staff=True)
+        self.plain = User.objects.create_user(username='dtplain', password='x')
+        DocumentType.objects.create(
+            type_name='성적서', type_code='SPEC', active_yn=True, display_order=1)
+        DocumentType.objects.create(
+            type_name='옛 서식', type_code='OLD', active_yn=False, display_order=2)
+
+    def test_관리자_페이지_링크가_살아_있다(self):
+        self.client.force_login(self.staff)
+        r = self.client.get(reverse('products:document_type_list'))
+        self.assertEqual(r.status_code, 200)
+        url = r.context['admin_url']
+        self.assertNotIn('/admin/', url)
+        self.assertIn('documenttype', url)
+
+        # 진짜로 열리는지 본다. 이 저장소는 403 을 404 로 위장하므로
+        # (common.views.custom_403) 상태 코드만으로는 "주소가 없다" 와
+        # "권한이 없다" 를 구분할 수 없다 — 권한을 주고 200 을 확인한다.
+        from django.contrib.auth.models import Permission
+
+        self.staff.user_permissions.add(
+            Permission.objects.get(codename='view_documenttype'))
+        self.staff.is_superuser = True
+        self.staff.save()
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_주소를_손으로_적어_두지_않았다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        for rel in ('templates/products/documents/type_list.html',
+                    'products/views.py'):
+            text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+            self.assertNotIn('/admin/documents/documenttype', text)
+
+    def test_비활성_타입도_보인다(self):
+        self.client.force_login(self.staff)
+        html = self.client.get(
+            reverse('products:document_type_list')).content.decode()
+        self.assertIn('옛 서식', html)
+        self.assertIn('비활성', html)
+        self.assertIn('성적서', html)
+
+    def test_활성_수를_따로_말한다(self):
+        self.client.force_login(self.staff)
+        r = self.client.get(reverse('products:document_type_list'))
+        self.assertEqual(len(r.context['types']), 2)
+        self.assertEqual(r.context['active_count'], 1)
+
+    def test_staff_가_아니면_막힌다(self):
+        """
+        예전에는 **없는 주소로 리다이렉트**하면서 경고를 세션에 남겼다.
+        404 페이지는 messages 를 그리지 않으므로, 그 경고는 나중에 엉뚱한
+        화면에서 튀어나왔다.
+
+        지금은 그 자리에서 막는다. 이 저장소는 403 을 404 로 위장하므로
+        (common.views.custom_403) 화면에 보이는 것은 404 다 — 확인할 것은
+        **리다이렉트가 아니라는 것**과 **떠도는 경고를 남기지 않는다는 것**이다.
+        """
+        self.client.force_login(self.plain)
+        r = self.client.get(reverse('products:document_type_list'))
+        self.assertEqual(r.status_code, 404)
+        self.assertNotIn(r.status_code, (301, 302))
+
+        from django.contrib.messages import get_messages
+
+        self.assertEqual(list(get_messages(r.wsgi_request)), [])
+
+    def test_이_화면으로_들어올_길이_있다(self):
+        """만들어 두고 아무도 링크하지 않으면 고쳐도 아무도 만나지 못한다."""
+        self.client.force_login(self.staff)
+        html = self.client.get('/home/').content.decode()
+        self.assertIn(reverse('products:document_type_list'), html)
+
+    def test_일반_사용자에게는_그_링크가_안_보인다(self):
+        self.client.force_login(self.plain)
+        html = self.client.get('/home/').content.decode()
+        self.assertNotIn(reverse('products:document_type_list'), html)
+
+    def test_admin_으로만_리다이렉트하던_죽은_뷰를_걷어냈다(self):
+        from django.urls import NoReverseMatch
+
+        for name in ('products:document_type_create',
+                     'products:document_type_update'):
+            with self.assertRaises(NoReverseMatch):
+                reverse(name, args=[1])

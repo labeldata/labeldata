@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.contrib import messages
 from v1.common.media_access import (
@@ -910,22 +911,12 @@ def product_detail(request, product_id):
     can_comment = False
     can_delete_product = False
 
-    # ── 상태별 편집 가능 역할 ──
-    # DRAFT           : OWNER, EDITOR
-    # REQUESTING      : OWNER, EDITOR, UPLOADER
-    # SUBMITTED/REVIEW: OWNER, EDITOR, REVIEWER
-    # PENDING         : OWNER, EDITOR, APPROVER
-    # CONFIRMED       : OWNER, EDITOR (다른 역할은 수정 불가)
-
-    edit_roles_by_status = {
-        ProductMetadata.Status.DRAFT:      {'OWNER', 'EDITOR'},
-        ProductMetadata.Status.REQUESTING: {'OWNER', 'EDITOR', 'UPLOADER'},
-        ProductMetadata.Status.SUBMITTED:  {'OWNER', 'EDITOR'},
-        ProductMetadata.Status.REVIEW:     {'OWNER', 'EDITOR'},
-        ProductMetadata.Status.PENDING:    {'OWNER', 'EDITOR', 'APPROVER'},
-        ProductMetadata.Status.CONFIRMED:  {'OWNER', 'EDITOR'},
-    }
-    can_edit = user_role in edit_roles_by_status.get(status, set())
+    # 편집 권한은 can_edit_product_fields 한 곳에서 정한다 — 저장을 받는
+    # product_update_fields 도 같은 함수를 본다. 예전에는 규칙이 세 벌이라
+    # "고칠 수는 있는데 저장은 못 하는" 사람이 있었다.
+    _edit_perm = (SharePermission.objects.filter(share=shared_share).first()
+                  if shared_share and not is_owner else None)
+    can_edit = can_edit_product_fields(is_owner, _edit_perm, status)
 
     def _skip_aware_actions(cur_status):
         """담당자 미지정 단계를 건너뛰는 available_actions를 반환합니다."""
@@ -1583,6 +1574,20 @@ def product_update(request, product_id):
     return redirect('products:product_detail_new', product_id=label.my_label_id)
 
 
+def _save_failed(message, status=400):
+    """
+    기본 정보 저장 실패를 **화면이 읽는 키**로 돌려준다.
+
+    뷰는 `error` 로 넣고 화면은 `data.message` 를 읽었다. 그래서 만들어 둔
+    이유("수정 권한이 없습니다"·"현재 상태에서는…")가 한 번도 표시되지 않고,
+    사용자는 늘 "저장 중 오류가 발생했습니다" 한 문장만 봤다.
+
+    둘 다 넣는다 — 밖에서 `error` 를 보고 있을지 모른다.
+    """
+    return JsonResponse({'success': False, 'message': message, 'error': message},
+                        status=status)
+
+
 @login_required
 @require_POST
 def product_update_fields(request, product_id):
@@ -1605,23 +1610,23 @@ def product_update_fields(request, product_id):
         if shared_share:
             label = shared_share.label
         else:
-            return JsonResponse({'success': False, 'error': '제품을 찾을 수 없습니다'}, status=404)
+            return _save_failed('제품을 찾을 수 없습니다.', 404)
 
     metadata = ProductMetadata.objects.filter(label=label).first()
     user_role = 'OWNER' if is_owner else 'VIEWER'
+    share_permission = None
     if shared_share and not is_owner:
         share_permission = SharePermission.objects.filter(share=shared_share).first()
         if share_permission:
             user_role = share_permission.role_code
 
-    if user_role not in ['OWNER', 'EDITOR']:
-        return JsonResponse({'success': False, 'error': '수정 권한이 없습니다.'}, status=403)
-
-    if user_role == 'EDITOR' and metadata and metadata.status not in [
-        ProductMetadata.Status.DRAFT,
-        ProductMetadata.Status.REQUESTING,
-    ]:
-        return JsonResponse({'success': False, 'error': '현재 상태에서는 수정할 수 없습니다.'}, status=403)
+    _status = metadata.status if metadata else ProductMetadata.Status.DRAFT
+    if not can_edit_product_fields(is_owner, share_permission, _status):
+        if share_permission and share_permission.can_edit_label:
+            return _save_failed('제출한 뒤에는 수정할 수 없습니다. '
+                                '작성 중으로 되돌린 뒤 다시 시도해 주세요.', 403)
+        return _save_failed('이 제품의 정보를 수정할 권한이 없습니다. '
+                            '제품 주인에게 "정보 수정" 권한을 요청하세요.', 403)
     
     try:
         data = json.loads(request.body)
@@ -1635,6 +1640,11 @@ def product_update_fields(request, product_id):
             'food_group', 'food_type', 'processing_method', 'processing_condition',
             'preservation_type', 'distributor_address', 'repacker_address', 'importer_address',
             'allergens',
+            # 화면에 고르는 자리가 있는데 여기 없어서, 고르고 저장해도 값이
+            # 남지 않았다. 그 값을 저장하는 코드는 어느 화면도 안 쓰는
+            # 레거시 뷰(product_update) 한 줄뿐이었다. 표시사항 검증은 계속
+            # "포장 형태가 정해지지 않아…" 를 냈다.
+            'package_form',
         ]
         
         # 변경된 필드 추적
@@ -1757,9 +1767,13 @@ def product_update_fields(request, product_id):
         })
 
     except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return _save_failed('요청을 읽지 못했습니다. 새로고침한 뒤 다시 저장해 주세요.', 400)
+    except Exception:
+        # 예외 원문을 사용자에게 보내지 않는다 — 키를 message 로 고친 순간
+        # 그대로 화면에 뜬다. 사람이 읽을 말은 여기, 원인은 로그로.
+        logger.exception('[기본 정보 저장 실패] label=%s user=%s',
+                         label.my_label_id, request.user.pk)
+        return _save_failed('저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 500)
 
 
 @login_required
@@ -3258,6 +3272,42 @@ def use_as_ingredient(request, receipt_id):
 # 것이 없던 그 증상이 그대로였다.
 #
 # 소유자·공동편집자는 단계 건너뛰기까지 걸려 있어 여기 담지 않는다.
+# 기본 정보를 **고칠 수 있는 상태** — 이 창 밖에서는 주인만 손댄다.
+#
+# 제출한 뒤에도 공동 작성자가 계속 고칠 수 있으면, 검토자가 본 것과 승인자가
+# 보는 것이 달라진다. 주인은 예외로 둔다 — 자기 제품을 되돌릴 길이 있어야 한다.
+EDITABLE_STATUSES = (
+    'DRAFT',
+    'REQUESTING',
+)
+
+
+def can_edit_product_fields(is_owner, permission, status):
+    """
+    제품 기본 정보를 고칠 수 있는가. **화면과 서버가 같이 본다.**
+
+    예전에는 규칙이 세 벌이었다.
+      · 화면(GET)은 역할 이름 표 — UPLOADER@REQUESTING, APPROVER@PENDING 허용
+      · 서버(POST)는 다른 표 — OWNER/EDITOR 만, EDITOR 는 DRAFT·REQUESTING 만
+      · 그 위의 주석은 또 달랐다 — SUBMITTED/REVIEW 에 REVIEWER 를 넣어 두었다
+
+    그래서 자료 제출자·최종 승인자·제출 뒤의 공동 작성자는 **입력칸이 전부
+    살아 있고 [저장] 도 눌리는데** 누르면 403 이었다. 다 고친 뒤에 막힌다.
+
+    셋 중 무엇이 맞는가는 모델이 답한다 — `SharePermission.can_edit_label`
+    ("정보 수정")은 EDITOR 에게만 기본 True 다. 역할 이름이 아니라 그 플래그가
+    권한이다. 바로 옆 댓글 권한이 이미 같은 이유로 플래그로 옮겨졌다.
+
+    플래그로 보면 권한 설정에서 "정보 수정" 을 켜 준 사람은 역할과 무관하게
+    열린다 — 그 체크박스가 약속하는 그대로다.
+    """
+    if is_owner:
+        return True
+    if not (permission and permission.can_edit_label):
+        return False
+    return status in EDITABLE_STATUSES
+
+
 ROLE_STATUS_ACTIONS = {
     'UPLOADER': {
         ProductMetadata.Status.REQUESTING: ['submitted'],
@@ -3815,40 +3865,37 @@ def detect_document_type(filename):
 
 @login_required
 def document_type_list(request):
-    """문서 타입 목록 (관리자 전용 - Admin 사용 권장)"""
+    """
+    문서 타입 목록 — **읽기 전용**. 등록·수정은 Django Admin 에서 한다.
+
+    관리자 페이지 주소를 세 곳에 손으로 박아 두었는데 **둘 다 틀렸다.**
+      · admin 은 `/admin/` 이 아니라 `/lbdt-manage/` 에 걸려 있다(URL 난독화)
+      · DocumentType 은 `documents` 가 아니라 `products` 앱이다
+        (apps.py 가 label='products' 로 고정한다)
+    그래서 이 화면이 "관리자 페이지에서 등록하세요" 라고 안내하며 내놓는
+    유일한 출구가 404 였다. 시키는 일을 할 방법이 화면에 없었다.
+    지금은 reverse 로 만든다 — 주소가 바뀌어도 따라간다.
+
+    비-staff 는 여기까지 오지 않는다(사이드바 링크가 staff 에게만 보인다).
+    직접 주소를 친 경우에도 404 로 떨어뜨리던 리다이렉트 대신 403 을 준다 —
+    예전에는 없는 주소로 보내면서 경고 메시지를 세션에 남겨, 그 경고가
+    나중에 엉뚱한 화면에서 튀어나왔다.
+    """
     if not request.user.is_staff:
-        messages.warning(request, '문서 타입은 관리자만 조회할 수 있습니다. Django Admin을 이용해주세요.')
-        return redirect('/admin/documents/documenttype/')
-    
-    types = DocumentType.objects.filter(active_yn=True).order_by('display_order', 'type_name')
-    
-    context = {
+        raise PermissionDenied('문서 타입은 관리자만 조회할 수 있습니다.')
+
+    # 비활성까지 모두 보여 준다. 예전에는 active_yn=True 로만 뽑아 놓고
+    # 화면에는 활성/비활성 배지를 그렸다 — '비활성' 배지는 도달할 수 없었고,
+    # 비활성 타입을 찾으러 온 관리자는 "하나도 없다" 로 잘못 읽었다.
+    types = DocumentType.objects.all().order_by(
+        '-active_yn', 'display_order', 'type_name')
+
+    return render(request, 'products/documents/type_list.html', {
         'types': types,
-    }
-    
-    return render(request, 'products/documents/type_list.html', context)
-
-
-@login_required
-def document_type_create(request):
-    """문서 타입 생성 (Django Admin 사용 권장)"""
-    if not request.user.is_staff:
-        messages.error(request, '권한이 없습니다.')
-        return redirect('products:document_type_list')
-    
-    messages.info(request, 'Django Admin에서 문서 타입을 관리해주세요.')
-    return redirect('/admin/documents/documenttype/add/')
-
-
-@login_required
-def document_type_update(request, type_id):
-    """문서 타입 수정 (Django Admin 사용 권장)"""
-    if not request.user.is_staff:
-        messages.error(request, '권한이 없습니다.')
-        return redirect('products:document_type_list')
-    
-    messages.info(request, 'Django Admin에서 문서 타입을 수정해주세요.')
-    return redirect(f'/admin/documents/documenttype/{type_id}/change/')
+        'active_count': sum(1 for t in types if t.active_yn),
+        # 화면이 "관리자 페이지로" 를 내놓는다. 주소를 손으로 적지 않는다.
+        'admin_url': reverse('admin:products_documenttype_changelist'),
+    })
 
 
 @login_required

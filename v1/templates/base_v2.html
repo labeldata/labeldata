@@ -141,6 +141,14 @@
                 <a href="{% url 'label:ocr_lab' %}" class="nav-link {% if request.resolver_match.url_name == 'ocr_lab' %}active{% endif %}">
                     <i class="bi bi-braces-asterisk" style="flex-shrink:0;"></i><span class="nav-label">판독 고도화</span>
                 </a>
+                {% comment %}
+                  문서 타입 관리는 만들어 두고 **어디서도 링크하지 않았다.**
+                  주소를 직접 쳐야만 닿았으니, 그 화면의 고침을 아무도 만나지
+                  못했다. 관리자 도구는 여기 모인다.
+                {% endcomment %}
+                <a href="{% url 'products:document_type_list' %}" class="nav-link {% if request.resolver_match.url_name == 'document_type_list' %}active{% endif %}">
+                    <i class="bi bi-file-earmark-text" style="flex-shrink:0;"></i><span class="nav-label">문서 타입</span>
+                </a>
                 {% endif %}
             </div>
 

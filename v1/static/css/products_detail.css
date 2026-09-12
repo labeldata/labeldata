@@ -654,8 +654,6 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 #versionHistoryModal .table { font-size: 13px; }
 
 /* 플로팅 저장 바 */
-.floating-save-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--google-border); padding: 16px 24px; box-shadow: 0 -2px 8px 0 rgba(60,64,67,0.15); z-index: 1000; display: none; animation: slideUp 0.3s ease-out; }
-.floating-save-bar.show { display: flex; justify-content: center; align-items: center; gap: 16px; }
 
 @keyframes slideUp {
     from { transform: translateY(100%); opacity: 0; }

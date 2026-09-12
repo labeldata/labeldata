@@ -69,8 +69,6 @@ urlpatterns = [
     
     # ==================== 문서 관리 (Documents) ====================
     path('documents/types/', views.document_type_list, name='document_type_list'),
-    path('documents/types/create/', views.document_type_create, name='document_type_create'),
-    path('documents/types/<int:type_id>/update/', views.document_type_update, name='document_type_update'),
     
     path('documents/api/types/', views.document_types_api, name='document_types_api'),
     path('documents/api/upload/<int:label_id>/', views.document_upload_api, name='document_upload_api'),

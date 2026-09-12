@@ -3497,6 +3497,28 @@ def linked_ingredient_count(request, label_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+def _food_type_for_dcnm(prdlst_dcnm):
+    """
+    식품안전나라의 식품유형 표기(prdlst_dcnm)로 우리 쪽 **소분류**를 찾는다.
+
+    FoodType 표가 둘을 함께 들고 있으므로 서버에서 맞춘다. 화면에서 문자열로
+    맞춰 보게 두면 표기가 조금만 달라도 조용히 빈칸으로 남는다.
+    """
+    name = (prdlst_dcnm or '').strip()
+    if not name:
+        return ''
+    row = (FoodType.objects
+           .filter(prdlst_dcnm=name)
+           .values_list('food_type', flat=True)
+           .first())
+    if row:
+        return row
+    # 표기가 그대로 소분류인 경우도 있다
+    if FoodType.objects.filter(food_type=name).exists():
+        return name
+    return ''
+
+
 @csrf_exempt
 @require_POST
 # 공개 데모가 부르고 csrf_exempt 다. 품목보고번호를 훑는 데 쓰이지 않게
@@ -3604,7 +3626,13 @@ def verify_report_no(request):
                 'prdlst_dcnm': food_item.prdlst_dcnm or '',
                 'packaging_material': food_item.frmlc_mtrqlt or '',
                 'manufacturer': food_item.bssh_nm or '',
-                'rawmtrl_nm': rawmtrl_nm
+                'rawmtrl_nm': rawmtrl_nm,
+                # 검증이 규칙을 고르는 키는 **소분류(food_type)** 다.
+                # 예전에는 인쇄용(prdlst_dcnm)만 보냈고, 화면은 도움말에
+                # "식품유형이 채워집니다" 라고 적어 두었다. 사용자는 복사가
+                # 다 해 준 줄 알고 넘어가는데, 소분류가 비면 그 검사는
+                # 통과한 것이 아니라 안 본 것이다.
+                'food_type': _food_type_for_dcnm(food_item.prdlst_dcnm),
             }
         })
     else:

@@ -26,13 +26,37 @@
     return hit ? hit.split('=')[1] : '';
   }
 
+  /*
+   * 서버가 거절해도 화면이 아무 말도 안 했다.
+   *
+   * 담기·고치기·빼기 셋 다 `.then(d => { if (d.success) load(...) })` 에
+   * `.catch(function () {})` 였다. 서버는 이유를 제대로 준다 —
+   * '문구가 비어 있습니다.'·'없는 문구입니다.'·'요청을 읽지 못했습니다.' —
+   * 전부 버려졌다. 사용자는 클릭이 안 먹은 줄 알고 몇 번 더 누른다.
+   */
+  function say(msg, kind) {
+    if (typeof window.showSnackbar === 'function') window.showSnackbar(msg, kind || 'error');
+  }
+
   function send(url, body) {
     return fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
       body: JSON.stringify(body || {})
-    }).then(function (r) { return r.json(); });
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    });
+  }
+
+  /** 보내고, 성공하면 다시 그리고, 실패하면 이유를 말한다. */
+  function sendThenReload(url, body, field, box, fallback) {
+    return send(url, body)
+      .then(function (data) {
+        if (data && data.success) { load(field, box); return; }
+        say((data && data.error) || fallback);
+      })
+      .catch(function () { say('서버에 연결할 수 없습니다.'); });
   }
 
   /* 문구함은 칸 이름으로 나뉜다. 주의사항 문구가 기타표시사항 줄에 뜨면
@@ -52,7 +76,13 @@
         draw(box, field, (data && (data.phrases || data.data)) || [],
              (data && data.defaults) || [], opts);
       })
-      .catch(function () {});
+      .catch(function () {
+        /* 목록을 못 읽으면 draw 를 못 불러 이 줄이 통째로 빈다 — 그러면
+           문구를 담는 [+ 내 문구 추가] 단추까지 사라져 복구할 길이 화면에
+           없어진다. 빈 목록으로라도 그려서 담는 자리는 남긴다. */
+        draw(box, field, [], [], opts);
+        say('내 문구를 불러오지 못했습니다. 새로고침해 주세요.', 'warning');
+      });
   }
 
   function draw(box, field, list, defaults, opts) {
@@ -141,10 +171,10 @@
     if (!text || !text.trim()) return;
     var name = window.prompt('버튼에 적을 짧은 이름 (비우면 앞부분을 씁니다)',
                              text.trim().slice(0, 12)) || '';
-    send(API + 'save/', { content: text.trim(), name: name.trim(),
-                          category: CATEGORY[field] || 'additional' })
-      .then(function (data) { if (data && data.success) load(field, box); })
-      .catch(function () {});
+    sendThenReload(API + 'save/',
+                   { content: text.trim(), name: name.trim(),
+                     category: CATEGORY[field] || 'additional' },
+                   field, box, '문구를 담지 못했습니다.');
   }
 
   function rename(field, phrase, box) {
@@ -153,17 +183,16 @@
     if (!text.trim()) return;
     var name = window.prompt('버튼에 적을 짧은 이름', phrase.name || '');
     if (name === null) return;
-    send(API + phrase.id + '/update/', { content: text.trim(), name: name.trim() })
-      .then(function (data) { if (data && data.success) load(field, box); })
-      .catch(function () {});
+    sendThenReload(API + phrase.id + '/update/',
+                   { content: text.trim(), name: name.trim() },
+                   field, box, '문구를 고치지 못했습니다.');
   }
 
   function remove(field, phrase, box) {
     if (!window.confirm('"' + (phrase.name || '') + '" 을(를) 문구함에서 뺍니다.\n'
                         + '이미 칸에 넣어 둔 글자는 그대로 남습니다.')) return;
-    send(API + phrase.id + '/delete/', {})
-      .then(function (data) { if (data && data.success) load(field, box); })
-      .catch(function () {});
+    sendThenReload(API + phrase.id + '/delete/', {},
+                   field, box, '문구를 빼지 못했습니다.');
   }
 
   document.addEventListener('DOMContentLoaded', function () {
