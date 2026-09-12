@@ -72,12 +72,31 @@ class Command(BaseCommand):
             if no:
                 by_no[no].append(r)
 
+        # ⓪ 그 번호가 **식약처에 실제로 있는가.**
+        #
+        # 처음에는 이걸 안 쟀다. 그런데 갈린 표본을 열어 보니 한 번호 아래에
+        # 밀가루·설탕·혼합간장이 함께 있었다. "같은 품목을 회사마다 다르게
+        # 적었다" 가 아니라 **그 번호가 애초에 품목보고번호가 아니었다**는
+        # 뜻이다. 그걸 가르지 않으면 갈림 비율이 무엇을 말하는지 알 수 없다.
+        from v1.label.models import FoodItem
+
+        nums = list(by_no)
+        known = set()
+        for i in range(0, len(nums), 500):
+            known.update(FoodItem.objects
+                         .filter(prdlst_report_no__in=nums[i:i + 500])
+                         .values_list('prdlst_report_no', flat=True))
+
         total_no = len(by_no)
         shared = {no: items for no, items in by_no.items()
                   if len({i['user_id'] for i in items}) >= opts['min_owners']}
 
         w('번호가 있는 원료: %s건 · 고유 번호 %s개'
           % (f'{sum(len(v) for v in by_no.values()):,}', f'{total_no:,}'))
+        w('식약처에 있는 번호: %s개 (%.1f%%) · **없는 번호 %s개 (%.1f%%)**'
+          % (f'{len(known):,}', len(known) * 100.0 / total_no if total_no else 0,
+             f'{total_no - len(known):,}',
+             (total_no - len(known)) * 100.0 / total_no if total_no else 0))
         w('두 곳 이상이 등록한 번호: %s개 (%.1f%%)'
           % (f'{len(shared):,}', len(shared) * 100.0 / total_no if total_no else 0))
 
@@ -102,10 +121,13 @@ class Command(BaseCommand):
                     differ += 1
                     if len(samples[label]) < opts['show']:
                         samples[label].append((no, sorted(vals)[:3]))
-            known = agree + differ
+            # 이름을 겹치지 않게 쓴다. known 은 위에서 '식약처에 있는 번호'
+            # 집합으로 쓰고 있다 — 여기서 덮으면 아래 표본 표시가 조용히
+            # 터진다(실제로 그랬다).
+            counted = agree + differ
             w('  %-14s 같음 %4d · 갈림 %4d · 아무도 안 적음 %4d   → 갈림 %.1f%%'
               % (label, agree, differ, empty,
-                 differ * 100.0 / known if known else 0.0))
+                 differ * 100.0 / counted if counted else 0.0))
 
         w('')
         w('[갈린 표본 — 이것을 보고 2단계를 할지 정한다]')
@@ -114,7 +136,20 @@ class Command(BaseCommand):
                 continue
             w('  · %s' % label)
             for no, vals in samples[label][:opts['show']]:
-                w('      %-16s %s' % (no, ' | '.join(v[:28] for v in vals)))
+                w('      %-16s %-6s %s'
+                  % (no, '' if no in known else '[없는번호]',
+                     ' | '.join(v[:28] for v in vals)))
+
+        # 갈림이 '없는 번호' 에 몰려 있으면, 그것은 회사마다 다르게 적은 것이
+        # 아니라 번호를 잘못 넣은 것이다. 둘은 전혀 다른 문제이고 고치는 법도
+        # 다르다 — 앞은 공용 풀, 뒤는 번호 검증이다.
+        bad_shared = [no for no in shared if no not in known]
+        if bad_shared:
+            w('')
+            w('  겹친 번호 %d개 중 **식약처에 없는 것이 %d개**다.'
+              % (len(shared), len(bad_shared)))
+            w('  그쪽의 갈림은 "회사마다 다르게 적었다" 가 아니라 '
+              '"번호를 잘못 넣었다" 이다.')
 
         w('')
         w('  읽기만 했다. 아무것도 저장하지 않았다.')

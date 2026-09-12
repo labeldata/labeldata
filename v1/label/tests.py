@@ -17035,3 +17035,69 @@ class 공용_원료_풀은_만들기_전에_먼저_잰다(TestCase):
         block = src[src.index('COMPARE = ('):src.index(')', src.index('COMPARE = ('))]
         for forbidden in ('ratio', '배합', '단가', 'price'):
             self.assertNotIn(forbidden, block)
+
+
+class 갈린_까닭을_가르지_않으면_숫자가_거짓말을_한다(TestCase):
+    """
+    겹친 번호의 갈림 비율만 보면 "회사마다 다르게 적는구나" 로 읽힌다. 그런데
+    운영에서 갈린 표본을 열어 보니 **한 번호 아래에 밀가루·설탕·혼합간장**이
+    함께 있었고, 그 번호들은 **식약처에 아예 없었다.**
+
+    같은 품목을 다르게 적은 것이 아니라 **그 번호가 애초에 품목보고번호가
+    아니었던 것**이다. 둘은 전혀 다른 문제이고 고치는 법도 다르다 — 앞은
+    공용 풀, 뒤는 번호 검증이다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import FoodItem
+
+        self.a = User.objects.create_user(username='a@example.com', password='x')
+        self.b = User.objects.create_user(username='b@example.com', password='x')
+        FoodItem.objects.create(prdlst_report_no='19990001', prdlst_nm='밀가루',
+                                prdlst_dcnm='밀가루', bssh_nm='(주)제분')
+
+    def _ing(self, user, no, **kw):
+        from v1.label.models import MyIngredient
+
+        kw.setdefault('prdlst_nm', '원료')
+        return MyIngredient.objects.create(
+            user_id=user, prdlst_report_no=no, delete_YN='N', **kw)
+
+    def _run(self, **opts):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('measure_ingredient_pool', stdout=out, **opts)
+        return out.getvalue()
+
+    def test_식약처에_있는_번호와_없는_번호를_가른다(self):
+        self._ing(self.a, '19990001')      # 있는 번호
+        self._ing(self.a, '12345678')      # 없는 번호
+        out = self._run()
+        self.assertIn('식약처에 있는 번호: 1개', out)
+        self.assertIn('없는 번호 1개', out)
+
+    def test_갈린_표본에_없는_번호임을_표시한다(self):
+        self._ing(self.a, '12345678', prdlst_dcnm='밀가루')
+        self._ing(self.b, '12345678', prdlst_dcnm='혼합간장')
+        out = self._run()
+        self.assertIn('[없는번호]', out)
+
+    def test_갈림이_없는_번호에_몰리면_그렇게_말한다(self):
+        """
+        숫자만 내놓고 읽는 사람에게 해석을 떠넘기면, 다음 사람이 같은 착각을
+        되풀이한다.
+        """
+        self._ing(self.a, '12345678', prdlst_dcnm='밀가루')
+        self._ing(self.b, '12345678', prdlst_dcnm='혼합간장')
+        out = self._run()
+        self.assertIn('번호를 잘못 넣었다', out)
+
+    def test_있는_번호끼리_갈리면_그런_말은_안_한다(self):
+        self._ing(self.a, '19990001', prdlst_dcnm='밀가루')
+        self._ing(self.b, '19990001', prdlst_dcnm='밀가루')
+        self.assertNotIn('번호를 잘못 넣었다', self._run())
