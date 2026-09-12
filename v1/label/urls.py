@@ -66,6 +66,9 @@ urlpatterns = [
     # 내 원료의 영양성분 — 후보 조회와 확정
     path('my-ingredient/<int:ingredient_id>/nutrition/',
          views.my_ingredient_nutrition_api, name='my_ingredient_nutrition'),
+    # 같은 품목보고번호를 쓰는 다른 곳이 같게 적었는가 (개수만)
+    path('my-ingredient/<int:ingredient_id>/consensus/',
+         products_views.ingredient_consensus, name='ingredient_consensus'),
     # 영양성분 성적서를 올려 읽는다. **파일은 남기지 않는다** — 원료에는
     # 서류를 붙일 곳이 없고, 제품 문서함에 넣으면 그 원료를 쓰는 다른
     # 제품에서는 안 보인다.

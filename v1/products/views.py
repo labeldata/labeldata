@@ -7346,3 +7346,31 @@ def ingredient_spec_nutrition_save(request, ingredient_id):
 
     logger.info('성적서 -> 원료 영양성분: ingredient=%s', ingredient.pk)
     return JsonResponse({'success': True, 'grade': 'A'})
+
+
+@login_required
+@require_GET
+def ingredient_consensus(request, ingredient_id):
+    """
+    같은 품목보고번호를 쓰는 다른 곳이 같게 적었는가. **개수만 돌려준다.**
+
+    값을 보여 주면 사람은 그걸 베낀다. 그런데 다수가 틀렸을 수 있고, 그 순간
+    우리 책임이 된다 — 알레르기는 틀리면 사람이 다친다. 개수만 말하면 성격이
+    달라진다: "다시 확인해 보라" 는 신호일 뿐, 무엇으로 고치라고 하지 않는다.
+
+    **응답에 값도, 누가 적었는지도 담지 않는다.** 담기지 않으면 샐 수도 없다.
+    """
+    from v1.label.models import MyIngredient
+    from v1.label.services import ingredient_consensus as consensus
+
+    ingredient = get_object_or_404(
+        MyIngredient, pk=ingredient_id, user_id=request.user)   # 남의 원료면 404
+
+    try:
+        got = consensus.for_ingredient(ingredient)
+    except Exception:
+        # 곁들이 때문에 원료 화면을 잃을 이유가 없다
+        logger.exception('원료 합치 조회 실패 (ingredient=%s)', ingredient.pk)
+        got = None
+
+    return JsonResponse({'success': True, 'consensus': got})

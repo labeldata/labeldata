@@ -611,6 +611,25 @@
                         </td>
                     </tr>
                     {% endif %}
+                    {% if mode == 'edit' and ingredient.prdlst_report_no %}
+                    {% comment %}
+                      같은 품목보고번호를 쓰는 다른 곳이 같게 적었는가.
+
+                      **값은 보여 주지 않는다.** "3곳이 '우유, 대두' 로 적었다"
+                      고 값을 내보이면 사람은 그걸 베끼는데, 그 3곳이 틀렸을 수
+                      있고 그 순간 우리 책임이 된다 — 알레르기는 틀리면 사람이
+                      다친다. 다수인지 아닌지만 말하면 "다시 확인해 보라" 는
+                      신호가 된다.
+                    {% endcomment %}
+                    <tr id="ingConsensusRow" style="display:none;">
+                        <th>다른 사용자<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>같은 품목보고번호를 쓰는 곳</b>같은 번호는 법적으로 같은 품목이라, 표시명·알레르기·GMO 는 어느 회사가 적어도 같아야 합니다.<br><strong>다수가 옳다는 뜻은 아닙니다.</strong> 다르게 적은 곳이 있으면 한 번 더 확인해 보시라는 신호입니다.<em>다른 회사가 적은 값과 상호명은 보여 드리지 않습니다.</em></span></span>
+                        </th>
+                        <td colspan="3">
+                            <div id="ingConsensus"
+                                 data-url="{% url 'label:ingredient_consensus' ingredient_id=ingredient.my_ingredient_id %}"></div>
+                        </td>
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
             </fieldset>
@@ -641,6 +660,78 @@
       btn.textContent = open ? '접기' : '고르기';
     });
   });
+})();
+</script>
+
+<script>
+/* ── 다른 사용자 다수는 이렇게 했다 ────────────────────────────────────
+ *
+ * 같은 품목보고번호는 법적으로 같은 품목이다. 그런데 지금은 같은 조사를 회사
+ * 수만큼 반복하면서 서로 다르게 적고 있다.
+ *
+ * **값은 받지도 보여 주지도 않는다.** 서버가 개수만 보낸다 — 응답에 담기지
+ * 않으면 샐 수도 없다. 다수가 옳다는 뜻도 아니다. 다르게 적은 곳이 있으면
+ * "한 번 더 확인해 보라" 는 신호일 뿐이다.
+ * ───────────────────────────────────────────────────────────────── */
+(function () {
+  function esc(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var box = document.getElementById('ingConsensus');
+  if (!box || !box.dataset.url) return;
+  var row = document.getElementById('ingConsensusRow');
+
+  fetch(box.dataset.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var c = d && d.consensus;
+      /* 견줄 곳이 없으면 **아예 안 보인다.** "다른 곳이 없습니다" 는
+         알려 줘 봐야 할 일이 없는 말이고, 줄만 늘린다. */
+      if (!c || !c.fields || !c.fields.length) return;
+
+      var html = '<div class="ing-cons-head">같은 품목보고번호를 쓰는 곳이 '
+        + '<b>' + c.owners + '곳</b>입니다.</div><div class="ing-cons-list">';
+
+      c.fields.forEach(function (f) {
+        var differ = f.differ > 0;
+        html += '<div class="ing-cons' + (differ ? ' ing-cons-warn' : '') + '">'
+          + '<span class="ing-cons-name">' + f.label + '</span>'
+          + '<span class="ing-cons-txt">'
+          + (differ
+              ? (f.agreed
+                  ? '다수는 나와 같게 적었습니다 (' + f.same + ' / ' + f.others + '곳)'
+                  : '<b>다수는 다르게 적었습니다</b> (' + f.differ + ' / ' + f.others + '곳)')
+              : '다른 ' + f.others + '곳 모두 같게 적었습니다')
+          + '</span></div>';
+
+        /* **다를 때만 값을 보인다.**
+         *
+         * 개수만으로는 판단할 수가 없다 — 무엇이 다른지 모르면 고칠지 말지를
+         * 정할 수 없고, 결국 규격서를 처음부터 다시 찾아야 한다. 그러면 이
+         * 기능이 없는 것과 같다.
+         *
+         * 여기 값들은 **라벨에 인쇄되는 공개 정보**다. 제품을 사면 누구나
+         * 읽는다. 다만 **누가 적었는지는 보여 주지 않는다** — 그건 인쇄되지
+         * 않는다. */
+        (f.others_values || []).forEach(function (v) {
+          html += '<div class="ing-cons-alt">'
+            + '<span class="ing-cons-alt-n">' + v.owners + '곳</span>'
+            + '<span class="ing-cons-alt-v">' + esc(v.value) + '</span></div>';
+        });
+      });
+
+      html += '</div>';
+      if (c.fields.some(function (f) { return f.differ > 0; })) {
+        html += '<div class="ing-cons-note">다수가 옳다는 뜻은 아닙니다. '
+              + '규격서를 한 번 더 확인해 보세요.</div>';
+      }
+      box.innerHTML = html;
+      if (row) row.style.display = '';
+    })
+    .catch(function () { /* 곁들이다. 실패해도 화면은 그대로 */ });
 })();
 </script>
 

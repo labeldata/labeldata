@@ -1838,3 +1838,32 @@ html.v2-max .v2-max-exit { display: flex; }
 .cmp-where-from {
   margin-top: 4px; font-size: 11px; color: var(--ez-gray-600, #80868b);
 }
+
+/* ── 같은 번호를 쓰는 다른 곳 ────────────────────────────────────────────
+   값은 보여 주지 않는다. 다수인지 아닌지만 말해 "한 번 더 확인해 보라" 는
+   신호를 준다 — 다수가 옳다는 뜻이 아니다. */
+.ing-cons-head { font-size: 12px; color: var(--ez-gray-700, #5f6368); margin-bottom: 4px; }
+.ing-cons-list { display: flex; flex-direction: column; gap: 2px; }
+.ing-cons {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  font-size: 12px; color: var(--ez-gray-800, #3c4043);
+}
+.ing-cons-name {
+  flex: 0 0 92px; color: var(--ez-gray-600, #80868b); font-size: 11px;
+}
+.ing-cons-warn .ing-cons-txt { color: var(--ez-warning-on-bg, #a35400); }
+.ing-cons-warn b { color: var(--ez-danger, #c5221f); }
+.ing-cons-note {
+  margin-top: 5px; font-size: 11px; color: var(--ez-gray-600, #80868b);
+}
+.ing-cons-alt {
+  display: flex; gap: 8px; align-items: baseline;
+  margin: 2px 0 4px 100px; font-size: 12px;
+}
+.ing-cons-alt-n {
+  flex: 0 0 auto; font-size: 11px; padding: 0 6px; border-radius: 9px;
+  background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-700, #5f6368);
+  font-variant-numeric: tabular-nums;
+}
+.ing-cons-alt-v { color: var(--ez-gray-900, #202124); word-break: break-all; }
+@media (max-width: 600px) { .ing-cons-alt { margin-left: 0; } }

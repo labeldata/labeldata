@@ -17346,3 +17346,183 @@ class 성적서에서_읽은_값은_등급_A_다(TestCase):
         self.assertEqual(f.remote_field.on_delete.__name__, 'SET_NULL')
         self.assertEqual(MyIngredientNutrition.GRADE[
             MyIngredientNutrition.SOURCE_SPEC_OCR], 'A')
+
+
+class 다른_곳은_어떻게_적었는가(TestCase):
+    """
+    같은 품목보고번호는 법적으로 같은 품목이다. 그런데 지금은 같은 조사를 회사
+    수만큼 반복하면서 서로 다르게 적고 있다.
+
+    처음에는 **개수만** 말하려 했다. 값을 보이면 베낄 테고, 베낀 값이 틀렸으면
+    우리 책임이 된다고 봤다. 그런데 개수만으로는 **판단할 수가 없다** —
+    무엇이 다른지 모르면 고칠지 말지를 정할 수 없고, 결국 규격서를 처음부터
+    다시 찾아야 한다. 그러면 이 기능이 없는 것과 같다.
+
+    그리고 여기서 견주는 것들은 **라벨에 인쇄되는 공개 정보**다. 원재료
+    표시명·알레르기·GMO·식품유형은 제품을 사면 누구나 읽는다. 배합비·거래처·
+    단가와는 성격이 전혀 다르고, 그쪽은 이 표에 있지도 않다.
+
+    그래서 **다를 때만 값을 보이고 건수를 붙인다.** 다만 **누가 적었는지는
+    끝까지 보여 주지 않는다** — 값은 인쇄되지만 "어느 회사가 이 원료를 쓰는가"
+    는 인쇄되지 않는다.
+    """
+
+    NO = '1971027500346'
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import FoodItem
+
+        self.a = User.objects.create_user(username='a@example.com', password='x')
+        self.b = User.objects.create_user(username='b@example.com', password='x')
+        self.c = User.objects.create_user(username='c@example.com', password='x')
+        # 식약처에 실재하는 번호여야 이 기능이 돈다
+        FoodItem.objects.create(prdlst_report_no=self.NO, prdlst_nm='단팥빵',
+                                prdlst_dcnm='빵류')
+
+    def _ing(self, user, no=None, **kw):
+        from v1.label.models import MyIngredient
+
+        kw.setdefault('prdlst_nm', '원료')
+        return MyIngredient.objects.create(
+            user_id=user, prdlst_report_no=self.NO if no is None else no,
+            delete_YN='N', **kw)
+
+    def got(self, ing):
+        from v1.label.services import ingredient_consensus as ic
+        return ic.for_ingredient(ing)
+
+    # ── 언제 보이나 ─────────────────────────────────────────────────────
+    def test_혼자_쓰는_번호면_아무_말도_안_한다(self):
+        mine = self._ing(self.a, allergens='우유')
+        self.assertIsNone(self.got(mine))
+
+    def test_식약처에_없는_번호는_보지_않는다(self):
+        """
+        한 번호 아래에 밀가루·설탕·혼합간장이 함께 있던 일이 있었다. 같은
+        품목을 다르게 적은 것이 아니라 **그 번호가 애초에 없는 번호**였다.
+        걸러내지 않으면 남의 제품 값을 근거처럼 대게 된다.
+        """
+        mine = self._ing(self.a, no='9999999999999', allergens='우유')
+        self._ing(self.b, no='9999999999999', allergens='대두')
+        self.assertIsNone(self.got(mine))
+
+    def test_두_곳_이상이면_말한다(self):
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='우유')
+        got = self.got(mine)
+        self.assertEqual(got['owners'], 2)
+
+    # ── 무엇을 말하나 ───────────────────────────────────────────────────
+    def test_같게_적었으면_그렇게_말한다(self):
+        mine = self._ing(self.a, allergens='우유, 대두')
+        self._ing(self.b, allergens='우유,  대두 ')      # 공백만 다르다
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertEqual(row['same'], 1)
+        self.assertEqual(row['differ'], 0)
+
+    def test_다르게_적은_곳을_센다(self):
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='우유, 대두')
+        self._ing(self.c, allergens='우유, 대두')
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertEqual(row['differ'], 2)
+        self.assertFalse(row['agreed'])      # 나는 소수 쪽이다
+
+    def test_한_회사가_여러_줄_넣어도_한_표다(self):
+        """그 회사 의견이 여러 표가 되면 다수가 뒤집힌다."""
+        mine = self._ing(self.a, allergens='우유')
+        for _ in range(5):
+            self._ing(self.b, allergens='대두')
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertEqual(row['others'], 1)
+
+    def test_내가_안_적은_항목은_견주지_않는다(self):
+        mine = self._ing(self.a, allergens='우유')       # GMO 는 비워 둠
+        self._ing(self.b, allergens='우유', gmo='비유전자변형')
+        keys = [f['key'] for f in self.got(mine)['fields']]
+        self.assertNotIn('gmo', keys)
+
+    # ── 새면 안 되는 것 ─────────────────────────────────────────────────
+    def test_다르면_값을_보여_준다(self):
+        """
+        개수만으로는 판단할 수가 없다. 무엇이 다른지 모르면 고칠지 말지를 정할
+        수 없고, 결국 규격서를 처음부터 다시 찾아야 한다 — 이 기능이 없는 것과
+        같아진다.
+        """
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='우유, 대두')
+        self._ing(self.c, allergens='우유, 대두')
+
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertEqual(row['others_values'][0]['value'], '우유, 대두')
+        self.assertEqual(row['others_values'][0]['owners'], 2)
+
+    def test_같으면_값을_보여_주지_않는다(self):
+        """보여 줄 것이 없다. '같습니다' 면 끝이다."""
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='우유')
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertEqual(row['others_values'], [])
+
+    def test_많이_적힌_값이_먼저_온다(self):
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='대두')
+        self._ing(self.c, allergens='밀')
+        from django.contrib.auth.models import User
+        d = User.objects.create_user(username='d@example.com', password='x')
+        self._ing(d, allergens='밀')
+
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertEqual(row['others_values'][0]['value'], '밀')
+        self.assertEqual(row['others_values'][0]['owners'], 2)
+
+    def test_내_값은_다시_보여_주지_않는다(self):
+        """화면에 이미 있다."""
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='우유')
+        self._ing(self.c, allergens='대두')
+        row = [f for f in self.got(mine)['fields'] if f['key'] == 'allergens'][0]
+        self.assertNotIn('우유', [v['value'] for v in row['others_values']])
+
+    def test_누가_적었는지는_끝까지_안_보여_준다(self):
+        """
+        값은 라벨에 인쇄되는 공개 정보다. 그런데 **어느 회사가 이 원료를
+        쓰는가** 는 인쇄되지 않는다.
+        """
+        import json
+
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='대두')
+        blob = json.dumps(self.got(mine), ensure_ascii=False)
+
+        self.assertNotIn('b@example.com', blob)
+        for key in ('user', 'owner', 'ingredient_id', 'user_id'):
+            self.assertNotIn('"%s"' % key, blob)
+
+    def test_배합비나_거래처는_보지도_않는다(self):
+        from v1.label.services import ingredient_consensus as ic
+
+        fields = {f for f, _ko in ic.FIELDS}
+        self.assertEqual(fields, {'ingredient_display_name', 'allergens',
+                                  'gmo', 'prdlst_dcnm'})
+
+    def test_남의_원료는_404(self):
+        from django.urls import reverse
+
+        mine = self._ing(self.a, allergens='우유')
+        self._ing(self.b, allergens='우유')
+        self.client.force_login(self.b)
+        resp = self.client.get(
+            reverse('label:ingredient_consensus', args=[mine.pk]))
+        self.assertEqual(resp.status_code, 404)    # 403 은 그 id 가 있다고 알려 준다
+
+    def test_화면은_다수인지만_말한다(self):
+        from pathlib import Path
+
+        html = Path('v1/templates/label/my_ingredient_detail_partial.html').read_text(
+            encoding='utf-8')
+        self.assertIn('다수는 나와 같게 적었습니다', html)
+        self.assertIn('다수는 다르게 적었습니다', html)
+        self.assertIn('다수가 옳다는 뜻은 아닙니다', html)
