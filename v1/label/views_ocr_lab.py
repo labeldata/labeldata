@@ -196,12 +196,72 @@ def truth_from_label(request):
         # 표시사항이 같은 제품인지**는 아무도 확인하지 않았으므로 켜 두지 않는다.
         verified=False,
         note=f'표시사항 #{label.pk} 에서 가져옴',
+        source_label=label,
         created_by=request.user,
     )
     return JsonResponse({
         'success': True, 'case': _case_json(case),
         'warning': ('표시사항의 값을 그대로 가져왔습니다. 올린 사진이 그 제품의 '
                     '표시사항이 맞는지 확인한 뒤 "정답 확인" 을 켜 주세요.'),
+    })
+
+
+@staff_member_required
+@require_POST
+def truth_pull_label(request, case_id):
+    """
+    **내 표시사항을 제품에서 그대로 끌어온다.** 손으로 옮겨 적지 않는다.
+
+    시안 대조 채점은 두 쪽을 견준다 — 시안에 인쇄된 값(expected)과 이 제품에
+    확정해 둔 값(label_values). 그런데 뒤쪽을 사람이 손으로 적으면 **시험이
+    성립하지 않는다.** 다르다고 체크할 칸의 값을 사람이 직접 다르게 적어 넣게
+    되니 판정기는 당연히 다르다고 하고, 짚음만 쌓이고 놓침도 오탐도 영영 0 이
+    된다. 내가 낸 문제를 내가 채점하는 꼴이다.
+
+    제품에서 끌어오면 그 고리가 끊어진다. 사람이 하는 일은 **눈으로 보고 정말
+    다른 항목을 골라 두는 것** 하나로 줄고, 값은 양쪽 다 기계가 가져온다.
+
+    한 번 연결해 두면 다음부터는 번호를 다시 안 넣어도 된다.
+    """
+    from v1.common.models import OcrTruthCase
+    from v1.label.models import MyLabel
+    from v1.label.services.ocr_lab import expected_from_label
+
+    case = get_object_or_404(OcrTruthCase, pk=case_id)
+
+    label_id = (request.POST.get('label_id') or '').strip()
+    if label_id:
+        label = get_object_or_404(MyLabel, pk=label_id)
+        case.source_label = label
+    else:
+        label = case.source_label
+        if label is None:
+            return JsonResponse(
+                {'success': False,
+                 'error': '연결된 표시사항이 없습니다. 제품 번호를 넣어 주세요.'},
+                status=400)
+
+    values = expected_from_label(label)
+    if not values:
+        return JsonResponse(
+            {'success': False,
+             'error': '그 표시사항에는 채워진 항목이 없습니다.'}, status=400)
+
+    case.label_values = values
+    case.save(update_fields=['source_label', 'label_values', 'updated_at'])
+
+    # 정답 자체를 같은 제품에서 가져온 정답지라면 양쪽이 같아진다 — 재 봐야
+    # 전부 '같음' 이고 얻는 것이 없다. 조용히 두면 사람이 모른다.
+    warning = ''
+    if case.source == OcrTruthCase.Source.LABEL:
+        warning = ('이 정답지는 정답도 같은 표시사항에서 가져온 것이라 양쪽이 '
+                   '같아집니다. 정답(시안에 인쇄된 값)을 사진에 적힌 대로 '
+                   '고쳐야 대조를 잴 수 있습니다.')
+
+    return JsonResponse({
+        'success': True, 'case': _case_json(case),
+        'label_id': label.pk, 'pulled': len(values),
+        'warning': warning,
     })
 
 
@@ -368,6 +428,7 @@ def _case_json(case):
         # 칸이 비어 보이고, 그대로 저장하면 적어 둔 것이 지워진다.
         'label_values': case.label_values or {},
         'expected_diff': case.expected_diff or [],
+        'source_label_id': case.source_label_id,
         'source': case.get_source_display(),
         'verified': case.verified,
         'note': case.note,

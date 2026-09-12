@@ -133,6 +133,8 @@ urlpatterns = [
          name='ocr_lab_truth_from_label'),
     path('ocr-lab/truth/<int:case_id>/', views_ocr_lab.truth_detail,
          name='ocr_lab_truth_detail'),
+    path('ocr-lab/truth/<int:case_id>/pull-label/', views_ocr_lab.truth_pull_label,
+         name='ocr_lab_truth_pull_label'),
     path('ocr-lab/truth/<int:case_id>/save/', views_ocr_lab.truth_update,
          name='ocr_lab_truth_update'),
     path('ocr-lab/truth/<int:case_id>/locate/', views_ocr_lab.truth_locate,

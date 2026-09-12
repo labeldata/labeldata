@@ -271,6 +271,26 @@
       + '  <label class="form-label" style="font-size:11.5px;">품목보고번호 (등록 정보 대조에 씁니다)</label>'
       + '  <input type="text" id="caseReportNo" class="form-control form-control-sm" value="' + esc(c.report_no) + '">'
       + '</div>'
+      // 내 표시사항을 제품에서 끌어오는 자리. 손으로 적으면 시험이 사람의
+      // 손버릇을 재게 된다 — 다르다고 체크할 칸을 사람이 직접 다르게 적어
+      // 넣으니 판정기는 당연히 다르다고 하고, 짚음만 쌓인다.
+      + '<div class="mb-2 p-2" style="background:#f8f9fa;border-radius:6px;">'
+      + '  <label class="form-label" style="font-size:11.5px;">'
+      + '    내 표시사항을 제품에서 가져오기'
+      + (c.source_label_id
+          ? ' <span class="text-muted">— 지금 연결: 제품 #' + c.source_label_id + '</span>'
+          : '')
+      + '  </label>'
+      + '  <div class="d-flex gap-2 align-items-center">'
+      + '    <input type="text" id="casePullLabel" class="form-control form-control-sm"'
+      + '           style="max-width:160px;" placeholder="제품 번호'
+      + (c.source_label_id ? ' (비우면 연결된 제품)' : '') + '"'
+      + '           value="">'
+      + '    <button type="button" id="casePullBtn" class="btn btn-outline-secondary v2-btn-sm">'
+      + '      <i class="bi bi-box-arrow-in-down"></i> 가져오기</button>'
+      + '    <small class="text-muted">손으로 옮겨 적으면 시험이 성립하지 않습니다.</small>'
+      + '  </div>'
+      + '</div>'
       + '<div class="mb-2">'
       + '  <label class="form-label" style="font-size:11.5px;">읽을 영역 x, y, 너비, 높이 (원본 픽셀 · 비우면 사진 전체)</label>'
       + '  <input type="text" id="caseCrop" class="form-control form-control-sm" value="'
@@ -462,6 +482,30 @@
           : '<div class="text-danger">이 영역에서는 그 항목을 읽지 못했습니다.'
             + (others ? ' 대신 읽힌 것: ' + esc(others) : ' 영역을 넓혀 보세요.') + '</div>';
         if (target) target.classList.add('bx-target');
+      })
+      .catch(function (err) { note(err.message, 'error'); })
+      .finally(function () { busy(btn, false); });
+  }
+
+  function pullLabel() {
+    if (!editing) return;
+    var btn = document.getElementById('casePullBtn');
+    var labelId = (document.getElementById('casePullLabel').value || '').trim();
+    busy(btn, true, '가져오는 중…');
+    postJson(BASE + 'truth/' + editing.id + '/pull-label/',
+             labelId ? { label_id: labelId } : {})
+      .then(function (body) {
+        // 가져온 값을 그 자리에서 칸에 붓는다. 다시 열게 하면 적어 두던
+        // '다름' 체크가 날아간다.
+        var mine = body.case.label_values || {};
+        document.querySelectorAll('#caseBody .truth-mine').forEach(function (el) {
+          if (mine[el.dataset.key] !== undefined) el.value = mine[el.dataset.key];
+        });
+        editing.source_label_id = body.case.source_label_id;
+        note(body.warning
+             || ('제품 #' + body.label_id + ' 에서 ' + body.pulled
+                 + '개 항목을 가져왔습니다. 정말 다른 항목만 체크한 뒤 저장하세요.'),
+             body.warning ? 'warn' : 'ok');
       })
       .catch(function (err) { note(err.message, 'error'); })
       .finally(function () { busy(btn, false); });
@@ -780,6 +824,11 @@
     document.getElementById('truthCreateBtn').addEventListener('click', createTruth);
     document.getElementById('truthFromLabelBtn').addEventListener('click', createFromLabel);
     document.getElementById('caseSave').addEventListener('click', saveCase);
+    // 이 단추는 정답지를 열 때마다 새로 그려진다. 그때 매면 두 번 열었을 때
+    // 두 번 걸린다 — 바깥에 한 번만 매어 두고 눌린 것을 가른다.
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('#casePullBtn')) pullLabel();
+    });
     document.getElementById('runBtn').addEventListener('click', runBenchmark);
 
     document.getElementById('promptBaseBtn').addEventListener('click', function () {

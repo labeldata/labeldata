@@ -301,6 +301,20 @@ class OcrTruthCase(models.Model):
     expected_diff = models.JSONField(default=list, blank=True,
                                      verbose_name='정말 다른 항목')
 
+    # 이 사진이 어느 제품의 표시사항인가.
+    #
+    # 연결해 두면 label_values 를 **손으로 옮겨 적지 않아도 된다.** 손으로
+    # 적으면 시험이 사람의 손버릇을 재게 된다 — 다르다고 체크한 칸의 값을
+    # 사람이 직접 다르게 적어 넣으면 시스템은 당연히 다르다고 하고, 짚음만
+    # 쌓이고 놓침도 오탐도 영영 0 이 된다. 내가 낸 문제를 내가 채점하는 꼴이다.
+    #
+    # 앱을 가로지르는 참조라 문자열로 건다. 제품이 지워져도 정답지는 남아야
+    # 하므로 SET_NULL 이다 — 이미 적어 둔 label_values 까지 사라지면 안 된다.
+    source_label = models.ForeignKey('label.MyLabel', null=True, blank=True,
+                                     on_delete=models.SET_NULL,
+                                     related_name='ocr_truth_cases',
+                                     verbose_name='연결된 표시사항')
+
     note = models.TextField(blank=True, default='', verbose_name='메모')
     created_by = models.ForeignKey(User, null=True, blank=True,
                                    on_delete=models.SET_NULL,
