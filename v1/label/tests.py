@@ -17876,3 +17876,123 @@ class ProductDetailPopupFitsContentTests(TestCase):
         """스크롤은 원재료명 박스 안에서만 — 창을 줄인 뒤에도 그렇다."""
         self.assertIn('overflow: hidden', self.html)
         self.assertIn('overflow-y: auto', self.html)
+
+
+class IngredientSaveKeepsUnsentFieldsTests(TestCase):
+    """
+    `MyIngredientsForm` 은 prms_dt·pog_daycnt·frmlc_mtrqlt·rawmtrl_nm 을
+    받는데, V2 상세 화면에는 **그 네 칸의 입력이 하나도 없다.** ModelForm 은
+    POST 에 없는 칸을 '' 로 클린하므로 표시명 한 글자만 고쳐 저장해도
+    하위 원료·소비기한·포장재질·허가일자가 통째로 비었다. 모델이 전부
+    blank=True 라 검증도 안 걸렸다.
+
+    제품 조회의 "내 원료로 저장", 엑셀 붙여넣기, 첨가물 사본 — 전부 그 네
+    칸에 값이 들어 있고, 목록에서 켜 볼 수 있는 칸이라 사라진 것이 바로 보인다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient
+        self.MyIngredient = MyIngredient
+        self.user = User.objects.create_user('주인', password='x', email='a@x.com')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='밀가루', delete_YN='N',
+            rawmtrl_nm='밀(미국산), 정제수', pog_daycnt='제조일로부터 12개월',
+            frmlc_mtrqlt='합성수지제', prms_dt='2026-08-25')
+        self.client.force_login(self.user)
+
+    def _save(self, **extra):
+        from django.urls import reverse
+        payload = {'prdlst_nm': '밀가루', 'ingredient_display_name': '밀'}
+        payload.update(extra)
+        return self.client.post(
+            reverse('label:my_ingredient_detail',
+                    kwargs={'ingredient_id': self.ing.my_ingredient_id}),
+            payload, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+    def test_화면에_없는_칸은_지워지지_않는다(self):
+        self._save()
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.rawmtrl_nm, '밀(미국산), 정제수')
+        self.assertEqual(self.ing.pog_daycnt, '제조일로부터 12개월')
+        self.assertEqual(self.ing.frmlc_mtrqlt, '합성수지제')
+        self.assertEqual(str(self.ing.prms_dt), '2026-08-25')
+
+    def test_보낸_칸은_고쳐진다(self):
+        self._save(ingredient_display_name='밀가루(표시)')
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.ingredient_display_name, '밀가루(표시)')
+
+    def test_손으로_비운_칸은_지워진다(self):
+        """안 온 것과 빈 것은 다르다."""
+        self._save(rawmtrl_nm='')
+        self.ing.refresh_from_db()
+        self.assertEqual(self.ing.rawmtrl_nm, '')
+
+
+class IngredientCountsCheckOwnerTests(TestCase):
+    """
+    번호를 훑으면 "그 원료가 존재하고 몇 개 제품에 쓰였는지" 를 남의 것까지
+    알 수 있었다. 형제 자리에는 주인 확인이 들어갔는데 이 둘만 빠져 있었다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from v1.label.models import MyIngredient, MyLabel
+        self.me = User.objects.create_user('나', password='x', email='me@x.com')
+        self.other = User.objects.create_user('남', password='x', email='no@x.com')
+        self.their_ing = MyIngredient.objects.create(
+            user_id=self.other, prdlst_nm='남의원료', delete_YN='N')
+        self.their_label = MyLabel.objects.create(
+            user_id=self.other, my_label_name='남의제품', delete_YN='N')
+        self.client.force_login(self.me)
+
+    def test_남의_원료는_404(self):
+        from django.urls import reverse
+        r = self.client.get(reverse(
+            'label:linked_labels_count',
+            kwargs={'ingredient_id': self.their_ing.my_ingredient_id}))
+        self.assertEqual(r.status_code, 404)
+
+    def test_남의_표시사항도_404(self):
+        from django.urls import reverse
+        r = self.client.get(reverse(
+            'label:linked_ingredient_count',
+            kwargs={'label_id': self.their_label.my_label_id}))
+        self.assertEqual(r.status_code, 404)
+
+    def test_내_것은_센다(self):
+        from django.urls import reverse
+        from v1.label.models import MyIngredient
+        mine = MyIngredient.objects.create(
+            user_id=self.me, prdlst_nm='내원료', delete_YN='N')
+        r = self.client.get(reverse(
+            'label:linked_labels_count',
+            kwargs={'ingredient_id': mine.my_ingredient_id}))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['count'], 0)
+
+
+class IngredientExcelUploadKeyMatchesTests(TestCase):
+    """
+    화면은 'file' 로 보내고 뷰는 'excel_file' 을 읽었다. 서버가 늘
+    "엑셀 파일이 없습니다." 를 돌려줬는데 화면은 data.success 를 안 보고
+    그 문구를 **초록 성공색**으로 띄우고 새로고침했다. 한 건도 안 들어왔는데
+    화면만 다시 그려졌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'label'
+                    / 'my_ingredient_list_combined.html').read_text(encoding='utf-8')
+
+    def test_뷰가_읽는_키로_보낸다(self):
+        self.assertIn("formData.append('excel_file'", self.src)
+        self.assertNotIn("formData.append('file'", self.src)
+
+    def test_실패를_성공색으로_띄우지_않는다(self):
+        i = self.src.index("formData.append('excel_file'")
+        block = self.src[i:i + 1600]
+        self.assertIn('if (!data.success)', block)
+        self.assertIn("'error'", block)

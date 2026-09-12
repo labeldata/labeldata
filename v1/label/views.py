@@ -1475,10 +1475,35 @@ def my_ingredient_detail(request, ingredient_id=None):
                 else:
                     messages.error(request, msg)
                     return redirect('label:my_ingredient_detail', ingredient_id=ingredient.my_ingredient_id)
+        #  **폼을 만들기 전에** 원래 값을 떠 둔다.
+        #  form.save(commit=False) 는 같은 인스턴스를 제자리에서 고치므로,
+        #  그 뒤에 읽으면 이미 빈 값이다.
+        _before = {f: getattr(ingredient, f, None)
+                   for f in MyIngredientsForm.Meta.fields} if mode == 'edit' else {}
+
         form = MyIngredientsForm(request.POST, instance=ingredient)
         if form.is_valid():
             new_ingredient = form.save(commit=False)
             new_ingredient.user_id = request.user
+
+            #  **화면이 안 보낸 칸은 건드리지 않는다.**
+            #
+            #  폼은 prms_dt·pog_daycnt·frmlc_mtrqlt·rawmtrl_nm 을 받는데 V2
+            #  상세 화면에는 그 네 칸의 입력이 하나도 없다. ModelForm 은 POST
+            #  에 없는 칸을 '' 로 클린하므로, **표시명 한 글자만 고쳐 저장해도
+            #  하위 원료·소비기한·포장재질·허가일자가 통째로 비었다.** 모델이
+            #  전부 blank=True 라 검증도 안 걸렸다.
+            #
+            #  제품 조회에서 "내 원료로 저장" 한 것, 엑셀로 붙여넣은 것,
+            #  첨가물 사본 — 전부 그 네 칸에 값이 들어 있다. 목록에서 켜 볼
+            #  수 있는 칸이라 사라진 것이 바로 보인다.
+            #
+            #  안 온 것과 손으로 비운 것은 다르다. POST 에 이름이 있으면
+            #  빈 값도 뜻이 있으니 그대로 쓴다.
+            for _f, _old in _before.items():
+                if _f not in request.POST:
+                    setattr(new_ingredient, _f, _old)
+
             new_ingredient.save()
 
             # ── BOM 연결 동기화 ──────────────────────────────────────────
@@ -3440,8 +3465,17 @@ def imported_food_count(request):
 @csrf_exempt
 def linked_labels_count(request, ingredient_id):
     """
-    특정 내원료(ingredient_id)와 연결된 표시사항(LabelIngredientRelation) 개수 반환
+    특정 내원료(ingredient_id)와 연결된 표시사항(LabelIngredientRelation) 개수 반환.
+
+    **주인을 확인한다.** 형제 자리(delete_my_ingredient, my_ingredient_detail)
+    에는 주인 확인이 들어갔는데 여기만 빠져 있었다. 번호를 훑으면 "그 원료가
+    존재하고 몇 개 제품에 쓰였는지" 를 남의 것까지 알 수 있었다.
     """
+    if not MyIngredient.objects.filter(
+            my_ingredient_id=ingredient_id, user_id=request.user,
+            delete_YN='N').exists():
+        return JsonResponse({'count': 0, 'error': '원료를 찾을 수 없습니다.'},
+                            status=404)
     count = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).count()
     return JsonResponse({'count': count})
 
@@ -3450,7 +3484,13 @@ def linked_labels_count(request, ingredient_id):
 def linked_ingredient_count(request, label_id):
     """
     Returns the count of ingredients linked to a given label (MyLabel).
+
+    같은 이유로 주인을 확인한다 — 표시사항 번호로 남의 것을 세어 볼 수 없다.
     """
+    if not MyLabel.objects.filter(
+            my_label_id=label_id, user_id=request.user, delete_YN='N').exists():
+        return JsonResponse({'count': 0, 'error': '표시사항을 찾을 수 없습니다.'},
+                            status=404)
     try:
         count = LabelIngredientRelation.objects.filter(label_id=label_id).count()
         return JsonResponse({'count': count})

@@ -516,7 +516,8 @@ body.in-iframe .bom-page-header { display: none !important; }
     let draftSaveDisabled = false;
     
     // 메타데이터 저장소 (rowIndex -> {allergens, gmo, report_no, ...})
-    const rowMetadata = new Map();
+    /* rowMetadata 는 걷어냈다 — 행 번호를 영구 키로 쓰던 자리다.
+       메타데이터는 각 행 객체의 _meta 에 붙는다(loadBOMData 주석 참고). */
 
     document.addEventListener('DOMContentLoaded', function() {
         if (window.parent !== window) {
@@ -1108,11 +1109,11 @@ body.in-iframe .bom-page-header { display: none !important; }
             hot.setDataAtRowProp(safeRowIndex, prop, value, source || 'edit');
             return;
         }
-        // 메타데이터는 별도 Map에 저장
-        if (!rowMetadata.has(safeRowIndex)) {
-            rowMetadata.set(safeRowIndex, {});
-        }
-        rowMetadata.get(safeRowIndex)[prop] = value;
+        // 표에 칸이 없는 것은 그 **행 객체**에 붙인다 (행 번호는 영구 키가 아니다)
+        const row = hot.getSourceDataAtRow(safeRowIndex);
+        if (!row) return;
+        if (!row._meta) row._meta = {};
+        row._meta[prop] = value;
     }
 
     function setRowProps(rowIndex, values, source = null) {
@@ -1128,13 +1129,11 @@ body.in-iframe .bom-page-header { display: none !important; }
         syncContextPanelToRow();
         const data = hot.getSourceData().filter(row => row && row.ingredient_name);
         
-        // 메타데이터도 함께 저장
-        const metadataArray = Array.from(rowMetadata.entries());
+        // 메타데이터는 행 객체(_meta)에 붙어 있어 data 와 함께 실린다
         
         const payload = {
             updatedAt: Date.now(),
             data: data,
-            metadata: metadataArray
         };
         try {
             localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
@@ -1169,14 +1168,10 @@ body.in-iframe .bom-page-header { display: none !important; }
         // 임시 저장된 데이터가 있으면 자동으로 불러오기
         hot.loadData(draft.data);
         
-        // 메타데이터 복원
-        rowMetadata.clear();
-        if (draft.metadata && Array.isArray(draft.metadata)) {
-            draft.metadata.forEach(([key, value]) => {
-                rowMetadata.set(key, value);
-            });
-        }
-        
+        /* 메타데이터 복원은 필요 없다 — _meta 가 행 객체에 붙어 있어
+           loadData 로 함께 돌아온다. 옛 초안의 metadata 배열은 행 번호
+           기준이라 복원하면 오히려 어긋난다. */
+
         hot.render();
         calculateTotal();
         return true;
@@ -1433,7 +1428,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             allergens: item.allergens || item.allergen || '',
             raw_material_name: item.raw_material_name || item.name || '',
             food_type: item.food_type || '',
-            summary_type: (rowMetadata.get(targetRow) || {}).summary_type || '식품유형',
+            summary_type: ((hot.getSourceDataAtRow(targetRow) || {})._meta || {}).summary_type || '식품유형',
             gmo: item.gmo || '',
             gmo_yn: !!item.gmo || !!item.gmo_yn,
             report_no: item.report_no || '',
@@ -1693,8 +1688,23 @@ body.in-iframe .bom-page-header { display: none !important; }
                     rowData['note:' + name] = item.note_fields[name];
                 });
                 
-                // 메타데이터를 rowMetadata Map에 저장
-                rowMetadata.set(idx, {
+                /* ══ 메타데이터는 **행 객체**가 든다 ══════════════════════
+                 *
+                 * 예전에는 rowMetadata(Map<행번호, {...}>) 에 뒀다. 그런데
+                 * 행 번호는 영구 키가 아니다 — manualRowMove 로 옮기거나
+                 * 우클릭으로 지우면 번호가 밀리는데, 그 Map 을 다시 매기는
+                 * 훅이 하나도 없었다(afterRowMove·afterCreateRow 0건).
+                 *
+                 * 그래서 3번 줄을 지우고 저장하면 4번 줄이던 원료가 3번 줄의
+                 * bom_id 를 달고 올라갔다. 서버는 그 bom_id 의 줄을 덮고,
+                 * source_ingredient 로 **내 원료 마스터까지 역동기화**하고,
+                 * 같은 원료를 쓰는 **다른 제품의 BOM 행까지 bulk_update**
+                 * 한다. 한 줄 지우고 저장하면 다른 제품의 원료명·알레르기·
+                 * 제조사가 조용히 바뀌었다.
+                 *
+                 * 객체에 달면 옮기고 지워도 그 줄을 따라간다.
+                 * ═══════════════════════════════════════════════════════ */
+                rowData._meta = {
                     bom_id: item.bom_id || null,
                     source_type: normalizeSourceType(item.source_type),
                     source_id: item.source_id || null,
@@ -1711,8 +1721,8 @@ body.in-iframe .bom-page-header { display: none !important; }
                     report_no: item.report_no || '',
                     source_label_id: item.source_label_id || null,
                     summary_type: item.summary_type || '식품유형'
-                });
-                
+                };
+
                 return rowData;
             });
 
@@ -1960,7 +1970,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             const rawName = (row.raw_material_name || row.ingredient_name || '').trim();
             if (!rawName) return;
             const ratio     = parseFloat(row.mixing_ratio) || 0;
-            const meta      = rowMetadata.get(idx) || {};
+            const meta      = row._meta || {};
             const summType  = (meta.summary_type || '식품유형').trim();
             const foodType  = (row.food_type || '').trim();
             /* 표시명을 무엇으로 적을까. '식품유형' 이면 식품유형을 쓰고, 그
@@ -2153,7 +2163,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         const rows = hot.getSourceData() || [];
         for (let i = 0; i < rows.length; i++) {
             if (!(rows[i] || {}).ingredient_name) continue;
-            markSheetSummaryType((rowMetadata.get(i) || {}).summary_type || '식품유형');
+            markSheetSummaryType(((rows[i] || {})._meta || {}).summary_type || '식품유형');
             return;
         }
     }
@@ -2338,7 +2348,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         viewEl.classList.add('d-none');
 
         const rowData = data || {};
-        const metadata = rowMetadata.get(rowIndex) || {};
+        const metadata = rowData._meta || {};
         const sourceType = metadata.source_type || 'manual';
 
         const viewBadge = document.getElementById('context-view-type');
@@ -2487,7 +2497,6 @@ body.in-iframe .bom-page-header { display: none !important; }
                 + '저장하기를 누르기 전에는 서버에 저장된 배합비가 그대로 남아 있습니다.')) {
             return;
         }
-        rowMetadata.clear();
         currentRowIndex = null;
         hot.loadData(Array.from({ length: 15 }, () => ({})));
         updateContextPanel(null, null);
@@ -2524,13 +2533,22 @@ body.in-iframe .bom-page-header { display: none !important; }
             // getSourceData()로 전체 배열을 가져와서 인덱스로 접근
             for (let index = 0; index < rowCount; index++) {
                 const row = sourceData[index];
-                const metadata = rowMetadata.get(index) || {};
+                const metadata = (row && row._meta) || {};
                 
                 if (row && row.ingredient_name && row.ingredient_name.toString().trim() !== '') {
-                    /* 표에 칸이 생겼으니 표가 먼저다. 칸에 친 값이 metadata
-                       에는 없어서 저장되지 않고 그대로 사라졌다. */
-                    const rowAllergens = row.allergens || metadata.allergens || metadata.allergen || '';
-                    const rowGmo = row.gmo || metadata.gmo || '';
+                    /* 표에 칸이 생겼으니 **표가 이긴다.**
+                     *
+                     * `row.allergens || metadata.allergens` 였다. 칸을 비우면
+                     * `''` 는 falsy 라 저장해 둔 옛 값으로 떨어졌다 — 잘못
+                     * 들어간 알레르기 "우유" 를 지우고 저장해도 새로고침하면
+                     * 다시 있었다. 라벨에 인쇄될 문구가 안 지워졌다.
+                     *
+                     * "빈 값" 과 "값 없음" 은 다르다. 칸이 있으면(undefined 가
+                     * 아니면) 그 값을 쓴다. */
+                    const pick = (a, b) => (a === undefined || a === null ? (b || '') : a);
+                    const rowAllergens = pick(row.allergens,
+                                              metadata.allergens || metadata.allergen);
+                    const rowGmo = pick(row.gmo, metadata.gmo);
                     const itemData = {
                         ingredient_name: row.ingredient_name,
                         mixing_ratio: row.mixing_ratio || null,
@@ -2545,8 +2563,10 @@ body.in-iframe .bom-page-header { display: none !important; }
                         summary_type: metadata.summary_type || '식품유형',
                         additive_yn: !!metadata.additive_yn,
                         additive_role: metadata.additive_role || '',
-                        gmo_yn: Boolean(rowGmo) || !!metadata.gmo_yn,
-                        report_no: row.report_no || metadata.report_no || '',
+                        /* 칸을 비웠으면 플래그도 내린다. Boolean(rowGmo) ||
+                           metadata.gmo_yn 이면 옛 플래그가 남아 표시가 안 지워졌다. */
+                        gmo_yn: Boolean(rowGmo),
+                        report_no: pick(row.report_no, metadata.report_no),
                         manufacturer: row.manufacturer || '',
                         source_label_id: metadata.source_label_id || null,
                         notes: row.notes || '',

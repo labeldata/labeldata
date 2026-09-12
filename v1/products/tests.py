@@ -3393,12 +3393,18 @@ class 표의_칸이_반쪽이었다(TestCase):
             self.assertIn(line, block)
 
     def test_저장할_때_칸을_먼저_본다(self):
+        """
+        `row.allergens || metadata.allergens` 였다. 칸을 **비우면** '' 가
+        falsy 라 옛 값으로 떨어져, 잘못 들어간 알레르기를 지워도 새로고침하면
+        되살아났다. 빈 값과 값 없음을 구분해야 한다(pick).
+        """
         head = self.html.index('const rowAllergens =')
         block = self.html[head:head + 1400]
-        self.assertIn("row.allergens || metadata.allergens", block)
+        self.assertIn('pick(row.allergens', block)
         self.assertIn('allergens: rowAllergens,', block)
         self.assertIn('gmo: rowGmo,', block)
-        self.assertIn("report_no: row.report_no || metadata.report_no", block)
+        self.assertIn('pick(row.report_no', block)
+        self.assertNotIn('row.allergens || metadata', block)
 
     def test_칩을_누르면_칸에_들어간다(self):
         # gridColumnProps 에 없으면 rowMetadata 로만 가고 표는 비어 있다
@@ -4244,10 +4250,16 @@ class BOM을_통째로_지운다(TestCase):
         self.assertIn("\n        hot.addHook('beforeKeyDown'", self.bom)
 
     def test_숨은_것도_함께_지운다(self):
+        """
+        예전에는 rowMetadata(Map<행번호, …>)를 따로 비웠다. 그 Map 을
+        걷어냈으므로(행 번호는 영구 키가 아니다) 메타데이터는 행 객체의
+        _meta 에 붙어 loadData 로 함께 사라진다. 따로 비울 것이 없다.
+        """
         head = self.bom.index('function clearAllRows(options)')
         block = self.bom[head:head + 1600]
-        self.assertIn('rowMetadata.clear();', block)
         self.assertIn('currentRowIndex = null;', block)
+        self.assertIn('hot.loadData(', block)
+        self.assertNotIn('rowMetadata', block)
 
     def test_합계와_요약을_다시_그린다(self):
         """loadData 로 넣은 값은 afterChange 가 무시한다(source === 'loadData')."""
@@ -8226,3 +8238,98 @@ class UseAsIngredientFollowsThePermissionTests(TestCase):
         src = (Path(dj.BASE_DIR) / 'templates' / 'products' / 'sharing'
                / 'inbox.html').read_text(encoding='utf-8')
         self.assertIn('share.permission.can_use_as_ingredient', src)
+
+
+class BomRowIdentityIsNotIndexTests(TestCase):
+    """
+    BOM 표의 메타데이터가 `rowMetadata: Map<행번호, {...}>` 에 있었다. 그런데
+    행 번호는 영구 키가 아니다 — manualRowMove 로 옮기거나 우클릭으로 지우면
+    번호가 밀리는데, 그 Map 을 다시 매기는 훅이 하나도 없었다.
+
+    3번 줄을 지우고 저장하면 4번 줄이던 원료가 3번 줄의 bom_id 를 달고
+    올라갔다. 서버는 그 bom_id 의 줄을 덮고, source_ingredient 로 **내 원료
+    마스터까지 역동기화**하고, 같은 원료를 쓰는 **다른 제품의 BOM 행까지
+    bulk_update** 한다. 한 줄 지우고 저장하면 다른 제품의 원료명·알레르기·
+    제조사가 조용히 바뀌었다.
+    """
+
+    def setUp(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / 'bom_detail.html').read_text(encoding='utf-8')
+        self.code = re.sub(r'/\*.*?\*/|\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}',
+                           '', self.src, flags=re.S)
+
+    def test_행_번호를_영구_키로_쓰지_않는다(self):
+        self.assertNotIn('rowMetadata', self.code)
+
+    def test_메타데이터는_행_객체가_든다(self):
+        self.assertIn('rowData._meta = {', self.code)
+        self.assertIn('row._meta', self.code)
+
+    def test_임시저장에_행번호_기준_배열을_싣지_않는다(self):
+        """복원하면 오히려 어긋난다 — _meta 가 data 와 함께 실린다."""
+        self.assertNotIn('metadataArray', self.code)
+        self.assertNotIn('metadata: ', self.code)
+
+
+class BomClearedFieldsStayClearedTests(TestCase):
+    """
+    `row.allergens || metadata.allergens` 였다. 칸을 비우면 `''` 는 falsy 라
+    저장해 둔 옛 값으로 떨어졌다 — 잘못 들어간 알레르기 "우유" 를 지우고
+    저장해도 새로고침하면 다시 있었다. **라벨에 인쇄될 문구가 안 지워졌다.**
+    """
+
+    def setUp(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+               / 'bom_detail.html').read_text(encoding='utf-8')
+        self.code = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+
+    def test_빈_값과_값_없음을_구분한다(self):
+        self.assertIn('const pick = (a, b) =>', self.code)
+        self.assertIn('pick(row.allergens', self.code)
+        self.assertIn('pick(row.gmo', self.code)
+        self.assertIn('pick(row.report_no', self.code)
+
+    def test_옛_값으로_떨어지지_않는다(self):
+        for bad in ('row.allergens || metadata',
+                    'row.gmo || metadata',
+                    'row.report_no || metadata'):
+            self.assertNotIn(bad, self.code, bad)
+
+    def test_칸을_비우면_플래그도_내린다(self):
+        self.assertNotIn('Boolean(rowGmo) || !!metadata.gmo_yn', self.code)
+
+
+class AiExtractRequiresLoginTests(TestCase):
+    """
+    형제 뷰는 모두 @login_required 가 있는데 document_ai_extract_api 만
+    없었다. 전역 로그인 강제 미들웨어도 없어, 비로그인 POST 가 로그인
+    화면으로 가지 않고 label__user_id=AnonymousUser 조회로 들어갔다.
+    게다가 이 경로는 호출마다 AI 비용이 나간다.
+    """
+
+    def test_비로그인은_로그인_화면으로_간다(self):
+        r = self.client.post(
+            reverse('products:document_ai_extract_api', args=[1]))
+        self.assertIn(r.status_code, (302, 403))
+        if r.status_code == 302:
+            self.assertIn('login', r['Location'])
+
+    def test_기존_가드의_명부에서_빠졌다(self):
+        """
+        common/tests.py 의 "인증 없이 열린 문" 가드에 이 뷰가 **명부로
+        올라가 있어** 감사가 지나쳤다. 명부는 "왜 열어 두는지" 를 적는
+        자리인데, 여기에는 그럴 이유가 없었다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'common' / 'tests.py').read_text(encoding='utf-8')
+        self.assertNotIn("'document_ai_extract_api'", src)

@@ -6256,6 +6256,14 @@ def document_ai_create_from_submission(request):
     except Exception as e:
         logger.exception(f"Error: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+#  **로그인 확인이 빠져 있었다.**
+#
+#  형제 뷰(document_ai_review · document_ai_review_save ·
+#  document_ai_apply_to_bom)는 모두 @login_required 가 있는데 이것만 없었다.
+#  전역 로그인 강제 미들웨어도 없으므로, 비로그인 POST 가 로그인 화면으로
+#  가지 않고 label__user_id=AnonymousUser 조회로 들어갔다.
+#  게다가 이 경로는 호출마다 AI 비용이 나간다.
+@login_required
 @require_POST
 # 문서 판독도 호출마다 돈이 나간다
 @ratelimit(key='user_or_ip', rate='30/h', method='POST', block=True)

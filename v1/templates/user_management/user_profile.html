@@ -672,7 +672,15 @@ document.addEventListener('DOMContentLoaded', function () {
 // ── 알림 키워드 관리 (내 정보 페이지) ─────────────────────────────────────
 
 const KW_RULES_URL  = '{% url "regulatory:alert_rules" %}';
-const KW_DELETE_TPL = '{% url "regulatory:alert_rule_delete" rule_id=0 %}'.replace('/0/', '/');
+/* 주소를 조립하지 않고 **함수로 만든다.**
+   `.replace('/0/', '/')` 로 0 자리를 통째로 없애고 뒤에 id 를 붙이던 탓에
+   `api/alert-rules/delete/12/` 가 됐다 — 실제 경로는
+   `api/alert-rules/12/delete/` 다. 어떤 패턴에도 안 맞아 404(HTML)가
+   왔고, r.json() 이 던지는데 .catch 가 없어 **조용히 끝났다.**
+   확인 창에서 [확인]을 눌러도 칩이 남고 오류 문구도 없었다. */
+const kwDeleteUrl = (ruleId) =>
+    '{% url "regulatory:alert_rule_delete" rule_id=0 %}'
+        .replace('/0/', '/' + ruleId + '/');
 
 function getCsrfP() {
     var v = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
@@ -779,7 +787,7 @@ window.showProfileBackfillResult = showProfileBackfillResult;
 
 function profileDeleteKeyword(ruleId, keyword) {
     if (!confirm('[' + keyword + '] 키워드를 삭제하시겠습니까?\n(연결된 모든 기기에서 삭제됩니다)')) return;
-    fetch(KW_DELETE_TPL + ruleId + '/', {
+    fetch(kwDeleteUrl(ruleId), {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfP()},
     })

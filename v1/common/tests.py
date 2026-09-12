@@ -120,7 +120,10 @@ class 로그인_없이_열려_있던_문(TestCase):
         'bookmarks_list', 'bookmark_detail', 'notifications_list',
         'notification_read', 'notification_read_all', 'notification_delete',
         # 안쪽에서 request.user 로 직접 막는다
-        'save_label', 'download_file', 'document_ai_extract_api',
+        # document_ai_extract_api 는 명부에서 뺐다 — 형제 뷰는 모두
+        # @login_required 가 있었고, 이 경로는 호출마다 AI 비용이 나간다.
+        # 명부에 올려 두었다는 이유로 감사가 지나쳤다.
+        'save_label', 'download_file',
         # 익명이면 로그인으로 되돌려 보낸다(next 를 붙여서). AJAX 면 JSON
         'create_new_label',
         # 공개 데모가 부른다. 로그인했을 때만 라벨에 손을 댄다
