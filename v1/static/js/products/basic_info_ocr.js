@@ -35,6 +35,7 @@
   // 확인 창이 지금 들고 있는 것. 품목을 골라 **다시 대조**할 때 그대로 보낸다.
   // 판독은 한 번만 하고(돈이 나간다), 대조만 다시 한다.
   var lastData = null, lastPhoto = null, lastSnap = null;
+  var lastOcrText = '';      // 시안에서 읽은 글자 전부 (대조에서만)
 
   // OCR 항목 -> 기본 정보 탭의 입력칸 id
   // weight_calorie 는 이 탭에 칸이 없다(내용량에 함께 적는 항목이라 뺐다).
@@ -790,16 +791,7 @@
         + rows.join('')
         + '</div>'
         + extrasHtml(data);
-      loadWhereImage(photoFile);
-    window.photoViewerLayout(body, photoFile, table);
-
-    // '어디서?' — 줄 아래에 그 자리를 오려 붙인다
-    body.addEventListener('click', function (ev) {
-      var btn = ev.target.closest('[data-where]');
-      if (!btn) return;
-      var row = btn.closest('.cmp-row');
-      if (row) toggleWhere(row, btn.dataset.where, data);
-    });
+      window.photoViewerLayout(body, photoFile, table);
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
 
       wireItemPick(body);
@@ -938,6 +930,43 @@
       if (el && el.value) bits.push(el.value);
     });
     return squeeze(bits.join(' '));
+  }
+
+  /* ── 시안에만 있는 문구 ───────────────────────────────────────────────
+   *
+   * 인쇄물에는 우리가 칸을 두지 않은 문구가 얹힌다 — 수상 내역, 이벤트 안내,
+   * 다른 제품에서 복사해 온 문장. **근거 없이 인쇄되는 것이 위험하다.**
+   *
+   * 판독 결과(data)만 봐서는 이걸 못 찾는다. 거기에는 **우리가 칸을 둔 것**만
+   * 들어 있고, 칸이 없는 문구는 애초에 담기지 않는다. 그래서 OCR 원문을 본다 —
+   * 인쇄된 글자 전부가 거기 있다.
+   *
+   * **틀렸다고 말하지 않는다.** 우리가 칸을 안 둔 정당한 표시일 수 있다
+   * (인증 마크 문구, 바코드 아래 안내). 근거를 확인하라고 모아 줄 뿐이다.
+   * ───────────────────────────────────────────────────────────────── */
+
+  // 이보다 짧은 조각은 버린다. 단위·기호 부스러기가 줄마다 걸린다.
+  var GROUNDLESS_MIN = 6;
+  // 너무 많으면 아무도 안 본다. 짚어 주는 것이 목적이지 나열이 아니다.
+  var GROUNDLESS_MAX = 20;
+
+  function groundlessFromText(text, hay) {
+    if (!text) return [];
+    var out = [], seen = {};
+    String(text).split(/[\r\n]+/).forEach(function (line) {
+      var t = String(line || '').trim();
+      if (!t || out.length >= GROUNDLESS_MAX) return;
+      var key = squeeze(t);
+      if (key.length < GROUNDLESS_MIN || seen[key]) return;
+      if (hay.indexOf(key) >= 0) return;
+      /* 긴 줄은 통째로 안 맞을 수 있다 — 우리가 줄을 다르게 끊어 적었을 뿐이다.
+         앞 절반이라도 들어 있으면 근거가 있는 것으로 본다. */
+      if (key.length >= 12
+          && hay.indexOf(key.slice(0, Math.floor(key.length / 2))) >= 0) return;
+      seen[key] = 1;
+      out.push(t);
+    });
+    return out;
   }
 
   function groundlessTexts(data) {
@@ -1199,13 +1228,19 @@
 
     /* 시안에만 있는 글. **틀렸다고 말하지 않는다** — 우리가 칸을 안 둔 정당한
        표시일 수 있다. 근거를 확인하라고 모아 줄 뿐이다. */
+    /* 두 길을 합친다. extra_texts 는 판독기가 "칸 밖의 글" 이라고 모아 준
+       것이고, 원문 쪽은 우리가 직접 가린 것이다. 판독기가 놓친 문구는 원문에
+       남아 있으므로 둘 다 본다. */
     var groundless = groundlessTexts(data);
+    groundlessFromText(lastOcrText, labelHaystack()).forEach(function (t) {
+      if (groundless.indexOf(t) < 0) groundless.push(t);
+    });
     var extraHtml = '';
     if (groundless.length) {
       extraHtml = '<details class="cmp-group cmp-group-extra" open>'
         + '<summary class="cmp-group-title">추가 표시사항 — 근거 확인 필요 '
         + groundless.length + '</summary>'
-        + '<div class="cmp-extra-note">표시사항 어디에도 없는 문구입니다. '
+        + '<div class="cmp-extra-note">원 표시사항에 없는 문구가 확인되었습니다. '
         + '근거가 있는 표시인지, 다른 제품의 문구가 섞인 것인지 확인해 주세요.</div>'
         + '<div class="cmp-extra-list">'
         + groundless.map(function (t) {
@@ -1225,6 +1260,25 @@
       + group(same, '같은 항목', false);
 
     window.photoViewerLayout(body, photoFile, table);
+
+    /* '어디서?' — 줄 아래에 그 자리를 오려 붙인다.
+     *
+     * **이 창에만 단다.** 채우기 창에는 대조 줄(cmp-row)이 없다 — 처음에
+     * 그쪽에 붙여서 단추는 보이는데 눌러도 아무 일이 없었다. 듣는 사람이
+     * 없는 단추였다.
+     *
+     * body 에 한 번만 맨다. 표는 매번 다시 그려지므로 줄마다 매면 다시 그릴
+     * 때 다 끊긴다. */
+    if (!body.dataset.whereBound) {
+      body.dataset.whereBound = '1';
+      body.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('[data-where]');
+        if (!btn) return;
+        var row = btn.closest('.cmp-row');
+        if (row) toggleWhere(row, btn.dataset.where, lastData);
+      });
+    }
+    loadWhereImage(photoFile);
 
     // 채우는 창이 아니다 — 반영 단추를 숨긴다
     var apply = modalEl.querySelector('#basicInfoOcrApply');
@@ -1844,6 +1898,8 @@
         }
         status('');
         derived = result.derived || null;
+        // 대조에서만 온다. 시안에만 있는 문구를 가리는 데 쓴다.
+        lastOcrText = result.ocr_text || '';
         // 판독에 쓴 사진을 문서함에 남긴다. 확인 창을 띄우기 전에 보내되
         // **기다리지 않는다** — 문서 저장이 늦거나 실패해도 판독 결과를 보는
         // 일이 막히면 안 된다. 원본을 보낸다(조각은 우리가 만든 것이다).

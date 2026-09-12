@@ -1394,6 +1394,14 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
                "regions": [r['label'] for r in regions]}
         if ground_report:
             out['ground'] = ground_report
+            # 원문도 함께 보낸다. **시안에만 있는 문구**를 가리려면 인쇄된
+            # 글자 전부가 필요한데, 판독 결과(data)에는 우리가 칸을 둔 것만
+            # 들어 있다. 칸이 없는 문구 — 수상 내역, 이벤트 안내, 다른 제품에서
+            # 복사해 온 문장 — 는 거기 없다.
+            #
+            # 원문은 대조(use_ground)에서만 만들어지므로 채우기 쪽 응답은
+            # 그대로다. 무겁지 않게 앞부분만 보낸다.
+            out['ocr_text'] = (ocr_text or '')[:20000]
 
         if want_boxes:
             # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이
@@ -1529,6 +1537,14 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         out = {"success": True, "data": result}
         if ground_report:
             out['ground'] = ground_report
+            # 원문도 함께 보낸다. **시안에만 있는 문구**를 가리려면 인쇄된
+            # 글자 전부가 필요한데, 판독 결과(data)에는 우리가 칸을 둔 것만
+            # 들어 있다. 칸이 없는 문구 — 수상 내역, 이벤트 안내, 다른 제품에서
+            # 복사해 온 문장 — 는 거기 없다.
+            #
+            # 원문은 대조(use_ground)에서만 만들어지므로 채우기 쪽 응답은
+            # 그대로다. 무겁지 않게 앞부분만 보낸다.
+            out['ocr_text'] = (ocr_text or '')[:20000]
 
         if want_boxes:
             # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이

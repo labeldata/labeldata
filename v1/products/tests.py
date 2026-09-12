@@ -6023,3 +6023,109 @@ class 성적서는_어디서_넣느냐에_따라_다른_곳에_붙는다(TestCas
             reverse('label:ingredient_spec_nutrition_save', args=[self.ing.pk]),
             data=json.dumps({'values': {}}), content_type='application/json')
         self.assertEqual(resp.status_code, 400)
+
+
+class 스타일은_마크업보다_먼저_온다(TestCase):
+    """
+    캐시를 비우고 기본 정보 탭에 들어가면 **알레르기 패널만** 잠깐 맨몸으로
+    보였다가 정상으로 돌아왔다. 그 규칙 176 줄이 **패널 마크업 뒤에** 있었기
+    때문이다 — 브라우저는 위에서 아래로 읽으며 그리므로 규칙을 만나기 전에
+    이미 한 번 그린다.
+
+    화면의 다른 곳이 멀쩡했던 까닭은 나머지 규칙이 전부 마크업보다 앞에
+    있었기 때문이다. 그 패널만 예외였다.
+    """
+
+    def tpl(self):
+        from pathlib import Path
+        return Path('v1/templates/products/_tab_basic_info.html').read_text(
+            encoding='utf-8')
+
+    def test_스타일_블록이_마크업_뒤에_있지_않다(self):
+        html = self.tpl()
+        last_style = html.rindex('<style>')
+        first_markup = html.index('<div')
+        self.assertLess(last_style, first_markup,
+                        '마크업 뒤에 <style> 이 있다 — 그 부분만 맨몸으로 그려진다')
+
+    def test_알레르기_패널_규칙이_남아_있다(self):
+        """옮기면서 잃으면 안 된다."""
+        html = self.tpl()
+        self.assertIn('.allergen-panel-root', html)
+        self.assertIn('.allergen-panel-header', html)
+
+
+class 어디서_단추는_대조_창에서만_듣는다(TestCase):
+    """
+    단추는 보이는데 눌러도 아무 일이 없었다. 클릭을 받는 코드를 **채우기
+    창(showModal)** 에 붙였기 때문이다 — 거기에는 대조 줄(cmp-row)이 없다.
+    듣는 사람이 없는 단추였다.
+    """
+
+    def js(self):
+        from pathlib import Path
+        return Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+
+    def test_대조_함수_안에서_듣는다(self):
+        js = self.js()
+        block = js[js.index('function drawCompare'):]
+        block = block[:block.index(chr(10) + '  }')]
+        self.assertIn("closest('[data-where]')", block)
+        self.assertIn('loadWhereImage(photoFile)', block)
+
+    def test_채우기_창에서는_듣지_않는다(self):
+        js = self.js()
+        block = js[js.index('function showModal'):js.index('function drawCompare')]
+        self.assertNotIn("closest('[data-where]')", block)
+
+    def test_한_번만_맨다(self):
+        """표는 매번 다시 그려진다. 줄마다 매면 다시 그릴 때 다 끊긴다."""
+        self.assertIn('body.dataset.whereBound', self.js())
+
+
+class 원_표시사항에_없는_문구를_모아_보여_준다(TestCase):
+    """
+    인쇄물에는 우리가 칸을 두지 않은 문구가 얹힌다 — 수상 내역, 이벤트 안내,
+    다른 제품에서 복사해 온 문장. **근거 없이 인쇄되는 것이 위험하다.**
+
+    판독 결과만 봐서는 못 찾는다. 거기에는 **우리가 칸을 둔 것**만 들어 있고
+    칸이 없는 문구는 애초에 담기지 않는다. 그래서 OCR 원문을 본다.
+    """
+
+    def test_원문을_화면까지_보낸다(self):
+        from pathlib import Path
+
+        src = Path('v1/label/services/ocr_service.py').read_text(encoding='utf-8')
+        self.assertEqual(src.count("out['ocr_text']"), 2)   # 두 경로 모두
+
+    def test_대조에서만_온다(self):
+        """채우기 응답이 무거워질 이유가 없다."""
+        from pathlib import Path
+
+        src = Path('v1/label/services/ocr_service.py').read_text(encoding='utf-8')
+        at = src.index("out['ocr_text']")
+        before = src[:at]
+        self.assertIn('if ground_report:', before[-400:])
+
+    def test_원문에서_짝_없는_줄을_모은다(self):
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.assertIn('function groundlessFromText', js)
+        self.assertIn('lastOcrText', js)
+
+    def test_틀렸다고_말하지_않는다(self):
+        """우리가 칸을 안 둔 정당한 표시일 수 있다(인증 마크, 바코드 아래 안내)."""
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.assertIn('원 표시사항에 없는 문구가 확인되었습니다', js)
+        self.assertIn('근거가 있는 표시인지', js)
+
+    def test_너무_많이_늘어놓지_않는다(self):
+        """짚어 주는 것이 목적이지 나열이 아니다."""
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.assertIn('GROUNDLESS_MAX', js)
+        self.assertIn('GROUNDLESS_MIN', js)
