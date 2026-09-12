@@ -400,6 +400,61 @@
   .ag-fold.is-open {
     display: flex; flex-wrap: wrap; gap: .25rem;
   }
+
+  /* ── 원료 상세 — 흐름에 따라 묶고 2 열로 ──────────────────────────
+     한때 아홉 줄이 한 칸짜리로 세로로 쌓여 있었다. 화면을 한참 내려야 끝이
+     보였고, 항목의 성격이 다 다른데 생김새가 같아서 무엇이 필수이고 무엇이
+     선택인지도 안 보였다.
+
+     사람이 하는 일에는 순서가 있다 — 무엇인가 / 라벨에 어떻게 / 계산에 쓰는
+     값 / 참고. 그 순서로 묶고, 뒤의 둘은 접는다. 없어도 되는 것이 필수
+     항목과 같은 크기로 서 있으면 화면만 길어진다. */
+  .ing-form { display: flex; flex-direction: column; gap: 10px; }
+
+  .ing-sec {
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fff;
+  }
+  .ing-sec-t {
+    margin: 0 0 8px; font-size: 12px; font-weight: 700;
+    color: var(--ez-gray-900, #202124);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .ing-sec-d { font-weight: 400; font-size: 11px; color: var(--ez-gray-600, #80868b); }
+
+  /* 접힌 묶음. 제목만 한 줄로 서 있다가 눌러야 펴진다. */
+  .ing-fold > summary { cursor: pointer; list-style: none; margin-bottom: 0; }
+  .ing-fold > summary::-webkit-details-marker { display: none; }
+  .ing-fold > summary::after {
+    content: '▾'; margin-left: auto; color: var(--ez-gray-500, #9aa0a6); font-size: 11px;
+  }
+  .ing-fold[open] > summary { margin-bottom: 8px; }
+  .ing-fold[open] > summary::after { content: '▴'; }
+  .ing-fold > summary:hover { color: var(--ez-info, #1a73e8); }
+
+  /* 두 칸이 기본. 넓은 것은 줄 전체를 쓴다. */
+  .ing-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 14px;
+  }
+  .ing-f-wide { grid-column: 1 / -1; }
+  .ing-f { min-width: 0; }
+
+  /* 이름은 위에 작게. 왼쪽에 세로로 세우면 긴 이름이 두 줄이 되면서
+     칸마다 높이가 달라진다. */
+  .ing-f-l {
+    font-size: 11px; color: var(--ez-gray-700, #5f6368);
+    margin-bottom: 3px; line-height: 1.4;
+  }
+  .ing-f-v { min-width: 0; }
+  .ing-f-v .form-control { font-size: 12px; }
+
+  @media (max-width: 720px) {
+    .ing-grid { grid-template-columns: 1fr; }
+  }
 </style>
 {% include "includes/_field_help.html" %}
 <div class="popup-container" id="ingredient-detail-container-partial">
@@ -442,12 +497,17 @@
               칸마다 따로 붙이면 언젠가 하나가 빠진다.
             {% endcomment %}
             <fieldset {% if read_only %}disabled{% endif %} class="ing-fieldset">
-            <table class="nutrition-table">
-                <tbody>
-                    <!-- 1행: 식품 구분 (라디오 버튼) -->
-                    <tr>
-                        <th>식품 구분 <span class="text-danger">*</span></th>
-                        <td colspan="3">
+            <div class="ing-form">
+  {% comment %}
+    ① 무엇인가. 원료를 등록하는 사람이 가장 먼저, 그리고 대개 여기까지만
+    한다. 그래서 제일 위에 두고 접지 않는다.
+  {% endcomment %}
+  <section class="ing-sec">
+    <h6 class="ing-sec-t">원료 정보</h6>
+    <div class="ing-grid">
+      <div class="ing-f ing-f-wide">
+        <div class="ing-f-l">식품 구분 <span class="text-danger">*</span></div>
+        <div class="ing-f-v">
                             <div class="d-flex flex-wrap align-items-center gap-3">
                                 <div class="d-flex gap-3">
                                     <div class="form-check form-check-inline mb-0">
@@ -464,12 +524,11 @@
                                     </div>
                                 </div>
                             </div>
-                        </td>
-                    </tr>
-                    <!-- 2행: 품목보고번호 (가공식품/식품첨가물만) -->
-                    <tr id="reportNoRow">
-                        <th>품목보고번호<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>있으면 편한 것</strong><i>[불러오기]</i> 를 누르면 <strong>원재료명·식품유형·제조사명</strong>이 한 번에 채워집니다.<br>영양성분도 같은 번호의 식약처 자료가 있으면 <strong>후보를 고르지 않고 바로 붙습니다</strong> — 같은 번호는 같은 품목이라 고를 것이 없습니다.<em>없어도 됩니다. 이름으로 후보를 고르거나 성적서 값을 직접 넣으면 같습니다.</em></span></span></th>
-                        <td colspan="3">
+                        </div>
+      </div>
+      <div class="ing-f ing-f-wide" id="reportNoRow">
+        <div class="ing-f-l">품목보고번호<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>있으면 편한 것</strong><i>[불러오기]</i> 를 누르면 <strong>원재료명·식품유형·제조사명</strong>이 한 번에 채워집니다.<br>영양성분도 같은 번호의 식약처 자료가 있으면 <strong>후보를 고르지 않고 바로 붙습니다</strong> — 같은 번호는 같은 품목이라 고를 것이 없습니다.<em>없어도 됩니다. 이름으로 후보를 고르거나 성적서 값을 직접 넣으면 같습니다.</em></span></span></div>
+        <div class="ing-f-v">
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no" value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15" placeholder="예: 19950000000000" style="flex: 1;">
                                 <button type="button" class="btn btn-outline-primary v2-btn-sm" onclick="fetchFoodItemByReportNo()" title="품목보고번호로 불러오기">
@@ -477,30 +536,39 @@
                                 </button>
                             </div>
                             <small class="text-muted d-block mt-1">품목보고번호를 입력하고 불러오기 버튼을 클릭하면 정보가 자동으로 입력됩니다.</small>
-                        </td>
-                    </tr>
-                    <!-- 3행: 원재료명 / 식품유형 -->
-                    <tr>
-                        <th style="width: 120px;">원재료명 <span class="text-danger">*</span></th>
-                        <td style="width: 60%;">
+                        </div>
+      </div>
+      <div class="ing-f">
+        <div class="ing-f-l">원재료명 <span class="text-danger">*</span></div>
+        <div class="ing-f-v">
                             <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}" placeholder="예: 밀가루" required>
-                        </td>
-                        <th style="width: 120px;">식품유형<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>이 원료를 제품에 넣을 때 <i>원재료명 표시</i>가 이 값으로 괄호 안 문구를 만듭니다.<br>식품첨가물이면 표시규정(주용도·표시명)도 이 값으로 찾습니다.</span></span></th>
-                        <td style="width: auto;">
+                        </div>
+      </div>
+      <div class="ing-f">
+        <div class="ing-f-l">식품유형<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>이 원료를 제품에 넣을 때 <i>원재료명 표시</i>가 이 값으로 괄호 안 문구를 만듭니다.<br>식품첨가물이면 표시규정(주용도·표시명)도 이 값으로 찾습니다.</span></span></div>
+        <div class="ing-f-v">
                             <select id="foodTypeSelect" name="prdlst_dcnm" class="form-control form-control-sm" data-selected="{{ ingredient.prdlst_dcnm|default:'' }}"></select>
-                        </td>
-                    </tr>
-                    <!-- 4행: 제조사명 -->
-                    <tr>
-                        <th>제조사명</th>
-                        <td colspan="3">
+                        </div>
+      </div>
+      <div class="ing-f ing-f-wide">
+        <div class="ing-f-l">제조사명</div>
+        <div class="ing-f-v">
                             <input type="text" class="form-control" name="bssh_nm" id="bssh_nm" value="{{ ingredient.bssh_nm|default:'' }}">
-                        </td>
-                    </tr>
-                    <!-- 5행: 원재료 표시명 -->
-                    <tr>
-                        <th>원재료 표시명<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>제품의 <i>원재료명</i> 을 조립할 때 <strong>이 글자가 그대로 들어갑니다.</strong> 원산지·복합원재료 괄호까지 적어 두면 제품마다 다시 안 써도 됩니다.<em>비워 두면 위의 원재료명이 대신 사용됩니다.</em></span></span></th>
-                        <td colspan="3">
+                        </div>
+      </div>
+    </div>
+  </section>
+
+  {% comment %}
+    ② 제품으로 나가는 값. ①이 "이 원료가 무엇인가" 라면 여기는 "그것을
+    라벨에 어떻게 적을 것인가" 다. 성격이 달라 묶음을 나눈다.
+  {% endcomment %}
+  <section class="ing-sec">
+    <h6 class="ing-sec-t">라벨 표시</h6>
+    <div class="ing-grid">
+      <div class="ing-f ing-f-wide">
+        <div class="ing-f-l">원재료 표시명<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>제품의 <i>원재료명</i> 을 조립할 때 <strong>이 글자가 그대로 들어갑니다.</strong> 원산지·복합원재료 괄호까지 적어 두면 제품마다 다시 안 써도 됩니다.<em>비워 두면 위의 원재료명이 대신 사용됩니다.</em></span></span></div>
+        <div class="ing-f-v">
                             <textarea class="auto-expand form-control" name="ingredient_display_name" id="ingredient_display_name" placeholder="원재료 표시명을 입력하세요" rows="1" style="overflow:hidden; resize:vertical;">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
                             <small class="text-muted d-block mt-1" id="ingredient_display_name_help">제품 라벨에 표시될 원재료명을 입력하세요. (예: 밀가루(미국산), 정제수)</small>
                             <!-- 식품첨가물 표시규정 (식품첨가물인 경우) -->
@@ -519,13 +587,11 @@
                                     <div id="display_regulation_buttons" style="display: none;" class="regulation-card-buttons d-flex flex-wrap gap-2"></div>
                                 </div>
                             </div>
-                        </td>
-                    </tr>
-                    <!-- 6행: 식품첨가물 표시규정 제거 (위로 이동) -->
-                    <!-- 7행: 알레르기 -->
-                    <tr>
-                        <th>알레르기<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>이 원료를 쓴 제품의 알레르기 문구에 자동으로 모입니다. 제품마다 다시 고르지 않습니다.<br><i>[자동감지]</i> 는 위의 원재료명·표시명에서 찾아 줍니다 — <strong>추천일 뿐이니 반드시 눈으로 확인하세요.</strong><em>표시기준의 19가지만 고를 수 있습니다.</em></span></span></th>
-                        <td colspan="3">
+                        </div>
+      </div>
+      <div class="ing-f ing-f-wide">
+        <div class="ing-f-l">알레르기<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>이 원료를 쓴 제품의 알레르기 문구에 자동으로 모입니다. 제품마다 다시 고르지 않습니다.<br><i>[자동감지]</i> 는 위의 원재료명·표시명에서 찾아 줍니다 — <strong>추천일 뿐이니 반드시 눈으로 확인하세요.</strong><em>표시기준의 19가지만 고를 수 있습니다.</em></span></span></div>
+        <div class="ing-f-v">
                             <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div id="allergySelectedDisplay" class="selected-display">선택된 항목 없음</div>
@@ -545,12 +611,11 @@
                                 <div id="allergyDetectNote" class="ag-note" style="display:none;"></div>
                                 <input type="hidden" name="allergens" id="allergy_info" value="{{ ingredient.allergens|default:'' }}">
                             </div>
-                        </td>
-                    </tr>
-                    <!-- 8행: GMO -->
-                    <tr>
-                        <th>GMO<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>고른 것이 있으면 제품의 <i>유전자변형식품</i> 표시 문구로 이어집니다.<em>해당 없으면 비워 두세요. 빈 값이 정상입니다.</em></span></span></th>
-                        <td colspan="3">
+                        </div>
+      </div>
+      <div class="ing-f ing-f-wide">
+        <div class="ing-f-l">GMO<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>고른 것이 있으면 제품의 <i>유전자변형식품</i> 표시 문구로 이어집니다.<em>해당 없으면 비워 두세요. 빈 값이 정상입니다.</em></span></span></div>
+        <div class="ing-f-v">
                             <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div id="gmoSelectedDisplay" class="selected-display">선택된 항목 없음</div>
@@ -564,45 +629,31 @@
                                 </div>
                                 <input type="hidden" name="gmo" id="gmo_info" value="{{ ingredient.gmo|default:'' }}">
                             </div>
-                        </td>
-                    </tr>
+                        </div>
+      </div>
+    </div>
+  </section>
 
-                    {% comment %}
-                      영양성분 — 배합으로 영양성분표를 만들려면 원료마다 이 값이
-                      있어야 한다. 여기서 한 번 정해 두면 이 원료를 쓰는 모든
-                      배합이 그 값을 쓴다.
-
-                      **자동으로 정하지 않는다.** '버터' 는 식약처 DB 에 동명이
-                      열두 건이고 열량이 164 ~ 761 kcal 로 갈린다. 이름이 완전히
-                      같아 기계가 못 고른다 — 후보만 내놓고 사람이 고른다.
-
-                      새 원료(mode=create)에는 감춘다. 저장 전에는 원료 id 가
-                      없어 붙일 자리가 없다.
-                    {% endcomment %}
-                    {% if mode == 'create' %}
-                    {% comment %}
-                      등록 화면에는 이 줄이 아예 없었다. 사용자는 "영양성분은
-                      여기서 넣는 게 아닌가 보다" 로 끝내고 다시 안 왔다 —
-                      배합 계산이 막히는 원인이 정확히 이것이다.
-                      저장 전에는 원료 id 가 없어 붙일 자리가 없는 것이 맞으니,
-                      없앨 것이 아니라 **언제 할 수 있는지** 말한다.
-                    {% endcomment %}
-                    <tr>
-                        <th>영양성분</th>
-                        <td colspan="3">
+  {% if mode != 'edit' or not ingredient.user_id %}
+  <section class="ing-sec"><div class="ing-grid">
+    <div class="ing-f ing-f-wide">
+      <div class="ing-f-l">영양성분</div>
+      <div class="ing-f-v">
                             <span class="ing-nut-later">
                                 <i class="bi bi-info-circle"></i>
                                 저장하면 여기서 영양성분을 정할 수 있습니다.
                                 배합으로 영양성분표를 산출할 때만 쓰이니 필수는 아닙니다.
                             </span>
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% if mode == 'edit' and ingredient.user_id %}
-                    <tr>
-                        <th>영양성분<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>꼭 넣어야 하나 — 아닙니다</b><strong>분석성적서가 있으면 그 값을 그대로 쓰면 됩니다.</strong> 여기 넣는 100g 당 값은 <i>배합으로 영양성분표를 산출</i>할 때만 쓰입니다.<br>입력 방법은 세 가지입니다 — 품목보고번호로 자동, 이름으로 후보 고르기, 성적서 값 직접 입력.<em>비워 두어도 원료 등록·원재료명 표시·알레르기에는 아무 지장이 없습니다.</em></span></span>
-                        </th>
-                        <td colspan="3">
+                        </div>
+    </div>
+  </div></section>
+  {% endif %}
+
+  {% if mode == 'edit' and ingredient.user_id %}
+  <details class="ing-sec ing-fold">
+    <summary class="ing-sec-t">영양성분<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>꼭 넣어야 하나 — 아닙니다</b><strong>분석성적서가 있으면 그 값을 그대로 쓰면 됩니다.</strong> 여기 넣는 100g 당 값은 <i>배합으로 영양성분표를 산출</i>할 때만 쓰입니다.<br>입력 방법은 세 가지입니다 — 품목보고번호로 자동, 이름으로 후보 고르기, 성적서 값 직접 입력.<em>비워 두어도 원료 등록·원재료명 표시·알레르기에는 아무 지장이 없습니다.</em></span></span> <span class="ing-sec-d">배합 계산에 쓰입니다 · 없어도 됩니다</span></summary>
+    <div class="ing-grid">
+      <div class="ing-f ing-f-wide"><div class="ing-f-v">
                             <div id="ingNutrition"
                                  data-url="{% url 'label:my_ingredient_nutrition' ingredient_id=ingredient.my_ingredient_id %}"
                                  data-save-url="{% url 'label:my_ingredient_nutrition_save' ingredient_id=ingredient.my_ingredient_id %}"
@@ -610,30 +661,23 @@
                                  data-spec-save-url="{% url 'label:ingredient_spec_nutrition_save' ingredient_id=ingredient.my_ingredient_id %}">
                                 <div class="ing-nut-loading text-muted small">불러오는 중…</div>
                             </div>
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% if mode == 'edit' and ingredient.prdlst_report_no %}
-                    {% comment %}
-                      같은 품목보고번호를 쓰는 다른 곳이 같게 적었는가.
+                        </div></div>
+    </div>
+  </details>
+  {% endif %}
 
-                      **값은 보여 주지 않는다.** "3곳이 '우유, 대두' 로 적었다"
-                      고 값을 내보이면 사람은 그걸 베끼는데, 그 3곳이 틀렸을 수
-                      있고 그 순간 우리 책임이 된다 — 알레르기는 틀리면 사람이
-                      다친다. 다수인지 아닌지만 말하면 "다시 확인해 보라" 는
-                      신호가 된다.
-                    {% endcomment %}
-                    <tr id="ingConsensusRow" style="display:none;">
-                        <th>다른 사용자<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>같은 품목보고번호를 쓰는 곳</b>같은 번호는 법적으로 같은 품목이라, 표시명·알레르기·GMO 는 어느 회사가 적어도 같아야 합니다.<br><strong>다수가 옳다는 뜻은 아닙니다.</strong> 다르게 적은 곳이 있으면 한 번 더 확인해 보시라는 신호입니다.<em>다른 회사가 적은 값과 상호명은 보여 드리지 않습니다.</em></span></span>
-                        </th>
-                        <td colspan="3">
+  {% if mode == 'edit' and ingredient.prdlst_report_no %}
+  <details class="ing-sec ing-fold" id="ingConsensusRow">
+    <summary class="ing-sec-t">다른 사용자<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>같은 품목보고번호를 쓰는 곳</b>같은 번호는 법적으로 같은 품목이라, 표시명·알레르기·GMO 는 어느 회사가 적어도 같아야 합니다.<br><strong>다수가 옳다는 뜻은 아닙니다.</strong> 다르게 적은 곳이 있으면 한 번 더 확인해 보시라는 신호입니다.<em>다른 회사가 적은 값과 상호명은 보여 드리지 않습니다.</em></span></span> <span class="ing-sec-d">같은 품목보고번호를 쓰는 곳과 견줍니다</span></summary>
+    <div class="ing-grid">
+      <div class="ing-f ing-f-wide"><div class="ing-f-v">
                             <div id="ingConsensus"
                                  data-url="{% url 'label:ingredient_consensus' ingredient_id=ingredient.my_ingredient_id %}"></div>
-                        </td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
+                        </div></div>
+    </div>
+  </details>
+  {% endif %}
+</div>
             </fieldset>
         </form>
     </div>
