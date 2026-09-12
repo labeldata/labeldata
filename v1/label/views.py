@@ -2672,23 +2672,23 @@ def preview_popup(request):
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
             'nutrition_items': nutrition_items,
-            'allergens': json.dumps(list(set(allergens)), ensure_ascii=False),  # JSON 직렬화 추가
+            'allergens': _script_json(list(set(allergens))),  # JSON 직렬화 추가
             'origins': list(set(origins)),       # 중복 제거
-            'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
-            'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
-            'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
-            'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
+            'nutrition_data': _script_json(nutrition_data),
+            'country_list': _script_json(country_list),  # JSON 직렬화
+            'country_mapping': _script_json(country_mapping),  # 국가 코드 매핑 추가
+            'expiry_recommendation_json': _script_json(get_expiry_recommendations()),  # 소비기한 권장 데이터 추가
             # 규정값은 **이 라벨에 걸리는 것만** 내려보낸다. 예전에는
             # constants.js 에 표가 통째로 박혀 있었고, /static/ 은 로그인
             # 없이 누구나 받는다(client_rules).
-            'regulations_json': json.dumps(
-                client_rules.for_label(label.prdlst_dcnm), ensure_ascii=False),
-            'custom_fields': json.dumps(custom_fields, ensure_ascii=False),  # 맞춤항목 추가
-            'label_data': json.dumps(label_data, ensure_ascii=False),
+            'regulations_json': _script_json(
+                client_rules.for_label(label.prdlst_dcnm)),
+            'custom_fields': _script_json(custom_fields),  # 맞춤항목 추가
+            'label_data': _script_json(label_data),
             # 표의 항목 배치(순서·폭·세로/2단). 라벨에 붙어 있어야 다른 사람도
             # 같은 모양을 본다 — 예전에는 브라우저 localStorage 에만 있었다.
-            'display_checked': json.dumps(preview_display_checked(label), ensure_ascii=False),
-            'field_layout': json.dumps(label.prv_field_layout or {}, ensure_ascii=False),
+            'display_checked': _script_json(preview_display_checked(label)),
+            'field_layout': _script_json(label.prv_field_layout or {}),
             # 규정 검증(AI) 버튼을 보일 것인가. 기능은 그대로 두고 버튼만 감춘다
             # (settings.SHOW_AI_VALIDATION 주석 참고).
             'show_ai_validation': getattr(settings, 'SHOW_AI_VALIDATION', False),
@@ -2696,10 +2696,10 @@ def preview_popup(request):
             'can_upload_pdf': can_upload_pdf,  # PDF 문서함 업로드 버튼 표시 여부
             # 디자인 의뢰서 — 표시장소마다 디자이너가 지켜야 하는 것.
             # 규정 숫자는 서버 상수에서 오고, 고친 것은 계정에 남는다.
-            'design_request': json.dumps({
+            'design_request': _script_json({
                 'notes': design_notes_for(request.user),
                 'mainFields': list(MAIN_PANEL_FIELDS),
-            }, ensure_ascii=False),
+            }),
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         
@@ -2913,13 +2913,23 @@ def save_preview_settings(request):
 
 
         # 분리배출마크 정보 저장 (첫 번째 마크만)
+        # 분리배출마크.
+        #
+        # 표에 자리가 **한 벌뿐이다**(prv_recycling_mark_type 등 단일 컬럼).
+        # 화면은 여러 개를 놓을 수 있으므로, 두 개 이상이면 첫 번째만 남는다.
+        # 조용히 버리면 사용자는 저장된 줄 알고 창을 닫는다 — 몇 개가 남는지
+        # 응답으로 말해 주고 화면이 그것을 띄운다.
         recycling_mark = data.get('recycling_mark', {})
+        marks_kept = 0
+        marks_sent = 0
         if recycling_mark:
             label.prv_recycling_mark_enabled = 'Y' if recycling_mark.get('enabled') else 'N'
-            
-            # marks 배열이 있으면 첫 번째 마크만 저장
-            if recycling_mark.get('marks') and isinstance(recycling_mark['marks'], list) and len(recycling_mark['marks']) > 0:
-                first_mark = recycling_mark['marks'][0]
+
+            marks = recycling_mark.get('marks')
+            if isinstance(marks, list) and marks:
+                marks_sent = len(marks)
+                marks_kept = 1
+                first_mark = marks[0]
                 label.prv_recycling_mark_type = first_mark.get('type', '')
                 label.prv_recycling_mark_position_x = str(first_mark.get('position_x', ''))
                 label.prv_recycling_mark_position_y = str(first_mark.get('position_y', ''))
@@ -2930,13 +2940,20 @@ def save_preview_settings(request):
                 label.prv_recycling_mark_position_x = str(recycling_mark.get('position_x', ''))
                 label.prv_recycling_mark_position_y = str(recycling_mark.get('position_y', ''))
                 label.prv_recycling_mark_text = recycling_mark.get('text', '')
+                marks_sent = marks_kept = 1 if label.prv_recycling_mark_type else 0
         else:
             label.prv_recycling_mark_enabled = 'N'
-        
+
         label.save()
-        return JsonResponse({'success': True})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': True,
+                             'marks_sent': marks_sent, 'marks_kept': marks_kept})
+    except Exception:
+        # 예외 원문을 화면에 흘리지 않는다
+        logger.exception('[미리보기 설정 저장 실패] label_id=%s', data.get('label_id')
+                         if isinstance(locals().get('data'), dict) else '?')
+        return JsonResponse({'success': False,
+                             'error': '설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'},
+                            status=500)
 
 
 # 한 번에 받을 표시면 개수 상한. 화면(photo_cropper.js)이 그보다 많이 고르게
@@ -3205,8 +3222,13 @@ def upload_label_pdf(request):
             if not shared_share:
                 return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
 
+            # **없으면 닫는다.**
+            # 예전에는 `if perm and not perm.can_upload_documents` 였다 —
+            # 권한 레코드가 아예 없는 공유(perm is None)는 그냥 통과했다.
+            # 화면 쪽은 반대로 잠겨 있어(can_upload_pdf 는 bool(_perm and …))
+            # 단추가 안 보였을 뿐, 요청을 직접 만들면 문서함에 등록됐다.
             perm = getattr(shared_share, 'permission', None)
-            if perm and not perm.can_upload_documents:
+            if not (perm and perm.can_upload_documents):
                 return JsonResponse({
                     'success': False,
                     'error': '문서 업로드 권한이 없습니다. (문서 업로드는 오너·편집자·자료제출자만 가능합니다.)'
@@ -3496,6 +3518,25 @@ def linked_ingredient_count(request, label_id):
         return JsonResponse({'count': count})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+def _script_json(obj):
+    """
+    `<script type="application/json">` 안에 넣어도 안전한 JSON 문자열.
+
+    파이썬의 json.dumps 는 `<` 와 `/` 를 그대로 둔다. 그 결과를 `|safe` 로
+    스크립트 블록에 박으면, 값 안에 `</script>` 가 들어 있을 때 HTML 파서가
+    거기서 블록을 끝내고 뒤를 마크업으로 읽는다 — 제품명·원재료명·맞춤항목처럼
+    사람이 적는 칸이면 그대로 **저장형 XSS** 다. 미리보기는 공유받은 사람에게도
+    열리므로(preview_popup), 남의 브라우저에서 돈다.
+
+    장고의 `json_script` 필터가 하는 escape 와 같다. 이스케이프된 문자열은
+    JSON 으로 파싱하면 원래 값 그대로이므로 읽는 쪽은 손댈 것이 없다.
+    """
+    return (json.dumps(obj, ensure_ascii=False)
+            .replace('<', r'\u003C')
+            .replace('>', r'\u003E')
+            .replace('&', r'\u0026'))
+
 
 def _food_type_for_dcnm(prdlst_dcnm):
     """

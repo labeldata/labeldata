@@ -1137,7 +1137,16 @@ document.addEventListener('DOMContentLoaded', function () {
     window.updateRecyclingMarkUI = function(packageText, autoApply = false) {
         // 분리배출마크는 label_preview.html 인라인 구현이 맡는다.
         // 둘 다 돌면 마크가 두 개 그려지고, 이쪽 것은 드래그도 삭제도 안 된다.
-        if (window.__recyclingMarkOwner === 'inline') return;
+        //
+        // 예전에는 여기서 그냥 return 했다. 그래서 사진 판독·재질 입력이
+        // 바뀌어도 추천이 아무 데도 닿지 않았다 — 인라인 쪽 추천기는 지역
+        // 함수라 이 파일에서 볼 수가 없었다. 지금은 그쪽으로 넘긴다.
+        if (window.__recyclingMarkOwner === 'inline') {
+            if (typeof window.recommendRecyclingMarkInline === 'function') {
+                window.recommendRecyclingMarkInline(packageText);
+            }
+            return;
+        }
         const recommended = recommendRecyclingMarkByMaterial(packageText);
         
         // DOM 요소가 준비될 때까지 대기
@@ -1425,66 +1434,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // (these properties are optional; CSS has sensible defaults)
     }
 
-    // 미리보기 스타일 업데이트 (임시 비활성화로 테스트)
+    /*
+     * 미리보기 표 스타일 갱신 — **진짜 구현은 label_preview.html 인라인에 있다.**
+     *
+     * 여기 있던 것은 첫 줄이 `return;` 인 죽은 스텁이었고("임시로 완전히
+     * 비활성화하여 분리배출마크 영향 테스트"), 그 아래 60여 줄은 한 번도
+     * 실행되지 않았다. 인라인 쪽 동명 함수는 지역 함수라 window 에 없었으므로
+     *   · 항목명 칸(mm)을 바꿔도 표가 그대로였고
+     *     (`if (typeof window.updatePreviewStyles === 'function')` 이 늘 거짓)
+     *   · 순서 드래그·눈 아이콘·2단배치로 표를 다시 그린 뒤 세로(cm)·
+     *     정보표시면 면적이 옛 값으로 남았다
+     * 인라인이 자기를 window 에 올리고, 여기서는 그쪽으로 넘긴다.
+     */
     function updatePreviewStyles() {
-        // 임시로 완전히 비활성화하여 분리배출마크 영향 테스트
-        return;
-        
-        const previewContent = document.getElementById('previewContent');
-        if (!previewContent) return;
-
-        const settings = {
-            width: parseFloat(document.getElementById('widthInput').value) || 10,
-            height: parseFloat(document.getElementById('heightInput').value) || 10,
-            fontSize: parseFloat(document.getElementById('fontSizeInput').value) || 10,
-            letterSpacing: parseInt(document.getElementById('letterSpacingInput').value) || -5,
-            lineHeight: parseFloat(document.getElementById('lineHeightInput').value) || 1.2,
-            fontFamily: document.getElementById('fontFamilySelect').value || "'Noto Sans KR'"
-        };
-
-    // Apply modern preview content class and set CSS variables for dynamic values
-    previewContent.classList.add('preview-content-modern');
-    previewContent.style.setProperty('--preview-width', `${settings.width}cm`);
-    previewContent.style.setProperty('--preview-font-size', `${settings.fontSize}pt`);
-    previewContent.style.setProperty('--preview-letter-spacing', `${settings.letterSpacing / 100}em`);
-    previewContent.style.setProperty('--preview-line-height', `${settings.lineHeight}`);
-    previewContent.style.setProperty('--preview-font-family', `${settings.fontFamily}`);
-
-        const table = previewContent.querySelector('.preview-table');
-    if (table) table.classList.add('preview-table');
-
-        // 분리배출마크 요소들은 제외하고 셀에만 스타일 적용
-        const cells = previewContent.querySelectorAll('th, td');
-        cells.forEach(cell => {
-            // 분리배출마크 관련 요소인지 확인
-            const isRecyclingElement = cell.closest('#recyclingMarkContainer') || 
-                                     cell.classList.contains('recycling-text-line') ||
-                                     cell.classList.contains('recycling-line');
-            
-            if (!isRecyclingElement) {
-                cell.classList.add('preview-cell');
-                if (cell.tagName === 'TH') cell.classList.add('preview-header');
-            }
-        });
-
-    const headerText = previewContent.querySelector('.header-text');
-    if (headerText) headerText.classList.add('preview-text');
-
-        requestAnimationFrame(() => {
-            const contentHeight = previewContent.scrollHeight;
-            const cmHeight = Math.ceil(contentHeight / 37.8);
-            const heightInput = document.getElementById('heightInput');
-            
-            // 이벤트 발생 없이 값만 변경 (연쇄 반응 방지)
-            if (heightInput && heightInput.value !== cmHeight.toString()) {
-                // 임시로 이벤트 리스너 제거
-                const tempValue = heightInput.value;
-                heightInput.value = cmHeight;
-                
-                // updateArea만 직접 호출 (다른 이벤트 체인 방지)
-                updateArea();
-            }
-        });
+        var real = window.updatePreviewStyles;
+        if (typeof real === 'function' && real !== updatePreviewStyles) real();
     }
 
     // 이벤트 리스너 설정 (중복 제거된 코드)
@@ -2081,13 +2045,22 @@ document.addEventListener('DOMContentLoaded', function () {
                  *
                  * 탭 안이면 바깥에 알린다. 바깥은 이 말을 이미 기다리고 있다
                  * (product_detail 의 previewSettingsSaved). */
+                /* 분리배출마크는 표에 자리가 한 벌뿐이라 여러 개를 놓아도
+                   첫 번째만 남는다. 조용히 버리면 저장된 줄 알고 창을 닫는다. */
+                let savedMsg = '표시사항 설정을 저장했습니다';
+                if (res.marks_sent > res.marks_kept) {
+                    savedMsg = '설정을 저장했습니다. 다만 분리배출마크는 한 개만 '
+                             + '보관됩니다 — ' + res.marks_sent + '개 중 첫 번째만 남았습니다.';
+                }
+
                 if (window.parent !== window) {
                     try {
                         window.parent.postMessage(
-                            {type: 'previewSettingsSaved'}, window.location.origin);
+                            {type: 'previewSettingsSaved', message: savedMsg},
+                            window.location.origin);
                     } catch (e) { /* 출처가 다르면 못 보낸다 */ }
                 } else if (typeof window.showSaved === 'function') {
-                    window.showSaved('표시사항 설정을 저장했습니다');
+                    window.showSaved(savedMsg);
                 }
 
                 const saveBtn = document.getElementById('saveSettingsBtn');
@@ -2104,7 +2077,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     }, 2000);
                 }
             } else {
-                alert('미리보기 설정 저장 실패: ' + (res.error || ''));
+                /* alert 은 화면을 멈춰 세운다. 이 파일이 이미 쓰고 있는
+                   통로가 있다(showPreviewToast — 탭 안이면 부모로 넘긴다). */
+                if (typeof showPreviewToast === 'function') {
+                    showPreviewToast(res.error || '미리보기 설정을 저장하지 못했습니다.', 'error');
+                } else {
+                    alert('미리보기 설정 저장 실패: ' + (res.error || ''));
+                }
             }
         })
         .catch(err => {
@@ -2219,6 +2198,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 현재 분리배출마크 정보 수집
     function getCurrentRecyclingMarkInfo() {
+        /* 마크를 만들고 끌고 지우는 것은 label_preview.html 의 인라인
+           구현이다(setRecyclingMark 가 위에서 그렇게 비켜 준다). 그쪽은
+           recyclingMark_1, _2 … 를 만들지 #recyclingMarkContainer 를 만들지
+           않으므로, 아래 코드는 늘 "마크 없음" 을 돌려줬다 — 저장은 한 번도
+           마크를 담아 보낸 적이 없다. 주인이 인라인이면 수집도 그쪽에 맡긴다. */
+        if (window.__recyclingMarkOwner === 'inline'
+            && typeof window.collectRecyclingMarks === 'function') {
+            return window.collectRecyclingMarks();
+        }
         const markElement = document.getElementById('recyclingMarkContainer');
         if (!markElement) {
             return {

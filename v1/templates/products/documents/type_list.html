@@ -14,7 +14,7 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong>등록된 문서 타입</strong>
-            {# 비활성까지 모두 보여 준다 — '상태' 열이 뜻을 가지려면 그래야 한다 #}
+{% comment %}비활성까지 모두 보여 준다 — '상태' 열이 뜻을 가지려면 그래야 한다{% endcomment %}
             <span class="text-muted" style="font-size:0.8125rem;">
                 전체 {{ types|length }}개 · 활성 {{ active_count }}개
             </span>

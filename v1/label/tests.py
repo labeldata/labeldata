@@ -15785,7 +15785,18 @@ class 저장했으면_어떻게든_말한다(TestCase):
         h = io.open('v1/templates/products/product_detail.html', encoding='utf-8').read()
         self.assertIn("'previewSettingsSaved'", h)
         at = h.index("'previewSettingsSaved'")
-        self.assertIn('showSaveStatusMsg()', h[at:at + 200])
+        self.assertIn('showSaveStatusMsg(', h[at:at + 400])
+
+    def test_미리보기가_보낸_말이_그대로_뜬다(self):
+        """
+        "분리배출마크는 한 개만 보관됩니다" 같은 말은 "저장했습니다" 로
+        덮이면 안 된다 — 미리보기가 보낸 문구가 있으면 그것을 띄운다.
+        """
+        import io
+        h = io.open('v1/templates/products/product_detail.html', encoding='utf-8').read()
+        at = h.index("'previewSettingsSaved'")
+        self.assertIn('event.data.message', h[at:at + 400])
+        self.assertIn('function showSaveStatusMsg(message)', h)
 
 
 class 시안에서_읽은_모든_글자를_견준다(TestCase):
@@ -17996,3 +18007,371 @@ class IngredientExcelUploadKeyMatchesTests(TestCase):
         block = self.src[i:i + 1600]
         self.assertIn('if (!data.success)', block)
         self.assertIn("'error'", block)
+
+
+class 미리보기가_남의_브라우저에서_스크립트를_돌리지_않는다(TestCase):
+    """
+    라벨 값이 `|safe` 로 `<script type="application/json">` 안에 그대로
+    박혔다. 파이썬 json.dumps 는 `<` 를 이스케이프하지 않으므로, 제품명이나
+    맞춤항목에 `</script>` 가 들어 있으면 HTML 파서가 거기서 블록을 끝내고
+    뒤를 마크업으로 읽는다 — **저장형 XSS** 다.
+
+    미리보기는 공유받은 사람에게도 열린다(preview_popup). 그러니 남의
+    브라우저에서 돈다.
+
+    같은 저장소가 `_condition_panel.html` 에서는 `json_script` 를 올바르게
+    쓰고 있었다. 이 화면만 열한 군데가 `|safe` 였다.
+    """
+
+    PAYLOAD = '</script><img src=x onerror=alert(1)>'
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='xssu', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='XSS', delete_YN='N',
+            prdlst_nm=self.PAYLOAD,
+            custom_fields=[{'name': self.PAYLOAD, 'value': self.PAYLOAD}])
+
+    def _html(self):
+        r = self.client.get('/label/preview/',
+                            {'label_id': self.label.my_label_id})
+        self.assertEqual(r.status_code, 200)
+        return r.content.decode()
+
+    def test_스크립트_블록이_값_때문에_끊기지_않는다(self):
+        html = self._html()
+        self.assertNotIn('</script><img', html)
+        self.assertIn(r'</script', html)
+
+    def test_값은_그대로_읽힌다(self):
+        """이스케이프해도 JSON 으로 파싱하면 원래 값이어야 한다."""
+        import re
+
+        html = self._html()
+        m = re.search(r'<script id="label-data" type="application/json">(.*?)</script>',
+                      html, re.S)
+        self.assertIsNotNone(m)
+        data = json.loads(m.group(1))
+        blob = json.dumps(data, ensure_ascii=False)
+        self.assertIn('</script>', blob)      # 값 자체는 온전하다
+
+    def test_열한_군데_모두_같은_함수를_쓴다(self):
+        """
+        한 군데만 놓치면 그 한 군데로 들어온다. 이 화면의 script 블록에
+        들어가는 값은 전부 _script_json 을 거쳐야 한다.
+        """
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'label/views.py').read_text(encoding='utf-8')
+        i = text.index("        context = {\n            'label': label,")
+        j = text.index("return render(request, 'label/label_preview.html', context)", i)
+        block = text[i:j]
+        self.assertEqual(len(re.findall(r'json\.dumps\(', block)), 0)
+        self.assertGreaterEqual(len(re.findall(r'_script_json\(', block)), 11)
+
+    def test_헬퍼가_세_글자를_모두_막는다(self):
+        from v1.label.views import _script_json
+
+        out = _script_json({'v': '<>&'})
+        self.assertNotIn('<', out)
+        self.assertNotIn('>', out)
+        self.assertEqual(json.loads(out)['v'], '<>&')
+
+
+class 분리배출마크가_저장된다(TestCase):
+    """
+    마크를 골라 놓고 [설정 저장] 을 눌러도 창을 다시 열면 하나도 없었다.
+
+    저장이 쓰는 수집 함수(label_preview.js)가 `#recyclingMarkContainer` 를
+    찾는데, 실제로 마크를 만드는 것은 인라인 구현이고 그쪽은
+    `recyclingMark_1`, `_2` … 로 만든다. 인라인에도 올바른 수집 함수가
+    있었지만 **지역 함수라 밖에서 볼 수가 없었다.** 그래서 서버에는 언제나
+    `{enabled:false}` 가 갔다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='rmu', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='마크', delete_YN='N')
+
+    def _save(self, marks):
+        return self.client.post(
+            '/label/save_preview_settings/',
+            data=json.dumps({'label_id': self.label.my_label_id,
+                             'recycling_mark': {'enabled': bool(marks), 'marks': marks}}),
+            content_type='application/json')
+
+    def test_마크가_라벨에_남는다(self):
+        r = self._save([{'type': 'PET', 'position_x': 10, 'position_y': 20,
+                         'text': '무색페트'}])
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['success'])
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.prv_recycling_mark_enabled, 'Y')
+        self.assertEqual(self.label.prv_recycling_mark_type, 'PET')
+        self.assertEqual(self.label.prv_recycling_mark_text, '무색페트')
+
+    def test_여러_개면_몇_개가_남았는지_말한다(self):
+        """
+        표에 자리가 한 벌뿐이라 첫 번째만 남는다. 조용히 버리면 사용자는
+        저장된 줄 알고 창을 닫는다.
+        """
+        body = self._save([
+            {'type': 'PET', 'position_x': 1, 'position_y': 1, 'text': 'A'},
+            {'type': 'PP', 'position_x': 2, 'position_y': 2, 'text': 'B'},
+        ]).json()
+        self.assertEqual(body['marks_sent'], 2)
+        self.assertEqual(body['marks_kept'], 1)
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.prv_recycling_mark_type, 'PET')
+
+    def test_예전_형식도_받는다(self):
+        r = self.client.post(
+            '/label/save_preview_settings/',
+            data=json.dumps({'label_id': self.label.my_label_id,
+                             'recycling_mark': {'enabled': True, 'type': 'PET',
+                                                'position_x': 3, 'position_y': 4,
+                                                'text': '옛 형식'}}),
+            content_type='application/json')
+        self.assertTrue(r.json()['success'])
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.prv_recycling_mark_type, 'PET')
+
+    def test_수집기가_주인_구현에_맡긴다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+              ).read_text(encoding='utf-8')
+        i = js.index('function getCurrentRecyclingMarkInfo()')
+        block = js[i:i + 900]
+        self.assertIn("window.__recyclingMarkOwner === 'inline'", block)
+        self.assertIn('window.collectRecyclingMarks', block)
+
+        tpl = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+               ).read_text(encoding='utf-8')
+        self.assertIn('window.collectRecyclingMarks = getCurrentRecyclingMarkInfo;', tpl)
+
+    def test_예외_원문을_사용자에게_보내지_않는다(self):
+        from unittest.mock import patch
+
+        with patch('v1.label.views.MyLabel.save',
+                   side_effect=RuntimeError('SELECT * FROM secret')):
+            r = self._save([{'type': 'PET', 'position_x': 1, 'position_y': 1}])
+        blob = r.content.decode()
+        self.assertNotIn('secret', blob)
+        self.assertNotIn('RuntimeError', blob)
+
+
+def _strip_comments(text):
+    """
+    주석을 걷어낸다 — 시험이 **코드**를 보게.
+
+    걷어낸 이유를 적은 주석에는 걷어낸 것의 이름이 그대로 나온다. 그것까지
+    세면 "안 지웠다" 는 거짓 실패가 난다. 실제로 세 번 났다.
+    """
+    import re
+
+    text = re.sub(r'\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}', '', text, flags=re.S)
+    text = re.sub(r'<!--.*?-->', '', text, flags=re.S)
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    text = re.sub(r'^\s*//.*$', '', text, flags=re.M)
+    return text
+
+
+class 미리보기에_같은_이름의_함수가_두_벌_있지_않다(TestCase):
+    """
+    한 인라인 스크립트 안에 같은 이름이 두 벌씩 있었다. 뒤에 선언된 것이
+    이기므로, 어느 쪽이 도는지는 **선언 순서에만** 달려 있어 아무도
+    의도하지 않는다.
+
+    · checkExpiryCompliance — 이긴 쪽은 식품유형 완전일치만 보고 '개월' 만
+      읽는다. 진 쪽은 부분일치·년/일·냉동/장기보존 예외까지 처리했다
+    · checkRecyclingMarkCompliance — 지역 호출과 window 경유가 서로 다른
+      구현으로 갈렸다
+    · addTextToRecyclingMark — 앞의 것은 없는 #recyclingMarkContainer 를 본다
+
+    셋 다 유일한 호출자가 `validateSettings_HTML_DEPRECATED`(호출자 0)였다.
+    규정 검증은 서버 API 로 간다.
+    """
+
+    TPL = 'templates/label/label_preview.html'
+
+    def _text(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return _strip_comments(
+            (Path(dj.BASE_DIR) / self.TPL).read_text(encoding='utf-8'))
+
+    def test_동명_함수가_남아_있지_않다(self):
+        import re
+
+        text = self._text()
+        for name in ('checkExpiryCompliance', 'checkRecyclingMarkCompliance',
+                     'addTextToRecyclingMark'):
+            n = len(re.findall(r'function\s+' + name + r'\s*\(', text))
+            self.assertLessEqual(n, 1, f'{name} 이(가) {n}벌 있다')
+
+    def test_호출자_0인_검증_덩어리를_걷어냈다(self):
+        # 걷어낸 이유를 적은 주석에도 그 이름이 나온다 — 정의를 본다
+        self.assertNotIn('function validateSettings_HTML_DEPRECATED', self._text())
+
+    def test_서버로_가는_검증_경로는_그대로다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+              ).read_text(encoding='utf-8')
+        self.assertIn('runRuleOnlyValidation', js)
+        self.assertIn("getElementById('ruleValidationBtn')", js)
+
+
+class 미리보기_스타일_갱신이_실제로_돈다(TestCase):
+    """
+    `window.updatePreviewStyles` 를 세 곳이 부르는데 그 이름이 저장소 어디에도
+    대입되어 있지 않았다. label_preview.js 의 동명 함수는 첫 줄이 `return;` 인
+    죽은 스텁이었고("임시로 완전히 비활성화하여…"), 진짜 구현은 템플릿 인라인의
+    지역 함수라 밖에서 볼 수가 없었다.
+
+    그래서 항목명 칸(mm)을 24 → 40 으로 바꿔도 표가 그대로였고, 순서 드래그·
+    눈 아이콘·2단배치로 표를 다시 그린 뒤 세로(cm)·정보표시면 면적이 옛 값으로
+    남았다.
+    """
+
+    def _files(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (_strip_comments((Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+                                ).read_text(encoding='utf-8')),
+                _strip_comments((Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                                ).read_text(encoding='utf-8')))
+
+    def test_인라인_구현이_window_에_올라간다(self):
+        _, tpl = self._files()
+        self.assertIn('window.updatePreviewStyles = updatePreviewStyles;', tpl)
+
+    def test_죽은_스텁이_사라졌다(self):
+        js, _ = self._files()
+        self.assertNotIn('임시로 완전히 비활성화하여', js)
+
+    def test_스텁_자리가_진짜_구현으로_넘긴다(self):
+        js, _ = self._files()
+        i = js.index('    function updatePreviewStyles() {')
+        block = js[i:i + 400]
+        self.assertIn('window.updatePreviewStyles', block)
+        # 자기 자신을 부르면 무한 재귀다
+        self.assertIn('!== updatePreviewStyles', block)
+
+
+class 마크_추천이_실제로_걸린다(TestCase):
+    """
+    포장재질에 "무색페트" 를 넣어도 분리배출마크가 자동으로 골라지지 않았다.
+
+    인라인 구현이 **단추의 글자로 상태를 판정**했는데
+    (`addBtn.textContent === '추가'`) 실제 단추는 아이콘이 붙어 있어 그 조건이
+    참이 되는 경우가 없었다. 다른 한 벌은 소유자 가드로 즉시 나갔다.
+    """
+
+    def _files(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (_strip_comments((Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+                                ).read_text(encoding='utf-8')),
+                _strip_comments((Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                                ).read_text(encoding='utf-8')))
+
+    def test_단추_글자로_판정하지_않는다(self):
+        _, tpl = self._files()
+        self.assertNotIn("addBtn.textContent === '추가'", tpl)
+
+    def test_없는_요소를_더_이상_보지_않는다(self):
+        _, tpl = self._files()
+        self.assertNotIn('additionalTextInputBox', tpl)
+
+    def test_추천기가_주인_구현으로_넘어간다(self):
+        js, tpl = self._files()
+        self.assertIn('window.recommendRecyclingMarkInline = updateRecyclingMarkUI;', tpl)
+        i = js.index('window.updateRecyclingMarkUI = function')
+        self.assertIn('window.recommendRecyclingMarkInline', js[i:i + 700])
+
+    def test_말없이_붙이지_않는다(self):
+        """
+        재질만 보고 마크를 표에 붙이는 것은 사용자가 원한 적 없는 변경이다.
+        골라 두기만 하고 붙이는 것은 사람이 누른다.
+        """
+        _, tpl = self._files()
+        i = tpl.index('if (!recommendedMark) return;')
+        block = tpl[i:i + 1800]
+        self.assertIn('select.value = recommendedMark', block)
+        self.assertNotIn('setRecyclingMark(recommendedMark)', block)
+
+
+class PDF_문서함_등록_권한이_화면과_서버에서_같다(TestCase):
+    """
+    화면은 닫힘이 기본(`bool(_perm and _perm.can_upload_documents)`)인데
+    서버는 열림이 기본이었다(`if perm and not perm.can_upload_documents`).
+    권한 레코드가 아예 없는 공유는 단추가 안 보일 뿐, 요청을 직접 만들면
+    문서함에 등록됐다.
+    """
+
+    def setUp(self):
+        from v1.products.models import ProductShare
+
+        self.owner = User.objects.create_user(username='pdfown', password='x')
+        self.guest = User.objects.create_user(
+            username='pdfguest', password='x', email='g@example.com')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='PDF', delete_YN='N')
+        # 권한 레코드가 **없는** 공유
+        ProductShare.objects.create(
+            label=self.label, created_by=self.owner, recipient_user=self.guest,
+            recipient_email=self.guest.email, active_yn=True)
+
+    def test_권한_레코드가_없으면_막힌다(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.client.force_login(self.guest)
+        r = self.client.post('/label/upload-label-pdf/', {
+            'label_id': self.label.my_label_id,
+            'pdf_file': SimpleUploadedFile('a.pdf', b'%PDF-1.4', 'application/pdf'),
+        })
+        self.assertEqual(r.status_code, 403)
+
+    def test_화면도_같은_판정이다(self):
+        self.client.force_login(self.guest)
+        r = self.client.get('/label/preview/', {'label_id': self.label.my_label_id})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.context['can_upload_pdf'])
+
+
+class 미리보기_스크립트도_배포하면_갱신된다(TestCase):
+    """
+    label_preview.js 만 `?v=86.0` 으로 못박혀 있었다. 5,700줄짜리를 고쳐
+    배포해도 이미 방문한 브라우저는 옛 파일을 계속 썼다 — 사람이 손으로
+    숫자를 올려야 했다.
+    """
+
+    def test_고정_버전이_아니다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tpl = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+               ).read_text(encoding='utf-8')
+        i = tpl.index('js/label/label_preview.js')
+        line = tpl[i:i + 120]
+        self.assertNotIn('?v=86.0', line)
+        self.assertIn('STATIC_BUILD_DATE', line)

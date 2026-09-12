@@ -522,7 +522,12 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <!-- Label Preview JS -->
-  <script src="{% static 'js/label/label_preview.js' %}?v=86.0"></script>
+  {% comment %}
+    이 파일만 ?v=86.0 으로 못박혀 있었다. 5,700줄짜리를 고쳐 배포해도 이미
+    방문한 브라우저는 옛 파일을 계속 썼다 — 사람이 손으로 숫자를 올려야 했다.
+    같은 문서의 다른 정적 자원은 전부 STATIC_BUILD_DATE 를 쓴다.
+  {% endcomment %}
+  <script src="{% static 'js/label/label_preview.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
   {# 디자인 의뢰서 — 미리보기 표에서 값을 가져오므로 그 뒤에 싣는다 #}
   <script src="{% static 'js/label/design_request.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
   <script>
@@ -1008,7 +1013,29 @@
                 }
             });
         }
+        /* 밖에서도 불러야 한다. label_preview.js 의 동명 함수는 죽은
+           스텁이었고, 항목명 칸(mm) 변경·재렌더 뒤 갱신이 여기로 오지
+           못해 표가 옛 값으로 남았다. */
+        window.updatePreviewStyles = updatePreviewStyles;
         
+        /* ── 여기 있던 클라이언트 검증 한 벌을 걷어냈다 ──────────────────
+         *
+         * validateSettings_HTML_DEPRECATED(135줄)과 그것만 부르던
+         * showValidationModal·checkExpiryCompliance·checkRecyclingMarkCompliance.
+         * 호출자가 0이었고, 되살려도 이 스코프에 없는 함수들
+         * (checkFarmSeafoodCompliance 등, label_preview.js 의 다른 클로저에
+         * 있다) 때문에 즉시 ReferenceError 였다.
+         *
+         * 더 나쁜 것은 **같은 이름이 이 파일 안에 두 벌씩 있었다**는 점이다.
+         * 뒤에 선언된 것이 이기므로, checkExpiryCompliance 는 식품유형
+         * 완전일치만 보고 '개월' 만 읽는 쪽이 이겼다 — 부분일치·년/일·냉동
+         * 예외까지 처리하던 앞의 것은 한 번도 불리지 않았다. 어느 쪽이
+         * 이기는지는 선언 순서에만 달려 있어 아무도 의도하지 않는다.
+         *
+         * 규정 검증은 서버 API 로 간다(label_preview.js 의 ruleValidationBtn
+         * → /label/<id>/validate/). 우회할 수 없는 판정이라 그쪽이 맞다.
+         * ────────────────────────────────────────────────────────────── */
+
         function convertCountryCodeToKorean(text) {
             if (!text || !countryMapping) return text;
             return text.replace(/\b[A-Z]{2}\b/g, match => countryMapping[match] || match);
@@ -1198,52 +1225,6 @@
             updatePreviewStyles();
         }
 
-        // 분리배출 마크에 텍스트 라인 추가
-        function addTextToRecyclingMark(text) {
-            const container = document.getElementById('recyclingMarkContainer');
-            const image = document.getElementById('recyclingMarkImage') || container.querySelector('.recycling-mark-image');
-            const textContainer = container.querySelector('.recycling-mark-text');
-            if (!container || !image || !textContainer) {
-                return;
-            }
-
-            const textDiv = document.createElement('div');
-            textDiv.className = 'recycling-text-line';
-            textDiv.dataset.textId = `rtext-${++recyclingTextIdCounter || 1}`;
-            textDiv.textContent = text;
-            
-
-            textDiv.style.cssText = `
-                font-weight: 500;
-                color: #000;
-                line-height: 0.95;
-                word-break: keep-all;
-                text-align: center;
-                margin-top: 0px;
-                margin-bottom: 1px;
-                padding-bottom: 1px;
-                overflow: visible;
-            `;
-            textContainer.appendChild(textDiv);
-
-            // 단순화된 폰트 크기 계산 공식
-            const imageWidth = image.offsetWidth;
-            const textLength = text.length;
-            
-            // 유동적 폰트 크기 계산: 기본 8pt에서 텍스트 길이에 따라 감소
-            let fontSize = Math.max(8 - (textLength * 0.12), 5.5);
-            
-            textDiv.style.fontSize = `${fontSize}pt`;
-
-            // 이미지 너비 기반 추가 조정
-            let adjustmentAttempts = 0;
-            while (textDiv.scrollWidth > imageWidth && fontSize > 5 && adjustmentAttempts < 5) {
-                fontSize *= 0.9; // 10%씩 감소
-                textDiv.style.fontSize = `${fontSize}pt`;
-                adjustmentAttempts++;
-            }
-
-        }
         
         // 미리보기 영역에 마크(이미지+텍스트) 추가 및 드래그
         function setRecyclingMark(markValue, savedPosition = null, savedText = null) {
@@ -1419,15 +1400,6 @@
                     removeRecyclingMark(markId);
                 });
             });
-        }
-        
-        // 기존 addTextToRecyclingMark 함수 (하위 호환성 유지)
-        function addTextToRecyclingMark(text) {
-            // 가장 최근에 추가된 마크에 텍스트 추가
-            if (recyclingMarks.length > 0) {
-                const lastMark = recyclingMarks[recyclingMarks.length - 1];
-                addTextToRecyclingMarkById(lastMark.id, text);
-            }
         }
         
         function renderRecyclingMarkUI() {
@@ -1724,311 +1696,6 @@
             return { errors, suggestions };
         }
 
-        // 6. 소비기한
-        function checkExpiryCompliance() {
-            const errors = [];
-            const suggestions = [];
-            const foodType = (checkedFields.prdlst_dcnm || '').trim();
-            const expiry = (checkedFields.pog_daycnt || '').trim();
-            const storageMethod = (checkedFields.storage_method || '').trim();
-
-            if (!expiry || !foodType) {
-                return { errors, suggestions };
-            }
-
-            // 냉동식품 또는 장기보존식품(통조림, 레토르트)은 검증에서 제외
-            const isFrozen = storageMethod.toLowerCase().includes('냉동') || foodType.toLowerCase().includes('냉동');
-            const isLongTermStorage = foodType.includes('통조림') || foodType.includes('병조림') || foodType.includes('레토르트');
-
-            if (isFrozen || isLongTermStorage) {
-                return { errors, suggestions }; // 검증 대상이 아니므로 종료
-            }
-
-            // 1. 식품유형에 맞는 권장 소비기한 찾기
-            const recommendationKeys = Object.keys(REGULATIONS.expiry_recommendation || {}).sort((a, b) => b.length - a.length);
-            let recommendation = null;
-            for (const key of recommendationKeys) {
-                if (foodType.includes(key)) {
-                    recommendation = REGULATIONS.expiry_recommendation[key];
-                    break;
-                }
-            }
-
-            if (!recommendation || typeof recommendation.shelf_life !== 'number') {
-                return { errors, suggestions }; // 검증 대상이 아니면 종료
-            }
-
-            // 2. 입력된 소비기한을 '일' 단위로 변환
-            let totalDays = 0;
-            const yearMatch = expiry.match(/(\d+)\s*년/);
-            const monthMatch = expiry.match(/(\d+)\s*개월/);
-            const dayMatch = expiry.match(/(\d+)\s*일/);
-
-            if (yearMatch) {
-                totalDays = parseInt(yearMatch[1], 10) * 365;
-            } else if (monthMatch) {
-                totalDays = parseInt(monthMatch[1], 10) * 30;
-            } else if (dayMatch) {
-                totalDays = parseInt(dayMatch[1], 10);
-            }
-
-            if (totalDays === 0) {
-                return { errors, suggestions }; // 유효한 기간이 아니면 종료
-            }
-
-            // 3. 권장 소비기한을 '일' 단위로 변환
-            let recommendedDays = 0;
-            if (recommendation.unit === 'months') {
-                recommendedDays = recommendation.shelf_life * 30;
-            } else if (recommendation.unit === 'days') {
-                recommendedDays = recommendation.shelf_life;
-            }
-
-            // 4. 비교 및 오류 메시지 생성
-            if (recommendedDays > 0 && totalDays > recommendedDays) {
-                const unitText = recommendation.unit === 'months' ? '개월' : '일';
-                const suggestionMsg = `권장 소비기한(${recommendation.shelf_life}${unitText})을 초과하였습니다. 설정 근거를 반드시 확인하시기 바랍니다.`;
-                suggestions.push(suggestionMsg);
-            }
-
-            return { errors, suggestions };
-        }
-        
-        function checkRecyclingMarkCompliance() { 
-            const errors = [];
-            const suggestions = [];
-            
-            // 분리배출마크 검사
-            const frmlcMtrqlt = checkedFields.frmlc_mtrqlt || '';
-            const container = document.getElementById('recyclingMarkContainer');
-            
-            if (frmlcMtrqlt) {
-                if (!container) {
-                    errors.push(`포장재질(${frmlcMtrqlt})에 대한 분리배출마크가 필요합니다.`);
-                    
-                    // 포장재질에 따른 추천 마크
-                    if (frmlcMtrqlt.includes('종이')) {
-                        suggestions.push("종이 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('페트') || frmlcMtrqlt.includes('PET')) {
-                        suggestions.push("플라스틱(PET) 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('PP') || frmlcMtrqlt.includes('폴리프로필렌')) {
-                        suggestions.push("플라스틱(PP) 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('유리')) {
-                        suggestions.push("유리 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('복합재질')) {
-                        suggestions.push("복합재질 분리배출마크 추가 필요");
-                    }
-                }
-                
-                // 복합재질 마크에 추가 설명이 있는지 확인
-                if (container && frmlcMtrqlt.includes('복합재질')) {
-                    const textContainer = container.querySelector('.recycling-mark-text');
-                    if (!textContainer || !textContainer.textContent.trim()) {
-                        errors.push("복합재질 분리배출마크에 재질 정보(예: 몸체(종이)/뚜껑(PP))를 추가해야 합니다.");
-                    }
-                }
-            }
-            
-            return { errors, suggestions };
-        }
-        
-        function checkExpiryCompliance() { 
-            const errors = [];
-            const suggestions = [];
-            
-            // 소비기한 검사
-            const pogDaycnt = checkedFields.pog_daycnt || '';
-            const foodType = checkedFields.prdlst_dcnm || '';
-            
-            if (pogDaycnt && foodType) {
-                // REGULATIONS.expiry_recommendation에서 식품유형별 권장 소비기한 확인
-                const recommendation = REGULATIONS.expiry_recommendation[foodType];
-                
-                if (recommendation) {
-                    const { shelf_life, unit } = recommendation;
-                    const recommendedMonths = parseInt(shelf_life);
-                    
-                    if (!isNaN(recommendedMonths)) {
-                        // 권장 소비기한과 입력된 소비기한 비교
-                        const currentMonthMatch = pogDaycnt.match(/(\d+)\s*개월/);
-                        
-                        if (currentMonthMatch) {
-                            const currentMonths = parseInt(currentMonthMatch[1]);
-                            
-                            if (!isNaN(currentMonths) && currentMonths > recommendedMonths) {
-                                suggestions.push(`현재 소비기한(${currentMonths}개월)이 ${foodType}의 권장 소비기한(${recommendedMonths}개월)보다 깁니다. 검토가 필요합니다.`);
-                            }
-                        }
-                    }
-                }
-            }
-            
-            return { errors, suggestions };
-        }
-    
-        function showValidationModal() {
-            // 기존 모달과 오버레이 제거
-            let modal = document.getElementById('validationModal');
-            if (modal) modal.remove();
-            
-            // 혹시 남아있는 modal-backdrop 요소 제거
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => backdrop.remove());
-            
-            // 모달 생성
-            modal = document.createElement('div');
-            modal.id = 'validationModal';
-            modal.className = 'modal fade';
-            modal.innerHTML = `<div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">규정 검증 결과</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><table class="table table-bordered"><thead><tr><th>검증 항목</th><th>상태</th><th>결과 및 제안</th></tr></thead><tbody id="validationResultBody"></tbody></table></div></div></div>`;
-            document.body.appendChild(modal);
-            
-            // 모달이 닫힐 때 오버레이 제거 이벤트 추가
-            modal.addEventListener('hidden.bs.modal', function() {
-                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-            });
-            
-            new bootstrap.Modal(modal).show();
-            return modal;
-        }
-    
-        async function validateSettings_HTML_DEPRECATED() {
-            // 기존 backdrop 제거
-            document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-            
-            // 검증 항목 순서 및 매핑
-            const validationItems = [
-                {
-                    label: '표시면 면적',
-                    check: () => {
-                        const width = parseFloat(widthInput?.value) || 0;
-                        const height = parseFloat(document.getElementById('heightInput').value) || 0;
-                        const area = width * height;
-                        return {
-                            ok: area >= 40,
-                            errors: area < 40 ? [
-                                `<strong style="color:#222;">표시면 면적은 최소 40cm² 이상이어야 합니다 («식품 등의 표시기준» 제4조).</strong>`
-                            ] : [],
-                            suggestions: area < 40 ? [
-                                `<strong style="color:#222;">면적을 40cm² 이상으로 조정하세요.</strong>`
-                            ] : []
-                        };
-                    },
-                    always: true
-                },
-                {
-                    label: '글꼴 크기',
-                    check: () => {
-                        const fontSize = parseFloat(fontSizeInput?.value) || 10;
-                        return {
-                            ok: fontSize >= REGULATIONS.font_size.general.min,
-                            errors: fontSize < REGULATIONS.font_size.general.min ? [
-                                `<strong style="color:#222;">글꼴 크기는 최소 ${REGULATIONS.font_size.general.min}pt 이상이어야 합니다 («식품 등의 표시기준» 제6조).</strong>`
-                            ] : [],
-                            suggestions: fontSize < REGULATIONS.font_size.general.min ? [
-                                `<strong style="color:#222;">글꼴 크기를 ${REGULATIONS.font_size.general.min}pt 이상으로 조정하세요.</strong>`
-                            ] : []
-                        };
-                    },
-                    always: true
-                },
-                {
-                    label: '제품명 성분 표시',
-                    check: () => {
-                        const result = checkFarmSeafoodCompliance();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                },
-                {
-                    label: '필수 문구',
-                    check: () => {
-                        const result = checkFoodTypePhrasesUnified();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                },
-                {
-                    label: '사용금지 문구',
-                    check: () => checkForbiddenPhrases()
-                },
-                {
-                    label: '알레르기 중복 표시',
-                    check: () => {
-                        const result = checkAllergenDuplication();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                },
-                {
-                    label: '분리배출마크',
-                    check: () => {
-                        const result = checkRecyclingMarkCompliance();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    },
-                    always: true
-                },
-                {
-                    label: '소비기한',
-                    check: () => {
-                        const result = checkExpiryCompliance();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                }
-            ];
-
-            const results = validationItems.map(item => item.check());
-            
-            const modal = showValidationModal();
-            const tbody = modal.querySelector('#validationResultBody');
-            tbody.innerHTML = '';
-
-            let hasErrors = false;
-
-            // tbody에 모든 검증 항목을 한 번에 추가 (tr을 누적해서 innerHTML로 할당)
-            let rowsHtml = '';
-            for (let i = 0; i < validationItems.length; i++) {
-                const item = validationItems[i];
-                const result = results[i];
-
-                rowsHtml += `<tr>`;
-
-                // 항목명
-                rowsHtml += `<td>${item.label}</td>`;
-
-                // 결과
-                if (!result.errors || result.errors.length === 0) {
-                    rowsHtml += `<td><span class="text-success">적합</span></td>`;
-                } else {
-                    rowsHtml += `<td><span class="text-danger">재검토</span></td>`;
-                    hasErrors = true;
-                }
-
-                // 에러/수정제안
-                let msg = '';
-                if (result.errors && result.errors.length > 0) msg += result.errors.join('<br>');
-                if (result.suggestions && result.suggestions.length > 0) {
-                    if (msg) msg += ' | ';
-                    msg += result.suggestions.join('<br>');
-                }
-                rowsHtml += `<td>${msg}</td>`;
-
-                rowsHtml += `</tr>`;
-            }
-            tbody.innerHTML = rowsHtml;
-        }
     
         /* exportToPDF 는 label_preview.js 로 옮겼다.
            같은 이름의 함수가 이 파일과 그 파일에 하나씩 있었고 **둘 다 같은
@@ -2066,6 +1733,16 @@
                 marks: marksData
             };
         }
+        /* **밖에서도 불러야 한다.**
+           마크를 만들고 끌고 지우는 것은 이 인라인 구현이다
+           (window.__recyclingMarkOwner === 'inline'). 그런데 설정을 저장하는
+           쪽은 label_preview.js 에 있고, 그쪽의 동명 함수는
+           #recyclingMarkContainer 를 찾는다 — 이 구현은 그런 요소를 만들지
+           않는다(recyclingMark_1, _2 … 로 만든다). 그래서 저장은 언제나
+           {enabled:false} 를 보냈고, 마크는 한 번도 남지 않았다.
+           이 함수는 지역 함수라 저쪽에서 볼 수가 없었다. 이름을 달리해
+           내보낸다 — 같은 이름으로 올리면 어느 쪽이 이기는지 알 수 없다. */
+        window.collectRecyclingMarks = getCurrentRecyclingMarkInfo;
         
         // 추천 마크 갱신
         function updateRecyclingMarkUI(packageText) {
@@ -2093,25 +1770,39 @@
             else if (material.includes('비닐')) recommendedMark = '비닐';
             else if (material.includes('/') || (material.match(/[가-힣]+\([가-힣]+\)/) && material.match(/[가-힣]+\([가-힣]+\)/g).length > 1)) recommendedMark = '복합재질';
             
-            if (recommendedMark) {
-                const select = document.getElementById('recyclingMarkSelect');
-                const addBtn = document.getElementById('addRecyclingMarkBtn');
-                if (select && addBtn && addBtn.textContent === '추가') {
-                    select.value = recommendedMark;
-                    setRecyclingMark(recommendedMark);
-                    addBtn.textContent = '제거';
-                    addBtn.classList.replace('btn-outline-primary', 'btn-danger');
-                    
-                    const selectedOption = select.options[select.selectedIndex];
-                    const additionalInputBox = document.getElementById('additionalTextInputBox');
-                    if (additionalInputBox && selectedOption.dataset.isComposite === 'true') {
-                        additionalInputBox.style.display = 'block';
-                        // 복합재질이면 자동 포커스
-                        setTimeout(() => document.getElementById('additionalRecyclingText').focus(), 100);
-                    }
-                }
+            if (!recommendedMark) return;
+
+            /* 여기 있던 코드는 **한 번도 실행되지 않았다.**
+               단추의 textContent 를 «추가» 와 견주어 상태를 판정했는데,
+               실제 단추는 `<i class="fas fa-plus"></i>마크 추가` 라
+               textContent 는 앞뒤 줄바꿈이 붙은 «마크 추가» 다. 조건이 참이 되는 경우가
+               없었다. 안에는 없는 요소(#additionalTextInputBox)와 없는
+               클래스(btn-outline-primary) 참조도 함께 굳어 있었다.
+
+               그리고 하려던 일 자체가 지금 UI 와 맞지 않는다. 마크는 여러 개를
+               놓을 수 있게 바뀌었으므로 '추가/제거' 를 오가는 단추가 아니고,
+               재질만 보고 마크를 **말없이 붙이는** 것은 사용자가 원한 적 없는
+               변경이다. 골라 두기만 하고 붙이는 것은 사람이 누른다. */
+            const select = document.getElementById('recyclingMarkSelect');
+            if (!select) return;
+
+            // 이미 골라 둔 것이 있으면 건드리지 않는다
+            if (select.value) return;
+            const exists = Array.prototype.some.call(
+                select.options, function (o) { return o.value === recommendedMark; });
+            if (!exists) return;
+
+            select.value = recommendedMark;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            if (typeof showPreviewToast === 'function') {
+                showPreviewToast('포장재질을 보고 «' + recommendedMark + '» 을(를) 골라 뒀습니다. '
+                                 + '[마크 추가] 를 누르면 표에 붙습니다.', 'info');
             }
         }
+        /* 사진 판독·재질 입력이 바뀔 때는 label_preview.js 가 부른다.
+           그쪽은 window 를 보므로 이름을 걸어 둔다 — 마크의 주인이
+           인라인이라 추천도 여기가 맡는다. */
+        window.recommendRecyclingMarkInline = updateRecyclingMarkUI;
 
         // 설정 저장
         /* savePreviewSettings 도 같은 이유로 label_preview.js 에만 둔다.
