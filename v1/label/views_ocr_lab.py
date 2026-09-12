@@ -53,7 +53,7 @@ def ocr_lab(request):
     from django.conf import settings
 
     from v1.common.models import OcrBenchmarkRun, OcrCorrection, OcrPromptVersion, OcrTruthCase
-    from v1.label.services.ocr_lab import TRUTH_FIELD_KEYS
+    from v1.label.services.ocr_lab import TRUTH_FIELD_KEYS, FIELD_LABELS
     from v1.label.services.ocr_learning import accuracy_stats
 
     cases = list(OcrTruthCase.objects.all()[:100])
@@ -90,6 +90,9 @@ def ocr_lab(request):
         # 예전에는 화면이 이미 값이 있는 항목만 줄로 그려서, 판독이 못 읽은
         # 칸은 손으로 넣을 방법조차 없었다 (TRUTH_FIELDS 주석 참고).
         'truth_fields': list(TRUTH_FIELD_KEYS),
+        # 영문 키는 DB 컬럼 이름이다. 사람이 채우고 사람이 읽는 화면이니
+        # 한글 이름을 같이 내려보낸다.
+        'truth_labels': dict(FIELD_LABELS),
     })
 
 

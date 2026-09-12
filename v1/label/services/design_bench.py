@@ -44,7 +44,7 @@ def grade_case(case):
       misses  정말 다른데 **같다고 했다**          ← 인쇄 사고
       falses  같은데 **다르다고 했다**             ← 기능을 닫게 만든다
     """
-    from v1.label.services import design_match
+    from v1.label.services import design_match, ocr_lab
 
     mine = dict(getattr(case, 'label_values', None) or {})
     theirs = dict(getattr(case, 'expected', None) or {})
@@ -61,7 +61,15 @@ def grade_case(case):
     pairs = {}
     for key in set(mine) | set(theirs):
         a, b = plain(mine.get(key)), plain(theirs.get(key))
-        if not a.strip() and not b.strip():
+        # **내 표시사항을 안 적은 칸은 채점하지 않는다.**
+        #
+        # 처음에는 빈 칸도 견주었다. 그랬더니 사람이 '다른 것 몇 개' 만
+        # 적어 넣은 정답지에서 나머지 스무 칸이 전부 '빈 값 ↔ 인쇄된 값' 이
+        # 되어 오탐으로 잡혔다. 안 적은 것은 **같다는 뜻도 다르다는 뜻도
+        # 아니다** — 재지 않는 것이 맞다.
+        if not a.strip():
+            continue
+        if not b.strip():
             continue
         pairs[key] = {'mine': a, 'design': b}
 
@@ -79,7 +87,8 @@ def grade_case(case):
             verdict, falses = 'false', falses + 1
         else:
             verdict = 'ok'
-        rows.append({'field': key, 'grade': got['grade'],
+        rows.append({'field': key, 'label': ocr_lab.label_of(key),
+                     'grade': got['grade'],
                      'reason': got.get('reason') or '', 'verdict': verdict})
 
     rows.sort(key=lambda r: {'miss': 0, 'false': 1, 'hit': 2, 'ok': 3}[r['verdict']])

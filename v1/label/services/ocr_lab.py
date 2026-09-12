@@ -482,6 +482,47 @@ TRUTH_FIELDS = (
 
 TRUTH_FIELD_KEYS = tuple(key for key, _ in TRUTH_FIELDS)
 
+# 화면에 보일 이름. 영문 키는 DB 컬럼 이름이라 **사람이 읽을 것이 못 된다** —
+# prdlst_dcnm 이 식품유형인 것을 아는 사람은 우리뿐이다. 정답지를 채우는 것도
+# 채점 결과를 읽는 것도 사람이 하는 일이니 여기서 한 번 옮긴다.
+FIELD_LABELS = {
+    'prdlst_nm': '제품명',
+    'prdlst_dcnm': '식품유형',
+    'content_weight': '내용량',
+    'weight_calorie': '내용량(열량)',
+    'prdlst_report_no': '품목보고번호',
+    'country_of_origin': '원산지',
+    'bssh_nm': '제조사명',
+    'distributor_address': '유통전문판매원',
+    'repacker_address': '소분원',
+    'importer_address': '수입원',
+    'storage_method': '보관방법',
+    'pog_daycnt': '소비기한',
+    'rawmtrl_nm': '원재료명',
+    'allergens': '알레르기 표시',
+    'ingredient_info': '특정성분 함량',
+    'frmlc_mtrqlt': '용기·포장재질',
+    'recycling_mark': '분리배출 표시',
+    'cautions': '주의사항',
+    'additional_info': '기타 표시사항',
+    'nutrition_basis': '영양성분 기준량',
+    'calories': '열량',
+    'natriums': '나트륨',
+    'carbohydrates': '탄수화물',
+    'sugars': '당류',
+    'fats': '지방',
+    'trans_fats': '트랜스지방',
+    'saturated_fats': '포화지방',
+    'cholesterols': '콜레스테롤',
+    'proteins': '단백질',
+}
+
+
+def label_of(key):
+    """이름을 모르는 항목은 키 그대로 — 빈칸보다는 낫다."""
+    return FIELD_LABELS.get(key, key)
+
+
 
 def expected_from_label(label):
     """

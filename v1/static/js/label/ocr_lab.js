@@ -181,6 +181,13 @@
     try { return el ? JSON.parse(el.textContent) : []; } catch (e) { return []; }
   })();
 
+  // 항목의 한글 이름. prdlst_dcnm 이 식품유형인 것을 아는 사람은 우리뿐이다.
+  var TRUTH_LABELS = (function () {
+    var el = document.getElementById('truth-labels-data');
+    try { return el ? JSON.parse(el.textContent) : {}; } catch (e) { return {}; }
+  })();
+  function labelOf(key) { return TRUTH_LABELS[key] || key; }
+
   // **값이 없는 항목도 입력 칸을 그린다.**
   //
   // 예전에는 이미 값이 있는 항목만 줄로 그렸다. 그래서 판독이 못 읽었거나
@@ -217,7 +224,11 @@
    * 화면에서 적으면 무엇과 무엇을 견주는지 매번 다시 찾게 된다.
    * ───────────────────────────────────────────────────────────────── */
   function fieldRowHtml(key, index, value, mine, isDiff) {
-    mine = mine || '';
+    // **기본값은 정답과 같은 값이다.** 빈칸으로 두면 사람이 '다른 것 몇 개'
+    // 만 적게 되고, 나머지는 안 적었다는 이유로 견줄 수가 없다. 시안 대조가
+    // 실제로 마주하는 것도 대부분 '같은 항목' 이니, 같은 값을 깔아 두고
+    // **다른 곳만 고치게** 하는 것이 실제 일의 모양에 맞는다.
+    mine = mine || value || '';
     var long = value.length > 40 || value.indexOf('\n') !== -1;
     var control = long
       ? '<textarea class="form-control form-control-sm truth-val" data-key="' + esc(key) + '" rows="'
@@ -231,7 +242,8 @@
       + '<input type="checkbox" class="truth-isdiff" data-key="' + esc(key) + '"'
       + (isDiff ? ' checked' : '') + '> 다름</label>';
     return '<div class="truth-key" data-pick="' + esc(key) + '">'
-      + '<span class="bx-num">' + (index + 1) + '</span>' + esc(key) + '</div>'
+      + '<span class="bx-num">' + (index + 1) + '</span>' + esc(labelOf(key))
+      + '</div>'
       + '<div>' + control
       + '<div class="truth-cmp">' + mineCtl + diffCtl + '</div>'
       + '</div>';
