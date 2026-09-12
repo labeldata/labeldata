@@ -840,3 +840,62 @@ class 어디까지_오고_어디서_새는가(TestCase):
         with patch('v1.common.services.funnel.snapshot', side_effect=RuntimeError('터짐')):
             resp = self.client.get('/dashboard/')
         self.assertEqual(resp.status_code, 200)
+
+
+class 대시보드는_한_화면에_중요한_것을_모은다(TestCase):
+    """
+    이 화면은 지금까지 쌓인 양을 길게 늘어놓았다. 덜 보는 묶음이 화면의 절반을
+    먹으면서, 정작 고칠 곳을 알려 주는 것은 아래로 밀려 있었다.
+
+    **지우지는 않는다.** 안 본다는 것과 필요 없다는 것은 다르다 — 접는다.
+    """
+
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='s@example.com', password='pw12345!', is_staff=True)
+        self.client.force_login(self.staff)
+
+    def body(self):
+        resp = self.client.get('/dashboard/')
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode('utf-8')
+
+    def test_화면이_뜬다(self):
+        """지표를 얹은 뒤 로그인 직후 한 번 넘어갔다. 렌더링까지 본다."""
+        self.assertIn('어디서 새는가', self.body())
+
+    def test_덜_보는_묶음은_접혀_있다(self):
+        body = self.body()
+        self.assertIn('<details class="section dash-fold">', body)
+        # 접힌 것이 셋 — UI 버전 · 기능별 통계 · 최근 활동
+        self.assertGreaterEqual(body.count('<details class="section dash-fold">'), 3)
+
+    def test_접어도_내용은_남는다(self):
+        """접는 것과 지우는 것은 다르다."""
+        body = self.body()
+        self.assertIn('UI 버전 현황', body)
+        self.assertIn('기능별 사용 통계', body)
+        self.assertIn('최근 활동', body)
+
+    def test_접힌_채로도_요약은_보인다(self):
+        """펼치지 않고도 무엇이 들었는지 알아야 펼칠지 정한다."""
+        self.assertIn('V2 ', self.body())
+
+    def test_태그가_짝이_맞는다(self):
+        """
+        닫는 태그를 깊이로 찾아 바꿨다. 하나라도 어긋나면 이 아래가 통째로
+        접힌 안으로 빨려 들어간다 — 눈으로는 '왜 안 보이지' 로만 보인다.
+        """
+        body = self.body()
+        self.assertEqual(body.count('<details'), body.count('</details>'))
+
+    def test_사람마다_한_번씩_묻지_않는다(self):
+        """
+        운영은 DB 가 별도 호스트라 사람 수만큼 왕복이 곱해진다. 대시보드가
+        첫 요청에서 넘어간 까닭이다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/common/services/funnel.py').read_text(encoding='utf-8')
+        block = src[src.index('def return_rate'):]
+        self.assertNotIn('.exists()', block)

@@ -421,6 +421,16 @@
           border-radius:10px; padding:2px 8px; }
 .fn-tag b { margin:0 3px; color:#1a73e8; }
 @media (max-width: 600px) { .fn-panel { padding:14px; } }
+
+/* 접는 묶음. 한 화면에 다 넣으려면 **덜 보는 것을 접어야** 한다.
+   지우지는 않는다 — 안 본다는 것과 필요 없다는 것은 다르다. */
+.dash-fold > summary { cursor:pointer; list-style:none; user-select:none; }
+.dash-fold > summary::-webkit-details-marker { display:none; }
+.dash-fold > summary::after { content:'▾'; margin-left:auto; color:#9aa0a6;
+                              font-size:12px; transition:transform .15s; }
+.dash-fold[open] > summary::after { transform:rotate(180deg); }
+.dash-fold > summary:hover { color:#1a73e8; }
+.dash-fold > summary .sub { font-weight:400; color:#5f6368; font-size:12px; }
 </style>
 {% endblock %}
 
@@ -574,11 +584,16 @@
         </div>
     </div>
 
-    <!-- UI 버전 현황 -->
-    <div class="section">
-        <div class="section-title">
+    {% comment %}
+      UI 버전은 **접어 둔다.** V2 가 기본이 된 지 오래라 이 비율로 정할 일이
+      더는 없다. 그래도 지우지 않는 까닭은 옛 화면을 아직 쓰는 사람이 있는지
+      가끔 확인해야 하기 때문이다 — 접힌 채로 요약만 보인다.
+    {% endcomment %}
+    <details class="section dash-fold">
+        <summary class="section-title">
             <i class="bi bi-diagram-3" style="font-size: 16px;"></i>UI 버전 현황
-        </div>
+            <span class="sub">V2 {{ ui_mode_stats.v2_pct }}% · V1 {{ ui_mode_stats.v1_pct }}%</span>
+        </summary>
         <div class="ui-mode-grid">
             <div class="ui-version-card v1">
                 <div class="ui-version-icon">V1</div>
@@ -613,14 +628,17 @@
                 </div>
             </div>
         </div>
-    </div>
+    </details>
 
-    <!-- 기능별 사용 통계 -->
-    <div class="section">
-        <div class="section-title">
+    {% comment %}
+      기능별 통계는 길다. 화면의 절반을 먹으면서도 매번 보는 것은 아니라,
+      펼쳐서 본다.
+    {% endcomment %}
+    <details class="section dash-fold">
+        <summary class="section-title">
             <i class="bi bi-graph-up" style="font-size: 16px;"></i>기능별 사용 통계
-            <span class="sub">(선택 기간 내 활동 기준)</span>
-        </div>
+            <span class="sub">선택 기간 내 활동 기준 — 펼쳐서 봅니다</span>
+        </summary>
         
         <!-- 그룹별 기능 카드 -->
         {% regroup category_stats by group as grouped_stats %}
@@ -647,13 +665,13 @@
             </div>
         </div>
         {% endfor %}
-    </div>
+    </details>
 
-    <!-- 최근 활동 -->
-    <div class="section">
-        <div class="section-title">
+    <details class="section dash-fold">
+        <summary class="section-title">
             <i class="bi bi-clock-history" style="font-size: 16px;"></i>최근 활동
-        </div>
+            <span class="sub">신규 가입자·최근 표시사항 — 펼쳐서 봅니다</span>
+        </summary>
         <div class="recent-grid">
             {% if recent_data.recent_users %}
             <div>
@@ -711,7 +729,7 @@
             </div>
             {% endif %}
         </div>
-    </div>
+    </details>
 
 </div>
 {% endblock %}

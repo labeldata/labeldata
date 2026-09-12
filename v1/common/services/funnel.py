@@ -133,13 +133,29 @@ def return_rate(days=90):
         if not ripe:
             out[window] = {'base': 0, 'came': 0, 'rate': 0.0}
             continue
-        came = 0
-        for uid, joined in ripe:
-            if UserActivityLog.objects.filter(
-                    user_id=uid,
-                    created_at__gt=joined + timezone.timedelta(days=1),
-                    created_at__lte=joined + timezone.timedelta(days=window)).exists():
-                came += 1
+        # **사람마다 한 번씩 묻지 않는다.**
+        #
+        # 처음에는 그렇게 썼다. 개발 PC 는 DB 가 같은 기계라 티가 안 났는데,
+        # 운영은 DB 가 별도 호스트라 사람 수만큼 왕복이 곱해진다. 대시보드가
+        # 첫 요청에서 넘어갔다.
+        #
+        # 한 번에 읽어 와서 파이썬에서 가른다. 창이 28일이라 줄 수가 뻔하고,
+        # 사람별 가입일이 달라 SQL 한 방으로는 못 가른다.
+        joined_at = dict(ripe)
+        oldest = min(joined_at.values())
+        rows = (UserActivityLog.objects
+                .filter(user_id__in=joined_at,
+                        created_at__gt=oldest,
+                        created_at__lte=timezone.now())
+                .values_list('user_id', 'created_at'))
+        came_ids = set()
+        for uid, at in rows.iterator(chunk_size=2000):
+            j = joined_at.get(uid)
+            if j is None or uid in came_ids:
+                continue
+            if j + timezone.timedelta(days=1) < at <= j + timezone.timedelta(days=window):
+                came_ids.add(uid)
+        came = len(came_ids)
         out[window] = {'base': len(ripe), 'came': came,
                        'rate': round(came * 100.0 / len(ripe), 1)}
     return out
