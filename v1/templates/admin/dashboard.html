@@ -3,6 +3,12 @@
 
 {% block extrahead %}
 {{ block.super }}
+{% comment %}
+  앱이 쓰는 색·그림자·글꼴 토큰을 그대로 끌어온다. 관리자 화면이라고 제 색을
+  따로 들고 있을 이유가 없다 — 지금까지는 보라색(#667eea) 강조에 들뜨는 그림자,
+  대문자 라벨처럼 앱 어디에도 없는 결이었다.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'css/variables.css' %}?v={{ STATIC_BUILD_DATE }}">
 <style>
     /* 사이드바 숨기기 및 전체 너비 사용 */
     #content-main {
@@ -118,42 +124,49 @@
         .stats-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
+    /* 앱과 같은 결. 얇은 테두리 · 8px 모서리 · 그림자는 거의 없이.
+       들뜨는 그림자와 떠오르는 hover 는 **여기서 할 일이 아니다** — 이 화면은
+       읽는 곳이지 누르는 곳이 아니다. */
     .stat-card {
-        background: white;
-        border-radius: 12px;
-        padding: 18px 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        border-left: 4px solid #667eea;
-        transition: transform 0.2s, box-shadow 0.2s;
+        background: #fff;
+        border: 1px solid var(--ez-gray-200, #e8eaed);
+        border-radius: var(--ez-radius, 8px);
+        padding: 14px 16px;
     }
-
-    .stat-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 18px rgba(102,126,234,0.18);
-    }
+    .stat-card:hover { border-color: var(--ez-gray-300, #dadce0); }
 
     .stat-label {
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+        font-size: var(--ez-font-size-xs, 12px);
+        font-weight: 500;
+        color: var(--ez-gray-700, #5f6368);
         margin-bottom: 6px;
+        /* 대문자 변환과 자간 넓히기를 걷는다. 한글에는 아무 효과가 없고
+           영문 라벨만 튀어 보였다. */
     }
 
     .stat-value {
-        font-size: 30px;
+        font-size: 26px;
         font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 6px;
-        line-height: 1;
+        color: var(--ez-gray-900, #202124);
+        line-height: 1.15;
+        margin-bottom: 4px;
+        /* 숫자를 세로로 견주는 자리라 자릿수를 고정한다 */
+        font-variant-numeric: tabular-nums;
     }
 
-    .stat-meta { font-size: 11px; color: #9ca3af; }
-    .stat-change { font-size: 13px; font-weight: 600; margin-left: 6px; }
-    .positive { color: #10b981; }
-    .negative { color: #ef4444; }
-    .neutral { color: #9ca3af; }
+    .stat-meta {
+        font-size: var(--ez-font-size-xs, 12px);
+        color: var(--ez-gray-600, #80868b);
+    }
+    .stat-change {
+        font-size: var(--ez-font-size-xs, 12px);
+        font-weight: 600;
+        margin-left: 6px;
+        font-variant-numeric: tabular-nums;
+    }
+    .positive { color: var(--ez-success, #1e8e3e); }
+    .negative { color: var(--ez-danger, #c5221f); }
+    .neutral  { color: var(--ez-gray-500, #9aa0a6); }
 
     /* ── UI 버전 현황 ── */
     .ui-mode-grid {
@@ -394,32 +407,37 @@
 /* ── 어디서 새는가 ──────────────────────────────────────────────────
    쌓인 양이 아니라 흐름을 보는 자리라, 위의 통계 카드와 결을 달리한다.
    막대는 장식이 아니라 **앞 단계 대비 얼마나 남았는지**를 한눈에 보라고 있다. */
-.fn-panel { background:#fff; border:1px solid #e6e9f2; border-radius:8px;
-            padding:20px; margin-bottom:24px; }
+.fn-panel { background:#fff; border:1px solid var(--ez-gray-200, #e8eaed);
+            border-radius:var(--ez-radius, 8px); padding:18px; margin-bottom:20px; }
 .fn-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
            margin-bottom:16px; }
-.fn-title { font-size:16px; font-weight:700; margin:0; color:#202124; }
-.fn-dim { font-size:12px; color:#5f6368; }
+.fn-title { font-size:var(--ez-font-size-lg, 16px); font-weight:700;
+            margin:0; color:var(--ez-gray-900, #202124); }
+.fn-dim { font-size:var(--ez-font-size-xs, 12px); color:var(--ez-gray-700, #5f6368); }
 .fn-steps { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
             gap:12px; margin-bottom:18px; }
-.fn-step { border:1px solid #eef1f6; border-radius:6px; padding:12px; }
+.fn-step { border:1px solid var(--ez-gray-200, #e8eaed);
+           border-radius:var(--ez-radius-sm, 6px); padding:12px; }
 .fn-step-name { font-size:12px; color:#5f6368; margin-bottom:4px; }
 .fn-step-users { font-size:22px; font-weight:700; color:#202124;
                  font-variant-numeric:tabular-nums; }
-.fn-bar { height:4px; background:#f1f3f4; border-radius:2px; margin:8px 0 6px; }
-.fn-bar span { display:block; height:100%; background:#1a73e8; border-radius:2px; }
-.fn-drop { font-size:11px; color:#c5221f; margin-top:4px; }
+.fn-bar { height:4px; border-radius:2px; margin:8px 0 6px;
+          background:var(--ez-gray-100, #f1f3f4); }
+.fn-bar span { display:block; height:100%; border-radius:2px;
+               background:var(--ez-info, #1a73e8); }
+.fn-drop { font-size:11px; margin-top:4px; color:var(--ez-danger, #c5221f); }
 .fn-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
             gap:12px; }
-.fn-card { border:1px solid #eef1f6; border-radius:6px; padding:12px; }
+.fn-card { border:1px solid var(--ez-gray-200, #e8eaed);
+           border-radius:var(--ez-radius-sm, 6px); padding:12px; }
 .fn-big { font-size:24px; font-weight:700; color:#202124;
           font-variant-numeric:tabular-nums; line-height:1.2; }
 .fn-big .fn-dim { font-size:13px; font-weight:400; margin-left:2px; }
 .fn-sources { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;
               align-items:center; }
-.fn-tag { font-size:11px; background:#f1f3f4; color:#3c4043;
-          border-radius:10px; padding:2px 8px; }
-.fn-tag b { margin:0 3px; color:#1a73e8; }
+.fn-tag { font-size:11px; border-radius:10px; padding:2px 8px;
+          background:var(--ez-gray-100, #f1f3f4); color:var(--ez-gray-800, #3c4043); }
+.fn-tag b { margin:0 3px; color:var(--ez-info, #1a73e8); }
 @media (max-width: 600px) { .fn-panel { padding:14px; } }
 
 /* 접는 묶음. 한 화면에 다 넣으려면 **덜 보는 것을 접어야** 한다.

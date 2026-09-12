@@ -17101,3 +17101,106 @@ class 갈린_까닭을_가르지_않으면_숫자가_거짓말을_한다(TestCas
         self._ing(self.a, '19990001', prdlst_dcnm='밀가루')
         self._ing(self.b, '19990001', prdlst_dcnm='밀가루')
         self.assertNotIn('번호를 잘못 넣었다', self._run())
+
+
+class 남의_번호를_적으면_남의_값이_붙는다(TestCase):
+    """
+    공용 원료 풀을 만들지 정하려고 겹치는 원료를 재 보다 알게 됐다. 한 번호
+    아래에 밀가루·설탕·혼합간장이 함께 있었고, 확인해 보니 **그 번호가 식약처에
+    없었다** — 애초에 품목보고번호가 아니었다.
+
+    잘못된 번호는 조용히 퍼진다. 영양성분 자동 연결이 안 되고, 검증이 그 번호를
+    근거로 삼고, 다른 회사의 다른 제품과 같은 번호가 된다. 그런데 넣는 자리에서
+    아무 말도 하지 않았다.
+    """
+
+    def setUp(self):
+        from v1.label.models import FoodItem
+
+        FoodItem.objects.create(prdlst_report_no='1971027500346', prdlst_nm='통밀가루',
+                                prdlst_dcnm='밀가루', bssh_nm='(주)제분')
+
+    def chk(self, no, **kw):
+        from v1.label.services import report_no_check
+        return report_no_check.check(no, **kw)
+
+    def test_없는_번호는_짚는다(self):
+        from v1.label.services import report_no_check
+
+        got = self.chk('1999999999999')
+        self.assertEqual(got['status'], report_no_check.UNKNOWN)
+        self.assertIn('찾지 못했습니다', got['message'])
+
+    def test_번호는_맞는데_제품이_다르면_짚는다(self):
+        """
+        번호가 없으면 자동 연결이 안 될 뿐이지만, 번호가 **남의 것**이면
+        남의 값이 우리 라벨에 붙는다. 이쪽이 더 위험하다.
+        """
+        from v1.label.services import report_no_check
+
+        got = self.chk('1971027500346', prdlst_nm='혼합간장', prdlst_dcnm='혼합간장')
+        self.assertEqual(got['status'], report_no_check.MISMATCH)
+        self.assertIn('통밀가루', got['message'])
+
+    def test_맞으면_아무_말도_안_한다(self):
+        from v1.label.services import report_no_check
+
+        got = self.chk('1971027500346', prdlst_nm='통밀가루', prdlst_dcnm='밀가루')
+        self.assertEqual(got['status'], report_no_check.OK)
+
+    def test_부기가_붙어도_같은_말로_본다(self):
+        """빵류 ↔ 빵류[가열하여…] 를 다르다고 하면 매번 울리는 경고가 된다."""
+        from v1.label.services import report_no_check
+
+        got = self.chk('1971027500346', prdlst_nm='통밀가루',
+                       prdlst_dcnm='밀가루 [가열하여 섭취하는 냉동식품]')
+        self.assertEqual(got['status'], report_no_check.OK)
+
+    def test_숫자가_아닌_번호는_탓하지_않는다(self):
+        """'2020_DNSP_04044' 는 우리 조회 키가 아니다. 틀렸다고 말할 근거가 없다."""
+        from v1.label.services import report_no_check
+
+        self.assertEqual(self.chk('2020_DNSP_04044')['status'], report_no_check.SKIP)
+        self.assertEqual(self.chk('')['status'], report_no_check.SKIP)
+
+    def test_조회가_실패해도_입력을_막지_않는다(self):
+        from unittest.mock import patch
+
+        from v1.label.services import item_lookup, report_no_check
+
+        with patch.object(item_lookup, 'find_exact', side_effect=RuntimeError('터짐')):
+            self.assertEqual(self.chk('1971027500346')['status'], report_no_check.SKIP)
+
+    def test_검증이_짚되_확정을_막지_않는다(self):
+        """
+        수입 원료는 번호 체계가 다르고, 우리 적재본이 최신이 아닐 수도 있다.
+        고칠 수 없는 지적으로 확정을 막으면 사용자는 검증 전체를 안 믿는다.
+        """
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+        from v1.label.services import validation_service as vs
+
+        user = User.objects.create_user(username='u@example.com', password='x')
+        label = MyLabel.objects.create(
+            user_id=user, my_label_name='제품', delete_YN='N',
+            prdlst_nm='초코쿠키', prdlst_report_no='1999999999999')
+
+        rows = vs.check_report_no_registered(label)
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0].get('advisory'))
+        self.assertIn('prdlst_report_no', rows[0].get('fields') or [])
+
+    def test_수입_제품은_아예_보지_않는다(self):
+        """수입식품에는 품목제조보고번호가 없다. 수입신고번호를 대신 적는다."""
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+        from v1.label.services import validation_service as vs
+
+        user = User.objects.create_user(username='i@example.com', password='x')
+        label = MyLabel.objects.create(
+            user_id=user, my_label_name='제품', delete_YN='N',
+            prdlst_report_no='1999999999999', importer_address='(주)수입상사')
+        if vs.is_imported(label):
+            self.assertEqual(vs.check_report_no_registered(label), [])

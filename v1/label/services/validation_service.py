@@ -2384,6 +2384,45 @@ def check_required_documents(label) -> list[dict]:
     return rows
 
 
+def check_report_no_registered(label) -> list:
+    """
+    적어 둔 품목보고번호가 **식약처에 실제로 있는 번호인가.**
+
+    공용 원료 풀을 만들지 정하려고 겹치는 원료를 재 보다가 알게 됐다. 한
+    번호 아래에 밀가루·설탕·혼합간장이 함께 있었고, 확인해 보니 **그 번호가
+    식약처에 없었다** — 애초에 품목보고번호가 아니었던 것이다.
+
+    잘못된 번호는 조용히 퍼진다. 영양성분 자동 연결이 안 되고, 검증이 그
+    번호를 근거로 삼고, 다른 회사의 다른 제품과 같은 번호가 된다. 그런데
+    지금까지는 넣는 자리에서 아무 말도 하지 않았다.
+
+    **막지 않는다.** 수입 원료는 번호 체계가 다르고(is_imported 면 아예 보지
+    않는다), 우리 적재본이 최신이 아닐 수도 있다. 그래서 advisory 다 —
+    짚되 확정을 막지는 않는다.
+    """
+    from v1.label.services import report_no_check
+
+    no = (getattr(label, 'prdlst_report_no', '') or '').strip()
+    if not no or is_imported(label):
+        return []
+
+    got = report_no_check.check(
+        no,
+        prdlst_nm=getattr(label, 'prdlst_nm', '') or '',
+        prdlst_dcnm=getattr(label, 'prdlst_dcnm', '') or '')
+    if got['status'] == report_no_check.UNKNOWN:
+        return [_issue('prdlst_report_no',
+                       '품목보고번호 「%s」 를 식약처 등록 정보에서 찾지 못했습니다.' % no,
+                       got['message'],
+                       fields=['prdlst_report_no'], advisory=True)]
+    if got['status'] == report_no_check.MISMATCH:
+        return [_issue('prdlst_report_no',
+                       '품목보고번호와 제품 정보가 서로 다릅니다.',
+                       got['message'],
+                       fields=['prdlst_report_no'], advisory=True)]
+    return []
+
+
 _CHECKS = [
     check_required_fields,
     check_calorie_consistency,
@@ -2401,6 +2440,7 @@ _CHECKS = [
     check_rawmtrl_brackets,
     check_food_type_known,
     check_food_type_consistency,
+    check_report_no_registered,   # 번호가 남의 것이면 남의 값이 우리 라벨에 붙는다
     check_allergen_vocabulary,
     check_font_size,
     # 사람이 검수하며 짚어 낸 것들
