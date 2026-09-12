@@ -17574,7 +17574,9 @@ class 원료_상세에서도_성적서를_읽는다(TestCase):
         터지지 않으니 아무도 모른다.
         """
         panel = self.panel()
-        self.assertIn('if (d.error) { alert(d.error); return; }', panel)
+        # 알리는 방식은 alert 에서 스낵바로 바뀌었다. 지켜야 할 것은 방식이
+        # 아니라 **값을 넣지 않고 멈춘다** 는 것이다.
+        self.assertIn("if (d.error) { showSnackbar(d.error, 'error'); return; }", panel)
 
     def test_확인한_뒤에_저장한다(self):
         """

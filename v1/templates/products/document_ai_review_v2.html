@@ -12,7 +12,7 @@
         <span class="badge bg-{{ ai_status|lower|default:'secondary' }}">
             {{ ai_status|upper|default:'PENDING' }}
         </span>
-        <span class="badge" style="background:#e8f0fe;color:#1a73e8;">Group {{ ai_group }}</span>
+        <span class="badge" style="background:#e8f0fe;color:var(--ez-info-on-bg);">Group {{ ai_group }}</span>
     </span>
 </div>
 {% include "includes/_topbar_account.html" %}
@@ -34,21 +34,21 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        border-right: 1px solid #e8eaed;
+        border-right: 1px solid var(--ez-gray-200);
     }
     
     .document-viewer-header {
         padding: 16px;
-        border-bottom: 1px solid #e8eaed;
-        background: #f8f9fa;
+        border-bottom: 1px solid var(--ez-gray-200);
+        background: var(--ez-gray-50);
         font-size: 13px;
-        color: #5f6368;
+        color: var(--ez-gray-700);
     }
     
     .document-viewer-header strong {
         display: block;
         margin-bottom: 4px;
-        color: #202124;
+        color: var(--ez-gray-900);
     }
     
     .document-viewer-content {
@@ -70,7 +70,7 @@
     
     .document-viewer-empty {
         text-align: center;
-        color: #9aa0a6;
+        color: var(--ez-gray-500);
     }
     
     .document-viewer-empty i {
@@ -90,14 +90,14 @@
     
     .ai-results-header {
         padding: 16px;
-        border-bottom: 1px solid #e8eaed;
-        background: #f8f9fa;
+        border-bottom: 1px solid var(--ez-gray-200);
+        background: var(--ez-gray-50);
     }
     
     .ai-results-header h3 {
         margin: 0 0 8px 0;
         font-size: 15px;
-        color: #202124;
+        color: var(--ez-gray-900);
         font-weight: 600;
     }
     
@@ -112,7 +112,7 @@
     
     .badge-group-a {
         background: #e3f2fd;
-        color: #1a73e8;
+        color: var(--ez-info-on-bg);
     }
     
     .badge-group-b {
@@ -134,7 +134,7 @@
         margin: 0 0 12px 0;
         font-size: 13px;
         font-weight: 600;
-        color: #5f6368;
+        color: var(--ez-gray-700);
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
@@ -142,23 +142,23 @@
     .extracted-item {
         margin-bottom: 16px;
         padding: 12px;
-        background: #f8f9fa;
+        background: var(--ez-gray-50);
         border-radius: 4px;
-        border-left: 3px solid #1a73e8;
+        border-left: 3px solid var(--ez-info);
     }
     
     .extracted-item-label {
         display: block;
         font-size: 12px;
         font-weight: 600;
-        color: #1a73e8;
+        color: var(--ez-info);
         margin-bottom: 6px;
         text-transform: uppercase;
     }
     
     .extracted-item-value {
         font-size: 13px;
-        color: #202124;
+        color: var(--ez-gray-900);
         word-break: break-word;
         font-family: 'Roboto Mono', monospace;
     }
@@ -167,7 +167,7 @@
     .extracted-item textarea {
         width: 100%;
         padding: 8px 12px;
-        border: 1px solid #dadce0;
+        border: 1px solid var(--ez-gray-300);
         border-radius: 4px;
         font-size: 12px;
         font-family: 'Roboto Mono', monospace;
@@ -177,7 +177,7 @@
     .extracted-item input:focus,
     .extracted-item textarea:focus {
         outline: none;
-        border-color: #1a73e8;
+        border-color: var(--ez-info);
         box-shadow: 0 1px 3px rgba(26, 115, 232, 0.3);
     }
     
@@ -186,13 +186,13 @@
         gap: 8px;
         margin-top: 20px;
         padding-top: 16px;
-        border-top: 1px solid #e8eaed;
+        border-top: 1px solid var(--ez-gray-200);
     }
     
     .btn-apply {
         flex: 1;
         padding: 10px 16px;
-        background: #1a73e8;
+        background: var(--ez-info);
         color: white;
         border: none;
         border-radius: 4px;
@@ -213,14 +213,14 @@
         align-items: center;
         justify-content: center;
         height: 100%;
-        color: #9aa0a6;
+        color: var(--ez-gray-500);
     }
     
     .spinner {
         width: 24px;
         height: 24px;
-        border: 2px solid #e8eaed;
-        border-top: 2px solid #1a73e8;
+        border: 2px solid var(--ez-gray-200);
+        border-top: 2px solid var(--ez-info);
         border-radius: 50%;
         animation: spin 1s linear infinite;
         margin-right: 12px;
@@ -233,10 +233,10 @@
     
     .metadata-footer {
         padding: 12px 16px;
-        background: #f8f9fa;
-        border-top: 1px solid #e8eaed;
+        background: var(--ez-gray-50);
+        border-top: 1px solid var(--ez-gray-200);
         font-size: 11px;
-        color: #9aa0a6;
+        color: var(--ez-gray-500);
     }
 </style>
 {% endblock %}
@@ -398,16 +398,16 @@ function extractAI(docId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            alert('AI 분석이 완료되었습니다. 페이지가 새로고침됩니다.');
+            showSnackbar('AI 분석이 완료되었습니다. 페이지가 새로고침됩니다.', 'success');
             location.reload();
         } else {
-            alert('분석 실패: ' + (data.error || data.message || '알 수 없는 오류'));
+            showSnackbar('분석 실패: ' + (data.error || data.message || '알 수 없는 오류'), 'error');
             btn.disabled = false;
             btn.innerHTML = originalText;
         }
     })
     .catch(err => {
-        alert('요청 실패: ' + err);
+        showSnackbar('요청 실패: ' + err, 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
     });
@@ -427,12 +427,12 @@ function applyToBOM(docId) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            alert('BOM에 정상 적용되었습니다');
+            showSnackbar('BOM에 정상 적용되었습니다', 'success');
         } else {
-            alert('오류: ' + (data.error || '알 수 없는 오류'));
+            showSnackbar('오류: ' + (data.error || '알 수 없는 오류'), 'error');
         }
     })
-    .catch(err => alert('요청 실패: ' + err));
+    .catch(err => showSnackbar('요청 실패: ' + err, 'error'));
 }
 
 document.getElementById('aiReviewForm')?.addEventListener('submit', function(e) {
@@ -448,13 +448,13 @@ document.getElementById('aiReviewForm')?.addEventListener('submit', function(e) 
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            if (window.showSaved) showSaved('저장했습니다'); else alert('저장되었습니다');
+            if (window.showSaved) showSaved('저장했습니다'); else showSnackbar('저장되었습니다', 'success');
             location.reload();
         } else {
-            alert('저장 실패: ' + (data.message || '오류'));
+            showSnackbar('저장 실패: ' + (data.message || '오류'), 'error');
         }
     })
-    .catch(err => alert('요청 실패: ' + err));
+    .catch(err => showSnackbar('요청 실패: ' + err, 'error'));
 });
 </script>
 {% endblock %}

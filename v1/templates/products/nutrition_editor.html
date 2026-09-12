@@ -1124,23 +1124,29 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <script>
 (function(){
+  /* 이 화면은 iframe 으로 뜨는 독립 페이지라 base_v2.html 을 타지 않는다.
+     그래서 제 스낵바가 필요하다 — 다만 **거기와 같은 결이어야 한다.**
+     사본이 낡아 'info' 를 모르고 있었고, info 로 부른 알림이 성공처럼
+     보였다. 여기를 고치면 base_v2.html 쪽도 함께 본다. */
   var _t = null;
+  var _KINDS = ['snack-show','snack-error','snack-warning','snack-info'];
   window.showSnackbar = function(message, type) {
     var el = document.getElementById('v2Snackbar');
     var msg = document.getElementById('v2SnackbarMsg');
     if (!el || !msg) return;
     if (_t) { clearTimeout(_t); _t = null; }
-    el.classList.remove('snack-show','snack-error','snack-warning');
+    el.classList.remove.apply(el.classList, _KINDS);
     msg.textContent = message;
-    if (type === 'error') el.classList.add('snack-error');
+    if (type === 'error')        el.classList.add('snack-error');
     else if (type === 'warning') el.classList.add('snack-warning');
+    else if (type === 'info')    el.classList.add('snack-info');
     void el.offsetWidth;
     el.classList.add('snack-show');
     _t = setTimeout(window.hideSnackbar, (type==='error'||type==='warning') ? 6000 : 4000);
   };
   window.hideSnackbar = function() {
     var el = document.getElementById('v2Snackbar');
-    if (el) el.classList.remove('snack-show','snack-error','snack-warning');
+    if (el) el.classList.remove.apply(el.classList, _KINDS);
     if (_t) { clearTimeout(_t); _t = null; }
   };
 })();

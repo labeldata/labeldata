@@ -6495,6 +6495,196 @@ class UploaderCanRemoveOwnUploadTests(SharingWorkspaceBase):
         self.assertEqual(self._delete(self.mine).status_code, 200)
 
 
+class TemplateColoursComeFromTokensTests(TestCase):
+    """
+    토큰 규율이 **템플릿 문턱에서 멈춰 있었다.**
+
+    ColoursComeFromTokensTests 는 static/css/*.css 만 본다. 그런데 이 앱은
+    화면 스타일의 상당 부분을 템플릿 안 <style> 블록에 두고 있어서, CSS 에서
+    금지한 하드코딩이 템플릿에서는 그대로 통과했다 — 권한 설정 11개, 문서함
+    9개, 자료요청 12개. 색 하나 바꾸려면 여전히 여러 곳을 고쳐야 했다.
+    """
+
+    #  인라인 style= 속성은 아직 세지 않는다. 연락처 한 화면에만 77곳이 있고,
+    #  그것은 값이 아니라 **구조**를 옮기는 일이라 따로 봐야 한다.
+    GUARDED = [
+        'templates/products/_tab_permissions.html',
+        'templates/products/_tab_documents.html',
+        'templates/products/doc_requests.html',
+    ]
+
+    def setUp(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.base = Path(dj.BASE_DIR)
+        self.tokens = {
+            v.lower(): k for k, v in re.findall(
+                r'(--ez-[\w-]+):\s*(#[0-9a-fA-F]{3,6})',
+                (self.base / 'static' / 'css' / 'variables.css').read_text(encoding='utf-8'))}
+
+    def _bare_in_style_blocks(self, rel):
+        import re
+        text = (self.base / rel).read_text(encoding='utf-8')
+        found = set()
+        for block in re.findall(r'<style[^>]*>.*?</style>', text, re.S):
+            stripped = re.sub(r'var\([^()]*\)', '', block)
+            found |= {c.lower() for c in re.findall(r'#[0-9a-fA-F]{6}', stripped)}
+        return found
+
+    def test_토큰이_있는_색은_템플릿에서도_토큰으로_적는다(self):
+        offenders = []
+        for rel in self.GUARDED:
+            hits = sorted(self._bare_in_style_blocks(rel) & set(self.tokens))
+            if hits:
+                offenders.append('%s: %s' % (rel.split('/')[-1], ', '.join(hits)))
+        self.assertEqual(offenders, [], '토큰이 있는데 <style> 안에 직접 적었다')
+
+
+class PaleBackgroundTextIsReadableTests(TestCase):
+    """
+    variables.css 가 재서 적어 둔 것 — "#1a73e8 은 옅은 파랑 바탕 위에서 대비가
+    모자란다". 그래서 --ez-info-on-bg(#1967d2)를 따로 뒀는데, 정작 옅은 바탕
+    칩을 그리는 자리들이 #1a73e8 을 그대로 쓰고 있었다.
+    """
+
+    RISKY = {
+        '#1a73e8': '--ez-info-on-bg',
+        '#1e8e3e': '--ez-success-on-bg',
+        '#e67700': '--ez-warning-on-bg',
+    }
+    SCREENS = [
+        'templates/products/contacts.html',
+        'templates/products/doc_requests.html',
+        'templates/products/_tab_permissions.html',
+    ]
+
+    def test_옅은_바탕_위_글자색은_on_bg_토큰을_쓴다(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        offenders = []
+        for rel in self.SCREENS:
+            text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+            for chunk in re.findall(r'[^;{}"\']*background[^;{}"\']*[;\s][^{}"\']*', text):
+                for bad, token in self.RISKY.items():
+                    if bad in chunk and re.search(r'color\s*:\s*%s' % bad, chunk):
+                        offenders.append('%s: %s → var(%s)'
+                                         % (rel.split('/')[-1], bad, token))
+        self.assertEqual(sorted(set(offenders)), [])
+
+
+class OneWayToTellTheUserTests(TestCase):
+    """
+    같은 제품 관리 안에서 저장 결과를 알리는 방식이 둘로 갈려 있었다 —
+    권한 설정은 스낵바 19번, 연락처는 브라우저 alert() 14번. alert 은 화면을
+    멈춰 세우고, 생김새가 브라우저마다 다르고, 여러 건을 잇달아 알릴 수 없다.
+
+    showSnackbar 는 base_v2.html 이 전역으로 띄워 두므로 연락처도 이미 쓸 수
+    있었다 — 안 쓰고 있었을 뿐이다.
+    """
+
+    #  전역 스낵바(base_v2.html)가 닿는 화면들. 여기서 alert 이 다시 나오면 실패한다.
+    SCREENS = [
+        'templates/products/contacts.html',
+        'templates/products/_tab_permissions.html',
+        'templates/products/_tab_documents.html',
+        'templates/products/doc_requests.html',
+        'templates/products/_tab_basic_info.html',
+        'templates/products/_bom_nutrition_summary.html',
+        'templates/products/_nutrition_from_bom.html',
+        'templates/products/document_ai_review_v2.html',
+        'templates/label/_ingredient_nutrition.html',
+        'templates/label/my_ingredient_list_combined.html',
+        'templates/regulatory/news_list.html',
+        'templates/user_management/user_profile.html',
+    ]
+
+    #  아직 alert 을 쓰는 곳 — **전역 스낵바가 닿지 않는 화면들이다.**
+    #  base.html(V1) 을 타거나 단독으로 뜨는 문서라 window.showSnackbar 가 없다.
+    #  옮기려면 그 화면들을 V2 로 올리거나 스낵바를 따로 실어야 하므로, 색을
+    #  바꾸는 일과 성격이 다르다. 목록으로 남겨 두어 늘어나는지를 지켜본다.
+    SNACKBAR_OUT_OF_REACH = {
+        'templates/includes/navbar.html',
+        'templates/includes/navbar_v1.html',
+        'templates/label/food_additive_search_v1.html',
+        'templates/label/label_preview.html',
+        'templates/products/document_ai_review.html',
+    }
+
+    def test_스낵바가_안_닿는_화면이_늘지_않았다(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        root = Path(dj.BASE_DIR) / 'templates'
+        using = set()
+        for path in root.rglob('*.html'):
+            text = path.read_text(encoding='utf-8')
+            # 주석 안의 언급은 세지 않는다
+            code = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+            if re.search(r'(?<![\w.])alert\s*\(', code):
+                using.add('templates/' + str(path.relative_to(root)).replace(chr(92), '/'))
+        self.assertEqual(using - self.SNACKBAR_OUT_OF_REACH, set(),
+                         'showSnackbar 를 쓰거나, 왜 못 쓰는지 명부에 적으세요')
+
+    def test_알림은_alert_이_아니라_스낵바로_한다(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        offenders = []
+        for rel in self.SCREENS:
+            text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+            hits = len(re.findall(r'(?<![\w.])alert\s*\(', text))
+            if hits:
+                offenders.append('%s: alert() %d곳' % (rel.split('/')[-1], hits))
+        self.assertEqual(offenders, [], 'showSnackbar 를 쓰세요 (base_v2.html 전역)')
+
+    #  base_v2.html 을 타지 않는 독립 페이지만 제 사본을 가질 수 있다.
+    #  nutrition_editor 는 iframe 으로 뜨므로 여기 해당한다.
+    STANDALONE = {'products/nutrition_editor.html'}
+
+    def _definers(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        root = Path(dj.BASE_DIR) / 'templates'
+        return sorted(
+            str(p.relative_to(root)).replace(chr(92), '/')
+            for p in root.rglob('*.html')
+            if re.search(r'window\.showSnackbar\s*=', p.read_text(encoding='utf-8')))
+
+    def test_스낵바를_다시_정의하는_것은_독립_페이지뿐이다(self):
+        extra = set(self._definers()) - {'base_v2.html'} - self.STANDALONE
+        self.assertEqual(extra, set(),
+                         'base_v2.html 을 타는 화면은 전역 스낵바를 쓰세요')
+
+    def test_사본은_본판과_같은_종류를_안다(self):
+        """
+        사본이 낡아 'info' 를 모르면, info 로 부른 알림이 성공처럼 보인다.
+        실제로 nutrition_editor 사본이 그랬다.
+        """
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        root = Path(dj.BASE_DIR) / 'templates'
+        for rel in self._definers():
+            text = (root / rel).read_text(encoding='utf-8')
+            for kind in ('snack-error', 'snack-warning', 'snack-info'):
+                self.assertIn(kind, text, '%s 가 %s 를 모른다' % (rel, kind))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 넘겨받는 자리 — 상태 전이 · 반려 · 기한 · 초대 착지점
+#
+# 기능은 갖춰져 있었는데 **사람이 넘겨받는 지점**에서 끊겼다. 부르기만 하고
+# 문이 잠겨 있거나, 문구로만 약속하고 길이 없거나, 적히기만 하고 아무 일도
+# 안 하거나. 아래는 전부 실제로 그랬던 것들이다.
+# ─────────────────────────────────────────────────────────────────────────────
+
 class WorkflowHandoffBase(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')

@@ -729,7 +729,7 @@ window.inspItemClick = inspItemClick;
 
 function inspDismissSelected() {
   var checked = document.querySelectorAll('.insp-select-cb:checked');
-  if (checked.length === 0) { alert('삭제할 항목을 선택하세요.'); return; }
+  if (checked.length === 0) { showSnackbar('삭제할 항목을 선택하세요.', 'warning'); return; }
   if (!confirm(checked.length + '개 수거검사 항목을 내 목록에서 삭제합니다.\n실제 수거검사 데이터는 삭제되지 않습니다.')) return;
 
   var ids = Array.from(checked).map(function(cb) { return parseInt(cb.dataset.inspId, 10); });
@@ -753,7 +753,7 @@ function inspDismissSelected() {
     url.searchParams.delete('insp_id');
     url.searchParams.set('tab', 'insp');
     window.location.href = url.toString();
-  }).catch(function() { alert('삭제 중 오류가 발생했습니다.'); });
+  }).catch(function() { showSnackbar('삭제 중 오류가 발생했습니다.', 'error'); });
 }
 window.inspDismissSelected = inspDismissSelected;
 
@@ -864,7 +864,7 @@ function deleteKeyword(ruleId, keyword) {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (!data.success) { alert(data.error || '삭제 실패'); return; }
+    if (!data.success) { showSnackbar(data.error || '삭제 실패', 'error'); return; }
     // 칩 제거 (모달 안)
     var chip = document.querySelector('.rkb-chip[data-rule-id="' + ruleId + '"]');
     if (chip) chip.remove();
@@ -894,7 +894,7 @@ function deleteMute(muteId, value) {
   })
   .then(function(r){ return r.json(); })
   .then(function(data){
-    if (!data.success) { alert(data.error || '해제 실패'); return; }
+    if (!data.success) { showSnackbar(data.error || '해제 실패', 'error'); return; }
     var chip = document.querySelector('.rkb-chip[data-mute-id="' + muteId + '"]');
     if (chip) chip.remove();
     _updateMuteCount(-1);

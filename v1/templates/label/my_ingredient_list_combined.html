@@ -21,15 +21,15 @@
 
 <style>
     :root {
-        --google-blue: #1a73e8;
-        --google-blue-hover: #1765cc;
-        --google-gray-50: #f8f9fa;
-        --google-gray-100: #f1f3f4;
-        --google-gray-200: #e8eaed;
-        --google-gray-300: #dadce0;
-        --text-primary: #202124;
-        --text-secondary: #5f6368;
-        --border-color: #dadce0;
+        --google-blue: var(--ez-info);
+        --google-blue-hover: var(--ez-info-hover);
+        --google-gray-50: var(--ez-gray-50);
+        --google-gray-100: var(--ez-gray-100);
+        --google-gray-200: var(--ez-gray-200);
+        --google-gray-300: var(--ez-gray-300);
+        --text-primary: var(--ez-gray-900);
+        --text-secondary: var(--ez-gray-700);
+        --border-color: var(--ez-gray-300);
         --shadow-1: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
     }
 
@@ -136,15 +136,15 @@
         width: 15px;
         height: 15px;
         cursor: pointer;
-        accent-color: #1a73e8;
-        border: 1.5px solid #5f6368;
+        accent-color: var(--ez-info);
+        border: 1.5px solid var(--ez-gray-700);
         border-radius: 3px;
         flex-shrink: 0;
     }
 
     /* 행 체크 시 하이라이트 */
     .ingredient-row.row-checked {
-        background: #e8f0fe !important;
+        background: var(--ez-info-bg) !important;
     }
     .ingredient-row.row-checked td {
         color: var(--text-primary) !important;
@@ -178,7 +178,7 @@
         font-weight: 600;
         padding: 4px 11px;
         border-radius: 12px;
-        background-color: #1967d2;
+        background-color: var(--ez-info-on-bg);
         color: #ffffff;
         white-space: nowrap;
     }
@@ -195,12 +195,12 @@
         white-space: nowrap;
     }
     .bom-sync-badge {
-        background-color: #e8f0fe;
-        color: #1967d2;
+        background-color: var(--ez-info-bg);
+        color: var(--ez-info-on-bg);
         border: 1px solid #aecbfa;
     }
     .ingredient-sync-badge {
-        background-color: #e6f4ea;
+        background-color: var(--ez-success-bg);
         color: #1e7e34;
         border: 1px solid #a8d5b5;
     }
@@ -210,7 +210,7 @@
         font-weight: 500;
         padding: 4px 12px;
         border-radius: 14px;
-        border: 1px solid #dadce0;
+        border: 1px solid var(--ez-gray-300);
         background: #ffffff;
         color: #444746;
         cursor: pointer;
@@ -221,17 +221,17 @@
     }
 
     #ingredient-selection-actions .act-btn:hover {
-        background: #f1f3f4;
-        border-color: #bdc1c6;
+        background: var(--ez-gray-100);
+        border-color: var(--ez-gray-400);
     }
 
     #ingredient-selection-actions .act-btn.danger {
         border-color: #f28b82;
-        color: #c5221f;
+        color: var(--ez-danger);
     }
 
     #ingredient-selection-actions .act-btn.danger:hover {
-        background: #fce8e6;
+        background: var(--ez-danger-bg);
     }
 
     .list-table-wrapper {
@@ -823,13 +823,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    alert(`${data.deleted_count}개 원료가 삭제되었습니다.`);
+                    showSnackbar(`${data.deleted_count}개 원료가 삭제되었습니다.`, 'success');
                     location.reload();
                 } else {
-                    alert('오류: ' + (data.error || '삭제 실패'));
+                    showSnackbar('오류: ' + (data.error || '삭제 실패'), 'error');
                 }
             })
-            .catch(() => alert('삭제 중 오류가 발생했습니다.'));
+            .catch(() => showSnackbar('삭제 중 오류가 발생했습니다.', 'error'));
         });
     }
 
@@ -848,13 +848,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    alert(`${data.copied_count}개 원료가 복사되었습니다.`);
+                    showSnackbar(`${data.copied_count}개 원료가 복사되었습니다.`, 'success');
                     location.reload();
                 } else {
-                    alert('오류: ' + (data.error || '복사 실패'));
+                    showSnackbar('오류: ' + (data.error || '복사 실패'), 'error');
                 }
             })
-            .catch(() => alert('복사 중 오류가 발생했습니다.'));
+            .catch(() => showSnackbar('복사 중 오류가 발생했습니다.', 'error'));
         });
     }
 
@@ -1021,7 +1021,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.saveIngredientColumns = function () {
         var columns = pickedColumns();
-        if (!columns.length) { alert('칸을 하나 이상 고르세요.'); return; }
+        if (!columns.length) { showSnackbar('칸을 하나 이상 고르세요.', 'warning'); return; }
         fetch('/label/my-ingredients/columns/', {
             method: 'POST',
             credentials: 'same-origin',
@@ -1032,9 +1032,9 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.success) window.location.reload();
-                else alert(data.error || '저장하지 못했습니다.');
+                else showSnackbar(data.error || '저장하지 못했습니다.', 'error');
             })
-            .catch(function () { alert('저장 중 오류가 발생했습니다.'); });
+            .catch(function () { showSnackbar('저장 중 오류가 발생했습니다.', 'error'); });
     };
 
     window.resetIngredientColumns = function () {
@@ -1094,10 +1094,10 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(r => r.json())
             .then(data => {
-                alert(data.message || '완료되었습니다.');
+                showSnackbar(data.message || '완료되었습니다.', 'success');
                 location.reload();
             })
-            .catch(() => alert('업로드 중 오류가 발생했습니다.'));
+            .catch(() => showSnackbar('업로드 중 오류가 발생했습니다.', 'error'));
         }
     });
 

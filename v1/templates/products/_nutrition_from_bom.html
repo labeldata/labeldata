@@ -26,7 +26,9 @@
 
   function note(text, warn) {
     var el = document.getElementById('calcNote');
-    if (!el) { if (warn) alert(text); return; }
+    // 자리 표시가 없으면 스낵바로 대신 알린다. 이 조각은 자체 스낵바를
+    // 가진 영양성분 편집기 안에 들어간다.
+    if (!el) { if (warn) showSnackbar(text, 'warning'); return; }
     el.textContent = text;
     el.classList.toggle('is-warn', !!warn);
     el.style.display = text ? '' : 'none';

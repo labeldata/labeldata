@@ -350,11 +350,11 @@
       body: JSON.stringify(body)
     }).then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d || !d.success) { alert((d && d.error) || '저장하지 못했습니다.'); return; }
+        if (!d || !d.success) { showSnackbar((d && d.error) || '저장하지 못했습니다.', 'error'); return; }
         pickAt += 1;
         showPick();
       })
-      .catch(function () { alert('저장하지 못했습니다.'); });
+      .catch(function () { showSnackbar('저장하지 못했습니다.', 'error'); });
   }
 
   function onPickClick(ev) {

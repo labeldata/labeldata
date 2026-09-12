@@ -21,7 +21,7 @@
     padding: 4px 14px;
     font-size: 12px;
     line-height: 1.5;
-    background: #f8f9fa;
+    background: var(--ez-gray-50);
     color: #6c757d;
     cursor: pointer;
     transition: all .15s ease;
@@ -263,7 +263,7 @@
                 }
                 .allergen-add-btn:hover { background: var(--v2-blue-hover, #1765cc); }
                 .allergen-add-btn.btn-remove {
-                    background: #d93025;
+                    background: var(--ez-danger-bright);
                 }
                 .allergen-add-btn.btn-remove:hover { background: #b31412; }
                 
@@ -1227,7 +1227,7 @@ window.syncFoodGroupFromType = function (foodType) {
             _productAllergens.forEach(function(src, allergen) {
                 var isAuto = src === 'auto';
                 var tagStyle = isAuto
-                    ? 'background:#e8f0fe; color:#1a73e8; border:1px solid #a8c7fa;'
+                    ? 'background:#e8f0fe; color:var(--ez-info-on-bg); border:1px solid #a8c7fa;'
                     : 'background:#e6f4ea; color:#137333; border:1px solid #81c995;';
                 var title = isAuto ? '자동 감지' : '직접 추가';
                 // 본문 태그
@@ -1362,7 +1362,7 @@ window.syncFoodGroupFromType = function (foodType) {
 
     window.addCrossContaminationToCautionsProduct = function() {
         if (_productCrossAllergens.size === 0) {
-            alert('먼저 제조시설 혼입 우려 성분을 선택해주세요.');
+            showSnackbar('먼저 제조시설 혼입 우려 성분을 선택해주세요.', 'warning');
             return;
         }
         var detectedList = Array.from(_productAllergens.keys());

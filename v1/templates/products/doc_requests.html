@@ -21,37 +21,37 @@
 .dr-tab-btn {
     padding: 8px 20px; border: none; background: transparent;
     border-radius: 8px 8px 0 0; font-size: 14px; font-weight: 500;
-    color: #5f6368; cursor: pointer; border-bottom: 2px solid transparent;
+    color: var(--ez-gray-700); cursor: pointer; border-bottom: 2px solid transparent;
     transition: all .15s;
 }
-.dr-tab-btn.active { color: #1a73e8; border-bottom-color: #1a73e8; background: #f0f4ff; }
+.dr-tab-btn.active { color: var(--ez-info-on-bg); border-bottom-color: var(--ez-info); background: #f0f4ff; }
 .dr-tab-btn .badge { font-size: 11px; }
 
 /* 카드 */
 .dr-card {
-    background: #fff; border: 1px solid #e8eaed; border-radius: 10px;
+    background: #fff; border: 1px solid var(--ez-gray-200); border-radius: 10px;
     margin-bottom: 10px; padding: 16px 20px;
     display: flex; align-items: flex-start; gap: 16px;
 }
-.dr-card:hover { border-color: #1a73e8; box-shadow: 0 2px 8px rgba(26,115,232,.12); }
+.dr-card:hover { border-color: var(--ez-info); box-shadow: 0 2px 8px rgba(26,115,232,.12); }
 .dr-avatar {
     width: 42px; height: 42px; border-radius: 50%;
-    background: #e8f0fe; color: #1a73e8;
+    background: var(--ez-info-bg); color: var(--ez-info-on-bg);
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; font-weight: 700; flex-shrink: 0;
 }
 .dr-meta { flex: 1; min-width: 0; }
 .dr-meta-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-.dr-name { font-weight: 600; font-size: 14px; color: #202124; }
-.dr-email { font-size: 12px; color: #5f6368; }
-.dr-company { font-size: 12px; color: #5f6368; }
-.dr-date { font-size: 11px; color: #9aa0a6; margin-left: auto; }
+.dr-name { font-weight: 600; font-size: 14px; color: var(--ez-gray-900); }
+.dr-email { font-size: 12px; color: var(--ez-gray-700); }
+.dr-company { font-size: 12px; color: var(--ez-gray-700); }
+.dr-date { font-size: 11px; color: var(--ez-gray-500); margin-left: auto; }
 .dr-doc-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .dr-doc-chip {
     padding: 2px 8px; border-radius: 12px; font-size: 11px;
-    background: #f1f3f4; color: #3c4043; border: 1px solid #e0e0e0;
+    background: var(--ez-gray-100); color: var(--ez-gray-800); border: 1px solid #e0e0e0;
 }
-.dr-message { font-size: 12px; color: #5f6368; margin-top: 6px; font-style: italic; }
+.dr-message { font-size: 12px; color: var(--ez-gray-700); margin-top: 6px; font-style: italic; }
 .dr-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
 
 /* 상태 배지 */
@@ -59,14 +59,14 @@
     display: inline-flex; align-items: center; gap: 4px;
     padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
 }
-.status-PENDING   { background: #fef7e0; color: #b06000; }
-.status-ACCEPTED  { background: #e6f4ea; color: #1e7e34; }
-.status-REJECTED  { background: #fce8e6; color: #c5221f; }
-.status-CANCELLED { background: #f1f3f4; color: #5f6368; }
+.status-PENDING   { background: var(--ez-warning-bg); color: #b06000; }
+.status-ACCEPTED  { background: var(--ez-success-bg); color: #1e7e34; }
+.status-REJECTED  { background: var(--ez-danger-bg); color: var(--ez-danger); }
+.status-CANCELLED { background: var(--ez-gray-100); color: var(--ez-gray-700); }
 
 .dr-empty {
     text-align: center; padding: 60px 20px;
-    color: #9aa0a6; font-size: 14px;
+    color: var(--ez-gray-500); font-size: 14px;
 }
 .dr-empty i { font-size: 40px; display: block; margin-bottom: 12px; }
 </style>
@@ -200,7 +200,7 @@ async function cancelRequest(reqId, btn) {
         method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}
     });
     if (res.ok) location.reload();
-    else { alert('취소에 실패했습니다.'); btn.disabled = false; }
+    else { showSnackbar('취소에 실패했습니다.', 'error'); btn.disabled = false; }
 }
 
 async function acceptRequest(reqId, btn) {
@@ -210,7 +210,7 @@ async function acceptRequest(reqId, btn) {
         method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}
     });
     if (res.ok) location.reload();
-    else { alert('수락에 실패했습니다.'); btn.disabled = false; }
+    else { showSnackbar('수락에 실패했습니다.', 'error'); btn.disabled = false; }
 }
 </script>
 {% endblock %}

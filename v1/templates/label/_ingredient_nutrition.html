@@ -92,7 +92,7 @@
       body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d.success) { alert(d.error || '저장하지 못했습니다'); return false; }
+        if (!d.success) { showSnackbar(d.error || '저장하지 못했습니다', 'error'); return false; }
         flash(payload.kind === 'clear' ? '지웠습니다' : '저장했습니다');
         return true;
       });
@@ -105,7 +105,7 @@
       body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d || !d.success) { alert((d && d.error) || '저장하지 못했습니다'); return false; }
+        if (!d || !d.success) { showSnackbar((d && d.error) || '저장하지 못했습니다', 'error'); return false; }
         flash('저장했습니다');
         return true;
       });
@@ -261,20 +261,20 @@
       .then(function (d) {
         if (flash) flash.textContent = '';
         if (!d || !d.success) {
-          alert((d && d.error) || '판독하지 못했습니다.');
+          showSnackbar((d && d.error) || '판독하지 못했습니다.', 'error');
           return;
         }
         /* 기준량을 못 읽으면 값이 비어 온다. **100 으로 가정하지 않는다** —
            1회 제공량 30g 성적서가 그대로 들어오면 값이 3.3배 낮아지는데
            터지지 않으니 아무도 모른다. */
-        if (d.error) { alert(d.error); return; }
+        if (d.error) { showSnackbar(d.error, 'error'); return; }
         specValues = d.values || {};
         specName = d.filename || '';
         drawSpec(d);
       })
       .catch(function () {
         if (flash) flash.textContent = '';
-        alert('판독 중 오류가 발생했습니다.');
+        showSnackbar('판독 중 오류가 발생했습니다.', 'error');
       });
   }
 
