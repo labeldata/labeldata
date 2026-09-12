@@ -47,6 +47,8 @@ def _json_body(request):
 @staff_member_required
 @require_GET
 def ocr_lab(request):
+    from v1.label.services import design_bench
+
     """판독 고도화 화면."""
     from django.conf import settings
 
@@ -80,6 +82,10 @@ def ocr_lab(request):
         'current_model': getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
         'verified_count': sum(1 for c in cases if c.verified),
         'max_calls': MAX_CALLS_PER_RUN,
+        # 시안 대조 채점. **판독을 다시 돌리지 않는다** — 정답지의 값만 가지고
+        # 판정 규칙(design_match)을 잰다. 재려는 것이 그 규칙이고, 판독
+        # 정확도는 이 화면이 이미 따로 재고 있다. 두 물음을 섞지 않는다.
+        'design': design_bench.run(cases),
         # 정답지에 값이 없어도 **입력 칸은 늘 보여야** 사람이 채울 수 있다.
         # 예전에는 화면이 이미 값이 있는 항목만 줄로 그려서, 판독이 못 읽은
         # 칸은 손으로 넣을 방법조차 없었다 (TRUTH_FIELDS 주석 참고).
@@ -228,6 +234,26 @@ def truth_update(request, case_id):
         case.report_no = (payload['report_no'] or '').strip()[:32]
     if 'note' in payload:
         case.note = payload['note'] or ''
+    # ── 시안 대조 채점에 쓰는 두 칸 ─────────────────────────────────
+    #
+    # expected 가 "시안에 인쇄된 값" 이라면 label_values 는 **내 표시사항**
+    # 이다. 그 둘을 견주는 것이 시안 대조이고, expected_diff 는 **정말 다른
+    # 항목**을 사람이 적어 둔 것이다 — 판정이 맞았는지 재려면 정답이 있어야
+    # 한다.
+    if 'label_values' in payload:
+        values = payload['label_values']
+        if not isinstance(values, dict):
+            return JsonResponse({'success': False,
+                                 'error': '내 표시사항은 객체여야 합니다.'}, status=400)
+        case.label_values = {k: str(v or '').strip()
+                             for k, v in values.items() if str(v or '').strip()}
+    if 'expected_diff' in payload:
+        diff = payload['expected_diff']
+        if not isinstance(diff, list):
+            return JsonResponse({'success': False,
+                                 'error': '정말 다른 항목은 목록이어야 합니다.'}, status=400)
+        case.expected_diff = [str(k).strip() for k in diff if str(k).strip()]
+
     if 'crop_box' in payload:
         box = payload['crop_box']
         try:

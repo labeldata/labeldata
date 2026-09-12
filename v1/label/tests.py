@@ -17691,3 +17691,114 @@ class 번호는_맞는데_딴_원료를_적어_둔_줄을_뺀다(TestCase):
             encoding='utf-8')
         self.assertIn('곳마다 다르게 적었습니다', html)
         self.assertIn('f.has_majority', html)
+
+
+class 시안_대조를_정답지로_잰다(TestCase):
+    """
+    작업 3·4 에서 판정 규칙을 크게 바꿨다. 오탐을 줄이려고 눅였고, 그러다
+    **놓침을 하나 들여왔다가 시험이 우연히 잡았다**(초코쿠키 ↔ 초코칩쿠키).
+    잡은 것은 운이 좋았던 것이고, 지금도 놓침이 늘었는지 잴 방법이 없다.
+
+    **오탐은 사용자가 말해 준다. 놓침은 아무도 말해 주지 않는다** — 인쇄가
+    나온 뒤에야 안다. 그래서 잰다.
+    """
+
+    def _case(self, **kw):
+        from v1.common.models import OcrTruthCase
+
+        kw.setdefault('name', '단팥빵 시안')
+        return OcrTruthCase(**kw)
+
+    def test_두_쪽이_없으면_세지_않는다(self):
+        """
+        판독 정답지는 '시안에 인쇄된 값' 만 갖고 있다. 시안 대조는 **내
+        표시사항**이 있어야 견줄 수 있다 — 없으면 그 정답지는 판독 채점에만
+        쓰인다. 기존 것을 건드리지 않고 쓰던 대로 쓸 수 있어야 한다.
+        """
+        from v1.label.services import design_bench
+
+        self.assertIsNone(design_bench.grade_case(
+            self._case(expected={'prdlst_nm': '단팥빵'})))
+
+    def test_다른데_같다고_하면_놓침이다(self):
+        from v1.label.services import design_bench
+
+        got = design_bench.grade_case(self._case(
+            label_values={'prdlst_nm': '초코쿠키'},
+            expected={'prdlst_nm': '초코쿠키'},      # 판정은 '같음'
+            expected_diff=['prdlst_nm']))            # 그런데 정답은 '다르다'
+        self.assertEqual(got['misses'], 1)
+        self.assertEqual(got['falses'], 0)
+
+    def test_같은데_다르다고_하면_오탐이다(self):
+        from v1.label.services import design_bench
+
+        got = design_bench.grade_case(self._case(
+            label_values={'prdlst_nm': '초코쿠키'},
+            expected={'prdlst_nm': '초코칩쿠키'},    # 판정은 '다름'
+            expected_diff=[]))                       # 정답은 '같다'
+        self.assertEqual(got['falses'], 1)
+        self.assertEqual(got['misses'], 0)
+
+    def test_제대로_짚으면_hit_다(self):
+        from v1.label.services import design_bench
+
+        got = design_bench.grade_case(self._case(
+            label_values={'content_weight': '100g'},
+            expected={'content_weight': '110g'},
+            expected_diff=['content_weight']))
+        self.assertEqual(got['hits'], 1)
+
+    def test_부기는_오탐으로_세지_않는다(self):
+        """작업 3 이 고친 바로 그 자리다. 되돌아가면 여기서 잡힌다."""
+        from v1.label.services import design_bench
+
+        got = design_bench.grade_case(self._case(
+            label_values={'prdlst_dcnm': '빵류'},
+            expected={'prdlst_dcnm': '빵류 [가열하여 섭취하는 냉동식품]'},
+            expected_diff=[]))
+        self.assertEqual(got['falses'], 0)
+
+    def test_판독_결과_모양도_읽는다(self):
+        """정답지는 {'value':…} 꼴로 저장되기도 한다."""
+        from v1.label.services import design_bench
+
+        got = design_bench.grade_case(self._case(
+            label_values={'prdlst_nm': '단팥빵'},
+            expected={'prdlst_nm': {'value': '단팥빵', 'confidence': 'high'}},
+            expected_diff=[]))
+        self.assertEqual(got['falses'], 0)
+        self.assertEqual(got['checked'], 1)
+
+    def test_놓침률과_오탐률을_따로_낸다(self):
+        """
+        하나로 합쳐 "정확도 92%" 라고 하면 어느 쪽이 나빠졌는지 알 수 없다.
+        """
+        from v1.label.services import design_bench
+
+        got = design_bench.run([
+            self._case(name='a', label_values={'prdlst_nm': '초코쿠키'},
+                       expected={'prdlst_nm': '초코쿠키'}, expected_diff=['prdlst_nm']),
+            self._case(name='b', label_values={'prdlst_nm': '단팥빵'},
+                       expected={'prdlst_nm': '단팥빵'}, expected_diff=[]),
+        ])
+        self.assertEqual(got['misses'], 1)
+        self.assertEqual(got['miss_rate'], 100.0)
+        self.assertEqual(got['false_rate'], 0.0)
+
+    def test_보류한_판정은_어느_쪽으로도_세지_않는다(self):
+        """
+        unread('시안에서 확인 못함')는 **짚되 단정하지 않은** 것이다.
+        맞혔다고도 틀렸다고도 할 수 없다.
+        """
+        from v1.label.services import design_bench
+
+        self.assertNotIn('unread', design_bench.FLAGGED)
+
+    def test_화면이_놓침을_먼저_보인다(self):
+        from pathlib import Path
+
+        html = Path('v1/templates/label/ocr_lab.html').read_text(encoding='utf-8')
+        self.assertIn('놓침률', html)
+        self.assertIn('오탐률', html)
+        self.assertLess(html.index('놓침률'), html.index('오탐률'))

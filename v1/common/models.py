@@ -282,6 +282,25 @@ class OcrTruthCase(models.Model):
                                   verbose_name='OCR 엔진')
     ocr_fetched_at = models.DateTimeField(null=True, blank=True,
                                           verbose_name='OCR 읽은 시각')
+    # ── 시안 대조 채점에 쓰는 두 칸 ──────────────────────────────────
+    #
+    # 판독 채점은 물음이 하나다 — "사진에서 값을 정확히 읽었나". 시안 대조는
+    # **두 쪽**이 있어야 한다.
+    #
+    #     expected       시안에 인쇄된 값 (판독 채점이 이미 쓰는 정답)
+    #     label_values   **내 표시사항** — 이 제품에 우리가 확정해 둔 값
+    #
+    # 그 둘을 견줘 "어디가 다른가" 를 내는 것이 시안 대조이고, 채점은 그
+    # 판정이 맞았는지를 본다. 그래서 정답이 하나 더 필요하다 —
+    # **어느 항목이 정말 다른가**(expected_diff). 사람이 눈으로 정해 적는다.
+    #
+    # 둘 다 비어 있으면 그 정답지는 판독 채점에만 쓰인다. 기존 것을 건드리지
+    # 않고 쓰던 대로 쓸 수 있어야 한다.
+    label_values = models.JSONField(default=dict, blank=True,
+                                    verbose_name='내 표시사항')
+    expected_diff = models.JSONField(default=list, blank=True,
+                                     verbose_name='정말 다른 항목')
+
     note = models.TextField(blank=True, default='', verbose_name='메모')
     created_by = models.ForeignKey(User, null=True, blank=True,
                                    on_delete=models.SET_NULL,

@@ -434,27 +434,79 @@
   .ing-fold[open] > summary::after { content: '▴'; }
   .ing-fold > summary:hover { color: var(--ez-info, #1a73e8); }
 
-  /* 두 칸이 기본. 넓은 것은 줄 전체를 쓴다. */
+  /* ── 칸 너비에 맞춘다. 화면 너비가 아니다 ──────────────────────────
+     처음에는 `@media (max-width: 720px)` 로 갈랐다. 그런데 이 폼은 화면
+     전체가 아니라 **오른쪽 패널 안**에 산다. 게다가 화면 배율이 200 % 면
+     그 패널이 CSS 기준 500 px 밖에 안 되어, 넓은 모니터에서도 중단점에
+     걸려 1 열로 떨어졌다 — 2 열이 한 번도 안 보였다.
+
+     auto-fit 은 **담는 칸이 얼마나 넓은지**를 본다. 화면 배율과 무관하다. */
   .ing-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 14px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 5px 12px;
   }
   .ing-f-wide { grid-column: 1 / -1; }
-  .ing-f { min-width: 0; }
 
-  /* 이름은 위에 작게. 왼쪽에 세로로 세우면 긴 이름이 두 줄이 되면서
-     칸마다 높이가 달라진다. */
+  /* ── 이름과 칸을 한 줄에 ────────────────────────────────────────────
+     이름을 위에 두면 칸 하나가 두 줄을 먹는다. 항목이 열 개 넘게 서는
+     화면에서는 그 한 줄이 열 줄이 되어 화면 한 바닥이 된다.
+
+     이름 너비를 고정하는 까닭은 **칸이 세로로 줄을 맞추게** 하기 위해서다.
+     이름 길이에 따라 입력칸이 들쭉날쭉하면 읽는 눈이 매 줄 다시 자리를
+     찾아야 한다. 긴 이름은 두 줄로 접히되 칸은 제자리에 선다. */
+  .ing-f {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    min-width: 0;
+    padding: 3px 0;
+  }
   .ing-f-l {
-    font-size: 11px; color: var(--ez-gray-700, #5f6368);
-    margin-bottom: 3px; line-height: 1.4;
+    font-size: 11.5px; color: var(--ez-gray-700, #5f6368);
+    line-height: 1.35; padding-top: 5px;
+    overflow-wrap: break-word;
   }
   .ing-f-v { min-width: 0; }
-  .ing-f-v .form-control { font-size: 12px; }
 
-  @media (max-width: 720px) {
-    .ing-grid { grid-template-columns: 1fr; }
+  /* 입력 칸을 죈다. 부트스트랩 기본 높이(38px)는 이 폭에서 너무 크다. */
+  .ing-form .form-control,
+  .ing-form .form-select {
+    font-size: 12px; padding: 4px 8px; min-height: 0;
   }
+  .ing-form textarea.form-control { line-height: 1.45; }
+
+  /* ── 라디오·목록도 같은 결로 ────────────────────────────────────────
+     식품 구분은 라디오 셋이고 알레르기·GMO 는 칩 묶음인데, 저마다 제
+     여백과 글씨를 갖고 있어서 옆 칸의 입력 칸과 높이가 안 맞았다.
+     **입력 칸과 같은 높이·같은 글씨**로 맞춘다 — 성격이 다른 것이 아니라
+     고르는 방식만 다른 것이다. */
+  .ing-form .form-check {
+    margin-bottom: 0; min-height: 0; padding-top: 4px;
+  }
+  .ing-form .form-check-label { font-size: 12px; }
+  .ing-form .form-check-inline { margin-right: 12px; }
+  .ing-form .allergy-gmo-panel {
+    padding: 5px 8px !important; border-radius: 6px !important;
+  }
+  .ing-form .selected-display { font-size: 12px; }
+  .ing-form .ag-toggle-btn,
+  .ing-form .allergy-btn,
+  .ing-form .gmo-btn { font-size: 11px; padding: 2px 8px; }
+
+  /* 칸 밑에 붙는 안내는 작게. 입력 칸만 한 글씨로 두 줄씩 차지하면서
+     정작 다음 칸을 밀어낸다. */
+  .ing-form small,
+  .ing-form .form-text,
+  .ing-form .text-muted { font-size: 11px; line-height: 1.35; }
+
+  /* 아주 좁아지면 이름을 위로 올린다. 86px 을 떼면 입력칸이 너무 좁다. */
+  @media (max-width: 420px) {
+    .ing-f { grid-template-columns: 1fr; gap: 2px; }
+    .ing-f-l { padding-top: 0; }
+  }
+
 </style>
 {% include "includes/_field_help.html" %}
 <div class="popup-container" id="ingredient-detail-container-partial">
@@ -613,7 +665,7 @@
                             </div>
                         </div>
       </div>
-      <div class="ing-f ing-f-wide">
+      <div class="ing-f">
         <div class="ing-f-l">GMO<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>어디에 쓰이나</b>고른 것이 있으면 제품의 <i>유전자변형식품</i> 표시 문구로 이어집니다.<em>해당 없으면 비워 두세요. 빈 값이 정상입니다.</em></span></span></div>
         <div class="ing-f-v">
                             <div class="allergy-gmo-panel">
