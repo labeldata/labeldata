@@ -140,6 +140,24 @@
         <!-- 중앙: Workflow Dropzones (상태 단계별) -->
         <div class="workflow-dropzones">
 
+            {% comment %}
+            확정 바.
+
+            카드를 놓는 것은 **초안**이다. 예전에는 놓는 순간 서버로 가서,
+            자리를 몇 번 옮겨 보는 동안 매번 알림이 나갔다. 여기서 한 번에
+            확정한다. 대기 중인 변경이 없으면 감춰져 있다.
+            {% endcomment %}
+            <div id="perm-pending-bar" class="perm-pending" hidden>
+                <i class="bi bi-exclamation-circle perm-pending-icon"></i>
+                <span id="perm-pending-text" class="perm-pending-text"></span>
+                <button type="button" class="btn v2-btn-sm btn-outline-secondary"
+                        onclick="discardPermissions()">되돌리기</button>
+                <button type="button" class="btn v2-btn-sm btn-primary"
+                        id="perm-commit-btn" onclick="commitPermissions()">
+                    <i class="bi bi-check2"></i>권한 부여
+                </button>
+            </div>
+
             <!-- ① 작성 중 (기초 작성) — 오너 + 공동 작성자 -->
             <div class="dropzone-card accent-top-draft {% if product_status == 'DRAFT' %}stage-active{% endif %}" data-role="OWNER">
                 <div class="step-indicator-col">
@@ -412,6 +430,27 @@
      전체를 끌림 그림으로 잡는다 — 화면이 통째로 흐릿하게 따라다녔다.
      그래서 스냅샷이 끝난 다음 프레임에 이 클래스를 건다(dragStart 참고). */
   .person-card.is-dragging { opacity: .45; }
+
+  /* 확정 전 배치. 아직 서버에 안 간 카드임을 드러낸다 */
+  .person-card.is-pending {
+    border-style: dashed !important;
+    border-color: var(--ez-warning) !important;
+    background: var(--ez-warning-bg);
+  }
+
+  /* 확정 바 */
+  .perm-pending {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 0 0 12px; padding: 10px 14px;
+    border: 1px solid var(--ez-warning-border);
+    border-left: 3px solid var(--ez-warning);
+    border-radius: 8px; background: var(--ez-warning-bg);
+  }
+  .perm-pending-icon { color: var(--ez-warning-on-bg); flex-shrink: 0; }
+  .perm-pending-text {
+    flex: 1; min-width: 220px;
+    font-size: 12.5px; line-height: 1.55; color: var(--ez-warning-on-bg);
+  }
 
   /* 고른 카드. selectPerson 이 .selected 를 붙이는데 그 그림이 없었다 —
      멤버가 여러 명일 때 오른쪽 패널에 뜬 사람이 왼쪽 누구인지 알 수 없었고,
@@ -858,84 +897,118 @@ function leaveDrop(event) {
     event.currentTarget.classList.remove('pw-drop-over');
 }
 
+/* ══ 권한 변경은 **모아서 확정한다** ══════════════════════════════════════
+ *
+ * 예전에는 카드를 놓는 순간 서버로 갔다. 그래서
+ *
+ *   - 처음 놓는 사람은 이 제품에 공유가 없어 초대 경로를 타고 **새로고침**
+ *     됐다. 그 다음부터는 역할 변경이라 바로 반영됐다 — 같은 동작인데
+ *     첫 번만 화면이 튀었다.
+ *   - 자리를 몇 번 옮겨 보는 동안 **매번 이메일과 인앱 알림이 나갔다.**
+ *     받는 사람에게는 같은 제품의 역할 변경 통보가 연달아 쌓였다.
+ *   - 되돌리려면 다시 끌어야 했고 그것도 또 알림이었다.
+ *
+ * 지금은 놓는 것이 **초안**이다. 서버는 [권한 부여] 를 누를 때 한 번 부른다.
+ * ═══════════════════════════════════════════════════════════════════════ */
+var _pending = {};            /* key → 변경 한 건 */
+
+var _PENDING_ROLE_LABEL = {
+    UPLOADER: '자료 제출', EDITOR: '공동 편집', REVIEWER: '검토자',
+    APPROVER: '승인자', VIEWER: '단순 조회'
+};
+
+function _pendingKey(data) {
+    return data.shareId ? 'share:' + data.shareId
+                        : 'new:' + (data.email || '').toLowerCase();
+}
+
+function _markPending(card, on) {
+    if (card) card.classList.toggle('is-pending', !!on);
+}
+
+/* 대기 중인 변경을 화면 위쪽 바에 요약한다. */
+function _renderPendingBar() {
+    var bar  = document.getElementById('perm-pending-bar');
+    var text = document.getElementById('perm-pending-text');
+    if (!bar || !text) return;
+
+    var keys = Object.keys(_pending);
+    if (!keys.length) { bar.hidden = true; return; }
+
+    var lines = keys.map(function (k) {
+        var c = _pending[k];
+        var who = c.name || c.email;
+        var role = _PENDING_ROLE_LABEL[c.toRole] || c.toRole;
+        if (!c.toRole)  return who + ' → 공유 해제';
+        if (!c.shareId) return who + ' → ' + role + ' (새 초대)';
+        return who + ' → ' + role;
+    });
+    text.textContent = '확정 전 변경 ' + keys.length + '건 · ' + lines.join(' · ');
+    bar.hidden = false;
+}
+
+/* 원래 자리로 되돌려 놓으면 변경이 아니다 — 목록에서 뺀다. */
+function _recordPending(data, toRole) {
+    var key = _pendingKey(data);
+    var from = _pending[key] ? _pending[key].fromRole : (data.role || '');
+    if (data.shareId && (from || '') === (toRole || '')) {
+        delete _pending[key];
+    } else {
+        _pending[key] = {
+            shareId:   data.shareId || '',
+            email:     data.email,
+            name:      data.name || '',
+            company:   data.company || '',
+            licenseNo: data.licenseNo || '',
+            fromRole:  from,
+            toRole:    toRole || ''
+        };
+    }
+    _renderPendingBar();
+}
+
+/* 이 역할을 줄 수 없는 사람이면 왜 안 되는지 **먼저** 말한다.
+   예전에는 카드를 옮겨 놓고 서버가 403 을 줘서, JSON 덩어리가 스낵바에
+   찍히고 카드는 새로고침으로 되돌아갔다. */
+function _grantBlockedReason(role) {
+    if (_currentUserRole === 'OWNER') return '';
+    if (['VIEWER', 'UPLOADER', 'REVIEWER'].indexOf(role) !== -1) return '';
+    var label = { EDITOR: '공동 편집', APPROVER: '최종 승인' }[role] || role;
+    return label + ' 역할은 제품 소유자만 지정할 수 있습니다.';
+}
+
 function dropPerson(event, role) {
     event.preventDefault();
     leaveDrop(event);
 
     if (!_draggedPersonData || !_draggedPersonData.email) return;
 
-    var data    = Object.assign({}, _draggedPersonData); // 비동기 전에 복사
-    var shareId = data.shareId;
+    var data = Object.assign({}, _draggedPersonData);
     _draggedPersonData = null;
 
-    if (!shareId) {
-        /* 현재 제품 공유 없음 → 초대하면서 역할 지정 (새로고침 필요) */
-        var labelId = _labelId();
-        if (!labelId) { showSnackbar('라벨 ID를 찾을 수 없습니다.', 'error'); return; }
-        _permPost('/products/share/create/' + labelId + '/', {
-            email:   data.email,
-            role:    role,
-            name:    data.name    || '',
-            company: data.company || ''
-        })
-        .then(function(res) {
-            if (res.success) _reloadToPermissions();
-            else showSnackbar(res.error || '초대에 실패했습니다.', 'error');
-        })
-        .catch(function(err) { showSnackbar('초대 오류: ' + (err && err.message ? err.message : err), 'error'); });
-        return;
-    }
+    if (data.role === role) return;          /* 같은 자리면 아무 일도 없다 */
 
-    /* 같은 역할 드롭이면 무시 */
-    if (data.role === role) return;
+    var blocked = _grantBlockedReason(role);
+    if (blocked) { showSnackbar(blocked, 'warning'); return; }
 
-    /* 낙관적(Optimistic) DOM 업데이트 */
-    _removeCardFromDropzones(shareId);
-    var oldZoneId = 'dropzone-' + (data.role || '').toLowerCase();
-    var oldZone = document.getElementById(oldZoneId);
+    /* 화면만 옮긴다 — 서버는 확정할 때 한 번 부른다 */
+    if (data.shareId) _removeCardFromDropzones(data.shareId);
+    var oldZone = document.getElementById('dropzone-' + (data.role || '').toLowerCase());
     if (oldZone) _syncPlaceholder(oldZone);
 
     var newZone = document.getElementById('dropzone-' + role.toLowerCase());
     if (newZone) {
-        newZone.appendChild(_makeDropzoneCard(data, role));
+        var card = _makeDropzoneCard(data, role);
+        _markPending(card, true);
+        newZone.appendChild(card);
         _syncPlaceholder(newZone);
     }
-    _updatePaletteBadge(shareId, role);
-    // 출발지·도착지 카드의 스킵 스타일 즉시 반영
+    if (data.shareId) _updatePaletteBadge(data.shareId, role);
     _syncSkipStyles(role);
     _syncSkipStyles(data.role);
+    if (data.shareId) _syncDetailRole(data.shareId, role);
 
-    /* API 호출 (실패 시 롤백)
-     *
-     * 끌어다 놓기로 역할을 바꾸면 문서함 전체 보기가 그 역할의 기본값으로
-     * 돌아간다. 예전에는 그것이 넓어지는 쪽으로도 말없이 일어났고, 카드에
-     * 실린 data-see-all 은 옛 값 그대로였다. 서버가 결과를 돌려주므로
-     * 카드를 맞추고, 값이 실제로 바뀐 때에만 한 줄 알린다. */
-    _permPost('/products/share/' + shareId + '/update-permission/', { role: role })
-    .then(function(res) {
-        if (!res.success) {
-            showSnackbar(res.error || '역할 변경에 실패했습니다. 새로고침합니다.', 'error');
-            _reloadToPermissions();
-            return;
-        }
-        _syncSeeAll(shareId, res.see_all_documents);
-        /* 열려 있는 상세 패널도 새 역할로 맞춘다.
-         *
-         * 예전에는 드롭존·팔레트만 갱신했다. 그래서 뷰어를 검토자 칸으로
-         * 끌어 성공한 뒤 이름 오타를 고치려고 저장을 누르면, 패널의 역할
-         * select 가 아직 '뷰어' 여서 **조용히 다시 뷰어가 됐다.** 무엇이
-         * 되돌렸는지 알 방법이 없었다. */
-        _syncDetailRole(shareId, role);
-        if (res.see_all_changed) {
-            showSnackbar(res.see_all_documents
-                ? '문서함 전체 보기가 켜졌습니다. 이 역할의 기본값입니다.'
-                : '문서함 전체 보기가 꺼졌습니다. 본인이 올린 문서만 보입니다.', 'info');
-        }
-    })
-    .catch(function(err) {
-        showSnackbar('역할 변경 오류: ' + (err && err.message ? err.message : err), 'error');
-        _reloadToPermissions();
-    });
+    _recordPending(data, role);
 }
 
 function dropPersonToPalette(event) {
@@ -944,34 +1017,100 @@ function dropPersonToPalette(event) {
 
     if (!_draggedPersonData || !_draggedPersonData.shareId) return;
 
-    /* 팔레트 자체 카드에서 드래그한 경우(→ 이미 팔레트에 있음) 무시 */
-    var data    = Object.assign({}, _draggedPersonData);
-    var shareId = data.shareId;
+    var data = Object.assign({}, _draggedPersonData);
     _draggedPersonData = null;
 
-    if (!shareId) return;  /* 공유 없는 팔레트 자체 카드면 무시 */
+    /* 드롭존에 없던 카드를 팔레트에 놓은 것이면 아무 일도 아니다.
+       예전에는 `!shareId` 만 봐서, 팔레트 안에서 카드를 조금만 움직여도
+       확인창 없이 공유가 날아갔다. */
+    if (!document.querySelector(
+            '.dropzone-body .person-card[data-share-id="' + data.shareId + '"]')) {
+        return;
+    }
 
-    /* 낙관적 DOM 업데이트: 드롭존에서 카드 제거 + 팔레트 뱃지 제거 */
-    _removeCardFromDropzones(shareId);
+    _removeCardFromDropzones(data.shareId);
     document.querySelectorAll('.dropzone-body').forEach(_syncPlaceholder);
-    _updatePaletteBadge(shareId, '');  /* 뱃지 완전 제거 */
-    // 제거된 역할 카드의 스킵 스타일 즉시 반영
+    _updatePaletteBadge(data.shareId, '');
     _syncSkipStyles(data.role);
 
-    /* API 호출: 공유 완전 취소 (revoke) → 새로고침 후 드롭존·팔레트 모두 미노출 */
-    _permPost('/products/share/' + shareId + '/revoke/', {})
-    .then(function(res) {
-        if (!res.success) {
-            showSnackbar(res.error || '권한 제거에 실패했습니다. 새로고침합니다.', 'error');
-            _reloadToPermissions();
+    _recordPending(data, '');      /* 해제도 확정할 때 한 번에 */
+}
+
+/* ── 확정 ──────────────────────────────────────────────────────────────
+ * 모아 둔 변경을 차례로 보낸다. 알림은 이때 한 번씩만 나간다.
+ * ─────────────────────────────────────────────────────────────────── */
+function commitPermissions() {
+    var keys = Object.keys(_pending);
+    if (!keys.length) return;
+
+    var summary = keys.map(function (k) {
+        var c = _pending[k];
+        var who = c.name || c.email;
+        return c.toRole ? who + ' → ' + (_PENDING_ROLE_LABEL[c.toRole] || c.toRole)
+                        : who + ' → 공유 해제';
+    }).join('\n');
+    if (!confirm('아래 ' + keys.length + '건을 적용합니다.\n적용하면 담당자에게'
+                 + ' 알림이 갑니다.\n\n' + summary)) return;
+
+    var btn = document.getElementById('perm-commit-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '적용 중…'; }
+
+    var labelId = _labelId();
+    var failed = [];
+
+    function one(c) {
+        if (!c.shareId) {
+            return _permPost('/products/share/create/' + labelId + '/', {
+                email: c.email, role: c.toRole, name: c.name,
+                company: c.company, license_no: c.licenseNo
+            });
         }
-        /* 성공: DOM은 이미 낙관적 업데이트됨, 추가 액션 불필요 */
-    })
-    .catch(function(err) {
-        showSnackbar('권한 제거 오류: ' + (err && err.message ? err.message : err), 'error');
+        if (!c.toRole) {
+            return _permPost('/products/share/' + c.shareId + '/revoke/', {});
+        }
+        return _permPost('/products/share/' + c.shareId + '/update-permission/',
+                         { role: c.toRole });
+    }
+
+    keys.reduce(function (chain, key) {
+        return chain.then(function () {
+            var c = _pending[key];
+            return one(c)
+                .then(function (res) {
+                    if (!res || !res.success) {
+                        failed.push((c.name || c.email) + ': '
+                                    + ((res && res.error) || '실패'));
+                    }
+                })
+                .catch(function (err) {
+                    failed.push((c.name || c.email) + ': '
+                                + (err && err.message ? err.message : err));
+                });
+        });
+    }, Promise.resolve()).then(function () {
+        _pending = {};
+        if (failed.length) {
+            showSnackbar('일부 적용하지 못했습니다 — ' + failed.join(' / '), 'error');
+        } else if (typeof showSavedAfterReload === 'function') {
+            showSavedAfterReload('권한을 적용했습니다.');
+        }
         _reloadToPermissions();
     });
 }
+
+function discardPermissions() {
+    if (!Object.keys(_pending).length) return;
+    if (!confirm('확정하지 않은 변경을 모두 버립니다.')) return;
+    _pending = {};
+    _reloadToPermissions();
+}
+
+/* 확정하지 않은 채 떠나려 하면 잡는다 */
+window.addEventListener('beforeunload', function (ev) {
+    if (!Object.keys(_pending).length) return;
+    ev.preventDefault();
+    ev.returnValue = '';
+});
 
 /* ── 인물 상세 패널 ── */
 

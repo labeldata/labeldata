@@ -7805,8 +7805,9 @@ class PaletteStateFollowsTheServerTests(TestCase):
     def test_드롭_뒤_상세_패널의_역할도_맞춘다(self):
         """패널이 옛 역할을 들고 있어 저장하면 조용히 되돌아갔다."""
         self.assertIn('function _syncDetailRole', self.src)
-        i = self.src.index('_syncSeeAll(shareId, res.see_all_documents)')
-        self.assertIn('_syncDetailRole(shareId, role)', self.src[i:i + 700])
+        i = self.src.index('function dropPerson(event, role)')
+        j = self.src.index(chr(10) + '}', i)
+        self.assertIn('_syncDetailRole(', self.src[i:j])
 
 
 class ShareInfoSaveTouchesOnlySentFieldsTests(TestCase):
@@ -7849,3 +7850,77 @@ class ShareInfoSaveTouchesOnlySentFieldsTests(TestCase):
             {'license_no': ''})
         self.share.refresh_from_db()
         self.assertIsNone(self.share.recipient_license_no)
+
+
+class PermissionChangesAreConfirmedOnceTests(TestCase):
+    """
+    카드를 놓는 순간 서버로 갔다. 그래서
+
+      - 처음 놓는 사람은 이 제품에 공유가 없어 초대 경로를 타고 **새로고침**
+        됐다. 그 다음부터는 역할 변경이라 바로 반영됐다 — 같은 동작인데
+        첫 번만 화면이 튀었다.
+      - 자리를 몇 번 옮겨 보는 동안 매번 이메일과 인앱 알림이 나갔다.
+      - 되돌리려면 다시 끌어야 했고 그것도 또 알림이었다.
+
+    놓는 것은 초안이고, 서버는 [권한 부여] 를 누를 때 한 번 부른다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / '_tab_permissions.html').read_text(encoding='utf-8')
+
+    def _body(self, name):
+        i = self.src.index('function %s(' % name)
+        j = self.src.index('\n}', i)
+        return self.src[i:j]
+
+    def test_드롭은_서버를_부르지_않는다(self):
+        for fn in ('dropPerson', 'dropPersonToPalette'):
+            self.assertNotIn('_permPost(', self._body(fn),
+                             '%s 가 드롭 즉시 서버를 부른다' % fn)
+
+    def test_드롭은_대기_목록에_담는다(self):
+        for fn in ('dropPerson', 'dropPersonToPalette'):
+            self.assertIn('_recordPending(', self._body(fn))
+
+    def test_확정과_되돌리기가_있다(self):
+        for piece in ('function commitPermissions', 'function discardPermissions',
+                      'id="perm-pending-bar"', 'id="perm-commit-btn"',
+                      'onclick="commitPermissions()"',
+                      'onclick="discardPermissions()"'):
+            self.assertIn(piece, self.src, piece)
+
+    def test_확정_전에_한_번_묻는다(self):
+        body = self._body('commitPermissions')
+        self.assertIn('confirm(', body)
+        self.assertIn('알림이 갑니다', body)
+
+    def test_확정이_세_경로를_모두_보낸다(self):
+        body = self.src[self.src.index('function commitPermissions'):]
+        body = body[:body.index('function discardPermissions')]
+        self.assertIn('share/create/', body)      # 새 초대
+        self.assertIn('/revoke/', body)           # 해제
+        self.assertIn('/update-permission/', body)  # 역할 변경
+
+    def test_원래_자리로_되돌리면_변경이_아니다(self):
+        body = self._body('_recordPending')
+        self.assertIn('delete _pending[key]', body)
+
+    def test_확정_전_카드는_다르게_보인다(self):
+        self.assertIn('.person-card.is-pending', self.src)
+        self.assertIn('_markPending(card, true)', self.src)
+
+    def test_못_주는_역할은_먼저_막는다(self):
+        """예전에는 옮겨 놓고 서버 403 의 JSON 덩어리를 스낵바에 찍었다."""
+        self.assertIn('function _grantBlockedReason', self.src)
+        self.assertIn('_grantBlockedReason(role)', self._body('dropPerson'))
+
+    def test_확정_안_하고_떠나면_잡는다(self):
+        self.assertIn("addEventListener('beforeunload'", self.src)
+
+    def test_팔레트_안의_카드를_움직인_것은_해제가_아니다(self):
+        """예전에는 팔레트 안에서 조금만 끌어도 확인창 없이 공유가 날아갔다."""
+        body = self._body('dropPersonToPalette')
+        self.assertIn('.dropzone-body .person-card[data-share-id=', body)
