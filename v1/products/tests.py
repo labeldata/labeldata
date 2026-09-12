@@ -8333,3 +8333,44 @@ class AiExtractRequiresLoginTests(TestCase):
 
         src = (Path(dj.BASE_DIR) / 'common' / 'tests.py').read_text(encoding='utf-8')
         self.assertNotIn("'document_ai_extract_api'", src)
+
+
+class ContactSearchScopeIsUnambiguousTests(TestCase):
+    """
+    필드 지정 검색이 `searchPlugin.updatePlugin({queryMethod})` 로 설정을
+    갈아 끼우려 했다. 이 격자는 `search: true` 로 켜 두어 플러그인 설정
+    객체가 없으므로 그 값이 실릴 자리가 없다 — "이메일" 을 골라도 회사명·
+    비고의 일치까지 함께 세었다.
+
+    열 번호도 `{email: 1, name: 2, …}` 하드코딩이었다. 비고가 5번에
+    끼어들면서 잠금 규칙이 밀렸던 것과 같은 함정이고, 이 격자는
+    manualColumnMove 로 사용자가 열을 옮길 수도 있다.
+    """
+
+    def setUp(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / 'contacts.html').read_text(encoding='utf-8')
+        # 주석 안의 언급(왜 그랬는지를 적어 두었다)은 세지 않는다
+        self.code = re.sub(
+            r'/\*.*?\*/|\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}|\{#.*?#\}',
+            '', self.src, flags=re.S)
+
+    def test_query_에_직접_넘긴다(self):
+        self.assertIn('searchPlugin.query(query, undefined, scoped)', self.code)
+        self.assertNotIn('updatePlugin(', self.code)
+
+    def test_열은_이름으로_찾는다(self):
+        self.assertIn('function colIndexOf(prop)', self.code)
+        self.assertNotIn('fieldColMap', self.code)
+
+    def test_검색_항목이_격자_칸과_맞는다(self):
+        import re
+        opts = set(re.findall(r'<option value="(\w+)">', self.src))
+        cols = set(re.findall(r"\{ data: '(\w+)'", self.src))
+        searchable = cols - {'_checked', 'sent', 'doc_pending'}
+        self.assertTrue(searchable <= opts,
+                        '격자에 있는데 검색으로 못 고르는 칸: %s'
+                        % sorted(searchable - opts))

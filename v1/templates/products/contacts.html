@@ -55,6 +55,11 @@
                     <option value="name">이름</option>
                     <option value="company">회사명</option>
                     <option value="license_no">인허가</option>
+                    {% comment %}
+                    비고도 격자의 칸이다. 엑셀에서 옮겨 온 전화번호·부서가
+                    여기 모이는데 골라 찾을 수가 없었다.
+                    {% endcomment %}
+                    <option value="memo">비고</option>
                 </select>
                 <div class="input-group input-group-sm" style="flex:1;">
                     <span class="input-group-text bg-white border-end-0 px-2"><i class="bi bi-search text-muted ct-xs"></i></span>
@@ -1154,28 +1159,40 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 검색
     const searchPlugin = hot.getPlugin('search');
-    const fieldColMap = { all: null, email: 1, name: 2, company: 3, license_no: 4 };
+
+    /* 검색할 열은 **이름으로** 찾는다.
+     *
+     * 예전에는 `{email: 1, name: 2, company: 3, license_no: 4}` 였다. 비고가
+     * 5번에 끼어들면서 잠금 규칙이 밀렸던 것과 같은 함정이고, 이 격자는
+     * manualColumnMove 로 사용자가 열을 옮길 수도 있다. */
+    function colIndexOf(prop) {
+        const cols = hot.getSettings().columns || [];
+        const i = cols.findIndex(c => c && c.data === prop);
+        return i === -1 ? null : i;
+    }
 
     function applyContactSearch() {
         const query = document.getElementById('contactSearch').value;
         const field = document.getElementById('contactSearchField').value;
-        const colIdx = fieldColMap[field] ?? null;
+        const colIdx = field && field !== 'all' ? colIndexOf(field) : null;
 
-        if (colIdx !== null) {
-            // 특정 컬럼만 검색하는 커스텀 queryMethod
-            searchPlugin.updatePlugin({
-                queryMethod: function(queryStr, value, cellProperties) {
-                    if (cellProperties.col !== colIdx) return false;
-                    return String(value ?? '').toLowerCase().includes(queryStr.toLowerCase());
-                }
-            });
-        } else {
-            // 전체 검색 (기본 동작)
-            searchPlugin.updatePlugin({ queryMethod: undefined });
-        }
+        /* queryMethod 는 **query() 에 직접 넘긴다.**
+         *
+         * 예전에는 `searchPlugin.updatePlugin({queryMethod})` 로 설정을
+         * 갈아 끼우려 했는데, 이 격자는 `search: true` 로 켜 두어(플러그인
+         * 설정 객체가 없다) 그 값이 어디에도 실리지 않는다. 그래서 "이메일"
+         * 을 골라도 회사명·비고의 일치까지 함께 세어 "N개 일치" 가 기대와
+         * 달랐다. query() 의 세 번째 인자는 그런 모호함이 없다. */
+        const scoped = colIdx === null ? undefined
+            : function (queryStr, value, cellProperties) {
+                  if (cellProperties.col !== colIdx) return false;
+                  return String(value ?? '').toLowerCase()
+                                            .includes(String(queryStr).toLowerCase());
+              };
 
-        const results = searchPlugin.query(query);
-        document.getElementById('rowInfo').textContent = query ? `${results.length}개 일치` : '';
+        const results = searchPlugin.query(query, undefined, scoped);
+        document.getElementById('rowInfo').textContent =
+            query ? `${(results || []).length}개 일치` : '';
         hot.render();
     }
 
