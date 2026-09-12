@@ -58,10 +58,11 @@ def vendor_upload_view(request, token):
             'reason': 'cancelled',
         }, status=410)
  
-    if dr.status == dr.STATUS_ACCEPTED:
-        return render(request, 'vendor/upload_expired.html', {
-            'reason': 'already_submitted',
-        }, status=410)
+    #  예전에는 한 번 내면 토큰이 즉시 만료돼 **다시 낼 수 없었다.**
+    #  파일을 잘못 냈거나 스캔이 잘렸거나 최신본으로 바꾸려면 협력사가 할 수
+    #  있는 것이 없었고, 요청자에게 연락해 새 요청을 받아야 했다. 자료가 한
+    #  번에 제대로 오는 경우가 드물다는 걸 생각하면 자주 걸리던 길이다.
+    #  기한 안에는 다시 받는다 — 문서함에는 이미 버전이 쌓인다.
  
     if _is_expired(dr):
         return render(request, 'vendor/upload_expired.html', {
@@ -107,8 +108,6 @@ def vendor_submit_view(request, token):
     # 재검증
     if dr is None or dr.status == dr.STATUS_CANCELLED:
         return render(request, 'vendor/upload_expired.html', {'reason': 'invalid'}, status=410)
-    if dr.status == dr.STATUS_ACCEPTED:
-        return render(request, 'vendor/upload_expired.html', {'reason': 'already_submitted'}, status=410)
     if _is_expired(dr):
         return render(request, 'vendor/upload_expired.html', {'reason': 'expired'}, status=410)
  
@@ -194,8 +193,9 @@ def vendor_submit_view(request, token):
         }
         return render(request, 'vendor/upload_form.html', dr_data)
  
-    # status → ACCEPTED (토큰 즉시 만료 - 재사용 차단)
-    dr.status = DocumentRequest.STATUS_ACCEPTED
+    #  '수락' 이 아니라 '제출 완료' 다. 예전에는 둘 다 ACCEPTED 라, 하겠다고만
+    #  하고 안 낸 건과 실제로 낸 건이 목록에서 구분되지 않았다.
+    dr.status = DocumentRequest.STATUS_SUBMITTED
     dr.save(update_fields=['status', 'updated_datetime'])
  
     return redirect('vendor:upload_complete')

@@ -64,6 +64,8 @@ urlpatterns = [
     path('share/<int:share_id>/update-permission/', views.share_update_permission, name='share_update_permission'),
     path('share/<int:share_id>/update-info/', views.share_update_info, name='share_update_info'),
     path('share/public/<uuid:share_token>/', views.public_share_view, name='public_share_view'),
+    # 초대 착지점 — 로그인 없이 열린다(제품 내용은 안 보여준다)
+    path('invite/<uuid:share_token>/', views.share_invite_landing, name='share_invite_landing'),
     
     # ==================== 문서 관리 (Documents) ====================
     path('documents/types/', views.document_type_list, name='document_type_list'),

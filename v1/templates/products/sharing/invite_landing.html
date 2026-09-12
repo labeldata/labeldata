@@ -1,0 +1,81 @@
+{% extends "base_v2.html" %}
+{% comment %}
+초대 착지점. 제품 내용은 보여주지 않는다 — 누가, 무엇을, 어떤 역할로
+공유했는지만. 그 셋은 초대 메일에 이미 적혀 있으므로 링크를 쥔 사람에게
+새로 새는 것이 없다.
+{% endcomment %}
+{% block title %}제품 공유 초대{% endblock %}
+
+{% block content %}
+<style>
+  .invite-wrap   { max-width: 520px; margin: 64px auto; padding: 0 16px; }
+  .invite-card   { border: 1px solid var(--ez-gray-300); border-radius: var(--ez-radius-lg, 12px);
+                   background: #fff; padding: 32px; }
+  .invite-eyebrow{ font-size: var(--ez-font-size-xs); color: var(--ez-gray-700);
+                   letter-spacing: .5px; text-transform: uppercase; margin: 0 0 8px; }
+  .invite-title  { font-size: 20px; font-weight: 700; color: var(--ez-gray-900);
+                   margin: 0 0 6px; line-height: 1.4; }
+  .invite-sub    { font-size: var(--ez-font-size-md); color: var(--ez-gray-700); margin: 0 0 24px; }
+  .invite-facts  { border: 1px solid var(--ez-gray-200); border-radius: 8px;
+                   background: var(--ez-gray-50); padding: 16px 18px; margin: 0 0 24px; }
+  .invite-facts dl { display: grid; grid-template-columns: 84px 1fr; gap: 8px 12px; margin: 0; }
+  .invite-facts dt { font-size: var(--ez-font-size-sm); color: var(--ez-gray-700); margin: 0; }
+  .invite-facts dd { font-size: var(--ez-font-size-sm); color: var(--ez-gray-900);
+                     font-weight: 600; margin: 0; word-break: break-all; }
+  .invite-note   { font-size: var(--ez-font-size-sm); color: var(--ez-gray-700);
+                   line-height: 1.65; margin: 20px 0 0; }
+  .invite-actions{ display: flex; gap: 10px; flex-wrap: wrap; }
+  .invite-warn   { border-left: 3px solid var(--ez-warning); background: var(--ez-warning-bg);
+                   color: var(--ez-warning-on-bg); padding: 12px 16px; border-radius: 0 6px 6px 0;
+                   font-size: var(--ez-font-size-sm); line-height: 1.6; margin: 0 0 24px; }
+</style>
+
+<div class="invite-wrap">
+  <div class="invite-card">
+    <p class="invite-eyebrow">제품 공유 초대</p>
+    <h1 class="invite-title">
+      {{ inviter_name }}님이 제품을 공유했습니다
+    </h1>
+    <p class="invite-sub">
+      아래 내용을 확인하고 로그인하면 공동작업 목록에서 볼 수 있습니다.
+    </p>
+
+    <div class="invite-facts">
+      <dl>
+        <dt>제품</dt>
+        <dd>{{ share.label.my_label_name|default:share.label.prdlst_nm|default:"제품" }}</dd>
+        <dt>보낸 사람</dt>
+        <dd>{{ inviter_name }}{% if inviter_company %} · {{ inviter_company }}{% endif %}</dd>
+        <dt>맡은 역할</dt>
+        <dd>{{ permission.role_label|default:"단순 조회" }}</dd>
+        <dt>받는 주소</dt>
+        <dd>{{ invited_email }}</dd>
+        {% if share.share_end_date %}
+        <dt>열람 기한</dt>
+        <dd>{{ share.share_end_date|date:"Y년 m월 d일" }}까지</dd>
+        {% endif %}
+      </dl>
+    </div>
+
+    {% if wrong_account %}
+      <div class="invite-warn">
+        지금 로그인한 계정({{ request.user.email }})은 초대받은 주소와 다릅니다.
+        <strong>{{ invited_email }}</strong> 로 로그인해야 이 제품이 보입니다.
+      </div>
+      <div class="invite-actions">
+        <a class="btn v2-btn" href="{% url 'user_management:logout' %}">다른 계정으로 로그인</a>
+        <a class="btn v2-btn-sm v2-link-btn" href="{% url 'products:inbox' %}">내 공동작업 보기</a>
+      </div>
+    {% else %}
+      <div class="invite-actions">
+        <a class="btn v2-btn" href="{{ signup_url }}">가입하고 시작하기</a>
+        <a class="btn v2-btn v2-action-btn-outline" href="{{ login_url }}">이미 계정이 있어요</a>
+      </div>
+      <p class="invite-note">
+        <strong>{{ invited_email }}</strong> 로 가입해야 이 제품과 연결됩니다.
+        다른 주소로 가입하면 공유가 보이지 않습니다.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

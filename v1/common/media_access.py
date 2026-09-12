@@ -209,16 +209,19 @@ def protected_media_serve(request, path):
     return static_serve(request, normalized, document_root=settings.MEDIA_ROOT)
 
 
-def downloadable_label_ids(user):
+def downloadable_label_scopes(user):
     """
-    이 사용자가 파일을 내려받을 수 있는 '공유받은' 표시사항 ID 목록.
-    (소유 제품은 호출부에서 별도로 OR 조건에 넣는다)
-    일괄 다운로드처럼 여러 건을 한 번에 거를 때 사용한다.
+    내려받기가 허용된 '공유받은' 표시사항을 두 갈래로 나눈다.
+
+    반환 (문서함 전체를 볼 수 있는 label_id, 본인이 올린 것만 볼 수 있는 label_id).
+
+    같은 표시사항에 공유가 여러 건이면 넓은 쪽이 이긴다 —
+    user_can_download_label_files 가 any() 로 판정하는 것과 같은 규칙이다.
     """
     if not user.is_authenticated:
-        return []
+        return set(), set()
     from v1.products.models import ProductShare
-    return list(
+    rows = (
         ProductShare.objects.filter(
             active_yn=True,
             share_mode='PRIVATE',
@@ -227,5 +230,28 @@ def downloadable_label_ids(user):
             Q(recipient_user=user) | Q(recipient_email__iexact=user.email)
         ).filter(
             Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
-        ).values_list('label_id', flat=True)
+        ).values_list('label_id', 'permission__can_view_all_documents')
+    )
+    see_all, own_only = set(), set()
+    for label_id, can_see_all in rows:
+        (see_all if can_see_all else own_only).add(label_id)
+    return see_all, own_only - see_all
+
+
+def visible_documents_for_user(user, queryset):
+    """
+    **여러 표시사항이 섞인** 문서 목록을 거른다.
+
+    visible_documents() 는 한 표시사항 안에서만 판정한다. 일괄 다운로드처럼
+    여러 제품의 문서가 한 번에 넘어오는 자리에서는 이쪽을 써야 한다.
+    label 단위 목록(downloadable_label_ids)만 보고 거르면 문서함 전체 보기가
+    통째로 무시된다 — 협력업체가 남의 규격서를 ZIP 으로 받아 갔다.
+    """
+    if not user.is_authenticated:
+        return queryset.none()
+    see_all, own_only = downloadable_label_scopes(user)
+    return queryset.filter(
+        Q(label__user_id=user)
+        | Q(label__my_label_id__in=see_all)
+        | (Q(label__my_label_id__in=own_only) & Q(uploaded_by=user))
     )

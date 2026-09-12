@@ -704,9 +704,31 @@ class SharePermission(models.Model):
     def __str__(self):
         return f"{self.share} 권한 ({self.role_code})"
 
+    #  역할 이름만으로는 무엇을 할 수 있는지 읽히지 않는다.
+    #
+    #  특히 '공동 편집' 이 그렇다. EDITOR 는 상태 전이에서 소유자와 **같은
+    #  권한**을 받는다 — 뒤로 돌리기, 담당자 미지정 단계 건너뛰기, 승인 완료까지
+    #  혼자 밀기. 이름은 편집인데 실질은 부소유자다. 외부 컨설턴트를 공동편집자로
+    #  넣는 순간 그 사람이 제품을 혼자 확정할 수 있다는 것을 화면에서 알 방법이
+    #  없었다.
+    #
+    #  뒤에 플래그가 열 개 있는데 화면에서 고를 수 있는 것은 역할과 문서함 전체
+    #  보기 둘뿐이다. 그러니 고르는 자리에서 무엇을 고른 것인지는 말해 줘야 한다.
+    ROLE_SUMMARY = {
+        'VIEWER':   '보기와 댓글만. 문서함 전체를 볼 수 있고 내려받을 수 있다.',
+        'UPLOADER': '자료를 올린다. **본인이 올린 문서만** 보이고, 댓글은 달 수 없다.',
+        'EDITOR':   '사실상 부소유자 — 제품 정보를 고치고, 단계를 되돌리고, 혼자 승인 완료까지 보낼 수 있다.',
+        'REVIEWER': '검토하고 승인 대기로 넘기거나 반려한다. 제품 정보는 못 고친다.',
+        'APPROVER': '최종 승인하거나 반려한다. 제품 정보는 못 고친다.',
+    }
+
     @property
     def role_label(self):
         return dict(self.ROLE_CHOICES).get(self.role_code, self.role_code)
+
+    @property
+    def role_summary(self):
+        return self.ROLE_SUMMARY.get(self.role_code, '')
 
     def apply_role_defaults(self, role_code=None, save=True):
         role = role_code or self.role_code
@@ -858,16 +880,27 @@ class DocumentRequest(models.Model):
     문서 요청 - 연락처에게 특정 문서 종류 제출 요청
     DB 테이블: v2_document_request  (기존 스키마 준수)
     """
+    #  '수락' 이 두 가지를 뜻하고 있었다.
+    #
+    #  받는 사람이 "하겠다" 고 누르면 ACCEPTED 가 됐고, 협력사가 파일을 내도
+    #  ACCEPTED 가 됐다. 그런데 연락처 화면의 '대기' 열은 PENDING 만 센다.
+    #  그래서 **수락만 하고 아직 안 낸 건이 대기에서 빠졌다** — 목록상으로는
+    #  처리된 것처럼 보이는데 파일은 오지 않았다. 가장 챙겨야 할 상태가 정확히
+    #  안 보이는 칸에 숨었다. 낸 것을 SUBMITTED 로 따로 뗀다.
     STATUS_PENDING   = 'PENDING'
     STATUS_ACCEPTED  = 'ACCEPTED'
+    STATUS_SUBMITTED = 'SUBMITTED'
     STATUS_REJECTED  = 'REJECTED'
     STATUS_CANCELLED = 'CANCELLED'
     STATUS_CHOICES = [
         (STATUS_PENDING,   '요청 중'),
-        (STATUS_ACCEPTED,  '수락'),
+        (STATUS_ACCEPTED,  '수락 (제출 전)'),
+        (STATUS_SUBMITTED, '제출 완료'),
         (STATUS_REJECTED,  '거절'),
         (STATUS_CANCELLED, '취소'),
     ]
+    #  아직 자료가 오지 않은 상태 — 챙겨야 할 것들
+    STATUS_OUTSTANDING = (STATUS_PENDING, STATUS_ACCEPTED)
 
     request_id          = models.AutoField(primary_key=True, verbose_name='요청 ID')
     requester           = models.ForeignKey(
@@ -892,6 +925,9 @@ class DocumentRequest(models.Model):
                                            null=True, blank=True, verbose_name='첨부 파일')
     created_datetime    = models.DateTimeField(auto_now_add=True, verbose_name='요청일시')
     updated_datetime    = models.DateTimeField(auto_now=True, verbose_name='최종수정일시')
+    # 같은 요청으로 매일 같은 독촉이 가면 사람은 읽지 않는 법을 익힌다.
+    # 보낸 날짜를 적어 두고 하루에 한 번만 보낸다.
+    reminded_on         = models.DateField(null=True, blank=True, verbose_name='마지막 독촉일')
     linked_label        = models.ForeignKey(
         'label.MyLabel',
         on_delete=models.SET_NULL,
@@ -927,6 +963,23 @@ class DocumentRequest(models.Model):
 
     def get_status_display_ko(self):
         return dict(self.STATUS_CHOICES).get(self.status, self.status)
+
+    @property
+    def is_outstanding(self):
+        """아직 자료가 오지 않았다 — 요청 중이거나, 하겠다고만 한 상태."""
+        return self.status in self.STATUS_OUTSTANDING
+
+    @property
+    def is_overdue(self):
+        """기한이 지났는데 아직 안 왔다."""
+        from django.utils import timezone as _tz
+        return bool(self.due_date) and self.is_outstanding and self.due_date < _tz.localdate()
+
+    @property
+    def days_left(self):
+        """기한까지 남은 날. 기한이 없으면 None, 지났으면 음수."""
+        from django.utils import timezone as _tz
+        return (self.due_date - _tz.localdate()).days if self.due_date else None
 
     def __str__(self):
         return f"{self.requester.username} → {self.recipient_email} ({self.get_status_display()})"

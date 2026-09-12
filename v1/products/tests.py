@@ -6129,3 +6129,790 @@ class 원_표시사항에_없는_문구를_모아_보여_준다(TestCase):
         js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
         self.assertIn('GROUNDLESS_MAX', js)
         self.assertIn('GROUNDLESS_MIN', js)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 권한 설정 · 공동 작업 · 연락처 관리
+#
+# 이 세 화면은 "누가 무엇을 볼 수 있는가" 를 정하는 자리인데, 시험이 모델
+# 헬퍼(media_access)까지만 닿아 있었고 HTTP 문 앞은 비어 있었다. 그 틈에서
+# 여덟 건이 나왔다. 여기 있는 것은 전부 실제로 재현됐던 것들이다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SharingWorkspaceBase(TestCase):
+    def setUp(self):
+        from django.core.files.base import ContentFile
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.sup = User.objects.create_user('협력사', password='x', email='sup@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        dtype = DocumentType.objects.create(type_code='T', type_name='성적서')
+        self.mine = ProductDocument.objects.create(
+            label=self.label, document_type=dtype,
+            file=ContentFile(b'mine', name='a.pdf'),
+            original_filename='내가올린것.pdf', uploaded_by=self.sup)
+        self.theirs = ProductDocument.objects.create(
+            label=self.label, document_type=dtype,
+            file=ContentFile(b'secret', name='b.pdf'),
+            original_filename='남의규격서.pdf', uploaded_by=self.owner)
+
+    def share(self, role, user=None, email=None):
+        u = user if user is not None else self.sup
+        s = ProductShare.objects.create(
+            label=self.label, recipient_email=email or u.email,
+            recipient_user=u, share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        p = SharePermission.objects.create(share=s)
+        p.apply_role_defaults(role_code=role, save=True)
+        return s, p
+
+
+class BulkDownloadRespectsDocumentScopeTests(SharingWorkspaceBase):
+    """
+    단건 내려받기는 문서까지 넘겨 검사했는데 일괄받기는 제품만 확인했다.
+    문서함 전체 보기가 통째로 무시돼, 협력업체가 document_id 만 찍어 넣으면
+    남의 규격서를 ZIP 으로 받아 갔다. 목록에는 안 보이지만 ID 는 연속된 정수다.
+    """
+
+    def _zip_names(self, response):
+        import io
+        import zipfile
+        return zipfile.ZipFile(io.BytesIO(response.content)).namelist()
+
+    def test_자료_제출자는_자기_것만_받는다(self):
+        self.share('UPLOADER')
+        self.client.force_login(self.sup)
+        r = self.client.post(reverse('products:bulk_download'), {
+            'document_ids': '%s,%s' % (self.mine.document_id, self.theirs.document_id),
+            'organize_by': 'flat'})
+        self.assertEqual(r.status_code, 200)
+        joined = ' '.join(self._zip_names(r))
+        self.assertIn('내가올린것.pdf', joined)
+        self.assertNotIn('남의규격서.pdf', joined)
+
+    def test_내부_팀은_전부_받는다(self):
+        self.share('REVIEWER')
+        self.client.force_login(self.sup)
+        r = self.client.post(reverse('products:bulk_download'), {
+            'document_ids': '%s,%s' % (self.mine.document_id, self.theirs.document_id),
+            'organize_by': 'flat'})
+        self.assertEqual(len(self._zip_names(r)), 2)
+
+    def test_주인은_전부_받는다(self):
+        self.client.force_login(self.owner)
+        r = self.client.post(reverse('products:bulk_download'), {
+            'document_ids': '%s,%s' % (self.mine.document_id, self.theirs.document_id),
+            'organize_by': 'flat'})
+        self.assertEqual(len(self._zip_names(r)), 2)
+
+    def test_남은_아무것도_못_받는다(self):
+        stranger = User.objects.create_user('남', password='x', email='no@x.com')
+        self.client.force_login(stranger)
+        r = self.client.post(reverse('products:bulk_download'), {
+            'document_ids': str(self.theirs.document_id), 'organize_by': 'flat'})
+        self.assertEqual(r.status_code, 404)
+
+
+class SeeAllSurvivesRoleChangeTests(SharingWorkspaceBase):
+    """
+    소유자가 "이 사람은 외부인이니 문서함 전체는 안 된다" 고 끈 것은 역할이
+    아니라 **사람**에 대한 판단이다. 역할만 옮겼다고 그것이 풀려서는 안 된다.
+    예전에는 끌어다 놓기 한 번에 조용히 도로 켜졌고 화면에 표시도 없었다.
+    """
+
+    def _move(self, share, role, **extra):
+        payload = {'role': role}
+        payload.update(extra)
+        return self.client.post(
+            reverse('products:share_update_permission', args=[share.share_id]), payload)
+
+    def test_꺼_둔_것은_역할을_옮겨도_꺼져_있다(self):
+        s, p = self.share('VIEWER')
+        p.can_view_all_documents = False
+        p.save()
+        self.client.force_login(self.owner)
+        self._move(s, 'REVIEWER')
+        p.refresh_from_db()
+        self.assertFalse(p.can_view_all_documents)
+
+    def test_좁아지는_쪽은_역할_기본값을_따른다(self):
+        s, p = self.share('REVIEWER')
+        self.assertTrue(p.can_view_all_documents)
+        self.client.force_login(self.owner)
+        self._move(s, 'UPLOADER')
+        p.refresh_from_db()
+        self.assertFalse(p.can_view_all_documents)
+
+    def test_손으로_켜면_켜진다(self):
+        s, p = self.share('UPLOADER')
+        self.client.force_login(self.owner)
+        self._move(s, 'UPLOADER', see_all_documents='true')
+        p.refresh_from_db()
+        self.assertTrue(p.can_view_all_documents)
+
+    def test_결과를_응답에_실어_화면이_알_수_있게_한다(self):
+        s, p = self.share('REVIEWER')
+        self.client.force_login(self.owner)
+        body = self._move(s, 'UPLOADER').json()
+        self.assertFalse(body['see_all_documents'])
+        self.assertTrue(body['see_all_changed'])
+
+
+class OnlyOwnerGrantsHighRolesTests(SharingWorkspaceBase):
+    """
+    역할 변경 문은 "자신의 권한은 변경할 수 없습니다" 로 자기 승격을 막았는데,
+    공유를 새로 만드는 문에는 역할 제한이 없었다. 공동 편집자가 자기 다른
+    이메일을 승인자로 초대하면 그대로 우회됐다.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.share('EDITOR')
+        self.client.force_login(self.sup)
+
+    def _invite(self, role, email='buddy@x.com'):
+        return self.client.post(
+            reverse('products:share_create', args=[self.label.my_label_id]),
+            {'email': email, 'role': role, 'share_mode': 'PRIVATE'})
+
+    def test_공동편집자는_승인자를_만들_수_없다(self):
+        self.assertEqual(self._invite('APPROVER').status_code, 403)
+        self.assertFalse(ProductShare.objects.filter(recipient_email='buddy@x.com').exists())
+
+    def test_공동편집자는_공동편집자를_만들_수_없다(self):
+        self.assertEqual(self._invite('EDITOR').status_code, 403)
+
+    def test_공동편집자도_검토자까지는_부를_수_있다(self):
+        for role in ('VIEWER', 'UPLOADER', 'REVIEWER'):
+            r = self._invite(role, email='%s@x.com' % role.lower())
+            self.assertEqual(r.status_code, 200, role)
+
+    def test_주인은_승인자를_만들_수_있다(self):
+        self.client.force_login(self.owner)
+        self.assertEqual(self._invite('APPROVER').status_code, 200)
+
+    def test_기존_공유를_승인자로_올리는_것도_막는다(self):
+        target, _ = self.share('VIEWER', email='third@x.com', user=None)
+        r = self.client.post(
+            reverse('products:share_update_permission', args=[target.share_id]),
+            {'role': 'APPROVER'})
+        self.assertEqual(r.status_code, 403)
+
+
+class CommentsFollowPermissionFlagsTests(SharingWorkspaceBase):
+    """
+    댓글 작성은 역할 이름을 하드코딩해 검사했고 그 목록에 자료 제출이 들어
+    있었다 — ROLE_DEFAULTS 는 can_comment=False 인데 서버가 뒤집고 있었다.
+    목록 쪽은 아예 거르지 않아 내부 검토 댓글이 협력사에게 그대로 보였다.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from v1.products.models import ProductComment
+        self.Comment = ProductComment
+        self.internal = ProductComment.objects.create(
+            label=self.label, author=self.owner,
+            content='A사 성적서 수치가 이상함. 거래 끊는 것 검토')
+
+    def test_자료_제출자는_댓글을_못_단다(self):
+        self.share('UPLOADER')
+        self.client.force_login(self.sup)
+        r = self.client.post(
+            reverse('products:comment_create', args=[self.label.my_label_id]),
+            {'content': '외부인이 남기는 글'})
+        self.assertEqual(r.status_code, 403)
+
+    def test_검토자는_댓글을_단다(self):
+        self.share('REVIEWER')
+        self.client.force_login(self.sup)
+        r = self.client.post(
+            reverse('products:comment_create', args=[self.label.my_label_id]),
+            {'content': '이 값 확인 부탁드립니다'})
+        self.assertEqual(r.status_code, 200)
+
+    def test_자료_제출자에게_내부_검토_댓글은_안_보인다(self):
+        self.share('UPLOADER')
+        self.client.force_login(self.sup)
+        r = self.client.get(
+            reverse('products:comment_list', args=[self.label.my_label_id]))
+        self.assertEqual([c['content'] for c in r.json()['comments']], [])
+
+    def test_자기_글에_달린_답글은_보인다(self):
+        s, p = self.share('UPLOADER')
+        p.can_comment = True          # 소유자가 손으로 열어 준 경우
+        p.save()
+        mine = self.Comment.objects.create(
+            label=self.label, author=self.sup, content='성적서 올렸습니다')
+        self.Comment.objects.create(
+            label=self.label, author=self.owner, parent=mine, content='확인했습니다')
+        self.client.force_login(self.sup)
+        r = self.client.get(
+            reverse('products:comment_list', args=[self.label.my_label_id]))
+        got = sorted(c['content'] for c in r.json()['comments'])
+        self.assertEqual(got, ['성적서 올렸습니다', '확인했습니다'])
+
+    def test_내부_팀은_전부_본다(self):
+        self.share('REVIEWER')
+        self.client.force_login(self.sup)
+        r = self.client.get(
+            reverse('products:comment_list', args=[self.label.my_label_id]))
+        self.assertEqual(len(r.json()['comments']), 1)
+
+
+class ContactEmailChangeTransfersAccessTests(SharingWorkspaceBase):
+    """
+    담당자가 바뀌어 연락처 이메일을 고치는 것은 흔한 일이다. 그런데
+    recipient_email 만 바꾸고 recipient_user 는 그대로 뒀다. 공유 조회가
+    recipient_user 또는 recipient_email 로 찾기 때문에 접근이 **옮겨 가는 게
+    아니라 복제됐다** — 전임자는 계속 받고, 고친 사람은 끊긴 줄 안다.
+    """
+
+    def _rename(self, old, new, **extra):
+        payload = {'old_email': old, 'email': new}
+        payload.update(extra)
+        return self.client.post(reverse('products:contacts_api_update'), payload)
+
+    def test_전임자_접근이_끊긴다(self):
+        from v1.common.media_access import user_can_download_label_files
+        self.share('EDITOR')
+        self.client.force_login(self.owner)
+        self._rename('sup@x.com', 'newguy@x.com', name='새담당')
+        self.assertFalse(
+            user_can_download_label_files(self.sup, self.label, self.theirs))
+
+    def test_새_담당자가_회원이면_계정으로_다시_잇는다(self):
+        newbie = User.objects.create_user('새담당', password='x', email='newguy@x.com')
+        self.share('EDITOR')
+        self.client.force_login(self.owner)
+        self._rename('sup@x.com', 'newguy@x.com')
+        self.assertEqual(ProductShare.objects.get(label=self.label).recipient_user, newbie)
+
+    def test_회원이_아니면_계정을_끊어_둔다(self):
+        self.share('EDITOR')
+        self.client.force_login(self.owner)
+        self._rename('sup@x.com', 'nobody@x.com')
+        self.assertIsNone(ProductShare.objects.get(label=self.label).recipient_user)
+
+    def test_이미_있는_연락처로_합쳐도_터지지_않는다(self):
+        from v1.products.models import UserContact
+        UserContact.objects.create(owner=self.owner, email='sup@x.com', name='구담당')
+        UserContact.objects.create(owner=self.owner, email='dup@x.com', name='중복')
+        self.client.force_login(self.owner)
+        r = self._rename('sup@x.com', 'dup@x.com', name='합침')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            UserContact.objects.filter(owner=self.owner, email='dup@x.com').count(), 1)
+        self.assertFalse(
+            UserContact.objects.filter(owner=self.owner, email='sup@x.com').exists())
+
+
+class ContactMemoSurvivesTests(SharingWorkspaceBase):
+    """
+    비고는 0008 로 막 넣은 칸인데, 목록 API 가 공유에서 온 행에는 memo 키를
+    아예 담지 않았다. 한 번이라도 공유한 연락처는 비고가 빈 칸으로 내려갔고,
+    화면이 그 행을 그대로 되돌려 보내면서 적어 둔 비고를 지웠다.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from v1.products.models import UserContact
+        self.UserContact = UserContact
+        UserContact.objects.create(owner=self.owner, email='sup@x.com',
+                                   name='협력사', memo='전화 010-1234, 담당 김대리')
+        self.share('UPLOADER')
+        self.client.force_login(self.owner)
+
+    def _row(self):
+        return self.client.get(reverse('products:contacts_api_list')).json()['contacts'][0]
+
+    def _page_row(self):
+        """화면이 실제로 쓰는 것은 API 가 아니라 서버가 렌더한 초기 데이터다."""
+        ctx = self.client.get(reverse('products:contacts')).context['contacts_list']
+        return ctx[0]
+
+    def test_공유_이력이_있어도_비고가_목록에_실린다(self):
+        self.assertEqual(self._row()['memo'], '전화 010-1234, 담당 김대리')
+
+    def test_화면이_받는_초기_데이터에도_비고가_있다(self):
+        # 한때 API 쪽만 고쳐 두고 화면 경로에는 같은 버그가 남아 있었다.
+        self.assertEqual(self._page_row()['memo'], '전화 010-1234, 담당 김대리')
+
+    def test_화면과_API_가_같은_것을_준다(self):
+        page = {k: v for k, v in self._page_row().items()}
+        api = self._row()
+        for key in ('email', 'name', 'company', 'license_no', 'memo',
+                    'doc_sent', 'doc_pending', 'doc_overdue', 'doc_received'):
+            self.assertEqual(page.get(key), api.get(key), key)
+
+    def test_회사명만_고쳐도_비고가_살아남는다(self):
+        row = self._row()
+        self.client.post(reverse('products:contacts_api_update'), {
+            'old_email': row['email'], 'email': row['email'], 'name': row['name'],
+            'company': '새회사', 'license_no': row['license_no'], 'memo': row['memo']})
+        uc = self.UserContact.objects.get(owner=self.owner, email='sup@x.com')
+        self.assertEqual(uc.memo, '전화 010-1234, 담당 김대리')
+        self.assertEqual(uc.company, '새회사')
+
+    def test_손으로_비우면_지워진다(self):
+        self.client.post(reverse('products:contacts_api_update'), {
+            'old_email': 'sup@x.com', 'email': 'sup@x.com', 'memo': ''})
+        self.assertIsNone(
+            self.UserContact.objects.get(owner=self.owner, email='sup@x.com').memo)
+
+
+class UploaderCanRemoveOwnUploadTests(SharingWorkspaceBase):
+    """
+    올릴 권한은 줬는데 취소할 권한이 없었다. 협력사가 잘못 올렸다고 연락하면
+    소유자가 대신 지워 줘야 했다.
+    """
+
+    def _delete(self, doc):
+        return self.client.post(
+            reverse('products:document_delete_api', args=[doc.document_id]))
+
+    def test_자기가_올린_것은_지운다(self):
+        self.share('UPLOADER')
+        self.client.force_login(self.sup)
+        self.assertEqual(self._delete(self.mine).status_code, 200)
+        self.mine.refresh_from_db()
+        self.assertFalse(self.mine.active_yn)
+
+    def test_남이_올린_것은_못_지운다(self):
+        self.share('UPLOADER')
+        self.client.force_login(self.sup)
+        self.assertEqual(self._delete(self.theirs).status_code, 403)
+        self.theirs.refresh_from_db()
+        self.assertTrue(self.theirs.active_yn)
+
+    def test_올릴_권한이_없으면_못_지운다(self):
+        self.share('VIEWER')
+        self.client.force_login(self.sup)
+        self.assertEqual(self._delete(self.mine).status_code, 403)
+
+    def test_주인은_남이_올린_것도_지운다(self):
+        self.client.force_login(self.owner)
+        self.assertEqual(self._delete(self.mine).status_code, 200)
+
+
+class WorkflowHandoffBase(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.reviewer = User.objects.create_user('검토자', password='x', email='rv@x.com')
+        self.approver = User.objects.create_user('승인자', password='x', email='ap@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        self.meta = ProductMetadata.objects.create(
+            label=self.label, product_code='PRD-T-1',
+            status=ProductMetadata.Status.DRAFT)
+        self._share('REVIEWER', self.reviewer)
+        self._share('APPROVER', self.approver)
+
+    def _share(self, role, user):
+        s = ProductShare.objects.create(
+            label=self.label, recipient_email=user.email, recipient_user=user,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        p = SharePermission.objects.create(share=s)
+        p.apply_role_defaults(role_code=role, save=True)
+        return s, p
+
+    def _at(self, status):
+        self.meta.status = status
+        self.meta.save(update_fields=['status'])
+
+    def _post(self, status, **extra):
+        payload = {'status': status}
+        payload.update(extra)
+        return self.client.post(
+            reverse('products:product_update_status', args=[self.label.my_label_id]),
+            payload)
+
+
+class ReviewerPicksUpTheWorkTests(WorkflowHandoffBase):
+    """
+    제출 완료가 되면 세 곳에서 검토자를 부른다 — 이메일("검토하고 피드백을
+    남겨주세요"), 인앱 알림("귀하의 작업이 필요합니다"), 인박스("검토 필요").
+    그런데 서버는 그 상태에서 검토자에게 아무 행동도 주지 않았다. 소유자가
+    문을 열어 줄 때까지 서 있었고, 소유자에게는 그러라는 말이 가지 않았다.
+    """
+
+    def test_검토자가_제출_완료에서_검토를_시작한다(self):
+        self._at(ProductMetadata.Status.SUBMITTED)
+        self.client.force_login(self.reviewer)
+        r = self._post(ProductMetadata.Status.REVIEW)
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.meta.refresh_from_db()
+        self.assertEqual(self.meta.status, ProductMetadata.Status.REVIEW)
+
+    def test_검토_권한이_없으면_시작할_수_없다(self):
+        share = ProductShare.objects.get(recipient_user=self.reviewer)
+        share.permission.can_review = False
+        share.permission.save()
+        self._at(ProductMetadata.Status.SUBMITTED)
+        self.client.force_login(self.reviewer)
+        self.assertEqual(self._post(ProductMetadata.Status.REVIEW).status_code, 403)
+
+    def test_인박스가_말하는_것과_실제로_되는_것이_같다(self):
+        self._at(ProductMetadata.Status.SUBMITTED)
+        self.client.force_login(self.reviewer)
+        page = self.client.get(reverse('products:inbox'))
+        self.assertContains(page, '검토 시작')
+        self.assertEqual(self._post(ProductMetadata.Status.REVIEW).status_code, 200)
+
+
+class RejectionExistsTests(WorkflowHandoffBase):
+    """
+    초대 메일과 상태 알림이 승인자에게 "최종 승인 또는 **반려**해 주세요" 라고
+    두 곳에서 말하는데 그 길이 없었다. 문제를 본 승인자가 할 수 있는 것은
+    승인하거나, 아무것도 안 하고 전화하는 것뿐이었고 후자는 흔적이 안 남았다.
+    """
+
+    def test_승인자가_반려한다(self):
+        self._at(ProductMetadata.Status.PENDING)
+        self.client.force_login(self.approver)
+        r = self._post(ProductMetadata.Status.REVIEW, reject_reason='알레르기 표시 누락')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.meta.refresh_from_db()
+        self.assertEqual(self.meta.status, ProductMetadata.Status.REVIEW)
+
+    def test_검토자가_반려한다(self):
+        self._at(ProductMetadata.Status.REVIEW)
+        self.client.force_login(self.reviewer)
+        r = self._post(ProductMetadata.Status.SUBMITTED, reject_reason='성적서가 옛 버전')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+
+    def test_사유_없이는_반려할_수_없다(self):
+        self._at(ProductMetadata.Status.PENDING)
+        self.client.force_login(self.approver)
+        r = self._post(ProductMetadata.Status.REVIEW)
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(r.json().get('need_reject_reason'))
+        self.meta.refresh_from_db()
+        self.assertEqual(self.meta.status, ProductMetadata.Status.PENDING)
+
+    def test_사유가_댓글로_남는다(self):
+        from v1.products.models import ProductComment
+        self._at(ProductMetadata.Status.PENDING)
+        self.client.force_login(self.approver)
+        self._post(ProductMetadata.Status.REVIEW, reject_reason='알레르기 표시 누락')
+        self.assertEqual(
+            [c.content for c in ProductComment.objects.filter(label=self.label)],
+            ['[반려] 알레르기 표시 누락'])
+
+    def test_사유가_활동_로그에_남는다(self):
+        self._at(ProductMetadata.Status.PENDING)
+        self.client.force_login(self.approver)
+        self._post(ProductMetadata.Status.REVIEW, reject_reason='알레르기 표시 누락')
+        log = ProductActivityLog.objects.filter(
+            label=self.label, action='STATUS_CHANGED').latest('log_id')
+        self.assertTrue(log.details.get('rejected'))
+        self.assertEqual(log.details.get('reject_reason'), '알레르기 표시 누락')
+
+    def test_검토자가_없어도_승인자는_반려할_수_있다(self):
+        # 검토 단계를 건너뛴 제품에서 "검토자가 필요합니다" 로 막히면
+        # 되돌릴 길이 아예 없어진다.
+        ProductShare.objects.filter(recipient_user=self.reviewer).delete()
+        self._at(ProductMetadata.Status.PENDING)
+        self.client.force_login(self.approver)
+        r = self._post(ProductMetadata.Status.REVIEW, reject_reason='되돌립니다')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+
+    def test_소유자에게_반려_소식이_간다(self):
+        from v1.products.models import ProductNotification
+        self._at(ProductMetadata.Status.PENDING)
+        self.client.force_login(self.approver)
+        self._post(ProductMetadata.Status.REVIEW, reject_reason='알레르기 표시 누락')
+        msgs = [n.message for n in ProductNotification.objects.filter(recipient=self.owner)]
+        self.assertTrue(any('반려' in m and '알레르기 표시 누락' in m for m in msgs), msgs)
+
+
+class DocRequestStatusIsHonestTests(TestCase):
+    """
+    '수락' 이 두 가지를 뜻했다 — 받는 사람이 "하겠다" 고 누른 것과, 협력사가
+    파일을 낸 것. 대기 집계는 PENDING 만 세므로 수락만 하고 안 낸 건이
+    대기에서 빠졌다. 목록상 처리된 것처럼 보이는데 파일은 오지 않았다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentRequest
+        self.DR = DocumentRequest
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.client.force_login(self.owner)
+
+    def _req(self, email, status, due=None):
+        # 연락처 목록은 '활성 공유 ∪ 주소록' 이다. 자료 요청만으로는 행이 안 생긴다.
+        from v1.products.models import UserContact
+        UserContact.objects.get_or_create(owner=self.owner, email=email)
+        return self.DR.objects.create(
+            requester=self.owner, recipient_email=email, status=status, due_date=due)
+
+    def _row(self, email):
+        rows = self.client.get(reverse('products:contacts')).context['contacts_list']
+        return next(r for r in rows if r['email'] == email)
+
+    def test_하겠다고만_한_건은_여전히_대기다(self):
+        self._req('sup@x.com', self.DR.STATUS_ACCEPTED)
+        self.assertEqual(self._row('sup@x.com')['doc_pending'], 1)
+
+    def test_실제로_낸_건은_대기에서_빠진다(self):
+        self._req('sup@x.com', self.DR.STATUS_SUBMITTED)
+        self.assertEqual(self._row('sup@x.com')['doc_pending'], 0)
+
+    def test_기한이_지난_건을_따로_센다(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        yesterday = timezone.localdate() - timedelta(days=1)
+        self._req('sup@x.com', self.DR.STATUS_ACCEPTED, due=yesterday)
+        self._req('sup@x.com', self.DR.STATUS_PENDING)
+        row = self._row('sup@x.com')
+        self.assertEqual((row['doc_pending'], row['doc_overdue']), (2, 1))
+
+    def test_기한_판정은_모델이_한다(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        dr = self._req('sup@x.com', self.DR.STATUS_ACCEPTED,
+                       due=timezone.localdate() - timedelta(days=3))
+        self.assertTrue(dr.is_outstanding)
+        self.assertTrue(dr.is_overdue)
+        self.assertEqual(dr.days_left, -3)
+        dr.status = self.DR.STATUS_SUBMITTED
+        self.assertFalse(dr.is_overdue, '이미 낸 건은 늦은 것이 아니다')
+
+    def test_하겠다고만_한_건도_취소할_수_있다(self):
+        dr = self._req('sup@x.com', self.DR.STATUS_ACCEPTED)
+        r = self.client.post(reverse('products:doc_request_cancel', args=[dr.request_id]))
+        self.assertEqual(r.status_code, 200)
+        dr.refresh_from_db()
+        self.assertEqual(dr.status, self.DR.STATUS_CANCELLED)
+
+
+class DueDateRemindersTests(TestCase):
+    """
+    due_date 는 적히기만 했다 — 협력사 링크 만료 판정과 빨간 글씨, 두 군데.
+    기한 전에도 후에도 아무 일이 없어서 "그거 아직 안 왔어요" 를 사람이
+    기억해서 챙기고 있었다.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from v1.products.models import DocumentRequest
+        self.DR = DocumentRequest
+        self.today = timezone.localdate()
+        self.delta = timedelta
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+
+    def _req(self, days, status=None):
+        return self.DR.objects.create(
+            requester=self.owner, recipient_email='sup@x.com',
+            status=status or self.DR.STATUS_PENDING,
+            due_date=self.today + self.delta(days=days))
+
+    def _run(self, **kw):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('remind_doc_requests', stdout=out, **kw)
+        return out.getvalue()
+
+    def test_기한_임박과_초과를_센다(self):
+        self._req(1)      # 내일
+        self._req(-2)     # 이틀 지남
+        self._req(30)     # 아직 멀었다
+        out = self._run()
+        self.assertIn('기한 임박 1건, 기한 초과 1건', out)
+
+    def test_이미_낸_것은_챙기지_않는다(self):
+        self._req(-2, status=self.DR.STATUS_SUBMITTED)
+        self.assertIn('기한 임박 0건, 기한 초과 0건', self._run())
+
+    def test_기본은_미리보기라_보내지_않는다(self):
+        from django.core import mail
+        self._req(-1)
+        self._run()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_보내면_받는_사람과_요청자_둘_다_받는다(self):
+        from django.core import mail
+        self._req(-1)
+        self._run(send=True)
+        to = sorted(sum((m.to for m in mail.outbox), []))
+        self.assertEqual(to, ['owner@x.com', 'sup@x.com'])
+
+    def test_같은_날_두_번_보내지_않는다(self):
+        from django.core import mail
+        self._req(-1)
+        self._run(send=True)
+        first = len(mail.outbox)
+        self._run(send=True)
+        self.assertEqual(len(mail.outbox), first)
+
+
+class VendorCanResubmitTests(TestCase):
+    """
+    한 번 내면 토큰이 즉시 만료돼 다시 낼 수 없었다. 파일을 잘못 냈거나
+    스캔이 잘렸으면 요청자에게 연락해 새 요청을 받아야 했다.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from v1.products.models import DocumentRequest
+        self.DR = DocumentRequest
+        owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.dr = DocumentRequest.objects.create(
+            requester=owner, recipient_email='sup@x.com',
+            due_date=timezone.localdate() + timedelta(days=7))
+
+    def _open(self):
+        return self.client.get(
+            reverse('vendor:upload_form', args=[self.dr.upload_token]))
+
+    def test_이미_낸_뒤에도_기한_안이면_다시_연다(self):
+        self.dr.status = self.DR.STATUS_SUBMITTED
+        self.dr.save()
+        self.assertEqual(self._open().status_code, 200)
+
+    def test_기한이_지나면_닫힌다(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        self.dr.due_date = timezone.localdate() - timedelta(days=1)
+        self.dr.save()
+        self.assertEqual(self._open().status_code, 410)
+
+    def test_취소된_요청은_닫힌다(self):
+        self.dr.status = self.DR.STATUS_CANCELLED
+        self.dr.save()
+        self.assertEqual(self._open().status_code, 410)
+
+
+class InviteLandsSomewhereTests(TestCase):
+    """
+    초대 메일은 회원 여부와 무관하게 /products/inbox/ 로 보냈다. 비회원이
+    누르면 로그인 화면으로 떨어지고, 가입 안내도 "초대받은 그 이메일로
+    가입해야 연결된다" 는 말도 없었다. 자료 요청은 이미 매직링크로 로그인
+    없이 받고 있었는데 초대에만 그 패턴이 없었다.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        self.share = ProductShare.objects.create(
+            label=self.label, recipient_email='newbie@x.com',
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        p = SharePermission.objects.create(share=self.share)
+        p.apply_role_defaults(role_code='REVIEWER', save=True)
+
+    def _url(self):
+        return reverse('products:share_invite_landing', args=[self.share.public_token])
+
+    def test_로그인_없이_열린다(self):
+        r = self.client.get(self._url())
+        self.assertEqual(r.status_code, 200)
+
+    def test_누가_무엇을_어떤_역할로_주었는지_말한다(self):
+        r = self.client.get(self._url())
+        self.assertContains(r, '브라우니')
+        self.assertContains(r, '검토자')
+        self.assertContains(r, 'newbie@x.com')
+
+    def test_그_이메일로_가입하라고_말한다(self):
+        r = self.client.get(self._url())
+        self.assertContains(r, '로 가입해야 이 제품과 연결됩니다')
+
+    def test_초대받은_계정으로_들어오면_인박스로_보낸다(self):
+        newbie = User.objects.create_user('새사람', password='x', email='newbie@x.com')
+        self.client.force_login(newbie)
+        self.assertRedirects(self.client.get(self._url()), reverse('products:inbox'))
+
+    def test_다른_계정이면_조용히_넘기지_않는다(self):
+        self.client.force_login(self.owner)
+        r = self.client.get(self._url())
+        self.assertContains(r, '초대받은 주소와 다릅니다')
+
+    def test_공유가_끊기면_닫힌다(self):
+        self.share.active_yn = False
+        self.share.save()
+        self.assertEqual(self.client.get(self._url()).status_code, 410)
+
+    def test_기한이_지나면_닫힌다(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        self.share.share_end_date = timezone.now() - timedelta(days=1)
+        self.share.save()
+        self.assertEqual(self.client.get(self._url()).status_code, 410)
+
+    def test_제품_내용은_보여주지_않는다(self):
+        # 착지점은 안내판이지 열람 화면이 아니다
+        from v1.products.models import ProductComment
+        ProductComment.objects.create(
+            label=self.label, author=self.owner, content='내부 검토 메모')
+        r = self.client.get(self._url())
+        self.assertNotContains(r, '내부 검토 메모')
+
+
+class RoleSummaryIsShownTests(TestCase):
+    """
+    '공동 편집' 은 이름과 실질이 다르다 — EDITOR 는 상태 전이에서 소유자와
+    같은 권한을 받아 혼자 승인 완료까지 보낼 수 있다. 외부 사람을 거기 넣는
+    순간 무슨 일이 벌어지는지 화면에서 알 방법이 없었다.
+    """
+
+    def test_모든_역할에_설명이_있다(self):
+        for code, _ in SharePermission.ROLE_CHOICES:
+            self.assertIn(code, SharePermission.ROLE_SUMMARY)
+            self.assertTrue(SharePermission.ROLE_SUMMARY[code].strip())
+
+    def test_공동_편집이_무엇인지_숨기지_않는다(self):
+        self.assertIn('부소유자', SharePermission.ROLE_SUMMARY['EDITOR'])
+        self.assertIn('승인 완료', SharePermission.ROLE_SUMMARY['EDITOR'])
+
+    def test_화면과_서버가_같은_문장을_쓴다(self):
+        """두 곳에 있는 문장이 갈라지면 화면이 거짓말을 한다."""
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'templates' / 'products'
+              / '_tab_permissions.html').read_text(encoding='utf-8')
+        block = re.search(r'var ROLE_SUMMARY = \{(.*?)\};', js, re.S)
+        self.assertIsNotNone(block, '화면에 ROLE_SUMMARY 가 없다')
+        for code, text in SharePermission.ROLE_SUMMARY.items():
+            # 서버 쪽은 강조용 ** 를 쓰므로 걷고 견준다
+            plain = text.replace('**', '')
+            self.assertIn(plain, block.group(1), code)
+
+
+class RejectReasonUiExistsTests(TestCase):
+    """
+    서버가 need_reject_reason 을 돌려주는데 화면이 그 창을 안 띄우면,
+    반려를 누른 사람은 스낵바 한 줄만 보고 왜 안 되는지 모른 채 끝난다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / 'product_detail.html').read_text(encoding='utf-8')
+
+    def test_서버_신호를_받아_창을_띄운다(self):
+        self.assertIn('result.need_reject_reason', self.src)
+        self.assertIn('showRejectReason(newStatus)', self.src)
+
+    def test_창과_입력칸이_있다(self):
+        for piece in ('id="rejectReasonModal"', 'id="rejectReason"',
+                      'id="rejectConfirm"', 'id="rejectReasonError"'):
+            self.assertIn(piece, self.src, piece)
+
+    def test_사유를_서버로_보낸다(self):
+        self.assertIn("formData.append('reject_reason', rejectReason)", self.src)
+        self.assertIn('changeStatus(newStatus, null, false, reason)', self.src)
+
+    def test_어디에_남는지_알려_준다(self):
+        self.assertIn('댓글과 활동 로그', self.src)
+
+    def test_색은_토큰에서_온다(self):
+        import re
+        block = re.search(r'\.rj-icon.*?\.rj-error[^\n]*\n', self.src, re.S)
+        self.assertIsNotNone(block)
+        self.assertNotRegex(block.group(0), r'#[0-9a-fA-F]{6}')
+

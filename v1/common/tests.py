@@ -125,6 +125,13 @@ class 로그인_없이_열려_있던_문(TestCase):
         'create_new_label',
         # 공개 데모가 부른다. 로그인했을 때만 라벨에 손을 댄다
         'verify_report_no',
+        # 초대 착지점. 비회원이 초대 메일에서 눌러 닿는 자리라 로그인을 요구할
+        # 수 없다 — 요구하면 로그인 화면으로 떨어지고 가입 안내가 없어, 초대를
+        # 받고도 들어올 방법을 스스로 알아내야 했던 것이 고치려던 문제다.
+        # UUID 토큰으로 찾고, 끊긴 공유·기한 지난 공유는 410 으로 닫는다.
+        # **제품 내용은 보여주지 않는다** — 누가·무엇을·어떤 역할로 주었는지만
+        # 이고, 그 셋은 초대 메일에 이미 적혀 있다.
+        'share_invite_landing',
     }
 
     AUTH = ('login_required', 'staff_member_required', 'permission_required',

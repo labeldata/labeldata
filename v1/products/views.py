@@ -7,7 +7,8 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib import messages
 from v1.common.media_access import (
-    downloadable_label_ids, user_can_download_label_files, visible_documents)
+    user_can_download_label_files, visible_documents,
+    visible_documents_for_user)
 from django.http import JsonResponse
 from django.conf import settings
 from django.db.models import Q, Count, Prefetch, Sum, Case, When, IntegerField
@@ -1754,6 +1755,16 @@ def product_update_status(request, product_id):
         ProductMetadata.Status.CONFIRMED:  [],
     }
     required_roles = status_required_roles.get(new_status, [])
+    #  뒤로 돌릴 때는 확인하지 않는다. 검토자가 없는 제품(단계를 건너뛴
+    #  제품)에서 승인자가 반려하려는데 "검토자가 필요합니다" 로 막히면
+    #  되돌릴 길이 아예 없어진다.
+    if (metadata.status, new_status) in {
+        (ProductMetadata.Status.REVIEW,    ProductMetadata.Status.SUBMITTED),
+        (ProductMetadata.Status.PENDING,   ProductMetadata.Status.REVIEW),
+        (ProductMetadata.Status.SUBMITTED, ProductMetadata.Status.REQUESTING),
+        (ProductMetadata.Status.CONFIRMED, ProductMetadata.Status.DRAFT),
+    }:
+        required_roles = []
     if required_roles:
         has_required = SharePermission.objects.filter(
             share__label=label,
@@ -1793,6 +1804,17 @@ def product_update_status(request, product_id):
         ProductMetadata.Status.PENDING:    ['confirmed', 'review'],
         ProductMetadata.Status.CONFIRMED:  ['draft'],
     }
+    #  검토자는 **자기가 집어 든다.** 예전에는 제출 완료에서 검토 중으로
+    #  넘기는 것이 소유자·공동편집자 전용이었다. 그런데 제출 완료가 되면
+    #  검토자에게 이메일("검토하고 피드백을 남겨주세요")과 인앱 알림("귀하의
+    #  작업이 필요합니다")이 가고 인박스에도 "검토 필요" 가 뜬다. 세 곳에서
+    #  당신 차례라고 불러 놓고, 들어가면 누를 것이 없었다 — 소유자가 문을
+    #  열어 줄 때까지 서 있었고 소유자에게는 그러라는 말이 가지 않았다.
+    #
+    #  반려도 마찬가지다. 초대 메일과 상태 알림이 승인자에게 "최종 승인 또는
+    #  **반려**해 주세요" 라고 두 곳에서 말하는데 그 길이 없었다. 문제를 본
+    #  승인자가 할 수 있는 것은 승인하거나, 아무것도 안 하고 전화하는 것
+    #  둘뿐이었고 후자는 시스템에 아무 흔적도 남기지 않았다.
     if user_role == 'OWNER':
         available_actions = status_actions_map_view.get(metadata.status, []) + skip_action_codes
     elif user_role == 'EDITOR':
@@ -1800,11 +1822,32 @@ def product_update_status(request, product_id):
     elif user_role == 'UPLOADER':
         available_actions = ['submitted'] if metadata.status == ProductMetadata.Status.REQUESTING else []
     elif user_role == 'REVIEWER':
-        available_actions = ['pending'] if metadata.status == ProductMetadata.Status.REVIEW else []
+        available_actions = {
+            ProductMetadata.Status.SUBMITTED: ['review'],              # 검토 시작
+            ProductMetadata.Status.REVIEW:    ['pending', 'submitted'],  # 넘김 / 반려
+        }.get(metadata.status, [])
     elif user_role == 'APPROVER':
-        available_actions = ['confirmed'] if metadata.status == ProductMetadata.Status.PENDING else []
+        available_actions = {
+            ProductMetadata.Status.PENDING: ['confirmed', 'review'],   # 승인 / 반려
+        }.get(metadata.status, [])
     else:
         available_actions = []
+
+    # 뒤로 돌리는 전이는 **반려**다. 왜 돌렸는지가 남지 않으면 다음 사람은
+    # 무엇을 고쳐야 하는지 모른다. 표시사항은 행정처분이 걸린 일이라 더 그렇다.
+    _BACKWARD = {
+        (ProductMetadata.Status.REVIEW,  ProductMetadata.Status.SUBMITTED),
+        (ProductMetadata.Status.PENDING, ProductMetadata.Status.REVIEW),
+        (ProductMetadata.Status.SUBMITTED, ProductMetadata.Status.REQUESTING),
+    }
+    is_rejection = (metadata.status, new_status) in _BACKWARD
+    reject_reason = (request.POST.get('reject_reason') or '').strip()
+    if is_rejection and user_role in ('REVIEWER', 'APPROVER') and not reject_reason:
+        return JsonResponse({
+            'success': False,
+            'need_reject_reason': True,
+            'error': '반려 사유를 적어 주세요. 다음 사람이 무엇을 고쳐야 하는지 알아야 합니다.',
+        }, status=400)
 
     if new_status not in {action_to_status.get(a) for a in available_actions}:
         return JsonResponse({'success': False, 'error': '상태 변경 권한이 없습니다.'}, status=403)
@@ -1815,6 +1858,8 @@ def product_update_status(request, product_id):
     if shared_share and not is_owner:
         _perm = SharePermission.objects.filter(share=shared_share).first()
         _needs = {
+            # 검토 시작도 검토 권한이다 — 넘길 때만 보면 화면이 또 거짓말을 한다
+            ProductMetadata.Status.REVIEW:    ('can_review',  '검토'),
             ProductMetadata.Status.PENDING:   ('can_review',  '검토'),
             ProductMetadata.Status.CONFIRMED: ('can_approve', '승인'),
         }
@@ -1938,12 +1983,26 @@ def product_update_status(request, product_id):
             _log_details['override_reason'] = validation_override['reason']
         else:
             _log_details['override_acknowledged'] = True
+    if is_rejection:
+        _log_details['rejected'] = True
+        if reject_reason:
+            _log_details['reject_reason'] = reject_reason
     ProductActivityLog.objects.create(
         label=label,
         user=request.user,
         action='STATUS_CHANGED',
         details=_log_details,
     )
+
+    # 반려 사유는 **댓글로도 남긴다.** 활동 로그는 이력을 뒤질 때 보는 곳이고,
+    # 고쳐야 하는 사람이 실제로 들여다보는 곳은 댓글이다. 두 곳에 남겨야
+    # "왜 돌아왔는지" 를 찾으러 다니지 않는다.
+    if is_rejection and reject_reason:
+        ProductComment.objects.create(
+            label=label,
+            author=request.user,
+            content='[반려] %s' % reject_reason,
+        )
 
     # ── 새 상태에서 담당 역할을 가진 공유자에게 인앱 알림 발송 ──
     notify_roles = {
@@ -1969,7 +2028,13 @@ def product_update_status(request, product_id):
         'OWNER':    '제품 상태 변경 내역을 확인해 주세요.',
     }
 
-    for nrole in notify_roles.get(new_status, []):
+    #  반려는 "당신 차례" 가 아니라 "돌아왔다" 는 소식이다. 되돌아간 상태의
+    #  담당자와 소유자가 함께 알아야 한다.
+    _notify_targets = list(notify_roles.get(new_status, []))
+    if is_rejection and 'OWNER' not in _notify_targets:
+        _notify_targets.append('OWNER')
+
+    for nrole in _notify_targets:
         if nrole in ('OWNER',):
             # 소유자 직접 알림
             owner_user = label.user_id
@@ -1977,7 +2042,9 @@ def product_update_status(request, product_id):
                 ProductNotification.objects.create(
                     label=label,
                     recipient=owner_user,
-                    message=f'[{product_name}] 상태가 "{new_status_label}"으(로) 변경되었습니다.',
+                    message=(f'[{product_name}] {changer_name}님이 반려했습니다 — {reject_reason or "사유 없음"}'
+                             if is_rejection else
+                             f'[{product_name}] 상태가 "{new_status_label}"으(로) 변경되었습니다.'),
                     status_code=new_status,
                 )
                 # 소유자에게 이메일도 발송
@@ -1999,7 +2066,10 @@ def product_update_status(request, product_id):
             ).select_related('share__recipient_user', 'share')
             for perm in perm_qs:
                 recipient = perm.share.recipient_user
-                notify_msg = f'[{product_name}] 상태가 "{new_status_label}"으(로) 변경되었습니다. 귀하의 작업이 필요합니다.'
+                if is_rejection:
+                    notify_msg = f'[{product_name}] {changer_name}님이 반려했습니다 — {reject_reason or "사유 없음"}'
+                else:
+                    notify_msg = f'[{product_name}] 상태가 "{new_status_label}"으(로) 변경되었습니다. 귀하의 작업이 필요합니다.'
                 _email_ctx = {
                     'subject': _status_email_subject,
                     'sender_name': changer_name, 'sender_company': changer_company, 'sender_email': request.user.email,
@@ -2689,13 +2759,17 @@ def sharing_inbox(request):
 
     # 역할별 할 일 매핑
     def _action_needed(role_code, status):
+        #  **여기 적힌 말은 그 사람이 실제로 누를 수 있는 것이어야 한다.**
+        #  예전에는 제출 완료의 검토자에게 "검토 필요" 를 띄웠는데 서버는 그
+        #  상태에서 검토자에게 아무 행동도 주지 않았다. 부르기만 하고 문은
+        #  잠겨 있었다. 지금은 검토자가 그 자리에서 검토를 시작할 수 있다.
         mapping = {
-            ('UPLOADER',  'REQUESTING'): ('업로드', 'bi bi-upload',        'text-primary'),
-            ('REVIEWER',  'SUBMITTED'):  ('검토 필요', 'bi bi-eye',         'text-warning'),
-            ('REVIEWER',  'REVIEW'):     ('검토 중',   'bi bi-eye-fill',    'text-warning'),
-            ('APPROVER',  'PENDING'):    ('승인 대기', 'bi bi-check-circle', 'text-danger'),
-            ('EDITOR',    'DRAFT'):      ('편집 가능', 'bi bi-pencil',       'text-success'),
-            ('EDITOR',    'REQUESTING'): ('편집 가능', 'bi bi-pencil',       'text-success'),
+            ('UPLOADER',  'REQUESTING'): ('자료 올리기', 'bi bi-upload',       'text-primary'),
+            ('REVIEWER',  'SUBMITTED'):  ('검토 시작',   'bi bi-play-circle',  'text-warning'),
+            ('REVIEWER',  'REVIEW'):     ('검토 중',     'bi bi-eye-fill',     'text-warning'),
+            ('APPROVER',  'PENDING'):    ('승인 대기',   'bi bi-check-circle', 'text-danger'),
+            ('EDITOR',    'DRAFT'):      ('편집 가능',   'bi bi-pencil',       'text-success'),
+            ('EDITOR',    'REQUESTING'): ('편집 가능',   'bi bi-pencil',       'text-success'),
         }
         hit = mapping.get((role_code, status))
         return hit if hit else (None, None, None)
@@ -3073,6 +3147,23 @@ def use_as_ingredient(request, receipt_id):
     return redirect('products:inbox')
 
 
+# 소유자가 아닌 사람(공동 편집자)이 남에게 줄 수 있는 역할.
+#
+# share_update_permission 은 "자신의 권한은 변경할 수 없습니다" 로 자기 승격을
+# 막는다. 그런데 공유를 새로 만드는 문에는 역할 제한이 없어서, 공동 편집자가
+# 자기 다른 이메일을 승인자로 초대하면 그대로 우회됐다. 승인과 공동 편집을
+# 남에게 주는 것은 제품 주인만 할 수 있어야 한다.
+EDITOR_GRANTABLE_ROLES = ('VIEWER', 'UPLOADER', 'REVIEWER')
+
+
+def _role_grant_error(is_owner, role_code):
+    """이 사람이 그 역할을 남에게 줄 수 있는가. 줄 수 없으면 사유 문자열."""
+    if is_owner or role_code in EDITOR_GRANTABLE_ROLES:
+        return None
+    label = dict(SharePermission.ROLE_CHOICES).get(role_code, role_code)
+    return f'{label} 역할은 제품 소유자만 지정할 수 있습니다.'
+
+
 def _get_editor_share_for_label(request, label):
     """요청 사용자가 해당 label에 EDITOR 역할로 공유받은 share를 반환. 없으면 None."""
     return ProductShare.objects.filter(
@@ -3097,6 +3188,7 @@ def share_create(request, label_id):
         delete_YN='N'
     ).first()
 
+    is_owner = label is not None
     if not label:
         # EDITOR 공유 접근 확인
         label = get_object_or_404(MyLabel, my_label_id=label_id, delete_YN='N')
@@ -3126,6 +3218,10 @@ def share_create(request, label_id):
 
     if role_code not in dict(SharePermission.ROLE_CHOICES):
         return JsonResponse({'success': False, 'error': '잘못된 역할입니다.'}, status=400)
+
+    grant_error = _role_grant_error(is_owner, role_code)
+    if grant_error:
+        return JsonResponse({'success': False, 'error': grant_error}, status=403)
 
     # 이 API 는 PRIVATE(권한 관리) 공유만 만든다. PUBLIC 은 열람 화면이 미구현이다.
     if request.POST.get('share_mode', 'PRIVATE') != 'PRIVATE':
@@ -3220,7 +3316,10 @@ def share_create(request, label_id):
     product_name = label.my_label_name or label.prdlst_nm or '제품'
     role_label   = permission.role_label
     from django.conf import settings as _ds
-    inbox_url = f'{getattr(_ds, "SITE_URL", "https://labeldata.pythonanywhere.com")}/products/inbox/'
+    _site = getattr(_ds, "SITE_URL", "https://labeldata.pythonanywhere.com")
+    # 회원이면 인박스로 곧장, 아니면 로그인 없이 열리는 착지점으로.
+    inbox_url = (f'{_site}/products/inbox/' if recipient_user
+                 else f'{_site}/products/invite/{share.public_token}/')
     _role_actions = {
         'UPLOADER': '공유받은 제품의 원료 규격서, 성분 데이터 등 요청 자료를 시스템에 업로드해 주세요.',
         'REVIEWER': '공유받은 제품의 라벨 내용을 검토하고 의견을 남겨주세요.',
@@ -3250,9 +3349,14 @@ def share_create(request, label_id):
 
 @login_required
 def share_detail(request, share_id):
-    """공유 상세"""
-    messages.info(request, '공유 상세 기능은 준비 중입니다.')
-    return redirect('products:inbox')
+    """
+    공유 상세 — 만들지 않는다.
+
+    "준비 중입니다" 안내 후 인박스로 보내던 자리였다. URL 이 살아 있으니 어딘가
+    링크가 남아 있으면 눌러 봐야 아무 일도 안 일어나는 막다른 길이 된다.
+    지금 이 자리가 보여줄 것은 권한 탭과 인박스가 이미 보여주고 있다.
+    """
+    raise Http404('공유 상세 화면은 제공하지 않습니다. 권한 탭에서 확인하세요.')
 
 
 @login_required
@@ -3290,6 +3394,7 @@ def share_revoke(request, share_id):
 def share_update_permission(request, share_id):
     """공유 권한 수정 – 소유자 또는 EDITOR(본인 제외) 접근 가능"""
     share = ProductShare.objects.filter(share_id=share_id, label__user_id=request.user).first()
+    is_owner = share is not None
     if not share:
         share = get_object_or_404(ProductShare, share_id=share_id)
         editor_share = _get_editor_share_for_label(request, share.label)
@@ -3302,8 +3407,34 @@ def share_update_permission(request, share_id):
     if role_code not in dict(SharePermission.ROLE_CHOICES):
         return JsonResponse({'success': False, 'error': '잘못된 역할입니다.'}, status=400)
 
+    grant_error = _role_grant_error(is_owner, role_code)
+    if grant_error:
+        return JsonResponse({'success': False, 'error': grant_error}, status=403)
+
     permission, _ = SharePermission.objects.get_or_create(share=share)
+    see_all_before = permission.can_view_all_documents
     permission.apply_role_defaults(role_code=role_code, save=True)
+
+    # 문서함 전체 보기 — 역할 기본값을 덮어쓸 수 있다.
+    #
+    # 역할을 다시 고르면 기본값으로 돌아가는 것이 규칙이다. 문제는 그것이
+    # **넓어지는 쪽으로도 조용히** 일어났다는 것이다. 외부인이라 소유자가 꺼
+    # 두었던 뷰어를 검토자로 옮기기만 해도 문서함이 도로 열렸고, 화면에는
+    # 아무 표시가 없었다. 화면이 지금 값을 함께 보내면 그것을 따르고, 어느
+    # 쪽이든 결과를 응답에 실어 화면이 알 수 있게 한다.
+    see_all = request.POST.get('see_all_documents', '')
+    if see_all in ('true', 'false'):
+        permission.can_view_all_documents = (see_all == 'true')
+        permission.save(update_fields=['can_view_all_documents'])
+    elif not see_all_before and permission.can_view_all_documents:
+        # 아무 말 없이 넓어지는 것만은 막는다.
+        #
+        # 소유자가 이 사람을 두고 "외부인이니 문서함 전체는 안 된다" 고 껐다면
+        # 그것은 역할이 아니라 **사람**에 대한 판단이다. 역할만 옮겼다고 그
+        # 판단이 풀려서는 안 된다. 좁히는 쪽(자료 제출로 옮기면 꺼진다)은
+        # 그대로 두고, 넓히는 쪽은 화면에서 손으로 켜야 한다.
+        permission.can_view_all_documents = False
+        permission.save(update_fields=['can_view_all_documents'])
 
     # 활동 로그 생성
     from .models import ProductActivityLog
@@ -3316,6 +3447,8 @@ def share_update_permission(request, share_id):
             'recipient_name': share.recipient_name,
             'role': role_code,
             'role_label': permission.role_label,
+            'see_all_documents': permission.can_view_all_documents,
+            'see_all_changed': see_all_before != permission.can_view_all_documents,
             'change_type': 'permission'
         }
     )
@@ -3342,7 +3475,12 @@ def share_update_permission(request, share_id):
         message=notify_msg,
     )
 
-    return JsonResponse({'success': True, 'role_label': permission.role_label})
+    return JsonResponse({
+        'success': True,
+        'role_label': permission.role_label,
+        'see_all_documents': permission.can_view_all_documents,
+        'see_all_changed': see_all_before != permission.can_view_all_documents,
+    })
 
 
 @login_required
@@ -3391,6 +3529,9 @@ def share_update_info(request, share_id):
     
     # 역할 업데이트
     if role_code and role_code in dict(SharePermission.ROLE_CHOICES):
+        grant_error = _role_grant_error(is_label_owner, role_code)
+        if grant_error:
+            return JsonResponse({'success': False, 'error': grant_error}, status=403)
         permission, _ = SharePermission.objects.get_or_create(share=share)
         permission.apply_role_defaults(role_code=role_code, save=True)
 
@@ -3442,6 +3583,58 @@ def public_share_view(request, share_token):
     구현하려면 토큰 검증·만료·열람 범위 설계가 함께 필요하다.
     """
     raise Http404("공개 공유 링크는 제공하지 않습니다.")
+
+
+def share_invite_landing(request, share_token):
+    """
+    초대 링크의 착지점 — **로그인하지 않아도 열린다.**
+
+    초대 메일은 회원 여부와 무관하게 /products/inbox/ 로 보냈다. 비회원이
+    누르면 login_required 에 걸려 로그인 화면으로 떨어지고, 가입 안내도
+    "초대받은 그 이메일로 가입해야 연결된다" 는 말도 없었다. 초대를 받고도
+    들어올 방법을 스스로 알아내야 했다.
+
+    역설적인 것은 답을 이미 갖고 있었다는 점이다 — 자료 요청은 매직링크로
+    로그인 없이 파일을 받는다. 초대에만 그 패턴이 없었다.
+
+    **제품 내용은 보여주지 않는다.** 누가 무엇을 어떤 역할로 공유했는지만
+    알린다. 그 세 가지는 초대 메일에 이미 적혀 있으므로 링크를 쥔 사람에게
+    새로 새는 것이 없다. 열람은 로그인한 뒤 인박스에서 한다.
+    """
+    share = (ProductShare.objects
+             .select_related('label', 'created_by', 'permission')
+             .filter(public_token=share_token, active_yn=True, share_mode='PRIVATE')
+             .first())
+    if not share or share.is_expired():
+        return render(request, 'products/sharing/invite_expired.html', status=410)
+
+    invited_email = (share.recipient_email or '').lower()
+    inviter_name, inviter_company = _get_sender_info(share.created_by)
+    perm = getattr(share, 'permission', None)
+
+    if request.user.is_authenticated:
+        if (request.user.email or '').lower() == invited_email:
+            return redirect('products:inbox')
+        # 다른 계정으로 들어와 있다 — 조용히 인박스로 보내면 "왜 안 보이지" 가 된다
+        return render(request, 'products/sharing/invite_landing.html', {
+            'share': share, 'permission': perm,
+            'inviter_name': inviter_name, 'inviter_company': inviter_company,
+            'invited_email': share.recipient_email,
+            'wrong_account': True,
+        })
+
+    from django.urls import reverse as _rev
+    from urllib.parse import urlencode
+    next_url = _rev('products:inbox')
+    return render(request, 'products/sharing/invite_landing.html', {
+        'share': share, 'permission': perm,
+        'inviter_name': inviter_name, 'inviter_company': inviter_company,
+        'invited_email': share.recipient_email,
+        'signup_url': '%s?%s' % (_rev('user_management:signup'),
+                                 urlencode({'email': share.recipient_email, 'next': next_url})),
+        'login_url': '%s?%s' % (_rev('user_management:login'),
+                                urlencode({'next': next_url})),
+    })
 
 
 # ==================== 문서 관리 ====================
@@ -3854,14 +4047,36 @@ def company_document_import_api(request, label_id):
 @login_required
 @require_POST
 def document_delete_api(request, document_id):
-    """문서 삭제 AJAX API - JSON 응답 반환"""
+    """
+    문서 삭제 AJAX API - JSON 응답 반환.
+
+    제품 소유자, 또는 **자기가 올린 문서**를 지우는 업로드 권한자.
+    예전에는 소유자만이었다. 올릴 권한은 줬는데 취소할 권한이 없어서, 협력사가
+    잘못 올렸다고 연락하면 소유자가 대신 지워 줘야 했다.
+    """
     try:
         document = get_object_or_404(
-            ProductDocument,
+            ProductDocument.objects.select_related('label'),
             document_id=document_id,
-            label__user_id=request.user,
             active_yn=True
         )
+        if document.label.user_id_id != request.user.id:
+            if document.uploaded_by_id != request.user.id:
+                return JsonResponse(
+                    {'success': False, 'error': '이 문서를 삭제할 권한이 없습니다.'}, status=403)
+            share = ProductShare.objects.filter(
+                label=document.label,
+                active_yn=True,
+                share_mode='PRIVATE',
+                permission__can_upload_documents=True,
+            ).filter(
+                Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+            ).filter(
+                Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+            ).first()
+            if not share:
+                return JsonResponse(
+                    {'success': False, 'error': '이 문서를 삭제할 권한이 없습니다.'}, status=403)
         
         # 삭제 전 정보 저장
         file_name = document.original_filename
@@ -3936,12 +4151,17 @@ def bulk_download(request):
             'error': '다운로드할 문서를 선택해주세요.'
         }, status=400)
     
-    # 문서 조회 (사용자 소유 확인)
-    documents = ProductDocument.objects.filter(
-        Q(label__user_id=request.user) | Q(label__my_label_id__in=downloadable_label_ids(request.user)),
+    # 문서 조회.
+    #
+    # **문서 단위로 걸러야 한다.** 예전에는 downloadable_label_ids() 로 제품만
+    # 확인했는데, 그 함수는 can_download_documents 만 보고 문서함 전체 보기는
+    # 보지 않는다. 그래서 시험성적서 하나 내라고 부른 협력업체가 문서 ID 만
+    # 찍어 넣으면 남의 규격서까지 ZIP 으로 받아 갈 수 있었다. 목록 화면에서는
+    # 안 보이지만 document_id 는 연속된 정수다.
+    documents = visible_documents_for_user(request.user, ProductDocument.objects.filter(
         document_id__in=document_ids,
         active_yn=True
-    ).select_related('label', 'document_type')
+    )).select_related('label', 'document_type')
     
     if not documents.exists():
         return JsonResponse({
@@ -4164,10 +4384,17 @@ def _sanitize_filename(name):
 # ==================== 협업 기능 (Stub) ====================
 
 def _get_label_access(request, label_id):
-    """댓글용 접근 권한 확인 (오너 또는 공유 사용자)"""
+    """
+    댓글용 접근 권한 확인 (오너 또는 공유 사용자).
+
+    (label, role, permission) 을 돌려준다. 소유자의 permission 은 None 이다.
+    **역할 이름이 아니라 permission 의 플래그로 판정하라.** 예전에는 댓글 작성을
+    역할 목록으로 검사했고 그 목록에 자료 제출(UPLOADER)이 들어 있었다 —
+    ROLE_DEFAULTS 는 can_comment=False 인데 서버가 그것을 뒤집고 있었다.
+    """
     try:
         label = MyLabel.objects.get(my_label_id=label_id, user_id=request.user)
-        return label, 'OWNER'
+        return label, 'OWNER', None
     except MyLabel.DoesNotExist:
         shared_share = ProductShare.objects.filter(
             label__my_label_id=label_id,
@@ -4179,20 +4406,31 @@ def _get_label_access(request, label_id):
         ).select_related('label').first()
 
         if not shared_share:
-            return None, None
+            return None, None, None
 
         share_permission = SharePermission.objects.filter(share=shared_share).first()
         role = share_permission.role_code if share_permission else 'VIEWER'
-        return shared_share.label, role
+        return shared_share.label, role, share_permission
 
 @login_required
 def comment_list(request, label_id):
     """댓글 목록 API"""
-    label, role = _get_label_access(request, label_id)
+    label, role, permission = _get_label_access(request, label_id)
     if not label:
         return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
 
     comments = ProductComment.objects.filter(label=label, resolved_yn=False).select_related('author').order_by('-created_at')
+
+    # 문서함이 막힌 사람에게는 댓글도 막는다.
+    #
+    # 문서 목록은 visible_documents 로 걸렀는데 댓글은 안 걸렀다. 같은 문서함에
+    # 여러 회사가 들어온다는 전제는 댓글에도 그대로 적용되고, 오히려 댓글이 더
+    # 노골적이다 — "A사 성적서 수치가 이상함. 거래 끊는 것 검토" 같은 내부 검토가
+    # 협력사에게 그대로 보였다. 자기가 쓴 것과 자기 글에 달린 답글만 남긴다.
+    if permission is not None and not permission.can_view_all_documents:
+        comments = comments.filter(
+            Q(author=request.user) | Q(parent__author=request.user)
+        )
     payload = []
     for comment in comments:
         payload.append({
@@ -4209,11 +4447,12 @@ def comment_list(request, label_id):
 @require_POST
 def comment_create(request, label_id):
     """댓글 생성 API"""
-    label, role = _get_label_access(request, label_id)
+    label, role, permission = _get_label_access(request, label_id)
     if not label:
         return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
 
-    if role not in ['OWNER', 'UPLOADER', 'EDITOR', 'REVIEWER', 'APPROVER']:
+    # 역할 이름을 하드코딩하지 않는다 — ROLE_DEFAULTS 가 정한 값을 그대로 쓴다.
+    if role != 'OWNER' and not (permission and permission.can_comment):
         return JsonResponse({'success': False, 'error': '댓글 작성 권한이 없습니다.'}, status=403)
 
     content = request.POST.get('content', '').strip()
@@ -4957,18 +5196,21 @@ def notification_mark_read(request):
 
     return JsonResponse({'success': True, 'unread': unread_count})
 
-@login_required
-def contacts(request):
-    """연락처 관리 - 공유 이력 기반 연락처 목록 및 공유 현황"""
-    from v1.label.models import MyLabel
+def _contact_rows(user):
+    """
+    연락처 한 줄들을 만든다 — **화면과 API 가 같은 것을 쓴다.**
 
-    # 내가 공유한 이메일 목록 (고유값, 최신 이름/회사명 우선)
-    # 라벨 소유자로서 공유하거나, EDITOR 권한으로 공유를 생성한 경우 모두 포함
+    예전에는 contacts() 와 contacts_api_list() 가 같은 일을 따로 적고 있었다.
+    한쪽만 고쳐지는 것은 시간 문제였고 실제로 그랬다 — 비고(memo)를 API 쪽에만
+    담고 화면 쪽에는 안 담아서, 한 번이라도 공유한 연락처는 비고가 빈 칸으로
+    내려갔고 다른 칸을 고쳐 저장하면 적어 둔 비고가 지워졌다.
+
+    'sent' 는 이 사람에게 보낸 활성 공유 수다.
+    """
+    rows = {}
     sent_shares = (
         ProductShare.objects
-        .filter(
-            Q(label__user_id=request.user) | Q(created_by=request.user)
-        )
+        .filter(Q(label__user_id=user) | Q(created_by=user))
         .filter(share_mode='PRIVATE', active_yn=True)
         .exclude(recipient_email__isnull=True)
         .exclude(recipient_email='')
@@ -4976,31 +5218,33 @@ def contacts(request):
         .distinct()
         .order_by('recipient_email', '-created_datetime')
     )
+    for share in sent_shares:
+        email = (share.recipient_email or '').lower()
+        if not email:
+            continue
+        if email in rows:
+            rows[email]['sent'] += 1
+            continue
+        name = (share.recipient_name
+                or (share.recipient_user.get_full_name() or share.recipient_user.username
+                    if share.recipient_user else '')
+                or '')
+        rows[email] = {
+            'email': email,
+            'name': name,
+            'company': share.recipient_company or '',
+            'license_no': share.recipient_license_no or '',
+            'memo': '',
+            'sent': 1,
+            'received': 0,
+        }
 
-    contact_map = {}
-    for s in sent_shares:
-        email = s.recipient_email.lower()
-        if email not in contact_map:
-            name = (s.recipient_name
-                    or (s.recipient_user.get_full_name() or s.recipient_user.username
-                        if s.recipient_user else '')
-                    or '')
-            contact_map[email] = {
-                'email': email,
-                'name': name,
-                'company': s.recipient_company or '',
-                'license_no': s.recipient_license_no or '',
-                'sent': 1,
-                'received': 0,
-            }
-        else:
-            contact_map[email]['sent'] += 1
-
-    # UserContact 기반 연락처 추가 (ProductShare에 없는 경우에만)
-    for uc in UserContact.objects.filter(owner=request.user):
+    # 주소록은 공유에서 온 행도 **채운다.** 건너뛰면 비고가 사라진다.
+    for uc in UserContact.objects.filter(owner=user):
         email = uc.email.lower()
-        if email not in contact_map:
-            contact_map[email] = {
+        row = rows.get(email)
+        if row is None:
+            rows[email] = {
                 'email': email,
                 'name': uc.name or '',
                 'company': uc.company or '',
@@ -5009,37 +5253,63 @@ def contacts(request):
                 'sent': 0,
                 'received': 0,
             }
+            continue
+        row['memo'] = uc.memo or ''
+        for field in ('name', 'company', 'license_no'):
+            if not row.get(field):
+                row[field] = getattr(uc, field) or ''
 
-    contacts_list = sorted(contact_map.values(), key=lambda x: x['email'])
+    return sorted(rows.values(), key=lambda r: r['email'])
 
-    # 문서 요청 집계 (내가 보낸 요청 기준)
-    from v1.products.models import DocumentRequest
+
+def _attach_doc_request_counts(user, rows):
+    """각 연락처에 자료 요청 현황을 얹는다 (보냄 / 아직 안 옴 / 기한 지남 / 받음)."""
     from django.db.models import Count, Q as Qdr
-    dr_agg = (
-        DocumentRequest.objects
-        .filter(requester=request.user)
+
+    from v1.products.models import DocumentRequest
+
+    sent_agg = {
+        r['recipient_email'].lower(): r
+        for r in DocumentRequest.objects
+        .filter(requester=user)
         .values('recipient_email')
         .annotate(
             total=Count('request_id'),
-            pending=Count('request_id', filter=Qdr(status='PENDING')),
+            #  '아직 안 온 것' 을 센다. PENDING 만 세던 시절에는 하겠다고
+            #  수락만 하고 안 낸 건이 대기에서 빠져, 목록상 처리된 것처럼
+            #  보이는데 파일은 오지 않았다.
+            pending=Count('request_id',
+                          filter=Qdr(status__in=DocumentRequest.STATUS_OUTSTANDING)),
+            overdue=Count('request_id', filter=Qdr(
+                status__in=DocumentRequest.STATUS_OUTSTANDING,
+                due_date__lt=timezone.localdate())),
         )
-    )
-    dr_map = {row['recipient_email'].lower(): row for row in dr_agg}
-
-    # 내가 받은 요청 집계 (요청수신 필터용)
-    dr_recv_agg = (
-        DocumentRequest.objects
-        .filter(recipient_email__iexact=request.user.email)
+    }
+    recv_agg = {
+        r['requester__email'].lower(): r['total']
+        for r in DocumentRequest.objects
+        .filter(recipient_email__iexact=user.email)
         .values('requester__email')
         .annotate(total=Count('request_id'))
-    )
-    dr_recv_map = {row['requester__email'].lower(): row['total'] for row in dr_recv_agg}
+        if r['requester__email']
+    }
+    for row in rows:
+        agg = sent_agg.get(row['email'], {})
+        row['doc_sent'] = agg.get('total', 0)
+        row['doc_pending'] = agg.get('pending', 0)
+        row['doc_overdue'] = agg.get('overdue', 0)
+        row['doc_received'] = recv_agg.get(row['email'], 0)
+    return rows
 
-    for c in contacts_list:
-        dr = dr_map.get(c['email'], {})
-        c['doc_sent']     = dr.get('total', 0)
-        c['doc_pending']  = dr.get('pending', 0)
-        c['doc_received'] = dr_recv_map.get(c['email'], 0)  # 이 연락처로부터 받은 요청
+
+@login_required
+def contacts(request):
+    """연락처 관리 - 공유 이력 기반 연락처 목록 및 공유 현황"""
+    from v1.label.models import MyLabel
+
+    #  목록 조립은 _contact_rows 한 곳에서만 한다 — 화면과 API 가 갈라지면
+    #  한쪽만 고쳐진다(실제로 비고가 그렇게 사라졌다).
+    contacts_list = _attach_doc_request_counts(request.user, _contact_rows(request.user))
 
     from v1.common.views import grid_order, grid_widths
 
@@ -5053,49 +5323,14 @@ def contacts(request):
 
 @login_required
 def contacts_api_list(request):
-    """연락처 목록 JSON API"""
-    # ① ProductShare 기반 연락처
-    sent_shares = (
-        ProductShare.objects
-        .filter(
-            Q(label__user_id=request.user) | Q(created_by=request.user)
-        )
-        .filter(share_mode='PRIVATE', active_yn=True)
-        .exclude(recipient_email__isnull=True)
-        .exclude(recipient_email='')
-        .select_related('recipient_user')
-        .distinct()
-    )
+    """
+    연락처 목록 JSON API.
 
-    contact_map = {}
-    for s in sent_shares:
-        email = (s.recipient_email or '').lower()
-        if email and email not in contact_map:
-            name = (s.recipient_name
-                    or (s.recipient_user.get_full_name() or s.recipient_user.username
-                        if s.recipient_user else '')
-                    or '')
-            contact_map[email] = {
-                'email': email,
-                'name': name,
-                'company': s.recipient_company or '',
-                'license_no': s.recipient_license_no or '',
-            }
-
-    # ② UserContact 기반 연락처 (ProductShare에 없는 경우에만 추가)
-    for uc in UserContact.objects.filter(owner=request.user):
-        email = uc.email.lower()
-        if email not in contact_map:
-            contact_map[email] = {
-                'email': email,
-                'name': uc.name or '',
-                'company': uc.company or '',
-                'license_no': uc.license_no or '',
-                'memo': uc.memo or '',
-            }
-
-    data = sorted(contact_map.values(), key=lambda x: x['email'])
-    return JsonResponse({'contacts': data})
+    화면(contacts)과 **같은 조립기**를 쓴다. 예전에는 둘이 같은 일을 따로
+    적고 있었고, 비고를 API 쪽에만 담아 화면에서는 사라졌다.
+    """
+    rows = _attach_doc_request_counts(request.user, _contact_rows(request.user))
+    return JsonResponse({'contacts': rows})
 
 
 @login_required
@@ -5120,42 +5355,52 @@ def contacts_api_update(request):
     except _DjValidationError:
         return JsonResponse({'success': False, 'error': '올바른 이메일 형식이 아닙니다.'}, status=400)
 
+    email_changed = old_email != new_email
+
     # ① ProductShare 레코드 일괄 업데이트 (이메일 변경 포함)
-    updated = (
+    #
+    # **recipient_user 를 함께 옮겨야 한다.** 예전에는 recipient_email 만 바꾸고
+    # recipient_user 는 그대로 뒀다. 공유 조회는
+    # Q(recipient_user=user) | Q(recipient_email__iexact=user.email) 이라,
+    # 담당자가 바뀌어 이메일을 고치면 접근이 **옮겨 가는 게 아니라 복제됐다** —
+    # 전임자는 계속 받을 수 있고 후임자도 받게 된다. 고친 사람은 끊긴 줄 안다.
+    shares = (
         ProductShare.objects
         .filter(
             Q(label__user_id=request.user) | Q(created_by=request.user)
         )
         .filter(recipient_email__iexact=old_email, share_mode='PRIVATE', active_yn=True)
         .distinct()
-        .update(
-            recipient_email=new_email if old_email != new_email else old_email,  # 이메일 변경
-            recipient_name=name or None,
-            recipient_company=company or None,
-            recipient_license_no=license_no or None,
-        )
     )
+    fields = {
+        'recipient_name': name or None,
+        'recipient_company': company or None,
+        'recipient_license_no': license_no or None,
+    }
+    if email_changed:
+        fields['recipient_email'] = new_email
+        # 새 이메일의 회원 계정으로 다시 잇는다. 회원이 아니면 끊어 둔다 —
+        # 남겨 두면 전임자 계정이 그대로 문을 여는 열쇠가 된다.
+        fields['recipient_user'] = User.objects.filter(email__iexact=new_email).first()
+    updated = shares.update(**fields)
 
-    # ② UserContact 동기화 (있으면 업데이트)
-    if old_email != new_email:
-        # 이메일이 변경되면 기존 레코드 삭제 및 새로 생성
+    # ② UserContact 동기화
+    #
+    # 이미 있는 이메일로 고치는 것은 "두 줄로 들어온 같은 사람을 합친다" 는 뜻이다.
+    # delete 뒤 create 로 처리하면 (owner, email) 유니크 제약에 걸려 500 이 났다.
+    # 같은 파일의 contacts_api_add 는 update_or_create 를 쓰고 있었다.
+    UserContact.objects.update_or_create(
+        owner=request.user,
+        email=new_email,
+        defaults={
+            'name': name or None,
+            'company': company or None,
+            'license_no': license_no or None,
+            'memo': memo or None,
+        },
+    )
+    if email_changed:
         UserContact.objects.filter(owner=request.user, email__iexact=old_email).delete()
-        UserContact.objects.create(
-            owner=request.user,
-            email=new_email,
-            name=name or None,
-            company=company or None,
-            license_no=license_no or None,
-            memo=memo or None,
-        )
-    else:
-        # 이메일은 같고 다른 정보만 수정
-        UserContact.objects.filter(owner=request.user, email__iexact=old_email).update(
-            name=name or None,
-            company=company or None,
-            license_no=license_no or None,
-            memo=memo or None,
-        )
 
     return JsonResponse({'success': True, 'updated': updated})
 
@@ -5351,9 +5596,9 @@ def doc_request_submit(request, req_id):
         sub.save()
         saved.append({'document_type': key, 'filename': f.name})
 
-    # 파일이 하나라도 제출되면 수낙 상태로 변경
+    # 파일이 하나라도 오면 '제출 완료'. '수락'(하겠다) 과는 다른 상태다.
     if saved:
-        dr.status = DocumentRequest.STATUS_ACCEPTED
+        dr.status = DocumentRequest.STATUS_SUBMITTED
         dr.save(update_fields=['status', 'updated_datetime'])
 
         # 요청자의 제품(linked_label)에 제출된 파일을 ProductDocument로 자동 등록
@@ -5433,7 +5678,8 @@ def doc_request_cancel(request, req_id):
         dr = DocumentRequest.objects.get(request_id=req_id, requester=request.user)
     except DocumentRequest.DoesNotExist:
         return JsonResponse({'error': '요청을 찾을 수 없습니다.'}, status=404)
-    if dr.status != DocumentRequest.STATUS_PENDING:
+    # 하겠다고만 하고 아직 안 낸 건도 취소할 수 있어야 한다.
+    if dr.status not in DocumentRequest.STATUS_OUTSTANDING:
         return JsonResponse({'error': '이미 처리된 요청입니다.'}, status=400)
     dr.status = DocumentRequest.STATUS_CANCELLED
     dr.save(update_fields=['status', 'updated_datetime'])

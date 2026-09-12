@@ -1,0 +1,24 @@
+{% extends "base_v2.html" %}
+{% block title %}만료된 초대{% endblock %}
+
+{% block content %}
+<style>
+  .invite-wrap  { max-width: 520px; margin: 64px auto; padding: 0 16px; }
+  .invite-card  { border: 1px solid var(--ez-gray-300); border-radius: var(--ez-radius-lg, 12px);
+                  background: #fff; padding: 32px; text-align: center; }
+  .invite-title { font-size: 20px; font-weight: 700; color: var(--ez-gray-900); margin: 0 0 8px; }
+  .invite-sub   { font-size: var(--ez-font-size-md); color: var(--ez-gray-700);
+                  line-height: 1.65; margin: 0 0 24px; }
+</style>
+
+<div class="invite-wrap">
+  <div class="invite-card">
+    <h1 class="invite-title">더 이상 열리지 않는 초대입니다</h1>
+    <p class="invite-sub">
+      공유가 해제되었거나 열람 기한이 지났습니다.<br>
+      계속 보셔야 한다면 보낸 분께 다시 초대를 요청해 주세요.
+    </p>
+    <a class="btn v2-btn" href="{% url 'main:home' %}">처음으로</a>
+  </div>
+</div>
+{% endblock %}

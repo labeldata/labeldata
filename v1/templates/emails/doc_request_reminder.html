@@ -1,0 +1,32 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+{% if to_requester %}
+<p style="font-size:18px;font-weight:700;color:#1e293b;margin:0 0 6px;line-height:1.45;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">요청한 자료가 아직 오지 않았습니다</p>
+<p style="font-size:14px;color:#64748b;margin:0 0 24px;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ recipient_email }} 님에게 보낸 자료 요청의 제출 기한이 {{ when }}.</p>
+{% else %}
+<p style="font-size:18px;font-weight:700;color:#1e293b;margin:0 0 6px;line-height:1.45;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">자료 제출 기한이 {{ when }}</p>
+<p style="font-size:14px;color:#64748b;margin:0 0 24px;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ requester_name }}님이 요청한 자료가 아직 제출되지 않았습니다.</p>
+{% endif %}
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin:0 0 24px;border-collapse:collapse;">
+  <tr><td style="padding:18px 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:14px;">
+      <tr>
+        <td style="padding:4px 0;vertical-align:top;color:#64748b;width:90px;white-space:nowrap;font-weight:500;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">제품명</td>
+        <td style="padding:4px 0;vertical-align:top;color:#1e293b;font-weight:600;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ product_name }}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 0;vertical-align:top;color:#64748b;width:90px;white-space:nowrap;font-weight:500;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">제출 기한</td>
+        <td style="padding:4px 0;vertical-align:top;{% if overdue %}color:#b91c1c;{% else %}color:#1e293b;{% endif %}font-weight:600;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ due_date|date:"Y년 m월 d일" }} — {{ when }}</td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+
+{% if not to_requester %}
+<div style="text-align:center;margin:0 0 30px;">
+  <a href="{{ upload_url }}" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;padding:13px 32px;border-radius:6px;font-size:15px;font-weight:700;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">자료 올리기</a>
+</div>
+<p style="font-size:13px;color:#64748b;margin:0 0 8px;line-height:1.6;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">로그인 없이 이 링크에서 바로 올릴 수 있습니다. 이미 올리셨더라도 기한 안에는 다시 올려 최신본으로 바꿀 수 있습니다.</p>
+{% endif %}
+{% endblock %}
