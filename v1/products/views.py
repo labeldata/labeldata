@@ -30,7 +30,10 @@ import hmac
 
 logger = logging.getLogger('django')
 
-from .models import Product, ProductFolder, ProductAccessLog, ProductMetadata, FoodType, CountryList
+from .models import (
+    CountryList, EXPIRING_SOON_DAYS, FoodType, Product, ProductAccessLog,
+    ProductFolder, ProductMetadata,
+)
 
 # 앱 통합 뷰를 위한 추가 import
 from v1.bom.models import ProductBOM
@@ -224,6 +227,37 @@ def product_explorer(request, folder_id=None):
                 Q(prdlst_report_no__icontains=search_query) |
                 Q(v2_metadata__search_tags__icontains=search_query)
             )
+
+    # ── 홈 대시보드에서 넘어오는 세 갈래 ────────────────────────────────────
+    #
+    # 대시보드의 통계 카드 넷 중 '즐겨찾기'·'승인 완료' 두 장과 '만료 임박'
+    # 칩이 **거르지 않은 전체 목록**으로 왔다. "즐겨찾기 12" 를 눌렀는데
+    # 제품 300개가 그대로 나오면, 그 카드는 숫자만 맞고 링크는 거짓말이다.
+    # 옆의 '내 제품'·'협업 중' 두 장은 filter=MINE/COLLAB 로 제대로 걸러
+    # 왔으므로, 나머지 셋도 같은 방식으로 맞춘다.
+    #
+    # filter(범위)와 달리 이 셋은 서로 겹쳐 쓸 수 있는 조건이라 별도 파라미터다.
+    starred_filter = request.GET.get('starred') == '1'
+    if starred_filter:
+        labels = labels.filter(v2_metadata__starred_yn=True)
+
+    status_filter = (request.GET.get('status') or '').strip().upper()
+    if status_filter in {c[0] for c in ProductMetadata.Status.choices}:
+        labels = labels.filter(v2_metadata__status=status_filter)
+    else:
+        status_filter = ''
+
+    expiring_filter = request.GET.get('expiring') == '1'
+    if expiring_filter:
+        # 대시보드 카드와 **같은 기준**으로 센다 (v1/main/views.py 의 expiring_count).
+        # 여기서 30일을 다시 적으면 두 숫자가 소리 없이 갈라진다.
+        _now = timezone.now()
+        labels = labels.filter(
+            v2_documents__active_yn=True,
+            v2_documents__expiry_date__isnull=False,
+            v2_documents__expiry_date__lte=_now + timezone.timedelta(days=EXPIRING_SOON_DAYS),
+            v2_documents__expiry_date__gte=_now.date(),
+        ).distinct()
 
     # 원료 연결 필터: ingredient_id 파라미터가 있으면 해당 원료와 연결된 제품만 표시
     ingredient_id_filter = request.GET.get('ingredient_id')
@@ -518,6 +552,13 @@ def product_explorer(request, folder_id=None):
         'starred_count': starred_count,
         'ingredient_id_filter': ingredient_id_filter,
         'ingredient_name_filter': ingredient_name_filter,
+        # 대시보드에서 넘어온 조건 — 화면이 "지금 걸려 있다" 를 말하고
+        # 풀 수 있는 단추를 내놓아야 한다
+        'starred_filter': starred_filter,
+        'status_filter': status_filter,
+        'status_filter_label': dict(ProductMetadata.Status.choices).get(status_filter, ''),
+        'expiring_filter': expiring_filter,
+        'expiring_soon_days': EXPIRING_SOON_DAYS,
     }
     return render(request, 'products/product_explorer.html', context)
 

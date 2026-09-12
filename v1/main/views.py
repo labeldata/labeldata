@@ -411,10 +411,12 @@ def home_dashboard(request):
         unread_notif_count = 0
 
     # ── 만료 임박 문서 (30일 이내) ──────────────────────────────
-    from v1.products.models import ProductDocument
+    from v1.products.models import EXPIRING_SOON_DAYS, ProductDocument
     expiring_count = 0
     try:
-        expiry_threshold = now + timezone.timedelta(days=30)
+        # 이 숫자는 제품 조회의 expiring 필터와 **같아야 한다** — 칩을 눌러
+        # 넘어간 목록의 건수가 칩에 적힌 숫자와 달라지면 안 된다.
+        expiry_threshold = now + timezone.timedelta(days=EXPIRING_SOON_DAYS)
         expiring_count = ProductDocument.objects.filter(
             label__user_id=user,
             active_yn=True,

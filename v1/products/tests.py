@@ -8489,3 +8489,92 @@ class BomExcelSkipsInactiveRowsTests(TestCase):
         names = [row[2] for row in wb['BOM'].iter_rows(min_row=2, values_only=True)]
         self.assertIn('밀가루', names)
         self.assertNotIn('옛원료', names)
+
+
+class 대시보드_카드는_그_숫자의_목록으로_간다(TestCase):
+    """
+    홈 대시보드 통계 카드 넷 중 '즐겨찾기'·'승인 완료' 두 장과 '만료 임박'
+    칩이 **거르지 않은 전체 목록**으로 갔다. 숫자는 맞는데 링크가 거짓말을
+    한다 — "즐겨찾기 12" 를 눌렀는데 제품 300개가 그대로 나온다.
+
+    옆의 '내 제품'·'협업 중' 두 장은 filter=MINE/COLLAB 로 제대로 걸러 왔다.
+    """
+
+    def setUp(self):
+        from v1.products.models import ProductMetadata
+
+        self.user = User.objects.create_user(username='dashu', password='x')
+        self.client.force_login(self.user)
+
+        self.starred = MyLabel.objects.create(
+            user_id=self.user, prdlst_nm='별표 제품', delete_YN='N')
+        self.confirmed = MyLabel.objects.create(
+            user_id=self.user, prdlst_nm='승인 제품', delete_YN='N')
+        self.plain = MyLabel.objects.create(
+            user_id=self.user, prdlst_nm='그냥 제품', delete_YN='N')
+
+        ProductMetadata.objects.create(
+            label=self.starred, product_code='D-1', starred_yn=True)
+        ProductMetadata.objects.create(
+            label=self.confirmed, product_code='D-2',
+            status=ProductMetadata.Status.CONFIRMED)
+        ProductMetadata.objects.create(label=self.plain, product_code='D-3')
+
+    def _ids(self, url):
+        from django.utils import timezone as _tz          # noqa: F401
+
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        return {row['label'].my_label_id for row in r.context['products_data']}
+
+    def test_즐겨찾기_카드는_별표한_것만_보여_준다(self):
+        self.assertEqual(self._ids('/products/explorer/?filter=ALL&starred=1'),
+                         {self.starred.my_label_id})
+
+    def test_승인_완료_카드는_그_상태만_보여_준다(self):
+        self.assertEqual(self._ids('/products/explorer/?filter=MINE&status=CONFIRMED'),
+                         {self.confirmed.my_label_id})
+
+    def test_만료_임박_칩은_임박한_문서가_붙은_제품만_보여_준다(self):
+        from datetime import timedelta
+
+        from v1.products.models import (
+            DocumentType, EXPIRING_SOON_DAYS, ProductDocument,
+        )
+
+        from django.utils import timezone
+
+        dt = DocumentType.objects.create(type_name='성적서', type_code='SPEC')
+        today = timezone.now().date()
+        ProductDocument.objects.create(
+            label=self.plain, document_type=dt, active_yn=True,
+            expiry_date=today + timedelta(days=EXPIRING_SOON_DAYS - 1))
+        # 기간 밖 — 걸리면 안 된다
+        ProductDocument.objects.create(
+            label=self.starred, document_type=dt, active_yn=True,
+            expiry_date=today + timedelta(days=EXPIRING_SOON_DAYS + 30))
+        # 이미 지난 것도 '임박' 이 아니다
+        ProductDocument.objects.create(
+            label=self.confirmed, document_type=dt, active_yn=True,
+            expiry_date=today - timedelta(days=1))
+
+        self.assertEqual(self._ids('/products/explorer/?filter=MINE&expiring=1'),
+                         {self.plain.my_label_id})
+
+    def test_조건이_걸리면_화면이_그렇다고_말한다(self):
+        html = self.client.get(
+            '/products/explorer/?filter=ALL&starred=1').content.decode()
+        self.assertIn('필터 해제', html)
+        self.assertIn('즐겨찾기', html)
+
+    def test_이상한_status_는_조용히_무시한다(self):
+        """주소창에 아무거나 넣어도 500 이 아니라 전체 목록이어야 한다."""
+        r = self.client.get('/products/explorer/?status=NOPE')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.context['products_data']), 3)
+
+    def test_대시보드가_내놓는_주소가_실제로_그_주소다(self):
+        """카드 마크업이 정말 걸러진 주소를 들고 있는지 — 링크 자체를 본다."""
+        html = self.client.get('/home/').content.decode()
+        self.assertIn('?filter=ALL&amp;starred=1', html)
+        self.assertIn('?filter=MINE&amp;status=CONFIRMED', html)

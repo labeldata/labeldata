@@ -285,6 +285,41 @@ def news_list(request):
     if conditions:
         qs = qs.filter(news_search.conditions_q(conditions))
 
+    # ── 상세 패널로 열린 뉴스 ────────────────────────────────────────────────
+    #
+    # 재매칭과 읽음 처리를 **목록 집계보다 먼저** 끝낸다. 뒤에서 하면 이번
+    # 화면의 점·배지가 한 박자 늦는다 — 눌러서 열었는데 그 줄의 점이 그대로
+    # 남아 있다가, 다른 줄로 옮겨야 비로소 사라졌다.
+    #
+    # id 는 사용자가 주소창에 무엇이든 넣을 수 있다. `get(pk='abc')` 는
+    # DoesNotExist 가 아니라 ValueError 를 던지므로 500 이 났다.
+    selected_news = None
+    selected_id = request.GET.get('id')
+    if selected_id:
+        try:
+            selected_news = RegulatoryNews.objects.get(pk=int(selected_id))
+        except (RegulatoryNews.DoesNotExist, ValueError, TypeError):
+            selected_news = None
+    if selected_news is not None:
+        # ━━ 온디맨드 재매칭 (제품 + 원료 보관함) ━━
+        try:
+            from v1.regulatory.services.matcher import (
+                find_affected_products,
+                find_matching_ingredients_unlinked,
+                save_ingredient_matches,
+                save_matches,
+            )
+            live_matches = find_affected_products(selected_news, request.user)
+            if live_matches:
+                save_matches(selected_news, live_matches)
+            live_ing_matches = find_matching_ingredients_unlinked(selected_news, request.user)
+            if live_ing_matches:
+                save_ingredient_matches(selected_news, request.user, live_ing_matches)
+        except Exception:
+            logger.exception('[온디맨드 재매칭 오류]')
+        # 열어 본 것은 읽음으로 — 세 종류 모두, 두 길목 모두 같은 함수로
+        _mark_news_read(request.user, selected_news)
+
     # 목록 렌더·배지·건수에 쓰는 매칭 정보를 한 번에 모아 온다 (행별 서브쿼리 제거).
     # 미확인·조치대상·미조치 집계도 여기서 함께 나오므로, 같은 행을 다시 읽지 않는다.
     match_ctx = selectors.user_match_context(request.user)
@@ -464,13 +499,19 @@ def news_list(request):
         else:
             news_item.saol_location = ''
 
-    # 미조치 건수 — **지금 탭 범위**로 센다.
-    # 같은 줄의 전체·내 알림·일반이 모두 탭 범위 숫자라, 여기만 두 탭을 합쳐
-    # 세면 눌렀을 때 그만큼 안 나온다("10건이라는데 목록엔 없다").
+    # 미조치 건수 — **지금 탭 범위, 지금 조건**으로 센다.
+    #
+    # 같은 줄에 전체·내 알림·일반·미조치 네 숫자가 나란히 있다. 앞의 셋은
+    # 검색·기간·분야 조건 안에서 세는데 미조치만 `RegulatoryNews.objects` 로
+    # 새로 시작해 조건을 통째로 무시했다. 네 숫자 중 하나만 다른 질문에
+    # 답하고 있었던 셈이다 — "미조치 3건" 을 눌렀는데 목록이 비었다.
+    #
+    # count_qs 는 조건이 다 걸린 뒤, 탭으로 가르기 전의 스냅샷이다.
+    # 이웃 셋(tab_admin_total·tab_insp_total·mine_total)이 바로 그것을 쓴다.
     _no_action_ids = match_ctx['no_action']
     if _no_action_ids:
         _tab_admin_q = Q(api_source__in=ADMIN_API_SOURCES)
-        _scoped = RegulatoryNews.objects.filter(id__in=_no_action_ids)
+        _scoped = count_qs.filter(id__in=_no_action_ids)
         # active_tab 은 아직 정해지기 전이다(수거검사 상세 선택 여부를 봐야 한다).
         # 여기서 필요한 것은 부적합/행정처분 갈래뿐이라 tab 을 그대로 쓴다.
         if tab == TAB_ADMIN:
@@ -623,76 +664,46 @@ def news_list(request):
             for r in recent_insp_page_obj
         ]
 
-    # 상세 패널: URL 파라미터로 선택된 뉴스
-    selected_id = request.GET.get('id')
-    selected_news = None
+    # 상세 패널에 그릴 것 (선택·재매칭·읽음 처리는 위에서 이미 끝났다)
     selected_matches = []
     selected_ing_matches = []   # NewsIngredientMatch 인스턴스 목록
     selected_kw_logs = []       # NewsKeywordMatch (내 알림 키워드 매칭)
-    if selected_id:
-        try:
-            selected_news = RegulatoryNews.objects.get(pk=selected_id)
-            # 알림이 '왜' 왔는지를 상세 패널의 표준 항목으로 보여 준다.
-            # 행정처분·지자체처분은 업체명 하나로 걸리고(원료 키워드를 보지 않는다),
-            # 나머지 부적합은 뉴스 쪽 키워드 ↔ 내 원료명의 짝으로 걸린다.
-            # 알림을 끄는 단추의 문구와 대상(scope)이 여기서 갈린다.
-            selected_news.is_admin_source = (
-                selected_news.api_source in ADMIN_API_SOURCES
+    if selected_news is not None:
+        # 알림이 '왜' 왔는지를 상세 패널의 표준 항목으로 보여 준다.
+        # 행정처분·지자체처분은 업체명 하나로 걸리고(원료 키워드를 보지 않는다),
+        # 나머지 부적합은 뉴스 쪽 키워드 ↔ 내 원료명의 짝으로 걸린다.
+        # 알림을 끄는 단추의 문구와 대상(scope)이 여기서 갈린다.
+        selected_news.is_admin_source = (
+            selected_news.api_source in ADMIN_API_SOURCES
+        )
+        selected_matches = (
+            NewsProductMatch.objects
+            .filter(news=selected_news, product__user_id=request.user,
+                    false_positive_yn=False)
+            .select_related('product', 'matched_bom')
+            .order_by('-risk_score', '-match_score')
+            .prefetch_related('actions')
+        )
+        # 원료 보관함 단독 매칭 (BOM 미연결)
+        selected_ing_matches = (
+            NewsIngredientMatch.objects
+            .filter(news=selected_news, user=request.user, dismissed_yn=False)
+            .select_related('ingredient')
+            .prefetch_related(
+                'ingredient__bom_usages__parent_label',
+                'actions',
             )
-
-            # ━━ 온디맨드 재매칭 (제품 + 원료 보관함) ━━
-            try:
-                from v1.regulatory.services.matcher import (
-                    find_affected_products,
-                    find_matching_ingredients_unlinked,
-                    save_ingredient_matches,
-                    save_matches,
-                )
-                live_matches = find_affected_products(selected_news, request.user)
-                if live_matches:
-                    save_matches(selected_news, live_matches)
-                live_ing_matches = find_matching_ingredients_unlinked(selected_news, request.user)
-                if live_ing_matches:
-                    save_ingredient_matches(selected_news, request.user, live_ing_matches)
-            except Exception:
-                logger.exception('[온디맨드 재매칭 오류]')
-
-            selected_matches = (
-                NewsProductMatch.objects
-                .filter(news=selected_news, product__user_id=request.user,
-                        false_positive_yn=False)
-                .select_related('product', 'matched_bom')
-                .order_by('-risk_score', '-match_score')
-                .prefetch_related('actions')
-            )
-            # 원료 보관함 단독 매칭 (BOM 미연결)
-            selected_ing_matches = (
-                NewsIngredientMatch.objects
-                .filter(news=selected_news, user=request.user, dismissed_yn=False)
-                .select_related('ingredient')
-                .prefetch_related(
-                    'ingredient__bom_usages__parent_label',
-                    'actions',
-                )
-                .order_by('-risk_score', '-match_score')
-            )
-            # 키워드 매칭 — 사용자에 붙는 표에서 읽는다.
-            # 예전에는 기기별 푸시 로그를 봤기 때문에, 앱을 깐 적 없는 사용자
-            # 에게는 이 구역이 한 번도 나온 적이 없다.
-            selected_kw_logs = list(
-                NewsKeywordMatch.objects
-                .filter(news=selected_news, user=request.user, dismissed_yn=False)
-                .select_related('rule')
-                .order_by('category', 'matched_keyword')
-            )
-            # 열어 본 것은 읽음으로 — 제품·원료 매칭과 같은 결
-            _unread_kw = [m.pk for m in selected_kw_logs if not m.read_yn]
-            if _unread_kw:
-                NewsKeywordMatch.objects.filter(pk__in=_unread_kw).update(
-                    read_yn=True, read_at=timezone.now())
-                cache.delete(f'regulatory_alert_count_{request.user.id}')
-        except RegulatoryNews.DoesNotExist:
-            pass
+            .order_by('-risk_score', '-match_score')
+        )
+        # 키워드 매칭 — 사용자에 붙는 표에서 읽는다.
+        # 예전에는 기기별 푸시 로그를 봤기 때문에, 앱을 깐 적 없는 사용자
+        # 에게는 이 구역이 한 번도 나온 적이 없다.
+        selected_kw_logs = list(
+            NewsKeywordMatch.objects
+            .filter(news=selected_news, user=request.user, dismissed_yn=False)
+            .select_related('rule')
+            .order_by('category', 'matched_keyword')
+        )
 
     # 사용자의 AlertRule 목록 — user 기반으로 직접 조회
     #
@@ -882,6 +893,37 @@ def news_list(request):
 # 상세 뷰 (독립 URL)
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _mark_news_read(user, news):
+    """
+    이 뉴스에 걸린 **내** 매칭을 읽음으로 남긴다.
+
+    상세를 보는 길이 둘이다 — 목록의 우측 패널(`/regulatory/?id=N`)과 독립
+    페이지(`/regulatory/N/`). 예전에는 앞의 것만, 그것도 키워드 매칭만
+    읽음으로 바꿨다. 뒤의 것은 아무것도 안 했다. 그래서 어느 길로 열었느냐에
+    따라 사이드바 점이 사라지기도 하고 남기도 했다.
+
+    감춰 둔 것(false_positive_yn·dismissed_yn)은 건드리지 않는다 — 미확인
+    모수에서 이미 빠져 있고, 읽음을 남기면 "본 적 없는 것을 봤다" 가 된다.
+
+    Returns: 읽음으로 바꾼 행 수
+    """
+    now = timezone.now()
+    n = NewsProductMatch.objects.filter(
+        news=news, product__user_id=user,
+        false_positive_yn=False, read_yn=False,
+    ).update(read_yn=True, read_at=now)
+    # NewsIngredientMatch 에는 read_at 이 없다 — read_yn 만 있다
+    n += NewsIngredientMatch.objects.filter(
+        news=news, user=user, dismissed_yn=False, read_yn=False,
+    ).update(read_yn=True)
+    n += NewsKeywordMatch.objects.filter(
+        news=news, user=user, dismissed_yn=False, read_yn=False,
+    ).update(read_yn=True, read_at=now)
+    if n:
+        cache.delete(f'regulatory_alert_count_{user.id}')
+    return n
+
+
 @login_required
 def news_detail(request, pk):
     """뉴스 상세 + 내 제품 매칭 결과 (독립 페이지)"""
@@ -909,6 +951,7 @@ def news_detail(request, pk):
         .order_by('category', 'matched_keyword')
     )
     news.is_admin_source = news.api_source in ADMIN_API_SOURCES
+    _mark_news_read(request.user, news)
     log_activity(request, 'regulatory', 'regulatory_detail', news.pk)
     return render(request, 'regulatory/news_detail.html', {
         'news':        news,
@@ -921,49 +964,6 @@ def news_detail(request, pk):
 # ─────────────────────────────────────────────────────────────────────────────
 # API 엔드포인트
 # ─────────────────────────────────────────────────────────────────────────────
-
-@login_required
-def unread_count_api(request):
-    """읽지 않은 매칭 알림 수 반환 (JSON) — 사이드바 배지와 동일 기준"""
-    return JsonResponse({'unread': selectors.unread_news_count(request.user)})
-
-
-@login_required
-@require_POST
-def mark_as_read(request):
-    """
-    읽음 처리 (JSON POST)
-    Body: {"news_id": 123}  또는  {} (전체 읽음)
-    """
-    try:
-        body = json.loads(request.body)
-        news_id = body.get('news_id')
-    except (ValueError, AttributeError):
-        news_id = None
-
-    qs = NewsProductMatch.objects.filter(product__user_id=request.user, read_yn=False)
-    if news_id:
-        qs = qs.filter(news_id=news_id)
-    updated = qs.update(read_yn=True, read_at=timezone.now())
-
-    # 원료 보관함 매칭도 읽음 처리
-    ing_qs = NewsIngredientMatch.objects.filter(user=request.user, read_yn=False, dismissed_yn=False)
-    if news_id:
-        ing_qs = ing_qs.filter(news_id=news_id)
-    ing_qs.update(read_yn=True)
-
-    # 키워드 매칭도 같은 기준으로 (배지의 모수에 함께 들어간다)
-    kw_qs = NewsKeywordMatch.objects.filter(user=request.user, read_yn=False, dismissed_yn=False)
-    if news_id:
-        kw_qs = kw_qs.filter(news_id=news_id)
-    kw_qs.update(read_yn=True, read_at=timezone.now())
-
-    # 읽음 처리 후 남은 미확인 뉴스 건수 (사이드바 배지와 동일 기준)
-    cache.delete(f'regulatory_alert_count_{request.user.id}')
-    unread = selectors.unread_news_count(request.user)
-
-    return JsonResponse({'success': True, 'updated': updated, 'unread': unread})
-
 
 @login_required
 @require_POST
@@ -1002,10 +1002,18 @@ def save_match_action(request):
             action_type=action_type,
             memo=memo,
         )
+        # 조치를 남겼다는 것은 본 것이다. 예전에는 read_yn 을 안 건드려,
+        # 화면에서 점이 사라진 것처럼 보이다가 새로고침하면 되살아났다.
+        _fields = []
+        if not ing_match.read_yn:
+            ing_match.read_yn = True
+            _fields.append('read_yn')
         # "해당 없음" 선택 시 dismissed 플래그 설정
         if action_type == RegulatoryMatchAction.ACTION_DISMISSED:
             ing_match.dismissed_yn = True
-            ing_match.save(update_fields=['dismissed_yn'])
+            _fields.append('dismissed_yn')
+        if _fields:
+            ing_match.save(update_fields=_fields)
     else:
         try:
             prod_match = NewsProductMatch.objects.get(pk=match_id, product__user_id=request.user)
@@ -1017,10 +1025,17 @@ def save_match_action(request):
             action_type=action_type,
             memo=memo,
         )
+        _fields = []
+        if not prod_match.read_yn:
+            prod_match.read_yn = True
+            prod_match.read_at = timezone.now()
+            _fields += ['read_yn', 'read_at']
         if action_type == RegulatoryMatchAction.ACTION_DISMISSED:
             prod_match.false_positive_yn = True
             prod_match.false_positive_at = timezone.now()
-            prod_match.save(update_fields=['false_positive_yn', 'false_positive_at'])
+            _fields += ['false_positive_yn', 'false_positive_at']
+        if _fields:
+            prod_match.save(update_fields=_fields)
 
     cache.delete(f'regulatory_alert_count_{request.user.id}')
     log_activity(request, 'regulatory', 'regulatory_action')
@@ -1256,23 +1271,49 @@ def inspection_mark_all_read(request):
 @require_POST
 def inspection_dismiss(request):
     """
-    수거검사 매칭 1건 삭제 (오매칭·해당없음 처리)
-    Body: {"insp_match_id": 123}
+    수거검사 매칭 삭제 (오매칭·해당없음 처리)
+
+    Body: {"insp_match_id": 123}          — 1건
+       또는 {"insp_match_ids": [1, 2, 3]}  — 여러 건
+
+    여러 건을 **한 요청으로** 받는다. 예전에는 화면이 N개를 고르면 fetch 를
+    N번 날리고 `Promise.all` 로 묶었다. 그중 몇이 실패해도 성공한 것만 조용히
+    지우고 새로고침해서, 사용자는 전부 지워진 줄 알았다 — 남은 것은 다음에
+    들어와서야 발견한다.
+
+    Returns: {'success', 'deleted', 'missing': [...], 'remaining_unread'}
+      missing 은 내 것이 아니거나 이미 없어진 id 다. 화면이 그 수를 말한다.
     """
     try:
         body = json.loads(request.body)
-        match_id = int(body.get('insp_match_id', 0))
+        raw = body.get('insp_match_ids')
+        if raw is None:
+            raw = [body.get('insp_match_id', 0)]
+        if not isinstance(raw, (list, tuple)):
+            raise ValueError('insp_match_ids must be a list')
+        ids = [int(x) for x in raw]
     except (ValueError, AttributeError, TypeError):
         return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
 
-    try:
-        match = InspectionMatch.objects.get(pk=match_id, user=request.user)
-        match.delete()
-    except InspectionMatch.DoesNotExist:
-        return JsonResponse({'success': False, 'error': '항목을 찾을 수 없습니다.'}, status=404)
+    ids = [i for i in ids if i > 0]
+    if not ids:
+        return JsonResponse({'success': False, 'error': '삭제할 항목이 없습니다.'}, status=400)
+
+    mine = list(InspectionMatch.objects
+                .filter(pk__in=ids, user=request.user)
+                .values_list('pk', flat=True))
+    missing = [i for i in ids if i not in set(mine)]
+    deleted = 0
+    if mine:
+        deleted, _ = InspectionMatch.objects.filter(pk__in=mine, user=request.user).delete()
 
     remaining = InspectionMatch.objects.filter(user=request.user, read_yn=False).count()
-    return JsonResponse({'success': True, 'remaining_unread': remaining})
+    if not mine:
+        return JsonResponse({'success': False, 'error': '항목을 찾을 수 없습니다.',
+                             'deleted': 0, 'missing': missing,
+                             'remaining_unread': remaining}, status=404)
+    return JsonResponse({'success': True, 'deleted': len(mine), 'missing': missing,
+                         'remaining_unread': remaining})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1444,7 +1485,9 @@ def alert_rules_api(request):
     Body(POST): {"category": "INGREDIENT", "keyword": "...", "match_type": "CONTAINS"}
     """
     from v1.mobile.models import AlertRule
-    from v1.mobile.services.push_service import backfill_alerts_for_rule, send_immediate_for_rule
+    from v1.mobile.services.push_service import (
+        NEWS_BACKFILL_DAYS, backfill_alerts_for_rule, send_immediate_for_rule,
+    )
 
     if request.method == 'GET':
         rules = (
@@ -1511,12 +1554,18 @@ def alert_rules_api(request):
     if not created:
         return JsonResponse({'success': False, 'error': '이미 등록된 키워드입니다.'}, status=400)
 
+    # 소급이 터져도 키워드 등록 자체는 살린다 — 앞으로 들어올 수집분은 정상으로
+    # 걸린다. 다만 **조용히 넘기지는 않는다.** 예전에는 여기서 예외를 삼켜
+    # created=0 이 되었고, 화면은 그것을 "일치하는 정보가 없습니다" 로 바꿔
+    # 보여 줬다. 실패와 0건은 사람에게 전혀 다른 말이다.
     backfill_result = {'created': 0, 'previews': []}
+    backfill_failed = False
     try:
         backfill_result = backfill_alerts_for_rule(rule)
         send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
     except Exception:
-        pass
+        backfill_failed = True
+        logger.exception('[키워드 소급] rule=%s 실패', rule.pk)
 
     return JsonResponse({
         'success': True,
@@ -1532,6 +1581,11 @@ def alert_rules_api(request):
         },
         'matched_count': backfill_result.get('created', 0),
         'previews': backfill_result.get('previews', []),
+        # 소급은 최근 것만 본다. 화면이 그 기간을 말해 줘야 사람이 "0건" 을
+        # "등록이 안 됐다" 로 읽지 않는다.
+        'window_days': backfill_result.get('window_days', NEWS_BACKFILL_DAYS),
+        'capped': backfill_result.get('capped', False),
+        'backfill_failed': backfill_failed,
     }, status=201)
 
 

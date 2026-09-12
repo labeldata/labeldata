@@ -335,6 +335,14 @@ class DocumentType(models.Model):
         return any(keyword in filename_lower for keyword in self.get_keywords_list())
 
 
+# 문서 만료 "임박" 으로 보는 기간.
+#
+# 홈 대시보드의 '만료 임박' 칩과 제품 조회의 expiring 필터, 슬롯 상태
+# (SlotStatus.EXPIRING) 가 모두 이 숫자를 말한다. 각자 30 을 적어 두면
+# 한쪽만 고쳐졌을 때 "칩은 5건인데 목록은 3건" 이 된다.
+EXPIRING_SOON_DAYS = 30
+
+
 class DocumentSlot(models.Model):
     """
     제품별 필수 문서 슬롯 (Smart Slot)
@@ -383,7 +391,7 @@ class DocumentSlot(models.Model):
             
             if expiry_date < today:
                 self.status = self.SlotStatus.EXPIRED
-            elif expiry_date <= today + timedelta(days=30):
+            elif expiry_date <= today + timedelta(days=EXPIRING_SOON_DAYS):
                 self.status = self.SlotStatus.EXPIRING
             else:
                 self.status = self.SlotStatus.VALID

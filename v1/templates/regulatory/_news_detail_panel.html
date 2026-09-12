@@ -513,67 +513,103 @@
 <script>
 (function(){
 function getCsrf(){return document.cookie.split('; ').find(r=>r.startsWith('csrftoken='))?.split('=')[1]||'';}
+
+/*
+ * 조치 요청 다섯 개가 모두 `if(d.success){…}` 하나뿐이었다. else 도 catch 도
+ * 없어서, 서버가 403·404·400 을 주거나 네트워크가 끊겨도 화면에 아무 일도
+ * 일어나지 않았다. 사용자는 클릭이 안 먹은 줄 알고 몇 번 더 누른다 —
+ * 그때마다 요청은 실제로 나간다.
+ *
+ * 다섯 곳이 같은 실수를 했으므로 보내는 자리를 하나로 모은다.
+ * onOk 는 성공했을 때만 부른다. 나머지는 여기서 말한다.
+ */
+function _say(msg,kind){
+  /* 이 조각의 두 부모(news_list·news_detail)가 모두 base_v2 를 타므로
+     showSnackbar 는 항상 있다. alert 폴백을 두면 안 된다 —
+     OneWayToTellTheUserTests 가 그것을 지킨다. */
+  if(typeof showSnackbar==='function') showSnackbar(msg,kind||'error');
+}
+function _post(url,payload,onOk){
+  return fetch(url,{method:'POST',
+                    headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},
+                    body:JSON.stringify(payload||{})})
+    .then(function(r){
+      return r.json().catch(function(){ return {}; })
+        .then(function(d){ return {ok:r.ok, status:r.status, data:d}; });
+    })
+    .then(function(res){
+      var d=res.data||{};
+      if(res.ok && d.success){ onOk(d); return; }
+      if(res.status===403){ _say(d.error||'권한이 없습니다.'); return; }
+      if(res.status===404){ _say(d.error||'대상을 찾을 수 없습니다. 새로고침해 주세요.'); return; }
+      _say(d.error||'처리하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    })
+    .catch(function(){ _say('서버에 연결할 수 없습니다.'); });
+}
+
 function markAllResolved(id){
-  fetch("{% url 'regulatory:mark_all_resolved' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({news_id:id})})
-  .then(r=>r.json()).then(d=>{
-    if(d.success){
-      if(typeof showSnackbar==='function')showSnackbar('이 알림의 모든 매칭이 조치 완료로 처리됐습니다.','success');
-      _updateBadge(d.unread);
-      _syncListBadge('resolved');
-      document.querySelectorAll('.rd-act-btn').forEach(function(b){
-        b.classList.remove('active-monitoring');
-        if(b.dataset.action==='resolved') b.classList.add('active-resolved');
-      });
-    }
+  _post("{% url 'regulatory:mark_all_resolved' %}",{news_id:id},function(d){
+    _say('이 알림의 모든 매칭이 조치 완료로 처리됐습니다.','success');
+    _updateBadge(d.unread);
+    _syncListBadge('resolved');
+    document.querySelectorAll('.rd-act-btn').forEach(function(b){
+      b.classList.remove('active-monitoring');
+      if(b.dataset.action==='resolved') b.classList.add('active-resolved');
+    });
   });
 }
 window.markAllResolved=markAllResolved;
 function markAllNewsResolved(){
   if(!confirm('미조치 상태인 전체 알림을 모두 조치 완료로 처리하고, 수거검사도 함께 확인 처리합니다.\n이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?')) return;
-  fetch("{% url 'regulatory:mark_all_news_resolved' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({})})
-  .then(r=>r.json()).then(d=>{
-    if(d.success){
-      if(typeof showSnackbar==='function')showSnackbar('전체 '+d.created+'건의 매칭이 조치 완료로 처리됐습니다.','success');
-      _updateBadge(0);
-      setTimeout(()=>window.location.reload(),300);  // 목록 전체가 바뀌므로 새로고침
-    }
+  _post("{% url 'regulatory:mark_all_news_resolved' %}",{},function(d){
+    _say('전체 '+d.created+'건의 매칭이 조치 완료로 처리됐습니다.','success');
+    _updateBadge(0);
+    setTimeout(()=>window.location.reload(),300);  // 목록 전체가 바뀌므로 새로고침
   });
 }
 window.markAllNewsResolved=markAllNewsResolved;
 function markFalsePositive(matchId){
   if(!confirm('이 매칭을 오탐지로 신고하시겠습니까?')) return;
-  fetch("{% url 'regulatory:mark_false_positive' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_id:matchId})})
-  .then(r=>r.json()).then(d=>{if(d.success){const c=document.getElementById('match-'+matchId);if(c){c.style.opacity='0.3';setTimeout(()=>c.remove(),500);}if(typeof showSnackbar==='function')showSnackbar('오탐지로 신고됐습니다.','info');_updateBadge(d.unread);}});
+  _post("{% url 'regulatory:mark_false_positive' %}",{match_id:matchId},function(d){
+    const c=document.getElementById('match-'+matchId);
+    if(c){c.style.opacity='0.3';setTimeout(()=>c.remove(),500);}
+    _say('오탐지로 신고됐습니다.','info');
+    _updateBadge(d.unread);
+  });
 }
 window.markFalsePositive=markFalsePositive;
 function toggleMemo(id){const el=document.getElementById(id);if(el)el.classList.toggle('show');}
 window.toggleMemo=toggleMemo;
 function doAction(matchType,matchId,actionType,btn){
-  fetch("{% url 'regulatory:save_action' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_type:matchType,match_id:matchId,action_type:actionType,memo:''})})
-  .then(r=>r.json()).then(d=>{
-    if(d.success){
-      if(actionType==='dismissed'){const c=matchType==='product'?document.getElementById('match-'+matchId):document.getElementById('ing-match-'+matchId);if(c){c.style.opacity='0.3';setTimeout(()=>c.remove(),500);}if(typeof showSnackbar==='function')showSnackbar('해당 없음으로 처리됐습니다.','info');}
-      else{
-        // 예전에는 0.7초 대기 후 페이지를 통째로 다시 불러와 반응이 느리게 느껴졌다.
-        // 바뀌는 건 버튼 상태와 좌측 목록의 상태 배지뿐이라 그 자리에서 갱신한다.
-        if(btn){
-          var group=btn.parentElement;
-          if(group) group.querySelectorAll('button').forEach(function(b){
-            b.classList.remove('active-monitoring','active-resolved');
-          });
-          btn.classList.add('active-'+actionType);
-        }
-        _syncListBadge(actionType);
-        if(typeof showSnackbar==='function')showSnackbar('['+d.action_label+'] 기록됐습니다.','success');
-      }
+  _post("{% url 'regulatory:save_action' %}",
+        {match_type:matchType,match_id:matchId,action_type:actionType,memo:''},
+        function(d){
+    if(actionType==='dismissed'){
+      const c=matchType==='product'?document.getElementById('match-'+matchId)
+                                   :document.getElementById('ing-match-'+matchId);
+      if(c){c.style.opacity='0.3';setTimeout(()=>c.remove(),500);}
+      _say('해당 없음으로 처리됐습니다.','info');
+      return;
     }
+    // 예전에는 0.7초 대기 후 페이지를 통째로 다시 불러와 반응이 느리게 느껴졌다.
+    // 바뀌는 건 버튼 상태와 좌측 목록의 상태 배지뿐이라 그 자리에서 갱신한다.
+    if(btn){
+      var group=btn.parentElement;
+      if(group) group.querySelectorAll('button').forEach(function(b){
+        b.classList.remove('active-monitoring','active-resolved');
+      });
+      btn.classList.add('active-'+actionType);
+    }
+    _syncListBadge(actionType);
+    _say('['+d.action_label+'] 기록됐습니다.','success');
   });
 }
 window.doAction=doAction;
 function saveActionMemo(matchType,matchId,areaId){
   const area=document.getElementById(areaId);const ta=area?area.querySelector('textarea'):null;const memo=ta?ta.value.trim():'';
-  fetch("{% url 'regulatory:save_action' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_type:matchType,match_id:matchId,action_type:'memo',memo:memo})})
-  .then(r=>r.json()).then(d=>{if(d.success){if(typeof showSnackbar==='function')showSnackbar('메모가 저장됐습니다.','success');}});
+  _post("{% url 'regulatory:save_action' %}",
+        {match_type:matchType,match_id:matchId,action_type:'memo',memo:memo},
+        function(){ _say('메모가 저장됐습니다.','success'); });
 }
 window.saveActionMemo=saveActionMemo;
 /**

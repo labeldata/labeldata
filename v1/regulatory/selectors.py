@@ -3,7 +3,7 @@
 
 사이드바 배지 / 홈 대시보드 / 목록 탭 배지 / 목록 헤더 / 카운트 API 가
 모두 같은 규칙으로 같은 숫자를 보여주도록 집계 로직을 이 모듈에 모은다.
-(이전에는 context_processors, views.news_list, unread_count_api, mark_as_read 에
+(이전에는 context_processors, views.news_list, 각종 API 뷰에
  같은 쿼리가 조금씩 다르게 복제되어 있어 화면마다 숫자가 어긋났다.)
 
 집계 규칙

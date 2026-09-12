@@ -256,7 +256,13 @@
           </a>
           {% if no_action_count or no_action_on %}
           <a class="rs-scope-item rs-scope-item--warn{% if no_action_on %} rs-scope-item--on{% endif %}"
-             href="{% if no_action_on %}?{{ scope_qs_all }}{% else %}?{{ no_action_qs }}{% endif %}"
+             {% comment %}
+               no_action_qs 는 켜고 끄기를 **양방향으로** 만든다
+               (_toggle_condition_qs). 예전에는 끌 때 scope_qs_all 을 썼는데
+               그것은 범위만 바꾸는 주소라 f/v 조건을 그대로 들고 갔다 —
+               눌러도 미조치가 안 꺼졌다.
+             {% endcomment %}
+             href="?{{ no_action_qs }}"
              title="{% if no_action_on %}미조치 조건을 끕니다{% else %}아직 조치하지 않은 건만 봅니다{% endif %}">
             미조치 <b>{{ no_action_count|intcomma }}</b>
           </a>
@@ -732,27 +738,40 @@ function inspDismissSelected() {
   if (checked.length === 0) { showSnackbar('삭제할 항목을 선택하세요.', 'warning'); return; }
   if (!confirm(checked.length + '개 수거검사 항목을 내 목록에서 삭제합니다.\n실제 수거검사 데이터는 삭제되지 않습니다.')) return;
 
+  /* 한 요청으로 보낸다.
+     예전에는 고른 수만큼 fetch 를 날리고 Promise.all 로 묶었다. 그중 몇이
+     실패해도 성공한 것만 조용히 지우고 새로고침해서, 사용자는 전부 지워진
+     줄 알았다 — 남은 것은 다음에 들어와서야 발견한다. */
   var ids = Array.from(checked).map(function(cb) { return parseInt(cb.dataset.inspId, 10); });
-  var promises = ids.map(function(id) {
-    return fetch("{% url 'regulatory:inspection_dismiss' %}", {
-      method: 'POST',
-      headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
-      body: JSON.stringify({insp_match_id: id}),
-    }).then(function(r) { return r.json(); });
-  });
 
-  Promise.all(promises).then(function(results) {
-    var successIds = ids.filter(function(id, i) { return results[i] && results[i].success; });
-    successIds.forEach(function(id) {
-      var item = document.querySelector('.rs-item--insp[data-insp-id="' + id + '"]');
-      if (item) item.remove();
-    });
-    toggleInspSelectMode();   // 선택 모드 종료
-    // 탭을 insp(수거검사)로 유지하며 새로고침
+  function goBackToInspTab() {
     var url = new URL(window.location.href);
     url.searchParams.delete('insp_id');
     url.searchParams.set('tab', 'insp');
     window.location.href = url.toString();
+  }
+
+  fetch("{% url 'regulatory:inspection_dismiss' %}", {
+    method: 'POST',
+    headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+    body: JSON.stringify({insp_match_ids: ids}),
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; });
+  }).then(function(res) {
+    var missing = (res && res.missing) || [];
+    if (!res || !res.success) {
+      showSnackbar((res && res.error) || '삭제하지 못했습니다.', 'error');
+      return;
+    }
+    if (missing.length) {
+      /* 새로고침이 스낵바를 쓸어 가므로, 남은 것이 있으면 먼저 말하고
+         사람이 읽을 시간을 준 뒤에 넘어간다. */
+      showSnackbar(res.deleted + '건을 지웠습니다. ' + missing.length
+                   + '건은 이미 없거나 내 항목이 아니라 남았습니다.', 'warning');
+      setTimeout(goBackToInspTab, 2500);
+      return;
+    }
+    goBackToInspTab();
   }).catch(function() { showSnackbar('삭제 중 오류가 발생했습니다.', 'error'); });
 }
 window.inspDismissSelected = inspDismissSelected;
@@ -839,7 +858,7 @@ function saveKeyword() {
 
     // 기존 데이터 매칭 결과 표시
     var matchedCount = data.matched_count || 0;
-    showBackfillResult(matchedCount, data.previews || [], r.keyword);
+    showBackfillResult(matchedCount, data.previews || [], r.keyword, data);
 
     // 매칭 건수가 있으면 모달 닫힌 후 페이지 새로고침 (kw-matched 항목 반영)
     if (matchedCount > 0) {
@@ -917,15 +936,32 @@ function _updateMuteCount(delta) {
   });
 }
 
-function showBackfillResult(count, previews, keyword) {
+function showBackfillResult(count, previews, keyword, meta) {
   var el = document.getElementById('kwBackfillResult');
   if (!el) return;
+
+  meta = meta || {};
+  var days = meta.window_days || 90;
+
+  if (meta.backfill_failed) {
+    /* 실패와 0건은 다른 말이다. 예전에는 서버가 예외를 삼켜 둘이 같아 보였다. */
+    el.innerHTML =
+      '<div class="kw-backfill kw-backfill--none">' +
+        '<i class="bi bi-exclamation-triangle me-1 text-warning"></i>' +
+        '<strong>' + escHtml(keyword) + '</strong> 키워드는 등록됐습니다. ' +
+        '다만 지난 기록을 거슬러 맞춰 보는 중 오류가 나 결과를 보여드리지 못합니다 — ' +
+        '앞으로 수집되는 건은 정상으로 걸립니다.' +
+      '</div>';
+    el.style.display = 'block';
+    return;
+  }
 
   if (count === 0) {
     el.innerHTML =
       '<div class="kw-backfill kw-backfill--none">' +
         '<i class="bi bi-check-circle me-1 text-success"></i>' +
-        '기존 부적합·처분 데이터에서 <strong>' + escHtml(keyword) + '</strong> 키워드와 일치하는 정보가 없습니다.' +
+        '최근 ' + days + '일 부적합·처분 데이터에서 <strong>' + escHtml(keyword) + '</strong> 키워드와 ' +
+        '일치하는 정보가 없습니다. 앞으로 수집되는 건은 걸리면 알려드립니다.' +
       '</div>';
   } else {
     var previewHtml = '';
@@ -943,13 +979,16 @@ function showBackfillResult(count, previews, keyword) {
       '</ul>' +
       (count > previews.length
         ? '<div class="kw-backfill-more">외 ' + (count - previews.length) + '건 더 있습니다 — 알림 탭에서 확인하세요</div>'
+        : '') +
+      (meta.capped
+        ? '<div class="kw-backfill-more">한 번에 ' + count + '건까지만 알림으로 만듭니다 — 나머지는 목록에서 검색해 보세요</div>'
         : '');
     }
     el.innerHTML =
       '<div class="kw-backfill kw-backfill--found">' +
         '<div class="kw-bf-title">' +
           '<i class="bi bi-bell-fill text-warning me-1"></i>' +
-          '기존 데이터에서 <strong>' + count + '건</strong> 매칭됨 — 알림에 추가되었습니다' +
+          '최근 ' + days + '일 데이터에서 <strong>' + count + '건</strong> 매칭됨 — 알림에 추가되었습니다' +
         '</div>' +
         previewHtml +
       '</div>';

@@ -87,6 +87,27 @@
         {% endif %}
     </div>
 
+    {% comment %}
+      대시보드에서 넘어온 조건 배너.
+      '즐겨찾기 12' 를 눌러 왔는데 화면이 아무 말도 안 하면, 사용자는 제품이
+      12개뿐인 줄 안다. 지금 무엇이 걸려 있고 어떻게 푸는지를 말해야 한다.
+      바로 아래 원료 필터 배너와 같은 모양으로 둔다.
+    {% endcomment %}
+    {% if starred_filter or status_filter or expiring_filter %}
+    <div class="d-flex align-items-center px-4 py-2 gap-2" style="background:#e8f0fe;border-bottom:1px solid #aecbfa;font-size:0.875rem;">
+        <i class="bi bi-funnel-fill" style="color:var(--ez-primary);"></i>
+        <span>
+            {% if starred_filter %}<strong>즐겨찾기</strong>한 제품만{% endif %}
+            {% if status_filter %}<strong>{{ status_filter_label }}</strong> 상태인 제품만{% endif %}
+            {% if expiring_filter %}문서가 <strong>{{ expiring_soon_days }}일 안에 만료</strong>되는 제품만{% endif %}
+            표시 중입니다.
+        </span>
+        <a href="?filter={{ filter_type|default:'ALL' }}" class="ms-auto btn v2-btn-sm btn-outline-secondary">
+            <i class="bi bi-x"></i> 필터 해제
+        </a>
+    </div>
+    {% endif %}
+
     <!-- 원료 필터 배너 -->
     {% if ingredient_id_filter %}
     <div class="d-flex align-items-center px-4 py-2 gap-2" style="background:#fff3cd;border-bottom:1px solid #ffc107;font-size:0.875rem;">

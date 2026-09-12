@@ -14,6 +14,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
 from v1.label.models import MyLabel
 from v1.regulatory.models import NewsProductMatch, RegulatoryNews
@@ -1765,3 +1766,464 @@ class 새올_파일도_같은_명령으로_넣는다(TestCase):
             ai_parsed=is_admin_disposal('saol-geoje-deadbeef'),
         )
         self.assertTrue(news.ai_parsed)
+
+
+class 키워드_하나가_전_기간을_긁지_않는다(TestCase):
+    """
+    키워드를 하나 등록하면 `backfill_alerts_for_rule` 이 RegulatoryNews **전체**를
+    한 줄씩 RapidFuzz 로 돌려 보고, 걸리는 족족 NewsKeywordMatch 를 만들었다.
+    요청 안에서 동기로 돈다.
+
+    · 수집이 쌓일수록 등록 한 번이 느려진다 — 상한이 없다
+    · 몇 해 전 처분까지 전부 '미확인 알림' 이 되어 알림함이 통째로 뒤덮인다
+
+    소급은 최근 것만 본다. 수거검사 쪽이 이미 그렇게 하고 있다
+    (`INSPECTION_BACKFILL_DAYS`).
+    """
+
+    def setUp(self):
+        import json
+
+        cache.clear()
+        self._json = json
+        self.user = User.objects.create_user(username='bfuser', password='x')
+        self.client.force_login(self.user)
+
+    def _news(self, ext, days_ago):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        d = timezone.now().date() - timedelta(days=days_ago)
+        return RegulatoryNews.objects.create(
+            external_id=ext, api_source='I2620', source='domestic',
+            product_name='대장균 검출 제품', ai_keywords=['대장균'],
+            ai_parsed=True, event_date=d, collected_date=d)
+
+    def _add_rule(self, keyword='대장균'):
+        return self.client.post(
+            '/regulatory/api/alert-rules/',
+            data=self._json.dumps({'category': 'INGREDIENT', 'keyword': keyword,
+                                   'match_type': 'CONTAINS'}),
+            content_type='application/json')
+
+    def test_기간_밖의_옛_처분은_알림이_되지_않는다(self):
+        from v1.mobile.services.push_service import NEWS_BACKFILL_DAYS
+        from v1.regulatory.models import NewsKeywordMatch
+
+        self._news('recent', 3)
+        self._news('old', NEWS_BACKFILL_DAYS + 30)
+
+        self.assertEqual(self._add_rule().status_code, 201)
+
+        got = set(NewsKeywordMatch.objects
+                  .filter(user=self.user)
+                  .values_list('news__external_id', flat=True))
+        self.assertEqual(got, {'recent'})
+
+    def test_발생일이_없으면_수집일로_본다(self):
+        """event_date 는 null 이 허용된다. 그 줄이 통째로 빠지면 안 된다."""
+        from v1.regulatory.models import NewsKeywordMatch
+
+        news = self._news('nodate', 3)
+        news.event_date = None
+        news.save(update_fields=['event_date'])
+
+        self._add_rule()
+        self.assertTrue(NewsKeywordMatch.objects
+                        .filter(user=self.user, news=news).exists())
+
+    def test_한꺼번에_만드는_건수에_상한이_있다(self):
+        from v1.mobile.services.push_service import NEWS_BACKFILL_MAX
+        from v1.regulatory.models import NewsKeywordMatch
+
+        for i in range(NEWS_BACKFILL_MAX + 5):
+            self._news(f'many{i}', 1)
+
+        body = self._add_rule().json()
+        self.assertEqual(
+            NewsKeywordMatch.objects.filter(user=self.user).count(),
+            NEWS_BACKFILL_MAX)
+        self.assertTrue(body['capped'])
+
+    def test_화면이_소급_기간을_안다(self):
+        """
+        "일치하는 정보가 없습니다" 만 말하면 사람은 등록이 안 된 줄로 읽는다.
+        기간 안에 없었을 뿐이라는 말을 하려면 화면이 그 기간을 알아야 한다.
+        """
+        from v1.mobile.services.push_service import NEWS_BACKFILL_DAYS
+
+        body = self._add_rule().json()
+        self.assertEqual(body['window_days'], NEWS_BACKFILL_DAYS)
+
+    def test_전_기간을_훑지_않는다(self):
+        """
+        상한이 없던 시절의 진짜 비용은 '만들어진 행 수' 가 아니라 '읽은 행 수' 다.
+        기간 밖 행은 Python 매칭까지 가지 않아야 한다.
+        """
+        from unittest.mock import patch
+
+        from v1.mobile.services.push_service import NEWS_BACKFILL_DAYS
+
+        self._news('recent', 3)
+        for i in range(10):
+            self._news(f'ancient{i}', NEWS_BACKFILL_DAYS + 100 + i)
+
+        with patch('v1.mobile.services.push_service._matches_rule',
+                   return_value=True) as m:
+            self._add_rule()
+        self.assertEqual(m.call_count, 1)
+
+
+class 열어_보거나_조치하면_읽음이_된다(TestCase):
+    """
+    점(미확인 표시)이 사라지지 않았다.
+
+    · 부적합 상세를 열어도 제품·원료 매칭은 안 읽힌다. 바로 옆의 키워드 매칭만
+      읽음이 됐다 — 같은 블록의 주석은 "제품·원료 매칭과 같은 결" 이라고
+      적어 놓고 정작 그 둘은 손대지 않았다.
+    · 조치(모니터링/조치완료/메모)를 남겨도 `read_yn` 이 그대로다. 화면에서는
+      점이 사라진 것처럼 보이다가 새로고침하면 되살아난다.
+
+    그 일을 하라고 만든 `regulatory:mark_read` 는 저장소 어느 화면도 부르지
+    않았다(호출 0회). 읽음은 사람이 따로 누르는 것이 아니라 열어 보거나
+    조치하면 되는 것이므로, 그 두 길목에서 처리하고 그 API 는 지웠다.
+    """
+
+    def setUp(self):
+        import json
+
+        cache.clear()
+        self._json = json
+        self.user = User.objects.create_user(username='rduser', password='x')
+        self.client.force_login(self.user)
+        self.news = RegulatoryNews.objects.create(
+            external_id='rd1', api_source='I2620', source='domestic',
+            product_name='문제 제품', ai_parsed=True, collected_date='2026-09-01')
+        self.label = MyLabel.objects.create(
+            user_id=self.user, prdlst_nm='내 제품', delete_YN='N')
+        self.match = NewsProductMatch.objects.create(
+            news=self.news, product=self.label, match_score=90, read_yn=False)
+
+    def test_상세를_열면_제품_매칭이_읽음이_된다(self):
+        from v1.regulatory import selectors
+
+        self.assertEqual(selectors.unread_news_count(self.user), 1)
+        self.client.get(f'/regulatory/?id={self.news.id}')
+        self.match.refresh_from_db()
+        self.assertTrue(self.match.read_yn)
+        self.assertIsNotNone(self.match.read_at)
+        self.assertEqual(selectors.unread_news_count(self.user), 0)
+
+    def test_상세를_열면_원료_매칭도_읽음이_된다(self):
+        from v1.label.models import MyIngredient
+        from v1.regulatory.models import NewsIngredientMatch
+
+        ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm='원료')
+        im = NewsIngredientMatch.objects.create(
+            news=self.news, user=self.user, ingredient=ing,
+            match_score=90, read_yn=False)
+
+        self.client.get(f'/regulatory/?id={self.news.id}')
+        im.refresh_from_db()
+        self.assertTrue(im.read_yn)
+
+    def test_조치를_남기면_읽음이_된다(self):
+        from v1.regulatory import selectors
+
+        r = self.client.post(
+            '/regulatory/api/save-action/',
+            data=self._json.dumps({'match_type': 'product',
+                                   'match_id': self.match.id,
+                                   'action_type': 'monitoring'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.match.refresh_from_db()
+        self.assertTrue(self.match.read_yn)
+        self.assertEqual(selectors.unread_news_count(self.user), 0)
+
+    def test_원료_조치도_읽음이_된다(self):
+        from v1.label.models import MyIngredient
+        from v1.regulatory.models import NewsIngredientMatch
+
+        ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm='원료')
+        im = NewsIngredientMatch.objects.create(
+            news=self.news, user=self.user, ingredient=ing,
+            match_score=90, read_yn=False)
+
+        self.client.post(
+            '/regulatory/api/save-action/',
+            data=self._json.dumps({'match_type': 'ingredient',
+                                   'match_id': im.id,
+                                   'action_type': 'resolved'}),
+            content_type='application/json')
+        im.refresh_from_db()
+        self.assertTrue(im.read_yn)
+
+    def test_남의_상세를_열어도_내_것이_읽히지_않는다(self):
+        other = User.objects.create_user(username='rdother', password='x')
+        other_label = MyLabel.objects.create(
+            user_id=other, prdlst_nm='남의 제품', delete_YN='N')
+        other_match = NewsProductMatch.objects.create(
+            news=self.news, product=other_label, match_score=90, read_yn=False)
+
+        self.client.get(f'/regulatory/?id={self.news.id}')
+        other_match.refresh_from_db()
+        self.assertFalse(other_match.read_yn)
+
+    def test_연_그_화면에서_바로_점이_사라진다(self):
+        """
+        읽음 처리가 목록 집계 뒤에 있었다. 눌러서 열었는데 그 줄의 점이 그대로
+        남아 있다가, 다른 줄로 옮겨야 비로소 사라졌다.
+        """
+        # 먼저 이 줄이 목록에 실제로 그려지는지부터 — 안 그려지면 시험이 헛돈다
+        before = self.client.get('/regulatory/').content.decode()
+        self.assertIn('<span class="rs-unread-dot">', before)
+
+        html = self.client.get(f'/regulatory/?id={self.news.id}').content.decode()
+        # 문자열 'rs-unread-dot' 은 인라인 JS 에도 있다 — 마크업만 본다
+        self.assertNotIn('<span class="rs-unread-dot">', html)
+
+    def test_id_가_숫자가_아니어도_500_이_아니다(self):
+        """
+        `get(pk='abc')` 는 DoesNotExist 가 아니라 ValueError 를 던진다.
+        except 절이 DoesNotExist 만 잡아 주소창에 아무거나 넣으면 500 이 났다.
+        """
+        self.assertEqual(self.client.get('/regulatory/?id=abc').status_code, 200)
+        self.assertEqual(self.client.get('/regulatory/?id=').status_code, 200)
+        self.assertEqual(self.client.get('/regulatory/?id=99999999').status_code, 200)
+
+    def test_독립_상세_페이지도_읽음이_된다(self):
+        """상세를 보는 길이 둘인데 독립 페이지는 아무것도 안 했다."""
+        self.client.get(f'/regulatory/{self.news.id}/')
+        self.match.refresh_from_db()
+        self.assertTrue(self.match.read_yn)
+
+    def test_오탐으로_감춘_것은_읽음_대상이_아니다(self):
+        """
+        false_positive_yn 인 매칭은 미확인 모수에서 이미 빠져 있다. 굳이
+        건드려 read_at 을 남기면 "본 적 없는 것을 봤다" 는 기록이 된다.
+        """
+        self.match.false_positive_yn = True
+        self.match.save(update_fields=['false_positive_yn'])
+
+        self.client.get(f'/regulatory/?id={self.news.id}')
+        self.match.refresh_from_db()
+        self.assertFalse(self.match.read_yn)
+
+
+class 미조치_칩은_같은_줄의_이웃과_같은_것을_센다(TestCase):
+    """
+    목록 머리의 네 칩 — 전체 · 내 알림 · 일반 · 미조치.
+
+    앞의 셋은 지금 걸린 검색·기간·분야 조건 안에서 세는데, **미조치만 조건을
+    무시하고 전 기간 전체를 셌다**. 나란히 붙은 네 숫자 중 하나만 다른 질문에
+    답하고 있었다 — "미조치 3건" 을 눌렀더니 목록이 비는 일이 여기서 났다.
+
+    그리고 그 칩은 켤 수만 있고 끌 수가 없었다. 끄는 주소로
+    `scope_qs_all`(= 범위만 바꾸는 주소)을 썼는데, 그것은 f/v 조건을 그대로
+    들고 간다. 눌러도 미조치가 그대로 남았다.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='nauser', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, prdlst_nm='내 제품', delete_YN='N')
+
+        # 검색어 '가나다' 로 걸리는 것 하나, 안 걸리는 것 하나 — 둘 다 미조치
+        for ext, name in (('na1', '가나다 제품'), ('na2', '라마바 제품')):
+            news = RegulatoryNews.objects.create(
+                external_id=ext, api_source='I2620', source='domestic',
+                product_name=name, ai_parsed=True,
+                collected_date=timezone.now().date())
+            NewsProductMatch.objects.create(
+                news=news, product=self.label, match_score=90, read_yn=False)
+
+    def test_검색어를_걸면_미조치_숫자도_따라_줄어든다(self):
+        r = self.client.get('/regulatory/?q=가나다')
+        self.assertEqual(r.context['no_action_count'], 1)
+
+    def test_검색어가_없으면_둘_다_센다(self):
+        r = self.client.get('/regulatory/')
+        self.assertEqual(r.context['no_action_count'], 2)
+
+    def _chip_href(self, html):
+        """화면에 실제로 그려진 '미조치' 칩의 href 를 꺼낸다."""
+        import re
+
+        m = re.search(r'<a class="rs-scope-item rs-scope-item--warn[^>]*?'
+                      r'href="([^"]*)"', html, re.S)
+        self.assertIsNotNone(m, '미조치 칩이 화면에 없다')
+        return m.group(1)
+
+    def test_칩을_한_번_더_누르면_꺼진다(self):
+        on = self.client.get('/regulatory/?f=status&v=no_action')
+        self.assertTrue(on.context['no_action_on'])
+
+        # 화면이 '끄기' 로 내놓는 **그 주소**를 그대로 따라간다.
+        # context 의 no_action_qs 는 처음부터 옳았다 — 템플릿이 그것 대신
+        # scope_qs_all 을 썼고, 그 주소는 f/v 조건을 그대로 들고 간다.
+        href = self._chip_href(on.content.decode())
+        self.assertNotIn('no_action', href)
+        off = self.client.get('/regulatory/' + href)
+        self.assertFalse(off.context['no_action_on'])
+
+    def test_꺼진_상태에서_누르면_켜진다(self):
+        html = self.client.get('/regulatory/').content.decode()
+        href = self._chip_href(html)
+        on = self.client.get('/regulatory/' + href.replace('&amp;', '&'))
+        self.assertTrue(on.context['no_action_on'])
+
+    def test_끄는_주소가_검색어는_지키고_미조치만_뺀다(self):
+        on = self.client.get('/regulatory/?q=가나다&f=status&v=no_action')
+        off_qs = on.context['no_action_qs']
+        self.assertIn('q=', off_qs)
+        self.assertNotIn('no_action', off_qs)
+
+
+class 여러_건_삭제는_한_요청으로_가고_남은_것을_말한다(TestCase):
+    """
+    수거검사 다중 삭제가 고른 수만큼 fetch 를 날리고 `Promise.all` 로 묶었다.
+    그중 몇이 실패해도 **성공한 것만 조용히 지우고 새로고침**해서, 사용자는
+    전부 지워진 줄 알았다. 남은 것은 다음에 들어와서야 발견한다.
+    """
+
+    def setUp(self):
+        import json
+
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        cache.clear()
+        self._json = json
+        self.user = User.objects.create_user(username='inspu', password='x')
+        self.other = User.objects.create_user(username='inspo', password='x')
+        self.client.force_login(self.user)
+
+        def mk(ext, owner):
+            r = InspectionResult.objects.create(
+                tkawyprno=ext, prdlst_report_no='1234567890',
+                bssh_nm='업소', tkawydtm='20260901')
+            return InspectionMatch.objects.create(
+                inspection=r, user=owner, read_yn=False,
+                alert_phase=InspectionMatch.PHASE_COLLECTION)
+
+        self.a = mk('i1', self.user)
+        self.b = mk('i2', self.user)
+        self.theirs = mk('i3', self.other)
+
+    def _post(self, payload):
+        return self.client.post('/regulatory/api/inspection/dismiss/',
+                                data=self._json.dumps(payload),
+                                content_type='application/json')
+
+    def test_여러_건을_한_번에_지운다(self):
+        from v1.regulatory.models import InspectionMatch
+
+        r = self._post({'insp_match_ids': [self.a.pk, self.b.pk]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['deleted'], 2)
+        self.assertFalse(InspectionMatch.objects
+                         .filter(pk__in=[self.a.pk, self.b.pk]).exists())
+
+    def test_남의_것은_지워지지_않고_남았다고_말한다(self):
+        from v1.regulatory.models import InspectionMatch
+
+        body = self._post({'insp_match_ids': [self.a.pk, self.theirs.pk]}).json()
+        self.assertEqual(body['deleted'], 1)
+        self.assertEqual(body['missing'], [self.theirs.pk])
+        self.assertTrue(InspectionMatch.objects.filter(pk=self.theirs.pk).exists())
+
+    def test_한_건짜리_옛_형식도_받는다(self):
+        """다른 곳이 아직 insp_match_id 하나로 부른다."""
+        r = self._post({'insp_match_id': self.a.pk})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['deleted'], 1)
+
+    def test_아무것도_못_지우면_실패다(self):
+        body = self._post({'insp_match_ids': [self.theirs.pk]})
+        self.assertEqual(body.status_code, 404)
+        self.assertFalse(body.json()['success'])
+
+    def test_이상한_몸통에_500_이_아니다(self):
+        self.assertEqual(self._post({'insp_match_ids': 'abc'}).status_code, 400)
+        self.assertEqual(self._post({'insp_match_ids': []}).status_code, 400)
+        self.assertEqual(self._post({}).status_code, 400)
+
+    def test_화면이_한_요청으로_보낸다(self):
+        """N번 날리던 코드가 남아 있으면 부분 실패가 다시 조용해진다."""
+        import re
+
+        html = self.client.get('/regulatory/?tab=insp').content.decode()
+        m = re.search(r'function inspDismissSelected\(\)(.*?)\nwindow\.inspDismissSelected',
+                      html, re.S)
+        self.assertIsNotNone(m)
+        # 주석에도 'Promise.all' 이라는 낱말이 있다 — 코드만 본다
+        body = re.sub(r'/\*.*?\*/', '', m.group(1), flags=re.S)
+        body = re.sub(r'//.*', '', body)
+        self.assertIn('insp_match_ids', body)
+        self.assertNotIn('Promise.all', body)
+
+
+class 상세_패널의_조치는_실패했을_때_말한다(TestCase):
+    """
+    상세 패널의 조치 요청 다섯 개가 모두 `if(d.success){…}` 하나뿐이었다.
+    else 도 catch 도 없어서, 서버가 403·404·400 을 주거나 네트워크가 끊겨도
+    화면에 아무 일도 일어나지 않았다. 사용자는 클릭이 안 먹은 줄 알고 몇 번
+    더 누른다 — 그때마다 요청은 실제로 나간다.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(username='pnlu', password='x')
+        self.client.force_login(self.user)
+        self.news = RegulatoryNews.objects.create(
+            external_id='pn1', api_source='I2620', source='domestic',
+            product_name='패널 제품', ai_parsed=True,
+            collected_date=timezone.now().date())
+        self.label = MyLabel.objects.create(
+            user_id=self.user, prdlst_nm='내 제품', delete_YN='N')
+        NewsProductMatch.objects.create(
+            news=self.news, product=self.label, match_score=90, read_yn=False)
+
+    def _panel_js(self):
+        """상세 패널의 스크립트 블록만 꺼낸다 (목록 쪽에도 같은 모양이 있다)."""
+        import re
+
+        html = self.client.get(f'/regulatory/?id={self.news.id}').content.decode()
+        for block in re.findall(r'<script>(.*?)</script>', html, re.S):
+            if 'function markAllResolved(' in block:
+                return block
+        self.fail('상세 패널 스크립트를 찾지 못했다')
+
+    def test_다섯_조치가_모두_한_보내기_함수를_쓴다(self):
+        js = self._panel_js()
+        for fn in ('markAllResolved', 'markAllNewsResolved', 'markFalsePositive',
+                   'doAction', 'saveActionMemo'):
+            self.assertIn('function ' + fn + '(', js)
+        # 직접 fetch 하는 곳이 남아 있으면 그 하나가 다시 조용해진다.
+        # 보내는 자리는 _post 하나뿐이어야 한다.
+        self.assertIn('function _post(', js)
+        self.assertEqual(js.count('fetch('), 1)
+
+    def test_보내기_함수가_실패를_말한다(self):
+        js = self._panel_js()
+        body = js[js.index('function _post('):]
+        body = body[:body.index('\nfunction ')]
+        self.assertIn('.catch(', body)          # 네트워크 끊김
+        self.assertIn('403', body)              # 권한 없음
+        self.assertIn('404', body)              # 사라진 대상
+        self.assertIn('_say(', body)
+
+    def test_서버가_거절하면_이유를_준다(self):
+        """화면이 읽을 error 키가 실제로 오는지 — 없으면 폴백 문구만 뜬다."""
+        import json
+
+        r = self.client.post(
+            '/regulatory/api/save-action/',
+            data=json.dumps({'match_type': 'product', 'match_id': 999999,
+                             'action_type': 'monitoring'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 404)
+        self.assertTrue(r.json().get('error'))

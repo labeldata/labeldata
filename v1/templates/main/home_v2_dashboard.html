@@ -327,7 +327,7 @@
             <div class="dash-hero-meta">
                 <span class="dash-sub">오늘도 간편한 표시사항 연구소와 함께 제품 라벨 관리를 시작해보세요.</span>
                 {% if expiring_count > 0 %}
-                <a href="{% url 'products:product_explorer' %}" class="dash-alert-chip">
+                <a href="{% url 'products:product_explorer' %}?filter=MINE&amp;expiring=1" class="dash-alert-chip">
                     <i class="bi bi-exclamation-triangle-fill"></i>
                     {{ expiring_count }}건 만료 임박 →
                 </a>
@@ -482,14 +482,20 @@
                 <div class="stat-lbl">협업 중 제품</div>
             </div>
         </a>
-        <a href="{% url 'products:product_explorer' %}" class="stat-card">
+        {% comment %}
+          이 두 장과 위의 '만료 임박' 칩이 거르지 않은 전체 목록으로 갔다.
+          숫자는 맞는데 링크가 거짓말을 했다 — '즐겨찾기 12' 를 눌렀는데
+          제품 300개가 나왔다. starred_count 는 내 것 + 공유받은 것을 세므로
+          범위는 ALL 이고, confirmed_count 는 내 제품만 세므로 MINE 이다.
+        {% endcomment %}
+        <a href="{% url 'products:product_explorer' %}?filter=ALL&amp;starred=1" class="stat-card">
             <div class="stat-icon si-yellow"><i class="bi bi-star-fill"></i></div>
             <div>
                 <div class="stat-val">{{ starred_count }}</div>
                 <div class="stat-lbl">즐겨찾기</div>
             </div>
         </a>
-        <a href="{% url 'products:product_explorer' %}" class="stat-card">
+        <a href="{% url 'products:product_explorer' %}?filter=MINE&amp;status=CONFIRMED" class="stat-card">
             <div class="stat-icon si-red"><i class="bi bi-check-circle-fill"></i></div>
             <div>
                 <div class="stat-val">{{ confirmed_count }}</div>

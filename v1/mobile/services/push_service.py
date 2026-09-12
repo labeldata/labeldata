@@ -305,10 +305,29 @@ def cancel_pending_logs(user=None, news_ids=None, rule=None, device=None) -> dic
     return {'cancelled': cancelled, 'read': read}
 
 
+# 키워드를 새로 등록했을 때 **거슬러 맞춰 보는 기간**과 **한 번에 만드는 상한**.
+#
+# 예전에는 둘 다 없었다. 등록 한 번이 RegulatoryNews 전체를 한 줄씩 RapidFuzz 로
+# 돌려 보고, 걸리는 족족 미확인 알림을 만들었다. 그것도 HTTP 요청 안에서 동기로.
+# 수집이 쌓일수록 등록이 느려지고, 몇 해 전 처분까지 전부 알림함을 뒤덮었다.
+#
+# 사람이 키워드를 넣는 까닭은 "앞으로 이게 걸리면 알려 달라" 이지 "지난 5년치를
+# 지금 다 읽겠다" 가 아니다. 옛 건은 알림이 아니라 검색으로 찾는 것이다.
+# 수거검사 쪽이 이미 같은 판단을 했다 — `INSPECTION_BACKFILL_DAYS`.
+#
+# 부적합·처분은 수거검사보다 발생 빈도가 낮아 30일로 자르면 새로 등록한 사람이
+# 빈 화면을 보기 쉽다. 그래서 세 배로 잡았다.
+NEWS_BACKFILL_DAYS = 90
+# 기기 알림함 상한(MOBILE_MAX_NOTIFICATIONS)과 같은 수. 그보다 많이 만들어 봐야
+# 어차피 _trim_notifications 가 도로 지운다.
+NEWS_BACKFILL_MAX = 100
+
+
 def backfill_alerts_for_rule(rule) -> dict:
     """
-    새로 등록된 AlertRule에 대해 기존 수집 데이터 전체를 소급 매칭.
-    소급분은 과거 데이터이므로 sent_at을 즉시 설정해 배치 발송 대상에서 제외한다.
+    새로 등록된 AlertRule 에 대해 **최근 NEWS_BACKFILL_DAYS 일**의 수집 데이터를
+    소급 매칭한다. 소급분은 과거 데이터이므로 sent_at 을 즉시 설정해 배치 발송
+    대상에서 제외한다.
 
     'created' 는 **걸린 부적합 건수**다.
     예전에는 만들어진 푸시 로그 수였는데, 그 수는 기기 수에 따라 달라졌다.
@@ -317,14 +336,19 @@ def backfill_alerts_for_rule(rule) -> dict:
     미리보기가 다섯 건 보이는 모순이 여기서 나왔다.
     지금은 사용자 매칭(NewsKeywordMatch)을 세므로 화면 문구와 어긋나지 않는다.
 
-    Returns: {'created': int, 'previews': list[dict], 'log_ids': list[int]}
+    Returns: {'created': int, 'previews': list[dict], 'log_ids': list[int],
+              'window_days': int, 'capped': bool}
     """
+    from datetime import timedelta
+
     from django.conf import settings
+    from django.db.models import Q
     from django.utils import timezone
     from v1.mobile.models import AppDevice, PushNotificationLog
     from v1.regulatory.models import RegulatoryNews
 
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
+    cutoff = timezone.now().date() - timedelta(days=NEWS_BACKFILL_DAYS)
 
     # 이 규칙이 푸시를 보낼 기기 (없어도 된다 — 웹 매칭은 기기와 무관하다)
     if rule.user:
@@ -332,17 +356,26 @@ def backfill_alerts_for_rule(rule) -> dict:
     else:
         target_devices = [rule.device] if rule.device_id else []
 
-    if rule.category == 'COMPANY':
-        qs = RegulatoryNews.objects.all().order_by('-event_date', '-collected_date')
-    else:
-        qs = RegulatoryNews.objects.filter(ai_parsed=True).order_by('-event_date', '-collected_date')
+    qs = RegulatoryNews.objects.all()
+    if rule.category != 'COMPANY':
+        qs = qs.filter(ai_parsed=True)
+    # 기간은 **DB 에서** 자른다. Python 매칭(RapidFuzz)까지 끌고 오면 상한을
+    # 둔 의미가 없다 — 진짜 비용은 만든 행 수가 아니라 읽어서 돌려 본 행 수다.
+    # event_date 는 null 이 허용되므로 그때는 수집일로 본다.
+    qs = qs.filter(Q(event_date__gte=cutoff)
+                   | Q(event_date__isnull=True, collected_date__gte=cutoff))
+    qs = qs.order_by('-event_date', '-collected_date')
 
     created_count = 0
     previews = []
     log_ids = []
     to_create = []
+    capped = False
 
-    for news in qs:
+    for news in qs.iterator(chunk_size=200):
+        if len(to_create) >= NEWS_BACKFILL_MAX:
+            capped = True
+            break
         if not _matches_rule(rule, *news_fields_for_matching(news)):
             continue
 
@@ -384,7 +417,8 @@ def backfill_alerts_for_rule(rule) -> dict:
                 )
                 created_ids.append(log.pk)
 
-    return {'created': created_count, 'previews': previews, 'log_ids': created_ids}
+    return {'created': created_count, 'previews': previews, 'log_ids': created_ids,
+            'window_days': NEWS_BACKFILL_DAYS, 'capped': capped}
 
 
 def send_immediate_for_rule(rule, log_ids: list[int]) -> int:
