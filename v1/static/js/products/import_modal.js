@@ -44,6 +44,7 @@
 
   var lookupFields = null;   // 조회(또는 후보에서 고르기)로 확정한 품목
   var candidates = [];       // 정확히 맞는 번호가 없을 때 늘어놓은 것들
+  var startMode = false;     // 새 제품으로 들어왔는가 — 고를 것이 하나뿐이다
 
   function csrf() {
     var input = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -244,6 +245,15 @@
           ? '<div class="mt-1">' + esc(fields.rawmtrl_nm) + '</div>' : '')
       + '</div>';
     setLookupButtons(modalEl, true);
+    /* **누르지 않아도 등록한다.**
+     *
+     * 새 제품 화면에서는 품목을 고르는 것이 곧 "이 제품으로 하겠다" 는 뜻이다.
+     * 그런데 고른 뒤에 사진 칸 아래의 '조회한 품목보고번호로 등록' 을 한 번 더
+     * 눌러야 했다. 그 단추는 사진 칸에 붙어 있어서 번호로 찾은 사람 눈에는
+     * 잘 띄지도 않는다 — 다 골라 놓고 아무 일도 안 일어나는 것처럼 보인다. */
+    if (startMode) {
+      setTimeout(function () { useLookup('product', modalEl); }, 0);
+    }
   }
 
   /*
@@ -283,8 +293,9 @@
     if (!fields) return;
     modalEl.querySelector('#importReportNo').value = fields.prdlst_report_no || '';
     showFields(modalEl, fields);
-    note('"' + (fields.prdlst_nm || fields.prdlst_report_no)
-         + '" 을(를) 골랐습니다. 아래에서 제품으로 등록할지, 원료로 등록할지 고르세요.',
+    note('"' + (fields.prdlst_nm || fields.prdlst_report_no) + '" 을(를) 골랐습니다.'
+         + (startMode ? ' 이 제품에 채웁니다.'
+                      : ' 아래에서 제품으로 등록할지, 원료로 등록할지 고르세요.'),
          'ok');
   }
 
@@ -308,7 +319,8 @@
         if (body.success) {
           candidates = [];
           showFields(modalEl, body.fields);
-          note('아래에서 제품으로 등록할지, 원료로 등록할지 고르세요.', 'ok');
+          note(startMode ? '이 제품에 채웁니다.'
+                         : '아래에서 제품으로 등록할지, 원료로 등록할지 고르세요.', 'ok');
           return;
         }
         if (body.candidates && body.candidates.length) {
@@ -464,6 +476,16 @@
   window.openImportModal = function (opts) {
     var modalEl = ensureModal();
     note('');
+    startMode = !!(opts && opts.start);
+    /* 새 제품으로 들어왔으면 **원료 쪽을 아예 감춘다.**
+     *
+     * 이 자리에서 하는 일은 하나다 — 이 제품의 표시사항을 채우는 것. 그런데
+     * 둘을 나란히 놓으니 "제품으로 등록 / 원료로 등록" 을 고르게 되고, 고를
+     * 것이 하나뿐인데 고르라고 하면 오히려 무엇을 눌러야 할지 모르게 된다. */
+    modalEl.querySelectorAll('[data-side="ingredient"]').forEach(function (zone) {
+      var col = zone.closest('.col-md-6') || zone.parentElement;
+      if (col) col.classList.toggle('d-none', startMode);
+    });
     /* 새 제품으로 들어왔는가. 그때만 '직접 입력하기' 띠를 보인다 — 이미
        만들던 제품에서 부른 경우에는 나갈 문이 따로 필요 없다. */
     var strip = modalEl.querySelector('.import-start');

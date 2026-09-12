@@ -613,7 +613,7 @@
     var pending = null;
     new MutationObserver(function () {
       clearTimeout(pending);
-      pending = setTimeout(showNavButton, 120);
+      pending = setTimeout(mountFab, 120);
     }).observe(document.body, {childList: true, subtree: true});
   }
 })();

@@ -461,6 +461,19 @@ function dismissSelectedBadges() {
     }
 }
 
+/* ── 뒤로 가기로 돌아오면 다시 읽는다 ────────────────────────────────
+ *
+ * 손대지 않은 새 제품은 떠날 때 치워진다(discard-if-untouched). 그런데
+ * **뒤로 가기는 서버에 묻지 않는다** — 브라우저가 떠나기 전 화면을 그대로
+ * 되살린다(bfcache). 그래서 이미 치워진 제품이 목록에 남아 보였고, 새로
+ * 고치면 사라졌다. 목록이 거짓말을 한 셈이다.
+ *
+ * event.persisted 가 그 되살림을 알려 준다. 그때만 다시 읽는다 — 늘 읽으면
+ * 뒤로 가기가 느려진다. */
+window.addEventListener('pageshow', function (ev) {
+    if (ev.persisted) window.location.reload();
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     try {
         const raw = localStorage.getItem('labeldata_bom_sync');

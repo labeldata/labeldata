@@ -5614,3 +5614,117 @@ class 손대지_않은_제품은_떠날_때_치운다(TestCase):
             encoding='utf-8')
         self.assertIn('from v1.label.services.temp_label import', cmd)
         self.assertNotIn('SKIP_FIELDS = {', cmd)      # 두 벌로 적지 않는다
+
+
+class 번호로_찾으면_아는_것을_다_채운다(TestCase):
+    """
+    품목보고번호로 조회하면 다섯 칸만 채웠다. 그런데 FoodItem 은 소비기한·
+    포장재질까지 들고 있다 — **식약처가 준 것을 우리가 안 쓰고 버린 것**이다.
+    번호를 넣은 사람은 "이 번호로 아는 것은 다 채워 달라" 고 말한 것인데,
+    다섯 칸만 채우면 나머지를 손으로 적게 된다.
+    """
+
+    def _item(self, **kw):
+        from v1.label.models import FoodItem
+
+        base = dict(prdlst_report_no='1971027500346', prdlst_nm='단팥빵',
+                    prdlst_dcnm='빵류', bssh_nm='(주)샤니',
+                    rawmtrl_nm='밀가루, 설탕, 팥앙금',
+                    pog_daycnt='제조일로부터 3일', frmlc_mtrqlt='폴리프로필렌',
+                    induty_cd_nm='식품제조가공업', prms_dt='19971027')
+        base.update(kw)
+        return FoodItem.objects.create(**base)
+
+    def test_소비기한과_포장재질도_넘긴다(self):
+        from v1.label.services import item_lookup
+
+        f = item_lookup.as_fields(self._item())
+        self.assertEqual(f['pog_daycnt'], '제조일로부터 3일')
+        self.assertEqual(f['frmlc_mtrqlt'], '폴리프로필렌')
+
+    def test_검증이_보는_칸도_함께_채운다(self):
+        """
+        food_type 이 비어 있으면 그 유형에만 있는 의무 표시사항 검사가 통째로
+        빠진다. 통과한 것이 아니라 안 본 것이다.
+        """
+        from v1.label.services import item_lookup
+
+        f = item_lookup.as_fields(self._item())
+        self.assertEqual(f['food_type'], '빵류')
+
+    def test_없는_것을_지어내지_않는다(self):
+        from v1.label.services import item_lookup
+
+        f = item_lookup.as_fields(self._item(pog_daycnt='', frmlc_mtrqlt=None))
+        self.assertEqual(f['pog_daycnt'], '')
+        self.assertEqual(f['frmlc_mtrqlt'], '')
+
+    def test_칸이_없는_것은_곁들여_보인다(self):
+        """버리기에는 아깝고 칸에 넣기에는 자리가 없는 것들."""
+        from v1.label.services import item_lookup
+
+        notes = item_lookup.as_notes(self._item())
+        self.assertEqual(notes.get('업종'), '식품제조가공업')
+        self.assertEqual(notes.get('허가일자'), '19971027')
+        self.assertNotIn('용도', notes)          # 값이 없으면 넣지 않는다
+
+
+class 고를_것이_하나뿐이면_묻지_않는다(TestCase):
+    """
+    새 제품 화면에서 품목을 고르는 것은 곧 "이 제품으로 하겠다" 는 뜻이다.
+    그런데 고른 뒤에 사진 칸 아래의 '조회한 품목보고번호로 등록' 을 한 번 더
+    눌러야 했다. 그 단추는 사진 칸에 붙어 있어 번호로 찾은 사람 눈에는 잘
+    띄지도 않는다 — 다 골라 놓고 아무 일도 안 일어나는 것처럼 보인다.
+    """
+
+    def js(self):
+        from pathlib import Path
+        return Path('v1/static/js/products/import_modal.js').read_text(encoding='utf-8')
+
+    def test_새_제품이면_고르는_즉시_등록한다(self):
+        js = self.js()
+        self.assertIn("if (startMode) {", js)
+        self.assertIn("useLookup('product', modalEl)", js)
+
+    def test_새_제품이면_원료_쪽을_감춘다(self):
+        """고를 것이 하나뿐인데 고르라고 하면 오히려 뭘 눌러야 할지 모르게 된다."""
+        js = self.js()
+        self.assertIn("[data-side=\"ingredient\"]", js)
+        self.assertIn("classList.toggle('d-none', startMode)", js)
+
+    def test_원래_화면에서는_그대로_묻는다(self):
+        """이미 만들던 제품에서 부른 경우에는 제품/원료를 골라야 한다."""
+        js = self.js()
+        self.assertIn('아래에서 제품으로 등록할지, 원료로 등록할지 고르세요', js)
+
+
+class 뒤로_가기로_돌아와도_목록이_참말을_한다(TestCase):
+    """
+    손대지 않은 새 제품은 떠날 때 치워진다. 그런데 **뒤로 가기는 서버에 묻지
+    않는다** — 브라우저가 떠나기 전 화면을 그대로 되살린다(bfcache). 그래서
+    이미 치워진 제품이 목록에 남아 보였고 새로 고치면 사라졌다.
+    """
+
+    def test_되살린_화면은_다시_읽는다(self):
+        from pathlib import Path
+
+        html = Path('v1/templates/products/product_explorer.html').read_text(
+            encoding='utf-8')
+        self.assertIn("addEventListener('pageshow'", html)
+        self.assertIn('ev.persisted', html)
+
+
+class 탭을_옮겨도_도움말_단추가_남는다(TestCase):
+    """
+    '핵심기능 보기' 를 걷으면서 showNavButton() 껍데기를 지웠는데, **관찰자가
+    부르는 자리 한 곳을 놓쳤다.** DOM 이 바뀔 때마다(탭 전환·iframe 로드)
+    없는 함수를 불러 거기서 예외가 났고, 그래서 BOM 탭으로 옮기면 단추가
+    사라졌다.
+    """
+
+    def test_없는_함수를_부르지_않는다(self):
+        from pathlib import Path
+
+        engine = Path('v1/templates/includes/_coachmark.html').read_text(encoding='utf-8')
+        self.assertNotIn('showNavButton', engine)
+        self.assertIn('setTimeout(mountFab, 120)', engine)
