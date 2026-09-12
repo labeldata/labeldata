@@ -9,6 +9,8 @@ urlpatterns = [
     path('signup/', views.signup, name='signup'),
     path('signup-done/', views.signup_done_view, name='signup_done'),
     path('logout/', views.logout_view, name='logout'),
+    # 게스트로 만든 것을 방금 로그인한 계정으로 옮긴다 (사람이 누른 뒤에만)
+    path('promote-guest-data/', views.promote_guest_data, name='promote_guest_data'),
     path('verify-email/', views.verify_email, name='verify_email'),
     path('resend-verification/', views.resend_verification_email, name='resend_verification'),
     path('password-reset-request/', views.password_reset_request, name='password_reset_request'),

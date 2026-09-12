@@ -278,6 +278,46 @@
       저장했다는 말. 화면 가운데에서 크게, 그러나 막지 않고 잠깐.
       자세한 까닭은 아래 showSaved() 주석에 있다.
     {% endcomment %}
+    {% comment %}
+      게스트로 만든 것을 가져올지 묻는다. 조용히 옮기지 않는 까닭은 둘이다 —
+      남의 PC 에서 둘러본 것이 딸려 오면 곤란하고, 무엇이 옮겨졌는지 모르면
+      빠진 것이 있어도 알 수 없다.
+
+      옮길 것이 실제로 있을 때만 뜬다(context_processors.guest_promotion).
+      화면을 막지 않고 아래에 앉는다 — 급한 일이 아니고, 거절해도 되는 일이다.
+    {% endcomment %}
+    {% if guest_promotion %}
+    <style>
+      /* 게스트 데이터를 가져올지 묻는 띠.
+         화면을 막지 않는다 — 급한 일이 아니고 거절해도 되는 일이라, 가운데
+         모달로 세우면 얻는 것보다 잃는 것이 많다. 아래에서 올라와 앉는다. */
+      .gp-ask {
+        position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+        z-index: 1080; max-width: min(560px, calc(100vw - 32px));
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        padding: 12px 16px; border-radius: 10px;
+        background: var(--ez-surface, #ffffff);
+        border: 1px solid var(--ez-border, #e6e9f2);
+        box-shadow: 0 6px 24px rgba(32, 33, 36, .18);
+        font-size: 13px; line-height: 1.5;
+      }
+      .gp-ask-text { flex: 1 1 240px; min-width: 0; }
+      .gp-ask-btns { display: flex; gap: 8px; margin: 0; flex: 0 0 auto; }
+    </style>
+    <div class="gp-ask" role="dialog" aria-label="게스트 데이터 가져오기">
+      <div class="gp-ask-text">
+        게스트로 만드신
+        <b>{% for name, n in guest_promotion.items %}{{ name }} {{ n }}개{% if not forloop.last %} · {% endif %}{% endfor %}</b>
+        가 있습니다. 이 계정으로 가져올까요?
+      </div>
+      <form method="post" action="{% url 'user_management:promote_guest_data' %}" class="gp-ask-btns">
+        {% csrf_token %}
+        <button type="submit" name="decline" value="1" class="btn btn-outline-secondary v2-btn-sm">아니요</button>
+        <button type="submit" class="btn btn-primary v2-btn-sm">가져오기</button>
+      </form>
+    </div>
+    {% endif %}
+
     <div id="v2Saved" role="status" aria-live="polite">
       <i class="bi bi-check-lg" aria-hidden="true"></i>
       <span id="v2SavedMsg"></span>

@@ -20,6 +20,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import connection
 from django.http import Http404
+from django.views.decorators.http import require_POST
 import logging
 import time
 import threading
@@ -386,7 +387,20 @@ def login_view(request):
                 request.session['unverified_email'] = email
                 messages.warning(request, "이메일 인증이 완료되지 않았습니다. 인증메일을 확인하거나 재발송 버튼을 클릭하세요.")
             else:
+                # 게스트로 둘러보다 로그인한 것인가.
+                #
+                # **login() 이 세션을 비운다.** 다른 사용자로 바뀌면 Django 가
+                # flush 하므로, 게스트 id 를 세션에 미리 넣어 두는 것으로는
+                # 살아남지 못한다. 로그인 **직전에** 붙들었다가 새 세션에
+                # 다시 넣는다.
+                #
+                # 여기서 옮기지는 않는다. 조용히 옮기면 안 되기 때문이다 —
+                # 남의 PC 에서 둘러본 것이 딸려 올 수 있다. 물어볼 거리만
+                # 남기고, 옮기는 것은 사람이 누른 뒤다.
+                leaving = request.user if is_guest(request.user) else None
                 login(request, user)
+                if leaving is not None and leaving.pk != user.pk:
+                    request.session['promote_guest_id'] = leaving.pk
                 return redirect('main:home')
         else:
             # 사용자가 없거나 비밀번호가 틀린 경우
@@ -652,3 +666,54 @@ def privacy_policy(request):
 def terms_of_service(request):
     """이용약관 페이지"""
     return render(request, 'user_management/terms_of_service.html')
+
+
+# ── 게스트가 만든 것 가져오기 ────────────────────────────────────────────────
+#
+# 로그인 자리에서 세션에 남겨 둔 게스트 id 를 보고, 가져올 것이 있으면
+# 물어본다(context_processors 가 화면에 올린다). 실제로 옮기는 것은 사람이
+# [가져오기] 를 누른 뒤 여기서다.
+#
+# **세션에 남은 id 로만 옮긴다.** 사용자가 보낸 id 를 받으면 남의 게스트
+# 계정 번호를 넣어 그 사람의 제품을 가져갈 수 있다. 그래서 받지 않는다.
+
+def _pending_guest(request):
+    """세션에 남은 게스트. 없거나 게스트가 아니면 None."""
+    gid = request.session.get('promote_guest_id')
+    if not gid:
+        return None
+    guest = User.objects.filter(pk=gid).first()
+    if guest is None or not is_guest(guest):
+        request.session.pop('promote_guest_id', None)
+        return None
+    return guest
+
+
+@login_required
+@require_POST
+def promote_guest_data(request):
+    """게스트로 만든 것을 지금 계정으로 옮긴다."""
+    from v1.common.guest import promote
+
+    guest = _pending_guest(request)
+    if guest is None:
+        # 이미 옮겼거나, 옮길 게스트가 없다. 조용히 돌아간다 — 두 번 눌러도
+        # 두 번째는 아무 일이 없어야 한다.
+        return redirect('main:home')
+
+    if request.POST.get('decline') == '1':
+        request.session.pop('promote_guest_id', None)
+        return redirect('main:home')
+
+    moved = promote(guest, request.user)
+    request.session.pop('promote_guest_id', None)
+
+    if moved:
+        messages.success(
+            request,
+            '게스트로 만드신 ' +
+            ' · '.join('%s %d개' % (k, v) for k, v in moved.items()) +
+            ' 를 이 계정으로 가져왔습니다.')
+    logger.info('게스트 승격: guest=%s -> user=%s moved=%s',
+                guest.pk, request.user.pk, moved)
+    return redirect('main:home')

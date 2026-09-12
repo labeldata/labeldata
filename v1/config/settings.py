@@ -120,6 +120,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'v1.common.context_processors.static_build_date',
                 'v1.common.context_processors.guest_flag',
+                'v1.common.context_processors.guest_promotion',
                 'v1.common.context_processors.board_notifications',
                 'v1.common.context_processors.ui_mode',
                 'v1.common.context_processors.regulatory_alerts',

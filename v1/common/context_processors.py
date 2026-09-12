@@ -41,6 +41,33 @@ def guest_flag(request):
     from v1.common.guest import is_guest
     return {'is_guest': is_guest(getattr(request, 'user', None))}
 
+
+def guest_promotion(request):
+    """
+    게스트로 만든 것을 가져올지 물을 거리가 있나.
+
+    로그인 자리에서 세션에 남긴 게스트 id 를 보고, **옮길 것이 실제로 있을
+    때만** 화면에 올린다. 빈손인 게스트를 둘러보다 로그인한 사람에게
+    "가져올까요" 를 묻는 것은 묻지 않느니만 못하다.
+
+    세는 일이 매 요청마다 일어나지 않게, 세션에 열쇠가 있을 때만 센다.
+    보통은 로그인 직후 한 번뿐이고, 누르거나 거절하면 열쇠가 사라진다.
+    """
+    if not request.session.get('promote_guest_id'):
+        return {}
+
+    from django.contrib.auth.models import User
+
+    from v1.common.guest import promotable
+
+    guest = User.objects.filter(pk=request.session['promote_guest_id']).first()
+    counts = promotable(guest) if guest else {}
+    if not counts:
+        # 옮길 것이 없으면 다시 묻지 않는다
+        request.session.pop('promote_guest_id', None)
+        return {}
+    return {'guest_promotion': counts}
+
 def ui_mode(request):
     """UI 모드(V1/V2) 컨텍스트 프로세서.
     세션의 'ui_mode' 값('v1' 또는 'v2')을 읽어 템플릿에 제공합니다.

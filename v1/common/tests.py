@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.urls import reverse
 from django.test import RequestFactory, SimpleTestCase, TestCase
 
 from v1.common.context_processors import board_notifications, regulatory_alerts
@@ -559,3 +560,176 @@ class 자리만_채운_비밀로는_운영에_뜨지_않는다(TestCase):
         src = self._settings_source()
         self.assertIn("_reject_placeholder('DJANGO_SECRET_KEY', SECRET_KEY)", src)
         self.assertIn("'DB_PASSWORD', config('DB_PASSWORD'", src)
+
+
+class 게스트가_만든_것을_버리지_않는다(TestCase):
+    """
+    격리는 끝냈는데 **승격 경로를 안 만들었다.** 게스트로 제품을 만들고 BOM 을
+    넣고 검증까지 돌려 본 사람이 가입하면, 그 전부가 남의 계정에 남고
+    stale_guests 가 지운다. 가장 열심히 써 본 사람의 결과물을 정확히 그
+    사람이 돈을 낼 마음이 든 순간에 버리고 있었다.
+    """
+
+    def setUp(self):
+        from v1.common.guest import create_guest
+        self.guest = create_guest()
+        self.member = User.objects.create_user(
+            username='real@example.com', email='real@example.com', password='x')
+
+    def _label(self, owner, name='제품'):
+        from v1.label.models import MyLabel
+        return MyLabel.objects.create(user_id=owner, prdlst_nm=name)
+
+    def _ingredient(self, owner, name='원료'):
+        from v1.label.models import MyIngredient
+        return MyIngredient.objects.create(user_id=owner, prdlst_nm=name, delete_YN='N')
+
+    def test_제품과_원료가_따라온다(self):
+        from v1.common.guest import promote
+        from v1.label.models import MyIngredient, MyLabel
+
+        label = self._label(self.guest)
+        ing = self._ingredient(self.guest)
+
+        moved = promote(self.guest, self.member)
+
+        self.assertEqual(MyLabel.objects.get(pk=label.pk).user_id, self.member)
+        self.assertEqual(MyIngredient.objects.get(pk=ing.pk).user_id, self.member)
+        self.assertEqual(moved.get('제품'), 1)
+        self.assertEqual(moved.get('원료'), 1)
+
+    def test_BOM_과_영양성분은_따로_옮기지_않아도_따라온다(self):
+        """
+        제품과 원료에 FK 로 매달려 있다. 이걸 모르고 하나씩 옮기려 들면 표를
+        열 개도 넘게 건드리게 된다 — 그러다 하나를 빠뜨린다.
+        """
+        from v1.common.guest import promote
+        from v1.label.models import MyIngredientNutrition
+
+        ing = self._ingredient(self.guest)
+        MyIngredientNutrition.objects.create(ingredient=ing)
+
+        promote(self.guest, self.member)
+
+        nut = MyIngredientNutrition.objects.get(ingredient=ing)
+        self.assertEqual(nut.ingredient.user_id, self.member)
+
+    def test_남의_것은_건드리지_않는다(self):
+        from v1.common.guest import create_guest, promote
+        from v1.label.models import MyLabel
+
+        other = create_guest()
+        mine = self._label(self.guest, '내 것')
+        theirs = self._label(other, '남의 것')
+
+        promote(self.guest, self.member)
+
+        self.assertEqual(MyLabel.objects.get(pk=mine.pk).user_id, self.member)
+        self.assertEqual(MyLabel.objects.get(pk=theirs.pk).user_id, other)
+
+    def test_옮긴_게스트는_잠근다(self):
+        """세션이 아직 살아 있어도 두 번 가져가지 못하게 하는 자물쇠다."""
+        from v1.common.guest import promote
+
+        promote(self.guest, self.member)
+        self.guest.refresh_from_db()
+        self.assertFalse(self.guest.is_active)
+
+    def test_게스트가_아닌_곳에서는_옮기지_않는다(self):
+        """
+        회원 A 의 것을 회원 B 로 옮기는 길이 생기면 안 된다. 이 함수는 게스트
+        승격 하나에만 쓰인다.
+        """
+        from v1.common.guest import promote
+
+        other = User.objects.create_user(username='b@example.com', password='x')
+        with self.assertRaises(ValueError):
+            promote(other, self.member)          # 출발지가 회원
+        with self.assertRaises(ValueError):
+            promote(self.guest, self.guest)      # 목적지가 게스트
+
+    def test_빈손이면_묻지_않는다(self):
+        """만든 것이 없는 사람에게 '가져올까요' 는 묻지 않느니만 못하다."""
+        from v1.common.guest import promotable
+
+        self.assertEqual(promotable(self.guest), {})
+        self._label(self.guest)
+        self.assertEqual(promotable(self.guest), {'제품': 1})
+
+
+class 가져오기는_사람이_눌러야_한다(TestCase):
+    """
+    조용히 옮기면 안 된다. 남의 PC 에서 둘러본 것이 내 계정에 딸려 오면
+    곤란하고, 무엇이 옮겨졌는지 모르면 빠진 것이 있어도 알 수 없다.
+    """
+
+    def setUp(self):
+        from v1.common.guest import create_guest
+        from v1.label.models import MyLabel
+
+        self.guest = create_guest()
+        self.member = User.objects.create_user(
+            username='real@example.com', email='real@example.com', password='pw12345!')
+        self.label = MyLabel.objects.create(user_id=self.guest, prdlst_nm='제품')
+
+    def _sign_in_with_pending(self):
+        self.client.force_login(self.member)
+        session = self.client.session
+        session['promote_guest_id'] = self.guest.pk
+        session.save()
+
+    def test_누르기_전에는_옮기지_않는다(self):
+        from v1.label.models import MyLabel
+
+        self._sign_in_with_pending()
+        self.client.get('/')
+        self.assertEqual(MyLabel.objects.get(pk=self.label.pk).user_id, self.guest)
+
+    def test_누르면_옮긴다(self):
+        from v1.label.models import MyLabel
+
+        self._sign_in_with_pending()
+        self.client.post(reverse('user_management:promote_guest_data'))
+        self.assertEqual(MyLabel.objects.get(pk=self.label.pk).user_id, self.member)
+
+    def test_아니요를_누르면_그대로_두고_다시_묻지_않는다(self):
+        from v1.label.models import MyLabel
+
+        self._sign_in_with_pending()
+        self.client.post(reverse('user_management:promote_guest_data'), {'decline': '1'})
+        self.assertEqual(MyLabel.objects.get(pk=self.label.pk).user_id, self.guest)
+        self.assertNotIn('promote_guest_id', self.client.session)
+
+    def test_두_번_눌러도_두_번째는_아무_일이_없다(self):
+        self._sign_in_with_pending()
+        self.client.post(reverse('user_management:promote_guest_data'))
+        resp = self.client.post(reverse('user_management:promote_guest_data'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_남의_게스트_번호를_넣어_가져갈_수_없다(self):
+        """
+        **세션에 남은 id 로만 옮긴다.** 사용자가 보낸 id 를 받으면 남의 게스트
+        계정 번호를 넣어 그 사람의 제품을 가져갈 수 있다.
+        """
+        from v1.common.guest import create_guest
+        from v1.label.models import MyLabel
+
+        victim = create_guest()
+        theirs = MyLabel.objects.create(user_id=victim, prdlst_nm='남의 제품')
+
+        self.client.force_login(self.member)      # 세션에 열쇠가 없다
+        self.client.post(reverse('user_management:promote_guest_data'),
+                         {'promote_guest_id': victim.pk, 'guest_id': victim.pk})
+
+        self.assertEqual(MyLabel.objects.get(pk=theirs.pk).user_id, victim)
+
+    def test_로그인하지_않으면_부를_수_없다(self):
+        resp = self.client.post(reverse('user_management:promote_guest_data'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login/', resp['Location'])
+
+    def test_GET_으로는_옮기지_않는다(self):
+        """주소만 눌러도 데이터가 움직이면 안 된다."""
+        self._sign_in_with_pending()
+        resp = self.client.get(reverse('user_management:promote_guest_data'))
+        self.assertEqual(resp.status_code, 405)

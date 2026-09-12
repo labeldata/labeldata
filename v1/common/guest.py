@@ -94,3 +94,89 @@ def stale_guests(hours: int = GUEST_TTL_HOURS):
     return (User.objects
             .filter(username__startswith=GUEST_PREFIX, date_joined__lt=cutoff)
             .exclude(username=LEGACY_GUEST_EMAIL))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 게스트가 만든 것을 회원 계정으로 옮긴다
+#
+# 격리는 끝냈는데 **승격 경로를 안 만들었다.** 그래서 지금 이런 일이 일어난다.
+#
+#     게스트로 들어옴 → 제품 만듦 → BOM 넣음 → 검증 돌림 → "쓸 만하네" → 가입
+#     → 새 계정은 텅 비어 있다 → 게스트 계정은 stale_guests 가 지운다
+#
+# 가장 열심히 써 본 사람의 결과물을, 정확히 그 사람이 돈을 낼 마음이 든
+# 순간에 버리고 있었다.
+#
+# **옮길 것은 다섯뿐이다.** User 를 가리키는 관계가 스물다섯쯤 있지만 전부
+# 옮기면 안 된다. 옮기는 것은 "그 사람이 만든 결과물" 이고, 남기는 것은
+# "그때 그 계정에 일어난 사실" 이다.
+#
+#     옮긴다   제품 · 원료 · 자주 쓰는 문구 · 폴더 · 문서 업로드자
+#     안 옮긴다 활동 로그(그때의 사실) · 받은 공유(남이 그 게스트에게 준 것)
+#               · 알림(옮겨도 의미가 없다)
+#
+# BOM 줄·영양성분·문서는 **따로 옮기지 않는다.** 제품과 원료에 FK 로 매달려
+# 있어서 주인이 바뀌면 함께 따라온다. 이걸 모르고 하나씩 옮기려 들면 표를
+# 열 개도 넘게 건드리게 된다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _movable(guest):
+    """(설명, 질의집합, 주인 칸) 세 쪽. 세는 것과 옮기는 것이 같은 목록을 본다."""
+    from v1.label.models import MyIngredient, MyLabel, MyPhrase
+    from v1.products.models import ProductDocument, ProductFolder
+
+    return [
+        ('제품',   MyLabel.objects.filter(user_id=guest),          'user_id'),
+        ('원료',   MyIngredient.objects.filter(user_id=guest),     'user_id'),
+        ('폴더',   ProductFolder.objects.filter(owner=guest),      'owner'),
+        ('문구',   MyPhrase.objects.filter(user_id=guest),         'user_id'),
+        # 문서는 제품에 매달려 따라온다. 업로드자 도장만 같은 사람으로 고친다 —
+        # 안 고치면 게스트가 지워질 때 SET_NULL 로 "누가 올렸는지 모름" 이 된다.
+        ('문서',   ProductDocument.objects.filter(uploaded_by=guest), 'uploaded_by'),
+    ]
+
+
+def promotable(guest):
+    """
+    옮길 것이 무엇이 얼마나 있나. **묻기 위해서** 센다.
+
+    조용히 옮기면 안 된다. 남의 PC 에서 둘러본 것이 내 계정에 딸려 오면
+    곤란하고, 무엇이 옮겨졌는지 모르면 빠진 것이 있어도 알 수 없다.
+    """
+    if not is_guest(guest):
+        return {}
+    counts = {}
+    for label, qs, _field in _movable(guest):
+        n = qs.count()
+        if n:
+            counts[label] = n
+    return counts
+
+
+@transaction.atomic
+def promote(guest, user):
+    """
+    게스트가 만든 것을 `user` 에게 옮긴다. 옮긴 수를 돌려준다.
+
+    **한 트랜잭션이다.** 다섯을 옮기다 가운데서 실패하면 절반만 옮겨진 채
+    남는데, 그 상태는 게스트도 회원도 온전하지 않다.
+
+    옮긴 뒤 게스트를 잠근다. 그 세션이 아직 살아 있어도 두 번 옮겨 가지
+    못하게 하는 자물쇠다 — is_active 를 내리면 다음 요청에서 로그아웃된다.
+    """
+    if not is_guest(guest):
+        raise ValueError('게스트가 아닌 계정에서는 옮기지 않는다')
+    if is_guest(user):
+        raise ValueError('게스트에게로는 옮기지 않는다')
+    if guest.pk == user.pk:
+        raise ValueError('제 자신에게로는 옮기지 않는다')
+
+    moved = {}
+    for label, qs, field in _movable(guest):
+        n = qs.update(**{field: user})
+        if n:
+            moved[label] = n
+
+    guest.is_active = False
+    guest.save(update_fields=['is_active'])
+    return moved
