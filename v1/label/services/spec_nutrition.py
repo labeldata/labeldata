@@ -1,32 +1,22 @@
-# -*- coding: utf-8 -*-
 """
-시험성적서 사진에서 **영양성분 값**을 읽는다.
+**영양성분 성적서** 사진에서 값을 읽는다.
 
-왜 이것이 특별한가
-──────────────────
-원료 영양성분의 출처에는 등급이 있다.
+왜 VLM 이 아니라 OCR 인가
+─────────────────────────
+성적서는 **인쇄된 표**다. 항목 | 결과 | 단위 | 시험방법 이 줄지어 선 정형이고,
+손글씨도 곡면도 없다. 그러면 전통 OCR 이 더 낫다 — 측정이 이미 그렇게 말했다
+(ocr_text 주석).
 
-    A  spec_ocr    업체 시험성적서
-    B  report_no   품목보고번호가 식약처 DB 와 정확히 일치
-    C  picked      후보 중 사람이 고름 / manual 직접 입력
+    VLM      레이아웃 이해는 탁월하고 **긴 문자열 축자 전사를 못 한다.**
+             다음 토큰을 확률로 뽑으니 그럴듯한 쪽으로 흐른다.
+    OCR      글자를 보고 글자를 내므로 **지어낼 수가 없다.** 대신 어느 칸인지
+             모른다.
 
-**공공 DB 로 채운 값은 영원히 C 다.** 식약처 DB 의 밀가루는 "일반적인 밀가루"
-이지 "우리가 쓰는 그 밀가루" 가 아니기 때문이다. 이론치로 만든 영양성분표는
-그 자체가 감사 대상이라 "이 숫자가 어디서 왔는가" 가 값만큼 중요하다.
+성적서에서 우리가 원하는 것은 **숫자를 정확히 옮기는 것**이다. 어느 칸인지는
+항목 이름이 바로 옆에 적혀 있어 규칙으로 가를 수 있다. VLM 이 잘하는 쪽은
+필요 없고, 못하는 쪽이 정확히 우리가 필요한 것이다.
 
-`SOURCE_SPEC_OCR` 은 모델에 처음부터 정의돼 있었다. **그 값을 넣는 화면만
-없었다.** 그리고 그 종이는 이미 우리 문서함에 쌓이고 있다.
-
-표시사항 판독과 무엇이 다른가
-─────────────────────────────
-표시사항 사진은 **인쇄된 라벨**이고, 성적서는 **시험 결과표**다. 읽는 것이
-다르다.
-
-    표시사항   제품명·원재료명·소비기한… 글이 대부분
-    성적서     항목 | 결과 | 단위 | 시험방법 이 줄지어 선 **표**
-
-그래서 프롬프트를 따로 둔다. 표시사항 프롬프트로 성적서를 읽히면 제품명 칸에
-시험기관 이름이 들어오는 식으로 어긋난다.
+값이 싸고 빠른 것은 덤이다 — 호출 하나가 줄고, 판독 한도(quota)도 덜 먹는다.
 
 기준량을 반드시 읽는다
 ──────────────────────
@@ -34,6 +24,13 @@
 섞여 있다. **기준량을 모르면 그 값은 쓸 수 없다** — 100 g 당으로 바꿔야
 배합 계산에 들어간다. 못 읽으면 비워 두고 사람에게 묻는다. 100 으로
 가정하면 조용히 몇 배씩 틀린다.
+
+왜 이것이 값진가
+────────────────
+원료 영양성분의 출처에는 등급이 있고 **공공 DB 로 채운 값은 영원히 C** 다.
+식약처 DB 의 밀가루는 "일반적인 밀가루" 이지 "우리가 쓰는 그 밀가루" 가
+아니기 때문이다. A 를 만들 수 있는 경로는 성적서뿐이고, 그 종이는 이미 우리
+문서함에 쌓이고 있다.
 """
 import base64
 import io as _io
@@ -59,29 +56,40 @@ FIELDS = (
     ('sugar_alcohols', '당알콜', 'g'),
 )
 
-PROMPT = (
-    '이 이미지는 식품 **시험성적서**(또는 규격서)입니다. 영양성분 시험 결과를 '
-    '읽어 JSON 으로만 답하세요.\n\n'
-    '읽을 것\n'
-    + ''.join('  %s (%s)\n' % (ko, unit) for _f, ko, unit in FIELDS) +
-    '\n'
-    '규칙\n'
-    '1. **적혀 있는 것만** 읽으세요. 표에 없는 항목은 null 로 두세요. '
-    '0 으로 적지 마세요 — 모르는 것과 0 은 다릅니다.\n'
-    '2. 단위를 위 목록에 맞춰 환산하세요. mg 로 적힌 나트륨은 그대로, '
-    'g 으로 적혀 있으면 1000 을 곱하세요.\n'
-    '3. "불검출", "ND", "-", "<0.1" 은 0 으로 보지 말고 null 로 두세요.\n'
-    '4. **기준량을 반드시 읽으세요.** "100g당", "1회 제공량(30g)당", "1kg당" '
-    '등이 표 머리나 각주에 있습니다. basis_amount 에 숫자, basis_unit 에 '
-    'g 또는 mL 을 넣으세요. 찾지 못하면 둘 다 null 로 두세요 — '
-    '**추측하지 마세요.**\n'
-    '5. 시험기관·시험번호·접수일 같은 것은 읽지 마세요. 영양성분만 봅니다.\n\n'
-    '형식 (다른 말 없이 이 JSON 만)\n'
-    '{"basis_amount": 100, "basis_unit": "g", '
-    '"values": {"calories": 380, "carbohydrates": 70.2, ...}}'
-)
+# 항목을 알아보는 말. 성적서마다 이름이 조금씩 다르다.
+ALIASES = {
+    'calories':      ('열량', '에너지', 'energy', 'calorie'),
+    'carbohydrates': ('탄수화물', 'carbohydrate'),
+    'sugars':        ('당류', 'sugar'),
+    'proteins':      ('단백질', 'protein'),
+    'fats':          ('지방', '조지방', 'fat'),
+    'saturated_fats': ('포화지방', '포화 지방', 'saturated'),
+    'trans_fats':    ('트랜스지방', '트랜스 지방', 'trans'),
+    'cholesterols':  ('콜레스테롤', 'cholesterol'),
+    'natriums':      ('나트륨', 'sodium'),
+    'dietary_fiber': ('식이섬유', 'fiber', 'fibre'),
+    'sugar_alcohols': ('당알콜', '당알코올'),
+}
 
-_NUM = re.compile(r'-?\d+(?:\.\d+)?')
+# 긴 이름을 먼저 본다. '지방' 이 '포화지방' 줄을 채 가면 안 된다.
+_ORDER = sorted(ALIASES, key=lambda k: -max(len(a) for a in ALIASES[k]))
+
+# 값이 없다는 말들. **0 으로 적으면 거짓말이 된다.**
+_ABSENT = ('불검출', 'nd', 'n.d', 'n/d', '-', '--', '해당없음', 'tr')
+
+# 기준량. "100g당", "100 g 당", "1회 제공량(30g)당", "per 100g"
+#
+# **당·기준 을 단위 뒤에 반드시 요구한다.** 없으면 "당류 12.5 g" 줄이
+# 기준량으로 잡힌다 — 실제로 그랬다. 성분 이름에도 '당' 이 들어간다.
+_BASIS = re.compile(
+    r'(\d+(?:\.\d+)?)\s*(g|kg|mg|mL|ml|밀리리터|그램)\s*\)?\s*(?:당|기준|Per|per)\b',
+    re.IGNORECASE)
+
+# 한 줄에서 숫자를 찾는다. 단위가 붙어 있으면 함께 본다.
+_VALUE = re.compile(r'(-?\d+(?:[,.]\d+)?)\s*(kcal|mg|g|%)?', re.IGNORECASE)
+
+# 단위를 우리 기준으로 맞춘다 (열량 kcal · 나트륨/콜레스테롤 mg · 나머지 g)
+_TO_UNIT = {'natriums': 'mg', 'cholesterols': 'mg', 'calories': 'kcal'}
 
 
 def _num(v):
@@ -91,10 +99,100 @@ def _num(v):
     if isinstance(v, (int, float)):
         return float(v)
     text = str(v).strip()
-    if not text or text.lower() in ('nd', 'n/d', '-', 'null', '불검출'):
+    if not text or _absent_in(text):
         return None
-    m = _NUM.search(text.replace(',', ''))
-    return float(m.group()) if m else None
+    m = _VALUE.search(text.replace(",", ""))
+    return float(m.group(1)) if m else None
+
+
+def _absent_in(text):
+    """이 조각이 '값이 없다' 고 말하는가."""
+    low = str(text or '').strip().lower()
+    if not low:
+        return False
+    if low.startswith('<'):
+        return True
+    for mark in _ABSENT:
+        if low.startswith(mark) or (' ' + mark) in (' ' + low):
+            return True
+    return False
+
+
+def parse_basis(text):
+    """원문에서 기준량을 찾는다. (숫자, 단위) — 못 찾으면 (None, '')."""
+    for line in str(text or '').splitlines():
+        m = _BASIS.search(line)
+        if not m:
+            continue
+        amount = float(m.group(1))
+        unit = m.group(2).lower()
+        if unit == 'kg':
+            amount, unit = amount * 1000, 'g'
+        elif unit == 'mg':
+            amount, unit = amount / 1000.0, 'g'
+        elif unit == '밀리리터':
+            unit = 'ml'
+        elif unit == '그램':
+            unit = 'g'
+        if amount > 0:
+            return amount, unit
+    return None, ''
+
+
+def _name_at(line):
+    """이 줄이 말하는 성분과 이름이 끝나는 자리. 없으면 (None, 0)."""
+    low = line.lower()
+    for key in _ORDER:
+        for alias in ALIASES[key]:
+            at = low.find(alias.lower())
+            if at >= 0:
+                return key, at + len(alias)
+    return None, 0
+
+
+def parse_values(text):
+    """
+    원문에서 성분별 값을 뽑는다. 단위는 우리 기준으로 맞춘다.
+
+    **없다고 적힌 줄에서 다음 줄 값을 빌려 오지 않는다.** 처음에 그렇게
+    했더니 '콜레스테롤 ND' 가 바로 아래 '나트륨 420' 을 가져갔다 —
+    없는 값이 남의 값으로 채워지는 것이 이 파서가 낼 수 있는 가장 나쁜
+    실수다. 없다고 적혀 있으면 **거기서 끝낸다.**
+    """
+    lines = [ln.strip() for ln in str(text or '').splitlines() if ln.strip()]
+    out = {}
+    for i, line in enumerate(lines):
+        key, after = _name_at(line)
+        if key is None or key in out:
+            continue
+
+        tail = line[after:]
+        if _absent_in(tail):
+            out[key] = None          # 읽었고, 없다고 적혀 있었다
+            continue
+
+        m = _VALUE.search(tail)
+        if m is None:
+            # 이름만 있는 줄. 다음 줄에 값이 있을 수 있다 — 다만 그 줄이
+            # 다른 성분 이름을 달고 있으면 남의 값이므로 건드리지 않는다.
+            if i + 1 < len(lines) and _name_at(lines[i + 1])[0] is None:
+                nxt = lines[i + 1]
+                if _absent_in(nxt):
+                    out[key] = None
+                    continue
+                m = _VALUE.search(nxt)
+            if m is None:
+                continue
+
+        value = float(m.group(1).replace(',', ''))
+        unit = (m.group(2) or '').lower()
+        want = _TO_UNIT.get(key, 'g')
+        if want == 'mg' and unit == 'g':
+            value *= 1000
+        elif want == 'g' and unit == 'mg':
+            value /= 1000.0
+        out[key] = value
+    return out
 
 
 def to_per_100(values, basis_amount, basis_unit):
@@ -125,45 +223,35 @@ def to_per_100(values, basis_amount, basis_unit):
 
 def read(image_fh, tag='spec_nutrition'):
     """
-    성적서 사진 하나를 읽어 {values, basis_amount, basis_unit, error} 를 낸다.
+    성적서 사진 하나를 읽어 {values, basis_amount, basis_unit, error, text} 를 낸다.
 
     값은 **100 g(mL) 당으로 환산해서** 낸다. 환산할 수 없으면 values 는 비고
     error 에 까닭이 담긴다 — 사람이 기준량을 알려 주면 다시 부르면 된다.
     """
-    from v1.label.services.ai_validation_service import call_openai
+    from v1.label.services.ocr_text import extract_text
 
+    empty = {'values': {}, 'basis_amount': None, 'basis_unit': '', 'text': ''}
     try:
         raw = image_fh.read()
     except Exception as exc:
-        return {'values': {}, 'basis_amount': None, 'basis_unit': '',
-                'error': '파일을 읽지 못했습니다: %s' % exc}
+        return dict(empty, error='파일을 읽지 못했습니다: %s' % exc)
     if not raw:
-        return {'values': {}, 'basis_amount': None, 'basis_unit': '',
-                'error': '빈 파일입니다.'}
+        return dict(empty, error='빈 파일입니다.')
 
-    b64 = base64.b64encode(raw).decode('ascii')
-    content = [
-        {"type": "image_url",
-         "image_url": {"url": "data:image/jpeg;base64,%s" % b64, "detail": "high"}},
-        {"type": "text", "text": PROMPT},
-    ]
-    body, reason = call_openai(tag, content, max_tokens=900, json_mode=True)
-    if body is None:
-        return {'values': {}, 'basis_amount': None, 'basis_unit': '',
-                'error': reason or '판독하지 못했습니다.'}
-    if isinstance(body, str):
-        try:
-            body = json.loads(body)
-        except ValueError:
-            return {'values': {}, 'basis_amount': None, 'basis_unit': '',
-                    'error': '판독 결과를 읽지 못했습니다.'}
+    try:
+        text = extract_text(raw)
+    except Exception as exc:
+        logger.exception('[%s] 원문 추출 실패', tag)
+        return dict(empty, error='글자를 읽지 못했습니다: %s' % exc)
+    if not (text or '').strip():
+        return dict(empty, error='사진에서 글자를 찾지 못했습니다.')
 
-    amount = _num(body.get('basis_amount'))
-    unit = str(body.get('basis_unit') or '').strip()
-    values, why = to_per_100(body.get('values') or {}, amount, unit)
+    amount, unit = parse_basis(text)
+    values, why = to_per_100(parse_values(text), amount, unit)
     return {
         'values': values or {},
         'basis_amount': amount,
         'basis_unit': unit,
+        'text': text,
         'error': why,
     }

@@ -7159,7 +7159,7 @@ def discard_if_untouched(request, product_id):
 @require_POST
 def document_spec_nutrition(request, document_id):
     """
-    문서함의 시험성적서에서 영양성분을 읽는다. **저장하지 않고 보여만 준다.**
+    문서함의 영양성분 성적서에서 값을 읽는다. **저장하지 않고 보여만 준다.**
 
     `MyIngredientNutrition.SOURCE_SPEC_OCR` 은 모델에 처음부터 있었고 등급이
     **A** 다. 그런데 그 값을 넣는 화면이 없어서, 원료 영양성분은 늘 C 등급
@@ -7237,7 +7237,7 @@ def document_spec_nutrition_save(request, document_id):
         'public_row': None,
         'picked_by': request.user,      # 사람이 승인했다. 자동 판단이 아니다
         'picked_at': timezone.now(),
-        'source_note': '시험성적서 판독 — %s' % (doc.original_filename or doc.pk),
+        'source_note': '영양성분 성적서 판독 — %s' % (doc.original_filename or doc.pk),
         'source_document': doc,
     })
     with transaction.atomic():

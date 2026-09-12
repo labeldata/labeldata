@@ -1243,6 +1243,98 @@ async function submitImportCompanyDoc() {
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    /* ── 영양성분 성적서 읽기 ────────────────────────────────────
+     *
+     * 원료 영양성분의 출처에는 등급이 있고 **공공 DB 로 채운 값은 영원히 C**
+     * 다. 식약처 DB 의 밀가루는 "일반적인 밀가루" 이지 "우리가 쓰는 그
+     * 밀가루" 가 아니기 때문이다. A 를 만들 수 있는 경로는 시험성적서뿐인데,
+     * 그 종이는 이미 여기 쌓여 있으면서 읽는 단추만 없었다.
+     * ───────────────────────────────────────────────────────────────── */
+
+    // 문서 종류 코드는 계정마다 다르게 만들어 쓴다(운영에는 여럿, 개발에는
+    // 하나뿐이다). 코드 하나로 못 박으면 그 계정에서만 보인다. 이름으로 본다.
+    function looksLikeSpecSheet(doc) {
+        var name = String((doc && doc.typeName) || '');
+        return /영양|성적서|규격서/.test(name);
+    }
+
+    window.readSpecNutrition = async function (docId) {
+        showSnackbar('성적서를 읽는 중입니다...', 'info');
+        let body;
+        try {
+            const res = await fetch(`/products/documents/${docId}/spec-nutrition/`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': ingredientCsrf()}
+            });
+            body = await res.json();
+            if (!res.ok || !body.success) {
+                showSnackbar(body.error || '읽지 못했습니다.', 'error');
+                return;
+            }
+        } catch (err) {
+            console.error(err);
+            showSnackbar('읽는 중 오류가 발생했습니다.', 'error');
+            return;
+        }
+
+        /* 기준량을 못 읽으면 값이 비어 온다. **100 으로 가정하지 않는다** —
+           1회 제공량 30g 성적서가 그대로 들어오면 값이 3.3배 낮아지는데
+           터지지 않으니 아무도 모른다. */
+        if (body.error) {
+            showSnackbar(body.error, 'error');
+            return;
+        }
+        showSpecNutrition(docId, body);
+    };
+
+    function showSpecNutrition(docId, body) {
+        const rows = [
+            ['calories', '열량', 'kcal'], ['carbohydrates', '탄수화물', 'g'],
+            ['sugars', '당류', 'g'], ['proteins', '단백질', 'g'],
+            ['fats', '지방', 'g'], ['saturated_fats', '포화지방', 'g'],
+            ['trans_fats', '트랜스지방', 'g'], ['cholesterols', '콜레스테롤', 'mg'],
+            ['natriums', '나트륨', 'mg']
+        ];
+        const v = body.values || {};
+        const list = rows.map(function (r) {
+            const val = v[r[0]];
+            return '<div class="d-flex justify-content-between border-bottom py-1">'
+                + '<span>' + r[1] + '</span>'
+                + '<span>' + (val == null
+                    ? '<span class="text-muted" style="font-size:11px;">성적서에 없음</span>'
+                    : val + ' ' + r[2]) + '</span></div>';
+        }).join('');
+
+        const html = '<div style="font-size:12px;">'
+            + '<div class="text-muted mb-2">성적서 기준량 '
+            + (body.basis_amount || '-') + (body.basis_unit || '')
+            + ' 을 <b>100' + (body.basis_unit || 'g') + ' 당</b>으로 바꾼 값입니다.</div>'
+            + list
+            + '<div class="text-muted mt-2" style="font-size:11px;">'
+            + '어느 원료에 붙일지 고르면 저장됩니다. 저장하면 그 원료의 출처가 '
+            + '<b>업체 시험성적서(등급 A)</b> 가 되고, 이 문서가 근거로 매달립니다.</div>'
+            + '</div>';
+
+        if (typeof window.openSpecNutritionPicker === 'function') {
+            window.openSpecNutritionPicker(docId, body, html);
+            return;
+        }
+        /* 고르는 창이 아직 없으면 **읽은 값을 그 자리에서 보여 준다.**
+           스낵바로 "읽었습니다" 만 띄우면 정작 값을 못 본다. 게다가 이 화면의
+           success 스낵바는 새로고침에 삼켜진다(showSavedAfterReload 주석). */
+        var box = document.getElementById('specNutritionResult');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'specNutritionResult';
+            box.className = 'border rounded p-2 mb-3';
+            box.style.background = 'var(--ez-success-bg, #e6f4ea)';
+            var panel = document.getElementById('documentEditPanel')
+                     || document.querySelector('.doc-edit-panel') || document.body;
+            panel.insertBefore(box, panel.firstChild);
+        }
+        box.innerHTML = html;
+    }
+
     window.previewIngredientPhoto = async function (docId) {
         showSnackbar('사진을 읽는 중입니다...', 'info');
         let body;
@@ -1389,6 +1481,24 @@ async function submitImportCompanyDoc() {
                     </button>
                 </div>
             </div>
+
+            ${looksLikeSpecSheet(doc) ? `
+            <div class="border rounded p-2 mb-3" style="background:var(--ez-success-bg,#e6f4ea); border-color:var(--ez-success-border,#ceead6) !important;">
+                <div class="fw-semibold mb-1" style="font-size:13px; color:var(--ez-success-on-bg,#137333);">
+                    <i class="bi bi-clipboard-data me-1"></i>영양성분 읽기
+                    <span class="badge bg-success-subtle text-success-emphasis" style="font-size:10px;">등급 A</span>
+                </div>
+                <div class="text-muted mb-2" style="font-size:11px; line-height:1.5;">
+                    영양성분 성적서의 값은 <b>가장 정확한 출처</b>입니다.
+                    공공 DB 로 채운 값은 "일반적인 그 원료" 라 등급이 낮습니다.
+                    읽은 값은 <b>확인한 뒤에</b> 원료에 붙습니다.
+                </div>
+                <button class="btn btn-outline-success v2-btn-sm w-100"
+                        onclick="readSpecNutrition(${docId})">
+                    <i class="bi bi-magic"></i>성적서에서 영양성분 읽기
+                </button>
+            </div>
+            ` : ''}
 
             ${doc.typeCode === 'INGREDIENT_LABEL' ? `
             <div class="border rounded p-2 mb-3" style="background:#f6f2fc; border-color:#d9c8f0 !important;">

@@ -17262,11 +17262,76 @@ class 성적서에서_읽은_값은_등급_A_다(TestCase):
         read = {f for f, _ko, _u in spec_nutrition.FIELDS}
         self.assertEqual(read - set(MyIngredientNutrition.VALUE_FIELDS), set())
 
-    def test_기준량을_추측하지_말라고_프롬프트에_적는다(self):
+    SAMPLE = """영양성분 성적서
+열량 380 kcal 계산법
+탄수화물 70.2 g AOAC
+당류 12.5 g HPLC
+단백질 8.1 g 켈달법
+지방 6.4 g 산분해
+포화지방 2.1 g GC
+트랜스지방 불검출 g GC
+콜레스테롤 ND mg GC
+나트륨 420 mg ICP
+(100g당 기준)"""
+
+    def test_VLM_이_아니라_OCR_로_읽는다(self):
+        """
+        성적서는 인쇄된 표다. VLM 은 긴 문자열 축자 전사를 못 하고(확률로 다음
+        토큰을 뽑는다) OCR 은 글자를 보고 글자를 내므로 지어낼 수가 없다.
+        우리가 원하는 것은 **숫자를 정확히 옮기는 것**이라 OCR 쪽이 맞다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/label/services/spec_nutrition.py').read_text(encoding='utf-8')
+        self.assertIn('from v1.label.services.ocr_text import extract_text', src)
+        self.assertNotIn('call_openai', src)
+
+    def test_표에서_성분을_뽑는다(self):
         from v1.label.services import spec_nutrition
 
-        self.assertIn('추측하지 마세요', spec_nutrition.PROMPT)
-        self.assertIn('0 으로 적지 마세요', spec_nutrition.PROMPT)
+        v = spec_nutrition.parse_values(self.SAMPLE)
+        self.assertEqual(v['calories'], 380.0)
+        self.assertEqual(v['sugars'], 12.5)
+        self.assertEqual(v['natriums'], 420.0)
+
+    def test_성분_이름의_당을_기준량으로_읽지_않는다(self):
+        """'당류 12.5 g' 이 기준량으로 잡혔다. 단위 뒤에 당·기준을 요구한다."""
+        from v1.label.services import spec_nutrition
+
+        self.assertEqual(spec_nutrition.parse_basis(self.SAMPLE), (100.0, 'g'))
+
+    def test_없다고_적힌_줄이_남의_값을_가져가지_않는다(self):
+        """
+        '콜레스테롤 ND' 가 바로 아래 '나트륨 420' 을 가져갔다. 없는 값이 남의
+        값으로 채워지는 것이 이 파서가 낼 수 있는 가장 나쁜 실수다.
+        """
+        from v1.label.services import spec_nutrition
+
+        v = spec_nutrition.parse_values(self.SAMPLE)
+        self.assertIsNone(v['cholesterols'])
+        self.assertIsNone(v['trans_fats'])
+        self.assertEqual(v['natriums'], 420.0)
+
+    def test_긴_이름을_먼저_본다(self):
+        """'지방' 이 '포화지방' 줄을 채 가면 안 된다."""
+        from v1.label.services import spec_nutrition
+
+        v = spec_nutrition.parse_values(self.SAMPLE)
+        self.assertEqual(v['fats'], 6.4)
+        self.assertEqual(v['saturated_fats'], 2.1)
+
+    def test_단위가_달라도_우리_기준으로_맞춘다(self):
+        from v1.label.services import spec_nutrition
+
+        v = spec_nutrition.parse_values('나트륨 0.42 g' + chr(10) + '지방 6400 mg')
+        self.assertEqual(v['natriums'], 420.0)      # g → mg
+        self.assertEqual(v['fats'], 6.4)            # mg → g
+
+    def test_1회_제공량_성적서도_기준량을_읽는다(self):
+        from v1.label.services import spec_nutrition
+
+        self.assertEqual(
+            spec_nutrition.parse_basis('1회 제공량(30g)당 기준')[0], 30.0)
 
     def test_A_등급은_종이를_댈_수_있어야_한다(self):
         """
