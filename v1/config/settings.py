@@ -20,6 +20,47 @@ try:
 except UndefinedValueError as e:
     raise Exception("Missing environment variable: {}".format(e))
 
+
+# ── 자리만 채워 둔 비밀로는 운영에 뜨지 않는다 ──────────────────────────────
+#
+# 위의 try/except 는 "환경변수가 없으면 뜨지 마라" 는 뜻으로 쓴 그물이다.
+# 그런데 같은 줄의 `default=` 가 그 그물을 무력화하고 있었다 — .env 가 통째로
+# 빠져도 예외가 나지 않고, **소스에 적힌 그 값으로 그냥 뜬다.**
+#
+# 무엇이 걸려 있나.
+#
+#     SECRET_KEY   세션·CSRF 토큰·비밀번호 재설정 링크가 전부 이 값에서 나온다.
+#                  소스를 본 사람은 남의 세션을 만들 수 있다.
+#     DB_PASSWORD  말 그대로 DB 다.
+#
+# `default=` 를 그냥 지우지 않는 까닭은 **개발 PC 를 멈추지 않기 위해서**다.
+# 로컬 .env 에는 DB_ 항목이 없고 로컬 MySQL 은 그 기본값으로 붙어 있다.
+# 그래서 기본값은 남기되 **DEBUG 가 꺼진 곳에서만 거부**한다. 운영에서 이
+# 값이 쓰이는 상황은 언제나 사고이고, 개발에서는 언제나 정상이다.
+#
+# 거부는 조용히 하지 않는다. 여기서 멈추는 편이, 그 비밀로 몇 달 더 도는
+# 것보다 낫다.
+_PLACEHOLDER_SECRETS = {
+    'DJANGO_SECRET_KEY': 'your-secret-key',
+    'DB_PASSWORD': 'labeldata1!',
+}
+
+
+def _reject_placeholder(name, value):
+    """운영(DEBUG=False)에서 소스에 적힌 기본값이 쓰이면 뜨지 못하게 한다."""
+    if DEBUG:
+        return value
+    if value == _PLACEHOLDER_SECRETS.get(name):
+        raise Exception(
+            "{0} 가 .env 에 없습니다. 지금 소스에 적힌 기본값으로 뜨려 하고 "
+            "있는데, 그 값은 저장소를 볼 수 있는 사람이면 누구나 압니다. "
+            ".env 에 {0} 를 넣고 다시 띄우세요.".format(name)
+        )
+    return value
+
+
+SECRET_KEY = _reject_placeholder('DJANGO_SECRET_KEY', SECRET_KEY)
+
 # 커스텀 에러 페이지 테스트를 위한 설정 (개발 시에만 사용)
 # 실제 운영에서는 DEBUG=False로 설정하면 자동으로 커스텀 에러 페이지가 작동합니다
 SHOW_CUSTOM_ERROR_PAGES = config('SHOW_CUSTOM_ERROR_PAGES', default=False, cast=bool)
@@ -96,7 +137,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': config('DB_NAME', default='labeldb'),
         'USER': config('DB_USER', default='labeldata'),
-        'PASSWORD': config('DB_PASSWORD', default='labeldata1!'),
+        'PASSWORD': _reject_placeholder(
+            'DB_PASSWORD', config('DB_PASSWORD', default='labeldata1!')),
         'HOST': config('DB_HOST', default='127.0.0.1'),
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {

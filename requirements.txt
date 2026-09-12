@@ -21,12 +21,12 @@ RapidFuzz==3.12.2
 requests==2.33.0
 setuptools==83.0.0
 soupsieve==2.8.4
-sqlparse==0.5.4
+sqlparse==0.6.0
 typing_extensions==4.12.2
 tzdata==2025.1
 urllib3==2.7.0
 wheel==0.46.2
-djangorestframework==3.17.1
+djangorestframework==3.17.2
 djangorestframework-simplejwt==5.5.1
 django-cors-headers==4.9.0
 PyJWT==2.13.0

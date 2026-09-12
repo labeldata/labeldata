@@ -163,3 +163,11 @@ django_cache/
 data/
 
 # 작업 문서는 저장소에 둔다. 내렸더니 그대로 사라졌다(README 참고).
+
+# 작업 도구·로컬 자료 — 저장소에 들어가면 안 되는 것들
+# .claude/settings.json 에 한때 키스토어 비밀번호가 평문으로 들어가 공개
+# 저장소에 올라간 적이 있다. 허용 명령 목록에 비밀번호가 섞여 들어온다.
+.claude/
+local_uploader/
+mobile/
+store_icon_512.png

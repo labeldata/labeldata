@@ -504,3 +504,58 @@ class 긁는_속도를_끊는다(TestCase):
                     break
                 self.assertIn('block=True', src[at:at + 120], rel)
                 at += 1
+
+
+class 자리만_채운_비밀로는_운영에_뜨지_않는다(TestCase):
+    """
+    settings 의 try/except UndefinedValueError 는 "환경변수가 없으면 뜨지
+    마라" 는 뜻으로 쓴 그물이었다. 그런데 같은 줄의 `default=` 가 그 그물을
+    무력화하고 있었다 — .env 가 통째로 빠져도 예외가 나지 않고 **소스에 적힌
+    값으로 그냥 뜬다.**
+
+    SECRET_KEY 는 세션·CSRF·비밀번호 재설정 토큰이 전부 딛고 선 값이고,
+    DB_PASSWORD 는 말 그대로 DB 다. 둘 다 저장소를 볼 수 있으면 아는 값이었다.
+
+    기본값을 그냥 지우지 않은 까닭은 개발 PC 를 멈추지 않기 위해서다. 로컬
+    .env 에는 DB_ 항목이 없다. 그래서 **DEBUG 가 꺼진 곳에서만** 거부한다.
+    """
+
+    def _settings_source(self):
+        from pathlib import Path
+        import v1.config.settings as st
+        return Path(st.__file__).read_text(encoding='utf-8')
+
+    def test_운영에서는_기본값을_거부한다(self):
+        from v1.config import settings as st
+
+        for name in ('DJANGO_SECRET_KEY', 'DB_PASSWORD'):
+            with self.subTest(name):
+                bad = st._PLACEHOLDER_SECRETS[name]
+                with patch.object(st, 'DEBUG', False):
+                    with self.assertRaises(Exception) as caught:
+                        st._reject_placeholder(name, bad)
+                self.assertIn(name, str(caught.exception))
+
+    def test_개발에서는_막지_않는다(self):
+        """로컬 .env 에 DB_ 항목이 없다. 여기서 막으면 개발이 멈춘다."""
+        from v1.config import settings as st
+
+        with patch.object(st, 'DEBUG', True):
+            got = st._reject_placeholder('DB_PASSWORD',
+                                         st._PLACEHOLDER_SECRETS['DB_PASSWORD'])
+        self.assertEqual(got, st._PLACEHOLDER_SECRETS['DB_PASSWORD'])
+
+    def test_제대로_된_값은_그냥_지나간다(self):
+        from v1.config import settings as st
+
+        with patch.object(st, 'DEBUG', False):
+            self.assertEqual(st._reject_placeholder('DB_PASSWORD', '진짜비밀'), '진짜비밀')
+
+    def test_두_비밀_다_이_그물을_지난다(self):
+        """
+        한쪽만 거치면 나머지 하나가 조용히 남는다. 실제로 DB_PASSWORD 쪽이
+        DATABASES 안에 따로 떨어져 있어 놓치기 쉬운 자리다.
+        """
+        src = self._settings_source()
+        self.assertIn("_reject_placeholder('DJANGO_SECRET_KEY', SECRET_KEY)", src)
+        self.assertIn("'DB_PASSWORD', config('DB_PASSWORD'", src)
