@@ -7345,6 +7345,87 @@ class PaletteSearchLooksAtWhatIsShownTests(TestCase):
         self.assertIn("card.dataset.isOwner === 'true'", self.src)
 
 
+class SelfIsNotInMyOwnContactsTests(TestCase):
+    """
+    share_create 가 공유를 만들 때 UserContact 도 함께 만든다. 그래서 자기
+    이메일로 한 번 공유해 보면 **자기가 자기 주소록에 들어앉고**, 권한 설정
+    팔레트에도 소유자 카드와 같은 사람이 두 번 나온다.
+    """
+
+    def setUp(self):
+        from v1.products.models import ProductMetadata, UserContact
+        self.UserContact = UserContact
+        self.owner = User.objects.create_user('주인', password='x', email='me@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        ProductMetadata.objects.create(label=self.label, product_code='PRD-T-1')
+        self.client.force_login(self.owner)
+
+    def test_주소록_목록에_내가_없다(self):
+        self.UserContact.objects.create(owner=self.owner, email='me@x.com', name='나')
+        self.UserContact.objects.create(owner=self.owner, email='sup@x.com', name='협력사')
+        rows = self.client.get(reverse('products:contacts')).context['contacts_list']
+        self.assertEqual([r['email'] for r in rows], ['sup@x.com'])
+
+    def test_내_이메일로_된_공유도_주소록에_안_올린다(self):
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email='me@x.com', share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=share)
+        rows = self.client.get(reverse('products:contacts')).context['contacts_list']
+        self.assertEqual(rows, [])
+
+    def test_권한_팔레트에도_내가_두_번_안_나온다(self):
+        self.UserContact.objects.create(owner=self.owner, email='me@x.com')
+        page = self.client.get(
+            reverse('products:product_detail', args=[self.label.my_label_id]))
+        emails = [c.recipient_email for c in page.context['all_shared_users']]
+        self.assertNotIn('me@x.com', emails)
+
+
+class DragGhostIsTheCardTests(TestCase):
+    """
+    카드를 끌면 카드만 따라와야 하는데 **화면 전체가 흐릿하게** 같이 잡혀
+    움직였다.
+
+    dragstart 안에서 곧바로 card.style.opacity 를 바꾼 것이 원인이다.
+    브라우저는 dragstart 직후 끌림 그림을 스냅샷하는데, 그 순간 요소가
+    반투명해지면 카드만 따로 뜨지 않고 합성 레이어 전체가 잡힌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / '_tab_permissions.html').read_text(encoding='utf-8')
+
+    def test_끌림_그림을_카드로_못박는다(self):
+        self.assertIn('setDragImage(', self.src)
+
+    def test_반투명은_스냅샷_뒤에_건다(self):
+        import re
+        i = self.src.index('function dragStart')
+        j = self.src.index('function dragEnd')
+        body = self.src[i:j]
+        # dragstart 안에서 곧바로 opacity 를 건드리면 안 된다
+        self.assertNotRegex(body, r"style\.opacity\s*=")
+        self.assertIn('is-dragging', body)
+        self.assertIn('setTimeout(', body)
+
+    def test_끌림_중_모양은_css_에_있다(self):
+        self.assertIn('.person-card.is-dragging', self.src)
+
+    def test_드롭_강조가_남지_않는다(self):
+        """드롭이 일어난 요소에는 dragleave 가 오지 않는다 — 끝날 때 걷는다."""
+        self.assertIn('_clearDropHighlight', self.src)
+        i = self.src.index('function dragEnd')
+        j = self.src.index('function _clearDropHighlight')
+        self.assertIn('_clearDropHighlight()', self.src[i:j])
+
+    def test_인허가번호도_들고_간다(self):
+        i = self.src.index('_draggedPersonData = {')
+        self.assertIn('licenseNo', self.src[i:i + 600])
+
+
 class ActionButtonsActuallyRenderTests(TestCase):
     """
     앞서 검토 시작·반려를 넣었는데 **POST 만 고쳤다.** 단추를 그리는 GET 쪽

@@ -407,6 +407,19 @@
 </div>
 
 <style>
+  /* 끌고 있는 카드.
+     dragstart 안에서 opacity 를 바꾸면 브라우저가 카드가 아니라 합성 레이어
+     전체를 끌림 그림으로 잡는다 — 화면이 통째로 흐릿하게 따라다녔다.
+     그래서 스냅샷이 끝난 다음 프레임에 이 클래스를 건다(dragStart 참고). */
+  .person-card.is-dragging { opacity: .45; }
+
+  /* 드롭 대상 강조. 인라인 스타일로 켜던 시절에는 드롭이 일어난 요소에
+     dragleave 가 오지 않아 파란 배경이 지워지지 않고 남았다. */
+  .pw-drop-over {
+    background: var(--ez-info-bg) !important;
+    border-color: var(--ez-info-on-bg) !important;
+  }
+
 /* -------------------------------------------------------------
    글자 크기와 역할 뱃지
 
@@ -752,34 +765,59 @@ function dragStart(event) {
     }
 
     _draggedPersonData = {
-        email:    card.dataset.email    || '',
-        username: card.dataset.username || '',
-        shareId:  card.dataset.shareId  || '',
-        role:     card.dataset.role     || '',
-        name:     card.dataset.name     || '',
-        company:  card.dataset.company  || ''
+        email:     card.dataset.email     || '',
+        username:  card.dataset.username  || '',
+        shareId:   card.dataset.shareId   || '',
+        role:      card.dataset.role      || '',
+        name:      card.dataset.name      || '',
+        company:   card.dataset.company   || '',
+        /* 인허가번호도 들고 간다. 없으면 끌어다 초대한 사람의 번호가
+           빈칸으로 들어간다 — 카드에 보이던 값이 사라진다. */
+        licenseNo: card.dataset.licenseNo || ''
     };
     event.dataTransfer.setData('text/plain', _draggedPersonData.email);
     event.dataTransfer.effectAllowed = 'move';
-    card.style.opacity = '0.5';
+
+    /* 끌고 다니는 그림은 **이 카드**여야 한다.
+     *
+     * 예전에는 여기서 곧바로 card.style.opacity 를 바꿨다. 브라우저는
+     * dragstart 가 끝난 직후 끌림 그림을 스냅샷하는데, 그 순간 요소가
+     * 반투명해지면 카드만 따로 뜨지 않고 **합성 레이어 전체**(화면이 통째로
+     * 흐릿하게)가 잡혀 따라다녔다.
+     *
+     * 그림을 카드로 못박고, 반투명은 스냅샷이 끝난 다음 프레임에 건다. */
+    if (event.dataTransfer.setDragImage) {
+        var box = card.getBoundingClientRect();
+        event.dataTransfer.setDragImage(
+            card, event.clientX - box.left, event.clientY - box.top);
+    }
+    setTimeout(function () { card.classList.add('is-dragging'); }, 0);
 }
 
 function dragEnd(event) {
-    event.currentTarget.style.opacity = '';
+    event.currentTarget.classList.remove('is-dragging');
+    _clearDropHighlight();
     _draggedPersonData = null;
+}
+
+/* 강조는 클래스로 켜고 끈다.
+ *
+ * 인라인 스타일로 켜던 시절에는, 드롭이 일어난 요소에는 dragleave 가 오지
+ * 않으므로 ondrop 이 없는 .tab-content · .palette-list 의 파란 배경이
+ * **지워지지 않고 남았다.** 끝날 때 한 번에 걷는다. */
+function _clearDropHighlight() {
+    document.querySelectorAll('.pw-drop-over').forEach(function (el) {
+        el.classList.remove('pw-drop-over');
+    });
 }
 
 function allowDrop(event) {
     event.preventDefault();
-    var zone = event.currentTarget;
-    zone.style.background = 'rgba(26,115,232,0.07)';
-    zone.style.borderColor = '#1a73e8';
+    event.currentTarget.classList.add('pw-drop-over');
 }
 
 function leaveDrop(event) {
-    var zone = event.currentTarget;
-    zone.style.background = '';
-    zone.style.borderColor = '';
+    event.currentTarget.classList.remove('pw-drop-over');
 }
 
 function dropPerson(event, role) {
