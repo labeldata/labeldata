@@ -3029,10 +3029,27 @@ def ocr_extract(request):
         # 그동안 그 경로로 맞춰 온 판독 품질을 건드릴 이유가 없다.
         # 업소 항목은 늘 한 번 더 읽는다(ocr_service._companies_rechecked).
         # 틀린 주소가 들어가는 시점은 시안 대조가 아니라 **처음 채울 때**다.
+        # ── 시안 대조에서만 원문 대조를 켠다 ───────────────────────────
+        #
+        # VLM 은 값을 지어낸다. 전통 OCR 은 글자를 보고 글자를 내므로 지어낼
+        # 수가 없다. 그래서 원문을 **정답이 아니라 증인**으로 세운다
+        # (ocr_ground). 기본이 꺼져 있는 까닭은 판독마다 Vision 호출이 하나
+        # 더 붙어서다.
+        #
+        # 대조에서만 켜는 까닭은 **틀렸을 때 값이 다르기 때문**이다.
+        #
+        #   채우기   사람이 한 칸씩 보고 [적용] 을 누른다. 지어낸 값은 거기서 걸린다
+        #   대조     "시안에 이렇게 적혀 있습니다" 라고 **단정**한다. 그 말이
+        #            거짓이면 사용자는 **멀쩡한 시안을 고치러 간다**
+        #
+        # 뒤엣것이 이 기능이 낼 수 있는 가장 나쁜 오탐이다. 대조는 판독보다
+        # 훨씬 드물게 돌고, 무엇보다 **일부러 검증하려고 누른 자리**라 호출
+        # 하나를 더 쓸 값이 있다.
+        ground = (purpose == 'compare') or None
         if len(parts) == 1 and parts[0][1] in ('whole', ''):
-            result = extract_label_from_image(image_files[0])
+            result = extract_label_from_image(image_files[0], use_ground=ground)
         else:
-            result = extract_label_from_parts(parts)
+            result = extract_label_from_parts(parts, use_ground=ground)
     except Exception as exc:
         logger.exception('OCR 처리 중 예외 (user=%s, file=%s, 영역=%s)',
                          request.user, name, len(parts))

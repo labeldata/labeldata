@@ -231,7 +231,11 @@
     same:    { tag: '같음',            cls: 'ocr-state-same',    real: false },
     spacing: { tag: '띄어쓰기만 다름',  cls: 'cmp-state-minor',   real: false },
     partial: { tag: '일부만 읽힘',      cls: 'cmp-state-partial', real: true  },
-    diff:    { tag: '다름',            cls: 'ocr-state-replace', real: true  }
+    diff:    { tag: '다름',            cls: 'ocr-state-replace', real: true  },
+    /* 판독 모델이 낸 값을 시안 원문에서 못 찾은 것. '다름' 과 같은 칸에 두면
+       안 된다 — 우리가 잘못 읽은 것을 시안 탓으로 돌리는 셈이고, 사용자는
+       멀쩡한 시안을 고치러 간다. 짚되 단정하지 않는다. */
+    unread:  { tag: '시안에서 확인 못함', cls: 'cmp-state-partial', real: false }
   };
 
   /*
@@ -951,7 +955,10 @@
       var theirs = (item && item.confidence !== 'none' && item.value)
         ? String(item.value).trim() : '';
       if (!mine && !theirs) return;      // 대조할 것이 없는 줄
-      pairs[field] = { mine: mine, design: theirs };
+      /* 판독이 원문 대조를 돌았으면 item.grounded 가 온다(ocr_ground).
+         false 면 그 값이 시안 원문에 없었다는 뜻이다. */
+      pairs[field] = { mine: mine, design: theirs,
+                       grounded: (item && item.grounded === false) ? false : true };
     });
 
     body.innerHTML = '<div class="text-center py-4 text-muted">시안과 대조하는 중…</div>';

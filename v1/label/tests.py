@@ -16566,3 +16566,129 @@ class 시안_대조는_항목마다_다른_자를_쓴다(TestCase):
         fields = set(re.findall(r'^\s*([a-z_]+):\s*\{', block, re.M))
         self.assertTrue(fields, 'FIELD_MAP 을 읽지 못했다')
         self.assertEqual(fields - set(design_match.FIELD_MODE), set())
+
+
+class 시안에_없는_글자를_있다고_말하지_않는다(TestCase):
+    """
+    VLM 은 값을 지어낸다. 전통 OCR 은 글자를 보고 글자를 내므로 지어낼 수가
+    없다 — 그래서 원문을 **정답이 아니라 증인**으로 세운다(ocr_ground).
+
+    대조에서 이것이 특히 중요한 까닭은 **틀렸을 때 값이 다르기 때문**이다.
+    채우기는 사람이 한 칸씩 보고 [적용] 을 눌러 지어낸 값이 거기서 걸리지만,
+    대조는 "시안에 이렇게 적혀 있습니다" 라고 **단정**한다. 그 말이 거짓이면
+    사용자는 **멀쩡한 시안을 고치러 간다.**
+    """
+
+    def g(self, field, mine, theirs, grounded=True):
+        from v1.label.services import design_match
+        return design_match.grade_field(field, mine, theirs, grounded=grounded)
+
+    def test_원문에_없으면_다르다고_단정하지_않는다(self):
+        r = self.g('prdlst_nm', '초코쿠키', '초코칩쿠키', grounded=False)
+        self.assertEqual(r['grade'], 'unread')
+        self.assertNotEqual(r['grade'], 'diff')
+
+    def test_까닭을_말해_준다(self):
+        r = self.g('prdlst_nm', '초코쿠키', '초코칩쿠키', grounded=False)
+        self.assertIn('찾지 못했', r['reason'])
+
+    def test_값을_버리지도_고치지도_않는다(self):
+        """
+        OCR 도 틀린다. 원문을 정답으로 삼으면 OCR 의 오독이 그대로 굳는다.
+        짚되 단정하지 않는 자리다.
+        """
+        from v1.label.services import design_match
+        out = design_match.grade_all({
+            'prdlst_nm': {'mine': '초코쿠키', 'design': '초코칩쿠키', 'grounded': False},
+        })
+        self.assertIn('prdlst_nm', out)          # 줄이 사라지면 안 된다
+
+    def test_대조를_안_켰으면_예전처럼_판정한다(self):
+        """
+        grounded 를 안 적어 보내는 경로가 있다. 그때 전부 '확인 못함' 이 되면
+        기능이 통째로 멎는다.
+        """
+        from v1.label.services import design_match
+        out = design_match.grade_all({
+            'prdlst_nm': {'mine': '초코쿠키', 'design': '초코칩쿠키'},
+        })
+        self.assertEqual(out['prdlst_nm']['grade'], 'diff')
+
+    def test_원문에_있으면_평소대로_판정한다(self):
+        self.assertEqual(self.g('prdlst_nm', '초코쿠키', '초코칩쿠키', grounded=True)['grade'],
+                         'diff')
+        self.assertNotEqual(self.g('prdlst_dcnm', '빵류', '빵류(가열)', grounded=True)['grade'],
+                            'diff')
+
+    def test_대조는_시안일_때만_켠다(self):
+        """
+        판독마다 Vision 호출이 하나 더 붙는다. 대조는 훨씬 드물게 돌고,
+        무엇보다 일부러 검증하려고 누른 자리라 호출 하나를 더 쓸 값이 있다.
+        """
+        from pathlib import Path
+
+        src = Path('v1/label/views.py').read_text(encoding='utf-8')
+        self.assertIn("ground = (purpose == 'compare') or None", src)
+        self.assertIn('extract_label_from_image(image_files[0], use_ground=ground)', src)
+        self.assertIn('extract_label_from_parts(parts, use_ground=ground)', src)
+
+    def test_화면도_그_등급을_안다(self):
+        """서버만 알고 화면이 모르면 판정이 조용히 '다름' 으로 보인다."""
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.assertIn('unread:', js)
+        self.assertIn('시안에서 확인 못함', js)
+        self.assertIn('item.grounded === false', js)
+
+
+class 시안_대조는_유사도로_봐주지_않는다(TestCase):
+    """
+    작업 3 에서 항목별 자를 들이면서 **놓침을 하나 들여왔다.** value_match 의
+    유사도 문턱(AGREE_SCORE 88)을 그대로 썼더니 이렇게 됐다.
+
+        초코쿠키  ↔  초코칩쿠키      유사도 88.9 → '같음'
+
+    다른 제품이다. 검증·판독은 식약처 등록 정보와 견주므로 표기가 흔들리는
+    것이 정상이라 유사도가 맞다. 그런데 시안 대조가 묻는 것은 **"인쇄물이
+    우리가 확정한 값 그대로인가"** 다 — 물음이 다르면 자도 달라야 한다.
+
+    놓침은 눈에 안 보인다. 그래서 못을 박는다.
+    """
+
+    def g(self, field, mine, theirs):
+        from v1.label.services import design_match
+        return design_match.grade_field(field, mine, theirs)
+
+    def test_비슷한_제품명은_같지_않다(self):
+        self.assertEqual(self.g('prdlst_nm', '초코쿠키', '초코칩쿠키')['grade'], 'diff')
+
+    def test_원재료명은_한_원료가_빠져도_다르다(self):
+        """
+        300 자 중 한 원료가 빠져도 유사도는 거의 안 떨어진다. 그런데 그 한
+        원료가 알레르기 유발물질일 수 있다.
+        """
+        mine = '밀가루(밀:미국산), 설탕, 가공버터, 계란, 정제소금, 탈지분유, 합성착향료'
+        theirs = '밀가루(밀:미국산), 설탕, 가공버터, 정제소금, 탈지분유, 합성착향료'
+        self.assertNotEqual(self.g('rawmtrl_nm', mine, theirs)['grade'], 'spacing')
+
+    def test_포장재질과_원산지도_글자가_같아야_한다(self):
+        self.assertEqual(self.g('frmlc_mtrqlt', '폴리프로필렌', '폴리에틸렌')['grade'], 'diff')
+        self.assertEqual(self.g('country_of_origin', '국내산', '외국산')['grade'], 'diff')
+
+    def test_눅이는_자는_다섯뿐이다(self):
+        """
+        늘리려면 **왜 그 항목은 표기가 흔들려도 같은 말인지** 댈 수 있어야
+        한다. 그 근거 없이 늘면 놓침이 는다.
+        """
+        from v1.label.services import design_match
+        self.assertEqual(set(design_match._FORGIVING),
+                         {'prefix', 'company', 'number', 'period', 'sentence'})
+
+    def test_기본값은_엄한_쪽이다(self):
+        """
+        표에 없는 항목이 생겼을 때 조용히 봐주는 쪽으로 떨어지면 안 된다.
+        """
+        from v1.label.services import design_match
+        self.assertEqual(design_match.DEFAULT_MODE, 'strict')
+        self.assertNotIn(design_match.DEFAULT_MODE, design_match._FORGIVING)
