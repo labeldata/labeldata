@@ -1795,10 +1795,14 @@ def check_calorie_matches_macros(label) -> list[dict]:
     for field in _ATWATER:
         value = _number((getattr(label, field, '') or '').strip())
         if value is None:
+            #  _FIELD_LABELS 는 금지문구 스캔 대상 목록 겸 이름표다(1147줄).
+            #  여기에 영양성분 필드를 더하면 그 스캔 범위가 번진다. 이름은
+            #  모델이 이미 갖고 있으니 그것을 쓴다 — "carbohydrates 이(가)
+            #  비어 있어" 라고 적히던 자리다.
             return [_unchecked(       # 하나라도 없으면 계산할 수 없다
                 'calorie_macros', CAUSE_NO_DATA,
                 '영양성분 탭의 %s 이(가) 비어 있어 열량을 계산해 견주지 '
-                '못했습니다.' % _FIELD_LABELS.get(field, field),
+                '못했습니다.' % _verbose_name(type(label), field),
                 '탄수화물·지방·단백질이 모두 있어야 계산할 수 있습니다.')]
         macros[field] = value
 
@@ -2411,12 +2415,15 @@ def check_report_no_registered(label) -> list:
         prdlst_nm=getattr(label, 'prdlst_nm', '') or '',
         prdlst_dcnm=getattr(label, 'prdlst_dcnm', '') or '')
     if got['status'] == report_no_check.UNKNOWN:
-        return [_issue('prdlst_report_no',
+        #  category 는 **검사 이름**이다. 나머지 24개가 다 그런데 이것만
+        #  필드 이름('prdlst_report_no')을 쓰고 있었고, 그래서 fields 와
+        #  키 공간이 겹쳤다. 이름표 사전에도 없어 화면에 영어가 그대로 찍혔다.
+        return [_issue('report_no_registered',
                        '품목보고번호 「%s」 를 식약처 등록 정보에서 찾지 못했습니다.' % no,
                        got['message'],
                        fields=['prdlst_report_no'], advisory=True)]
     if got['status'] == report_no_check.MISMATCH:
-        return [_issue('prdlst_report_no',
+        return [_issue('report_no_registered',
                        '품목보고번호와 제품 정보가 서로 다릅니다.',
                        got['message'],
                        fields=['prdlst_report_no'], advisory=True)]

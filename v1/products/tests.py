@@ -7252,3 +7252,94 @@ class StylesComeBeforeMarkupTests(TestCase):
         self.assertEqual(
             self._late_styles(), [],
             '스타일을 마크업 앞이나 head 에서 불리는 CSS 로 옮기세요')
+
+
+class ContactsAppearInPermissionPaletteTests(TestCase):
+    """
+    "연락처에 등록했는데 권한 설정에서 검색도 안 되고 목록에도 없다."
+
+    권한 탭의 검색은 서버를 부르지 않는다 — 이미 그려진 카드를 걸러내는 DOM
+    필터다. 그래서 **카드로 그려지지 않은 사람은 검색으로도 나올 수 없다.**
+    팔레트 목록(all_shared_users)이 ProductShare 만 보고 있어서, 연락처
+    화면에서 직접 추가한 사람(UserContact 만 있고 공유는 없다)은 한 번도
+    오르지 않았다.
+
+    공유 → 연락처 방향은 이미 흐른다(share_create 가 UserContact 를 만든다).
+    그 반대만 빠져 있었다.
+    """
+
+    def setUp(self):
+        from v1.products.models import ProductMetadata, UserContact
+        self.UserContact = UserContact
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner, my_label_name='브라우니')
+        ProductMetadata.objects.create(label=self.label, product_code='PRD-T-1')
+        self.client.force_login(self.owner)
+
+    def _palette(self):
+        page = self.client.get(
+            reverse('products:product_detail', args=[self.label.my_label_id]))
+        return page.context['all_shared_users']
+
+    def test_주소록에만_있는_사람도_팔레트에_오른다(self):
+        self.UserContact.objects.create(owner=self.owner, email='sup@x.com',
+                                        name='협력사', company='A식품')
+        rows = {c.recipient_email: c for c in self._palette()}
+        self.assertIn('sup@x.com', rows)
+        card = rows['sup@x.com']
+        self.assertEqual(card.display_name, '협력사')
+        self.assertEqual(card.recipient_company, 'A식품')
+
+    def test_아직_공유_안_된_카드는_share_id_가_없다(self):
+        """화면의 dropPerson 이 share_id 없는 카드를 초대로 보낸다."""
+        self.UserContact.objects.create(owner=self.owner, email='sup@x.com')
+        card = next(c for c in self._palette() if c.recipient_email == 'sup@x.com')
+        self.assertIsNone(card.share_id)
+        self.assertIsNone(card.permission_record)
+
+    def test_이미_공유된_사람은_두_번_오르지_않는다(self):
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email='sup@x.com', share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=share)
+        self.UserContact.objects.create(owner=self.owner, email='sup@x.com')
+        emails = [c.recipient_email for c in self._palette()]
+        self.assertEqual(emails.count('sup@x.com'), 1)
+
+    def test_대소문자가_달라도_두_번_오르지_않는다(self):
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email='Sup@X.com', share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=share)
+        self.UserContact.objects.create(owner=self.owner, email='sup@x.com')
+        self.assertEqual(len(self._palette()), 1)
+
+    def test_남의_주소록은_올라오지_않는다(self):
+        other = User.objects.create_user('남', password='x', email='other@x.com')
+        self.UserContact.objects.create(owner=other, email='secret@x.com')
+        self.assertEqual(
+            [c.recipient_email for c in self._palette()], [])
+
+
+class PaletteSearchLooksAtWhatIsShownTests(TestCase):
+    """
+    화면에 보이는 이름은 display_name(이름 → 계정명 → 이메일)인데 검색은
+    data-name(recipient_name)만 봤다. 이름을 안 적어 둔 멤버는 **보이는 그
+    이름으로 찾아도** 걸러졌다. 소유자 카드는 data-name 이 없어 무엇을
+    입력하든 사라졌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.src = (Path(dj.BASE_DIR) / 'templates' / 'products'
+                    / '_tab_permissions.html').read_text(encoding='utf-8')
+
+    def test_계정명도_찾는다(self):
+        self.assertIn('card.dataset.username', self.src)
+
+    def test_인허가번호도_찾는다(self):
+        self.assertIn('card.dataset.licenseNo', self.src)
+
+    def test_소유자는_검색으로_사라지지_않는다(self):
+        self.assertIn("card.dataset.isOwner === 'true'", self.src)

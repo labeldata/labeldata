@@ -66,6 +66,10 @@ _CATEGORY_LABELS = {
     'nutrition_scope': '영양표시 대상',
     'food_type_mismatch': '식품유형 일치',
     'package_form': '포장 형태',
+    'report_no_registered': '품목보고번호 등록 확인',
+    # category 를 안 달고 온 지적 — 있어서는 안 되지만, 나더라도 영어가
+    # 화면에 찍히지는 않게 한다.
+    'uncategorized': '그 밖의 지적',
 }
 
 # "규정만 검증"(규칙 기반)에는 없고 AI검증에만 있는 항목들 — 사용자에게
@@ -509,7 +513,7 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
         grouped[code] = blank(label)
 
     for issue in issues:
-        code = issue.get('category', 'other')
+        code = issue.get('category') or 'uncategorized'
         label = _CATEGORY_LABELS.get(code, code)
         row = grouped.setdefault(code, blank(label))
         row['ok'] = False

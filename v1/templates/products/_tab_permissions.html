@@ -1068,13 +1068,25 @@ function toggleRightPanel() {
 
 /* ── 팔레트 검색 필터 ── */
 
+/* 팔레트 검색.
+ *
+ * 이것은 서버를 부르지 않는다 — 이미 그려진 카드를 걸러내는 DOM 필터다.
+ * 그래서 **카드에 실린 값으로만 찾을 수 있다.** 두 가지가 어긋나 있었다.
+ *
+ *   1. 화면에 보이는 이름은 display_name(= 이름 → 계정명 → 이메일)인데
+ *      검색은 data-name(= recipient_name)만 봤다. 이름을 안 적어 두고
+ *      계정명으로 표시되는 멤버는 **보이는 그 이름으로 찾아도** 걸러졌다.
+ *   2. 소유자 카드에는 data-name 이 없어, 무엇을 입력하든 소유자가 사라졌다.
+ *      소유자는 검색으로 없어질 사람이 아니다 — 늘 남겨 둔다.
+ */
 function filterPalette() {
     var q = ((document.getElementById('palette-search') || {}).value || '').toLowerCase();
     document.querySelectorAll('.palette-list .person-card').forEach(function(card) {
-        var name    = (card.dataset.name    || '').toLowerCase();
-        var email   = (card.dataset.email   || '').toLowerCase();
-        var company = (card.dataset.company || '').toLowerCase();
-        card.style.display = (!q || name.includes(q) || email.includes(q) || company.includes(q)) ? '' : 'none';
+        if (card.dataset.isOwner === 'true') { card.style.display = ''; return; }
+        var hay = [card.dataset.name, card.dataset.username, card.dataset.email,
+                   card.dataset.company, card.dataset.licenseNo]
+                  .join(' ').toLowerCase();
+        card.style.display = (!q || hay.includes(q)) ? '' : 'none';
     });
 }
 

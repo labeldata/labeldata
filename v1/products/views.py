@@ -763,10 +763,12 @@ def product_detail(request, product_id):
         ).select_related('recipient_user').order_by('-created_datetime')
         
         # 중복 제거를 위해 email 기준으로 unique한 사용자만
+        # 이메일은 대소문자를 가리지 않는다. 섞어 쓰면 같은 사람이 두 번 오른다.
         seen_emails = set()
         for share in all_shares:
-            if share.recipient_email not in seen_emails:
-                seen_emails.add(share.recipient_email)
+            _email = (share.recipient_email or '').lower()
+            if _email not in seen_emails:
+                seen_emails.add(_email)
                 
                 # 현재 제품에서의 권한 정보 확인
                 current_share = shares.filter(recipient_email=share.recipient_email).first()
@@ -785,6 +787,38 @@ def product_detail(request, product_id):
                     or share.recipient_email
                     or '미가입'
                 )
+
+        # 주소록에만 있는 사람도 팔레트에 올린다.
+        #
+        # 권한 탭의 검색은 서버를 부르지 않는다 — 화면에 이미 그려진 카드를
+        # display:none 으로 걸러내는 DOM 필터다. 그래서 **카드로 그려지지 않은
+        # 사람은 검색으로도 나올 수 없다.** 연락처 화면에서 직접 추가한 사람은
+        # UserContact 만 생기고 ProductShare 는 없으므로, 팔레트에 한 번도
+        # 오르지 않았다. "연락처에 등록했는데 권한 설정에서 안 보인다" 가 그것이다.
+        #
+        # 공유 → 연락처 방향은 이미 흐른다(share_create 가 UserContact 를
+        # update_or_create 한다). 그 반대만 빠져 있었다.
+        #
+        # share_id 가 없는 카드는 끌어다 놓으면 초대로 간다 — 화면의 dropPerson
+        # 이 이미 그 경로를 갖고 있어 JS 는 고칠 것이 없다.
+        for contact in UserContact.objects.filter(owner=request.user):
+            email = (contact.email or '').lower()
+            if not email or email in seen_emails:
+                continue
+            seen_emails.add(email)
+            card = ProductShare(
+                label=label,
+                recipient_email=contact.email,
+                recipient_name=contact.name or None,
+                recipient_company=contact.company or None,
+                recipient_license_no=contact.license_no or None,
+                share_mode='PRIVATE',
+                created_by=request.user,
+            )
+            card.share_id = None          # 아직 이 제품에 공유되지 않았다
+            card.permission_record = None
+            card.display_name = contact.name or contact.email
+            all_shared_users.append(card)
     elif shared_share:
         # EDITOR 등 공유받은 사용자: 현재 제품의 공유자만 팔레트에 표시
         for share in shares:

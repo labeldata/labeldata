@@ -7713,6 +7713,28 @@ class CategoryLabelsCoverTests(TestCase):
         missing = sorted(set(_LEGAL_BASIS) - set(_CATEGORY_LABELS))
         self.assertEqual(missing, [], f'한글 이름이 없는 검사: {missing}')
 
+    def test_가드가_실제_누출면을_본다(self):
+        """
+        이 시험은 _LEGAL_BASIS 의 키만 봤다. 그런데 화면에 이름이 찍히는 것은
+        **issues[].category** 다. 근거 조항이 등록되지 않은 검사는 _LEGAL_BASIS
+        에도 없으므로 차집합에 잡히지 않았고, `prdlst_report_no` 가 정확히 그
+        틈으로 빠져나가 사용자 화면에 영어로 찍혔다.
+
+        소스에서 _issue()·_unchecked() 의 첫 인자를 전부 긁어 견준다 — 검사가
+        늘 때 이름표를 빠뜨리면 근거 조항 등록과 무관하게 잡힌다.
+        """
+        import re
+        from pathlib import Path
+
+        from v1.label.services.ai_validation_service import _CATEGORY_LABELS
+
+        src = Path('v1/label/services/validation_service.py').read_text(encoding='utf-8')
+        used = set(re.findall(r"_(?:issue|unchecked)\(\s*'([a-z_]+)'", src))
+        self.assertTrue(used, 'category 리터럴을 못 긁었다')
+        missing = sorted(used - set(_CATEGORY_LABELS))
+        self.assertEqual(missing, [], f'한글 이름이 없는 category: {missing}')
+
+
     def test_이름이_영어가_아니다(self):
         from v1.label.services.ai_validation_service import _CATEGORY_LABELS
 
