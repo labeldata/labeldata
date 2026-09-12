@@ -17204,3 +17204,79 @@ class 남의_번호를_적으면_남의_값이_붙는다(TestCase):
             prdlst_report_no='1999999999999', importer_address='(주)수입상사')
         if vs.is_imported(label):
             self.assertEqual(vs.check_report_no_registered(label), [])
+
+
+class 성적서에서_읽은_값은_등급_A_다(TestCase):
+    """
+    원료 영양성분의 출처에는 등급이 있고, **공공 DB 로 채운 값은 영원히 C** 다.
+    식약처 DB 의 밀가루는 "일반적인 밀가루" 이지 "우리가 쓰는 그 밀가루" 가
+    아니기 때문이다. A 를 만들 수 있는 경로는 시험성적서뿐인데, 모델에
+    SOURCE_SPEC_OCR 이 처음부터 있었으면서 **넣는 화면만 없었다.**
+    """
+
+    def test_기준량을_모르면_손대지_않는다(self):
+        """
+        1회 제공량 30g 성적서를 100g 으로 가정하면 값이 3.3배 낮아진다.
+        터지지 않으니 아무도 모른다.
+        """
+        from v1.label.services import spec_nutrition
+
+        got, why = spec_nutrition.to_per_100({'calories': 120}, None, '')
+        self.assertIsNone(got)
+        self.assertIn('기준량', why)
+
+    def test_기준량이_다르면_100g_당으로_바꾼다(self):
+        from v1.label.services import spec_nutrition
+
+        got, why = spec_nutrition.to_per_100({'calories': 120, 'natriums': 30}, 30, 'g')
+        self.assertEqual(why, '')
+        self.assertAlmostEqual(got['calories'], 400.0, places=1)
+        self.assertAlmostEqual(got['natriums'], 100.0, places=1)
+
+    def test_없는_값은_0_이_아니라_없음이다(self):
+        """'불검출'·'ND'·'-' 를 0 으로 적으면 거짓말이 된다."""
+        from v1.label.services import spec_nutrition
+
+        got, _ = spec_nutrition.to_per_100(
+            {'calories': 120, 'trans_fats': 'ND', 'sugars': '불검출', 'fats': '-'},
+            100, 'g')
+        self.assertEqual(got['calories'], 120)
+        self.assertIsNone(got['trans_fats'])
+        self.assertIsNone(got['sugars'])
+        self.assertIsNone(got['fats'])
+
+    def test_g_과_mL_말고는_받지_않는다(self):
+        from v1.label.services import spec_nutrition
+
+        got, why = spec_nutrition.to_per_100({'calories': 1}, 1, '개')
+        self.assertIsNone(got)
+        self.assertIn('단위', why)
+
+    def test_읽는_성분이_저장하는_칸과_같다(self):
+        """
+        여기서 늘리면 저장이 못 받고, 저기서 늘리면 여기가 못 읽는다.
+        """
+        from v1.label.models import MyIngredientNutrition
+        from v1.label.services import spec_nutrition
+
+        read = {f for f, _ko, _u in spec_nutrition.FIELDS}
+        self.assertEqual(read - set(MyIngredientNutrition.VALUE_FIELDS), set())
+
+    def test_기준량을_추측하지_말라고_프롬프트에_적는다(self):
+        from v1.label.services import spec_nutrition
+
+        self.assertIn('추측하지 마세요', spec_nutrition.PROMPT)
+        self.assertIn('0 으로 적지 마세요', spec_nutrition.PROMPT)
+
+    def test_A_등급은_종이를_댈_수_있어야_한다(self):
+        """
+        "이 숫자 어디서 왔죠" 에 성적서를 못 내밀면 등급이 거짓말이 된다.
+        """
+        from v1.label.models import MyIngredientNutrition
+
+        f = MyIngredientNutrition._meta.get_field('source_document')
+        self.assertTrue(f.null)
+        # 문서를 지워도 값은 남는다 — 서류를 정리하다 영양성분을 잃으면 안 된다
+        self.assertEqual(f.remote_field.on_delete.__name__, 'SET_NULL')
+        self.assertEqual(MyIngredientNutrition.GRADE[
+            MyIngredientNutrition.SOURCE_SPEC_OCR], 'A')

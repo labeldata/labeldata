@@ -166,6 +166,11 @@ urlpatterns = [
     path('labels/<int:label_id>/rawmtrl-to-bom/apply/', views.rawmtrl_to_bom_apply, name='rawmtrl_to_bom_apply'),
 
     # 원료 표시사항 사진 → BOM 원료 등록 (미리보기 후 확인)
+    # 시험성적서에서 영양성분 읽기 — 등급 A 를 만드는 유일한 경로
+    path('documents/<int:document_id>/spec-nutrition/', views.document_spec_nutrition,
+         name='document_spec_nutrition'),
+    path('documents/<int:document_id>/spec-nutrition/save/', views.document_spec_nutrition_save,
+         name='document_spec_nutrition_save'),
     path('documents/<int:document_id>/ingredient-photo/preview/', views.document_ingredient_photo_preview, name='document_ingredient_photo_preview'),
     path('documents/<int:document_id>/ingredient-photo/apply/', views.document_ingredient_photo_to_bom, name='document_ingredient_photo_to_bom'),
 ]

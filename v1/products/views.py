@@ -7153,3 +7153,96 @@ def discard_if_untouched(request, product_id):
         temp_label.discard(label)
         return JsonResponse({'success': True, 'discarded': True})
     return JsonResponse({'success': True, 'discarded': False})
+
+
+@login_required
+@require_POST
+def document_spec_nutrition(request, document_id):
+    """
+    문서함의 시험성적서에서 영양성분을 읽는다. **저장하지 않고 보여만 준다.**
+
+    `MyIngredientNutrition.SOURCE_SPEC_OCR` 은 모델에 처음부터 있었고 등급이
+    **A** 다. 그런데 그 값을 넣는 화면이 없어서, 원료 영양성분은 늘 C 등급
+    (공공 DB)이나 직접 입력이었다. 그 종이는 이미 우리 문서함에 쌓이고 있다.
+
+    판독이 틀린 값이 A 등급으로 저장되면 가장 나쁘다. 등급이 높다는 것은
+    "이 값을 믿어도 된다" 는 뜻인데 그게 거짓이면 아래 모든 판단이 무너진다.
+    그래서 **사람이 확인 창에서 승인해야 저장한다**(document_spec_nutrition_save).
+    """
+    from v1.label.services import spec_nutrition
+    from v1.products.models import ProductDocument
+
+    doc = get_object_or_404(
+        ProductDocument, pk=document_id, label__user_id=request.user)   # 남의 것이면 404
+    if not doc.file:
+        return JsonResponse({'success': False, 'error': '문서에 파일이 없습니다.'},
+                            status=400)
+
+    usage = quota.consume(request.user, 'ocr_label')
+    if not usage.get('ok'):
+        return JsonResponse({'success': False, 'error': usage['message']}, status=429)
+
+    try:
+        with doc.file.open('rb') as fh:
+            got = spec_nutrition.read(fh)
+    except Exception as exc:
+        logger.exception('성적서 영양성분 판독 실패 (document=%s)', doc.pk)
+        return JsonResponse({'success': False, 'error': str(exc)}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'values': got['values'],
+        'basis_amount': got['basis_amount'],
+        'basis_unit': got['basis_unit'],
+        # 기준량을 못 읽었으면 값이 비어 온다. 100 으로 가정하지 않는다 —
+        # 1회 제공량 30g 성적서가 그대로 들어오면 값이 3.3배 낮아지는데
+        # 터지지 않으니 아무도 모른다.
+        'error': got['error'],
+        'document': {'id': doc.pk, 'name': doc.original_filename or ''},
+    })
+
+
+@login_required
+@require_POST
+def document_spec_nutrition_save(request, document_id):
+    """
+    확인한 값을 원료에 붙인다. 출처는 **등급 A**(업체 시험성적서).
+
+    원본 파일을 그 값에 연결해 둔다. 나중에 "이 숫자 어디서 왔죠" 에 종이를
+    댈 수 있어야 A 등급이 의미가 있다.
+    """
+    from v1.label.models import MyIngredient, MyIngredientNutrition
+    from v1.products.models import ProductDocument
+
+    doc = get_object_or_404(
+        ProductDocument, pk=document_id, label__user_id=request.user)
+
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    ingredient = get_object_or_404(
+        MyIngredient, pk=body.get('ingredient_id') or 0,
+        user_id=request.user)           # 남의 원료에는 못 붙인다
+
+    values = body.get('values') or {}
+    fields = {f: values.get(f) for f in MyIngredientNutrition.VALUE_FIELDS}
+    if not any(v is not None for v in fields.values()):
+        return JsonResponse({'success': False, 'error': '저장할 값이 없습니다.'},
+                            status=400)
+
+    fields.update({
+        'source_kind': MyIngredientNutrition.SOURCE_SPEC_OCR,
+        'public_row': None,
+        'picked_by': request.user,      # 사람이 승인했다. 자동 판단이 아니다
+        'picked_at': timezone.now(),
+        'source_note': '시험성적서 판독 — %s' % (doc.original_filename or doc.pk),
+        'source_document': doc,
+    })
+    with transaction.atomic():
+        MyIngredientNutrition.objects.update_or_create(
+            ingredient=ingredient, defaults=fields)
+
+    logger.info('성적서 영양성분 저장: ingredient=%s document=%s', ingredient.pk, doc.pk)
+    return JsonResponse({'success': True, 'grade': 'A'})

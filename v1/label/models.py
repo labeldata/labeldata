@@ -1030,6 +1030,15 @@ class MyIngredientNutrition(models.Model):
                                    null=True, blank=True, related_name='picked_by_ingredients',
                                    verbose_name='본 식약처 행',
                                    help_text='값을 베낀 것이 아니라 어느 행을 보았는지를 남긴다')
+    # 그 값이 어느 종이에서 왔나. **A 등급은 종이를 댈 수 있어야 뜻이 있다** —
+    # "이 숫자 어디서 왔죠" 에 성적서를 못 내밀면 등급이 거짓말이 된다.
+    # 문서가 지워져도 값은 남긴다(SET_NULL). 값을 함께 지우면 사용자가
+    # 서류를 정리하다 영양성분을 잃는다.
+    source_document = models.ForeignKey(
+        'products.ProductDocument', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='nutrition_sources',
+        verbose_name='근거 문서')
+
     source_note = models.CharField(max_length=300, null=True, blank=True,
                                    verbose_name='근거', help_text='성적서 번호·발급일 등')
 

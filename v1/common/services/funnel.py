@@ -70,12 +70,20 @@ def funnel(days=90):
             n = len(set(UserActivityLog.objects
                         .filter(user_id__in=joined, action=action)
                         .values_list('user_id', flat=True)))
+        # 앞 단계에서 여기로 못 온 비율. 구멍이 어디인지는 이 수가 말한다.
+        #
+        # **음수가 나올 수 있다.** 뒷 단계 사람이 앞 단계보다 많을 때다 —
+        # 실제로 '첫 제품 4명, 첫 BOM 5명' 이 나왔다. 제품 생성이 기록되기
+        # 전에 만들어진 제품이 있거나, 공유받은 제품에 BOM 만 넣은 경우다.
+        # "-25% 이탈" 은 아무 뜻이 없으므로 0 으로 눕히고, 그런 일이 있었다는
+        # 사실은 gained 로 따로 남긴다 — 숨기면 다음 사람이 같은 것을 또 본다.
+        gap = prev - n
         out.append({
             'name': name,
             'users': n,
             'of_base': round(n * 100.0 / base, 1) if base else 0.0,
-            # 앞 단계에서 여기로 못 온 비율. 구멍이 어디인지는 이 수가 말한다.
-            'dropped': round((prev - n) * 100.0 / prev, 1) if prev else 0.0,
+            'dropped': round(gap * 100.0 / prev, 1) if prev and gap > 0 else 0.0,
+            'gained': gap < 0,
         })
         prev = n or prev
     return {'days': days, 'base': base, 'steps': out}

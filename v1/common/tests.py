@@ -899,3 +899,53 @@ class 대시보드는_한_화면에_중요한_것을_모은다(TestCase):
         src = Path('v1/common/services/funnel.py').read_text(encoding='utf-8')
         block = src[src.index('def return_rate'):]
         self.assertNotIn('.exists()', block)
+
+
+class 화면에_들어가게_줄인다(TestCase):
+    """
+    한 화면에 다 안 보였다. 단계 칸이 네 줄짜리로 여덟 개, 접힌 묶음 셋이
+    각각 화면 폭을 통째로 먹었다.
+    """
+
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='s@example.com', password='pw12345!', is_staff=True)
+        self.client.force_login(self.staff)
+
+    def body(self):
+        resp = self.client.get('/dashboard/')
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode('utf-8')
+
+    def test_접힌_묶음을_나란히_놓는다(self):
+        body = self.body()
+        self.assertIn('dash-fold-row', body)
+        # 셋이 한 줄 안에 든다
+        at = body.index('dash-fold-row')
+        row = body[at:body.index('</div>', body.rindex('</details>'))]
+        self.assertEqual(row.count('<details'), 3)
+
+    def test_단계_칸은_두_줄이다(self):
+        body = self.body()
+        self.assertIn('fn-step-top', body)
+        self.assertIn('fn-step-foot', body)
+
+    def test_음수_이탈은_내보내지_않는다(self):
+        """
+        '앞 단계에서 -25% 이탈' 은 아무 뜻이 없다. 뒷 단계 사람이 앞 단계보다
+        많을 때 나오는데(실제로 첫 제품 4명·첫 BOM 5명이 나왔다), 그건 앞
+        단계가 덜 기록됐다는 뜻이지 이탈이 아니다.
+        """
+        from v1.common.services import funnel
+
+        for step in funnel.funnel(90)['steps']:
+            self.assertGreaterEqual(step['dropped'], 0.0)
+
+    def test_그런_일이_있었다는_사실은_남긴다(self):
+        """숨기면 다음 사람이 같은 것을 또 본다."""
+        from pathlib import Path
+
+        src = Path('v1/common/services/funnel.py').read_text(encoding='utf-8')
+        self.assertIn("'gained'", src)
+        html = Path('v1/templates/admin/dashboard.html').read_text(encoding='utf-8')
+        self.assertIn('step.gained', html)
