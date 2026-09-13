@@ -722,3 +722,89 @@ class 부적합_상세가_앱이_그리는_칸을_실제로_보낸다(TestCase):
         results = r.json()['results']
         self.assertTrue(results)
         self.assertNotIn('raw_detail_text', results[0])
+
+
+class 앱을_지운_비회원_기기가_영원히_남지_않는다(TestCase):
+    """
+    개인정보처리방침이 "비회원은 모바일 앱을 삭제하는 즉시 기기 연동 데이터가
+    파기됩니다" 라고 약속한다. 그런데 **서버는 앱이 지워진 것을 알 수 없다** —
+    앱 삭제는 아무것도 보내지 않는다. `AppDevice` 와 거기 매달린 보관함·
+    알림 내역·알림 키워드가 그대로 남았고, 지우는 코드가 저장소 어디에도
+    없었다. 약속한 파기가 한 번도 일어나지 않았다.
+
+    알 수 있는 것은 마지막으로 서버를 부른 때뿐이다. 오래 잠잠한 **비회원**
+    기기를 치운다. 회원 기기는 계정에 매달려 있고 탈퇴 때 함께 지운다.
+    """
+
+    def setUp(self):
+        from django.utils import timezone
+
+        from v1.mobile.models import AppDevice, Bookmark
+        from v1.regulatory.models import RegulatoryNews
+
+        self.old = timezone.now() - timezone.timedelta(days=200)
+        self.news = RegulatoryNews.objects.create(
+            external_id='sd-1', api_source='I2620', source='domestic',
+            product_name='n', ai_parsed=True, collected_date='2026-01-01')
+
+        self.guest_old = AppDevice.objects.create(device_id='guest-old', user=None)
+        self.guest_new = AppDevice.objects.create(device_id='guest-new', user=None)
+        self.user = User.objects.create_user(username='keeper', password='x')
+        self.member_old = AppDevice.objects.create(
+            device_id='member-old', user=self.user)
+        Bookmark.objects.create(device=self.guest_old, news=self.news)
+
+        # auto_now 라 update() 로 직접 되돌린다
+        AppDevice.objects.filter(
+            pk__in=[self.guest_old.pk, self.member_old.pk]
+        ).update(last_active_at=self.old)
+
+    def _run(self, *args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('purge_stale_devices', *args, stdout=out)
+        return out.getvalue()
+
+    def test_기본은_보여_주기만_한다(self):
+        from v1.mobile.models import AppDevice
+
+        text = self._run()
+        self.assertIn('보여 주기만 했다', text)
+        self.assertTrue(AppDevice.objects.filter(device_id='guest-old').exists())
+
+    def test_잠잠한_비회원_기기를_지운다(self):
+        from v1.mobile.models import AppDevice
+
+        self._run('--apply')
+        self.assertFalse(AppDevice.objects.filter(device_id='guest-old').exists())
+
+    def test_그_기기의_보관함도_함께_간다(self):
+        from v1.mobile.models import Bookmark
+
+        self._run('--apply')
+        self.assertFalse(Bookmark.objects.filter(news=self.news).exists())
+
+    def test_최근에_쓴_기기는_건드리지_않는다(self):
+        from v1.mobile.models import AppDevice
+
+        self._run('--apply')
+        self.assertTrue(AppDevice.objects.filter(device_id='guest-new').exists())
+
+    def test_회원_기기는_잠잠해도_건드리지_않는다(self):
+        from v1.mobile.models import AppDevice
+
+        self._run('--apply')
+        self.assertTrue(AppDevice.objects.filter(device_id='member-old').exists())
+
+    def test_기기가_서버를_부르면_잠잠함이_풀린다(self):
+        """`last_active_at` 이 안 올라가면 쓰는 기기를 지운다."""
+        from v1.mobile.models import AppDevice
+
+        self.client.post('/api/mobile/device/register/',
+                         data=json.dumps({'device_id': 'guest-old'}),
+                         content_type='application/json')
+        self._run('--apply')
+        self.assertTrue(AppDevice.objects.filter(device_id='guest-old').exists())

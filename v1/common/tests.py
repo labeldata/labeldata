@@ -11,6 +11,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.urls import reverse
+from django.utils import timezone
 from django.test import RequestFactory, SimpleTestCase, TestCase
 
 from v1.common.context_processors import board_notifications, regulatory_alerts
@@ -1179,3 +1180,186 @@ class 둘러보기를_다시_눌러도_한도가_새것이_되지_않는다(Test
         signer_client.cookies[GUEST_COOKIE] = signed
         self._visit()
         self.assertNotEqual(self._current().pk, member.pk)
+
+
+class 탈퇴하면_지금_익명이_되고_기간_뒤에_사라진다(TestCase):
+    """
+    개인정보처리방침이 "회원 탈퇴 시 수집된 개인정보 및 기기 식별 정보는
+    **즉시 파기**됩니다" 라고 약속한다. 그런데 계정 행을 그 자리에서 지우면
+    그가 만든 표시사항·제품·원료가 CASCADE 로 함께 사라진다 — 잘못 눌렀을
+    때 되돌릴 방법이 없고, 지우다 실패하면 절반만 지워진 상태가 남는다.
+
+    그래서 나눈다. **탈퇴하는 순간 개인을 가리키는 것을 전부 지우고**(그
+    시점에 남는 것은 누구인지 알 수 없는 껍데기다), 정해진 기간이 지나면
+    껍데기와 그가 만든 것을 완전히 지운다.
+
+    기간은 「개인정보 보호법」 시행령 제16조 제1항 — 지체 없이, 정당한
+    사유가 없으면 **5일 이내**. 더 긴 법정 보존(전자상거래법의 5년·3년)은
+    이 저장소에 해당 데이터가 없다 — 결제·주문·구독 모델이 없다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyLabel
+        from v1.mobile.models import AlertRule, AppDevice
+        from v1.user_management.models import UserProfile
+
+        self.user = User.objects.create_user(
+            username='bye@example.com', email='bye@example.com',
+            password='pw12345!', first_name='홍', last_name='길동')
+        UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={'phone_number': '010-1234-5678', 'address': '서울시 어딘가',
+                      'company_name': '어떤식품', 'license_number': '12345',
+                      'manufacturer_name': '어떤제조원',
+                      'manufacturer_address': '경기도 어딘가',
+                      'email_verified_yn': True})
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='내 제품', delete_YN='N')
+        self.device = AppDevice.objects.create(
+            device_id='bye-device', user=self.user)
+        AlertRule.objects.create(
+            user=self.user, category='INGREDIENT', keyword='우유',
+            match_type='CONTAINS', is_active=True)
+
+    # ── 1단계: 탈퇴하는 순간 ─────────────────────────────────────────────
+
+    def test_계정에서_사람을_알아볼_수_없게_된다(self):
+        from v1.common import withdrawal
+
+        withdrawal.withdraw(self.user)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.username.startswith('withdrawn_'))
+        self.assertEqual(self.user.email, '')
+        self.assertEqual(self.user.first_name, '')
+        self.assertEqual(self.user.last_name, '')
+        self.assertFalse(self.user.is_active)
+        self.assertFalse(self.user.has_usable_password())
+
+    def test_프로필에_남은_개인정보가_없다(self):
+        """
+        새 칸이 생겼는데 지우는 목록에 안 올리면 조용히 남는다.
+        원래 값이 하나라도 남아 있으면 실패한다.
+        """
+        from v1.common import withdrawal
+
+        original = {'010-1234-5678', '서울시 어딘가', '어떤식품', '12345',
+                    '어떤제조원', '경기도 어딘가'}
+        withdrawal.withdraw(self.user)
+        profile = self.user.profile
+        profile.refresh_from_db()
+        left = []
+        for field in profile._meta.get_fields():
+            if not hasattr(field, 'attname'):
+                continue
+            value = getattr(profile, field.attname, None)
+            if isinstance(value, str) and value.strip() in original:
+                left.append('%s=%s' % (field.attname, value))
+        self.assertEqual(left, [], '탈퇴했는데 개인정보가 남았다')
+
+    def test_앱이_들고_있던_것이_그_자리에서_사라진다(self):
+        from v1.common import withdrawal
+        from v1.mobile.models import AlertRule, AppDevice
+
+        withdrawal.withdraw(self.user)
+        self.assertFalse(AppDevice.objects.filter(device_id='bye-device').exists())
+        self.assertFalse(AlertRule.objects.filter(user=self.user).exists())
+
+    def test_만든_것은_아직_남는다(self):
+        """그것까지 지금 지우면 잘못 눌렀을 때 되돌릴 방법이 없다."""
+        from v1.common import withdrawal
+        from v1.label.models import MyLabel
+
+        withdrawal.withdraw(self.user)
+        self.assertTrue(MyLabel.objects.filter(pk=self.label.pk).exists())
+
+    def test_다시_로그인할_수_없다(self):
+        from v1.common import withdrawal
+
+        withdrawal.withdraw(self.user)
+        ok = self.client.login(username='bye@example.com', password='pw12345!')
+        self.assertFalse(ok)
+
+    # ── 2단계: 기간이 지나면 ─────────────────────────────────────────────
+
+    def test_기간_안에는_지우지_않는다(self):
+        from v1.common import withdrawal
+
+        withdrawal.withdraw(self.user)
+        self.assertEqual(list(withdrawal.stale_withdrawn()), [])
+
+    def test_기간이_지나면_대상이_된다(self):
+        from v1.common import withdrawal
+
+        withdrawal.withdraw(self.user)
+        self.user.refresh_from_db()
+        # 탈퇴 날짜를 열흘 전으로 되돌린다 (username 앞머리가 날짜다)
+        old = timezone.now() - timezone.timedelta(days=10)
+        self.user.username = self.user.username.replace(
+            timezone.now().strftime('%Y%m%d'), old.strftime('%Y%m%d'))
+        self.user.save(update_fields=['username'])
+        self.assertIn(self.user, list(withdrawal.stale_withdrawn()))
+
+    def test_기본_기간은_5일이다(self):
+        """개인정보 보호법 시행령 제16조 제1항."""
+        from v1.common import withdrawal
+
+        self.assertEqual(withdrawal.DEFAULT_PURGE_DAYS, 5)
+        self.assertEqual(withdrawal.purge_days(), 5)
+
+    def test_운영에서_기간을_늘릴_수_있다(self):
+        from django.test import override_settings
+
+        from v1.common import withdrawal
+
+        with override_settings(ACCOUNT_PURGE_DAYS=30):
+            self.assertEqual(withdrawal.purge_days(), 30)
+
+    def test_탈퇴하지_않은_계정은_건드리지_않는다(self):
+        from v1.common import withdrawal
+
+        self.assertEqual(list(withdrawal.stale_withdrawn(days=0)), [])
+
+    # ── 파기 명령 ────────────────────────────────────────────────────────
+
+    def _aged(self):
+        from v1.common import withdrawal
+
+        withdrawal.withdraw(self.user)
+        self.user.refresh_from_db()
+        old = timezone.now() - timezone.timedelta(days=10)
+        self.user.username = self.user.username.replace(
+            timezone.now().strftime('%Y%m%d'), old.strftime('%Y%m%d'))
+        self.user.save(update_fields=['username'])
+
+    def test_기본은_보여_주기만_한다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        self._aged()
+        out = StringIO()
+        call_command('purge_withdrawn', stdout=out)
+        self.assertIn('보여 주기만 했다', out.getvalue())
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+
+    def test_apply_를_붙이면_계정과_만든_것이_사라진다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from v1.label.models import MyLabel
+
+        self._aged()
+        call_command('purge_withdrawn', '--apply', stdout=StringIO())
+        self.assertFalse(User.objects.filter(pk=self.user.pk).exists())
+        self.assertFalse(MyLabel.objects.filter(pk=self.label.pk).exists())
+
+    def test_아직_기간이_안_된_것은_apply_로도_안_지운다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        from v1.common import withdrawal
+
+        withdrawal.withdraw(self.user)
+        call_command('purge_withdrawn', '--apply', stdout=StringIO())
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())

@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from v1.common import withdrawal
 from v1.regulatory.models import RegulatoryNews, InspectionMatch
 from .models import AppDevice, AlertRule, PushNotificationLog, Bookmark, AppVersion
 from .serializers import (
@@ -206,8 +207,11 @@ def register_device(request):
             if getattr(device, field) != value:
                 setattr(device, field, value)
                 changed.append(field)
-        if changed:
-            device.save(update_fields=changed)
+        # `last_active_at` 은 auto_now 라 **저장할 때만** 올라간다. 바뀐 칸이
+        # 없다고 건너뛰면 그 값이 멈춘다 — 푸시 보낼 기기를 고르는 기준이고
+        # (push_service 의 order_by('-last_active_at')) 오래 안 쓴 기기를
+        # 치우는 기준이기도 하다. 그래서 부를 때마다 올린다.
+        device.save(update_fields=changed + ['last_active_at'])
     return Response(AppDeviceSerializer(device).data, status=status.HTTP_200_OK)
 
 
@@ -807,11 +811,10 @@ def account_delete(request):
       보관함·알림 내역이 함께 지워진다(FK CASCADE). 알림 키워드도 지운다
     · 계정을 비활성으로 돌린다 — 웹·앱 어느 쪽으로도 다시 못 들어온다
 
-    **일부러 남기는 것.** 그 계정이 만든 표시사항·제품·원료는 여기서
-    지우지 않는다. 앱의 탈퇴 버튼 하나로 웹에서 몇 년 쌓은 작업을 되돌릴
-    수 없게 지우는 것은 이 화면이 감당할 결정이 아니다. 방침의 "법령에
-    따라 일정 기간 보관이 필요한 경우 안전하게 보관 후 파기" 안쪽이며,
-    최종 파기는 운영에서 따로 처리한다.
+    **두 단계로 나눈다.** 그 계정이 만든 표시사항·제품·원료는 이 자리에서
+    지우지 않는다 — 지금은 누구인지 알 수 없는 껍데기만 남고, 정해진 기간이
+    지나면 `purge_withdrawn` 이 그것까지 완전히 지운다. 기간과 그 법적
+    근거는 `v1/common/withdrawal.py` 머리말에 적었다(기본 5일).
     """
     limited = _rate_limited(request)
     if limited:
@@ -838,12 +841,9 @@ def account_delete(request):
         return Response({'error': '비밀번호가 맞지 않습니다.'},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    AlertRule.objects.filter(user=user).delete()
-    AppDevice.objects.filter(user=user).delete()   # 보관함·알림 내역이 함께 간다
-
-    user.is_active = False
-    user.save(update_fields=['is_active'])
-    logger.info('[ACCOUNT_DELETE] user_id=%s 앱에서 탈퇴 처리', user.pk)
+    withdrawal.withdraw(user)
+    logger.info('[ACCOUNT_DELETE] user_id=%s 앱에서 탈퇴 처리 (파기 예정 %d일 뒤)',
+                user.pk, withdrawal.purge_days())
     return Response({'detail': 'ok'})
 
 
