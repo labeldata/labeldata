@@ -2382,6 +2382,9 @@ window.addEventListener('message', function(event) {
     if (event.data.type === 'nutritionSaved') {
         showSaved(event.data.message || '영양성분을 저장했습니다');
         showSaveStatusMsg();
+        if (typeof event.data.hasCalories === 'boolean') {
+            markWorkflowStep('#tab-nutrition', event.data.hasCalories);
+        }
         return;
     }
 
@@ -2392,6 +2395,30 @@ window.addEventListener('message', function(event) {
         showSaveStatusMsg(event.data.message);
     }
 });
+
+/*
+ * 단계 번호를 체크로 바꾼다(또는 되돌린다).
+ *
+ * 이 표시는 서버가 화면을 그릴 때 한 번 정해진다. 그런데 영양성분·배합은
+ * iframe 안에서 제 API 로 저장하고 화면을 다시 읽지 않는다 — 저장을 눌러도
+ * 번호가 그대로라 사용자는 저장이 안 된 줄 안다. 서버와 같은 기준으로
+ * 그 자리에서 고친다(products/views.py 의 _build_workflow_steps).
+ */
+function markWorkflowStep(tabTarget, done) {
+    const btn = document.querySelector(
+        '#workspaceTab .nav-link[data-bs-target="' + tabTarget + '"]');
+    const badge = btn && btn.querySelector('.wf-no');
+    if (!badge) return;
+    if (badge.classList.contains('wf-no-done') === !!done) return;
+    badge.classList.toggle('wf-no-done', !!done);
+    if (done) {
+        badge.innerHTML = '<i class="bi bi-check-lg"></i>';
+    } else {
+        const li = btn.closest('.wf-step');
+        const steps = Array.from(document.querySelectorAll('#workspaceTab .wf-step'));
+        badge.textContent = String(steps.indexOf(li) + 1);
+    }
+}
 
 // 워크플로우 관리 스크립트
 const workflowShares = [

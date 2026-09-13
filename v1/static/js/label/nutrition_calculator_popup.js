@@ -1002,6 +1002,20 @@ function loadExistingData(data) {
 
 // 페이지 로드 완료 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
+  /*
+   * **이 파일을 읽는 화면이 둘이다.**
+   *
+   * 계산기 팝업(label/nutrition_calculator_popup.html)에는 입력 표가
+   * 있고, 제품 영양성분 편집기(products/nutrition_editor.html)는 같은
+   * 계산 규칙만 빌려 쓰고 그 표가 없다.
+   *
+   * 편집기에서는 buildInputForm 이 컨테이너가 없어 그냥 돌아가는데,
+   * 아래 대기 루프는 그 사정을 모르고 3초를 기다린 뒤
+   * "입력 표가 준비되지 않았습니다" 를 콘솔에 남기고 URL 파라미터를
+   * 읽으러 갔다. 편집기 화면에서는 그게 전부 헛일이다.
+   */
+  if (!document.getElementById('basic-nutrient-inputs')) return;
+
   buildInputForm();
   
   // 단위량, 포장개수 필드에 쉼표 포맷팅 추가

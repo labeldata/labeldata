@@ -619,6 +619,99 @@ def _strip_js_noise(text):
     return ''.join(out)
 
 
+def _bracket_balance(text):
+    """
+    괄호가 안 맞는 자리. `(첫 초과 닫힘 줄, 마지막 깊이)` 또는 None.
+
+    재선언 검사(static.E001)는 균형이 깨지면 **조용히 포기한다** — 그래서
+    괄호가 하나 어긋난 파일은 아무 검사에도 안 걸렸다. 실제로 미리보기
+    화면의 label_preview.js 가 옛 함수의 닫는 괄호를 남긴 채 배포되어
+    파일 전체가 파싱 단계에서 죽었고, 화면은 "그냥 단추가 안 먹는" 것처럼만
+    보였다. 브라우저 콘솔의 SyntaxError 한 줄을 보기 전에는 알 수 없다.
+    """
+    clean = _strip_js_noise(text)
+    if clean is None:
+        return None
+    depth = 0
+    lineno = 1
+    negative = None
+    for ch in clean:
+        if ch == chr(10):
+            lineno += 1
+        elif ch in '{([':
+            depth += 1
+        elif ch in '})]':
+            depth -= 1
+            if depth < 0 and negative is None:
+                negative = lineno
+    if negative is None and depth == 0:
+        return None
+    return negative, depth
+
+
+def _is_built_bundle(text):
+    """번들러가 뱉은 파일은 건너뛴다 — 한 줄이 수만 자라 정규식 리터럴을
+    문자열과 구분하지 못한다. 사람이 쓴 소스에는 이런 줄이 없다."""
+    return any(len(line) > 2000 for line in text.split(chr(10)))
+
+
+@register()
+def check_js_bracket_balance(app_configs, **kwargs):
+    """괄호가 안 맞는 JS 를 오류로 보고한다."""
+    base = Path(settings.BASE_DIR)
+    errors = []
+
+    def describe(where, result):
+        negative, depth = result
+        if negative is not None:
+            return (f'{where} 닫는 괄호가 하나 남습니다(줄 {negative} 부근).')
+        kind = '열린' if depth > 0 else '닫는'
+        return f'{where} {kind} 괄호가 {abs(depth)}개 안 맞습니다.'
+
+    static_root = base / 'static'
+    if static_root.exists():
+        for path in sorted(static_root.rglob('*.js')):
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            if _is_built_bundle(text):
+                continue
+            result = _bracket_balance(text)
+            if result:
+                errors.append(Error(
+                    describe(f'{path.name}:', result)
+                    + ' 이 파일 **전체**가 SyntaxError 로 로드되지 않습니다.',
+                    hint='함수를 갈아 끼울 때 옛 본문의 마지막 줄과 닫는 '
+                         '괄호가 남아 있지 않은지 보세요.',
+                    obj=str(path),
+                    id='static.E002',
+                ))
+
+    for root in _template_dirs():
+        for path in sorted(root.rglob('*.html')):
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in _INLINE_SCRIPT.finditer(text):
+                body = m.group(1)
+                if _is_built_bundle(body):
+                    continue
+                result = _bracket_balance(body)
+                if result:
+                    line = text.count(chr(10), 0, m.start(1)) + 1
+                    errors.append(Error(
+                        describe(f'{path.name}:{line} 의 <script> 에서', result)
+                        + ' 이 <script> 블록 전체가 죽습니다.',
+                        hint='함수를 갈아 끼울 때 옛 본문의 마지막 줄과 닫는 '
+                             '괄호가 남아 있지 않은지 보세요.',
+                        obj=str(path),
+                        id='static.E002',
+                    ))
+    return errors
+
+
 def _redeclared(text):
     """(줄번호, 이름) 목록 — 같은 블록에서 두 번 선언된 것."""
     clean = _strip_js_noise(text)

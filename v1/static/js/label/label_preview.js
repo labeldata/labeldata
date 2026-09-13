@@ -2680,8 +2680,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isNaN(pct)) return '';
         if (pct < 1) return '1% 미만';
         return String(Math.round(pct));
-    }        return value;
-    }    // 계산기의 영양성분 값 계산 로직 적용 (완전 동일)
+    }
+
+    /*
+     * 표시단위(100g·단위내용량·총내용량)로 환산한 뒤 nutritionText 로 넘긴다.
+     *
+     * 여기 있던 옛 값 처리 함수를 nutritionText 로 갈아 끼우면서 **그 함수의
+     * 닫는 괄호와 마지막 return 을 지우지 않았다.** 그래서 이 파일은
+     * `}  return value;  }` 로 DOMContentLoaded 콜백이 중간에 닫혀
+     * 파싱 단계에서 통째로 죽었다 — 미리보기 화면의 전역 함수가 하나도
+     * 안 생겨서 2단 배치·필드 폭·getCookie 가 전부 ReferenceError 였다.
+     * checks.py 의 static.E002 가 이제 이 종류를 잡는다.
+     */
     function calculateNutrientValue(type, baseAmount, servings, val100g, displayUnit) {
         if (isNaN(val100g) || isNaN(baseAmount)) return 0;
         let raw = 0;

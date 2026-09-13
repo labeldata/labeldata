@@ -10701,3 +10701,142 @@ class 업로드_뒤에도_문서함_탭에_남는다(TestCase):
                         '탭 단추보다 먼저 돌면 켤 것을 찾지 못한다')
         self.assertLess(html.index('id="tab-info"'), mark,
                         '기본 정보 칸보다 먼저 돌면 active 를 걷어내지 못한다')
+
+
+class 괄호가_안_맞는_JS(TestCase):
+    """
+    미리보기 화면이 통째로 죽어 있었다. label_preview.js 에서 옛 함수를
+    갈아 끼우면서 그 함수의 마지막 줄과 닫는 괄호를 지우지 않아
+    DOMContentLoaded 콜백이 중간에 닫혔다. 파일이 파싱 단계에서 죽으니 그
+    안의 전역 함수가 하나도 안 생겼고, 화면에서는 "2단 배치 단추가 안
+    먹는다"(setAllFieldsWidth is not defined) 로만 보였다.
+
+    재선언 검사(static.E001)는 괄호가 안 맞으면 **조용히 포기한다.** 그래서
+    아무 검사에도 안 걸렸다.
+    """
+
+    def test_지금은_한_건도_안_걸린다(self):
+        from v1.common.checks import check_js_bracket_balance
+        found = check_js_bracket_balance(None)
+        self.assertEqual([e.msg for e in found], [])
+
+    def test_닫는_괄호가_하나_남으면_잡는다(self):
+        from v1.common.checks import _bracket_balance
+        result = _bracket_balance("""function f() {
+    return 1;
+}
+}
+""")
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], 4)
+
+    def test_열린_괄호가_남으면_잡는다(self):
+        from v1.common.checks import _bracket_balance
+        self.assertEqual(_bracket_balance("""function f() {
+    return 1;
+"""), (None, 1))
+
+    def test_문자열_주석_정규식_안의_괄호는_세지_않는다(self):
+        from v1.common.checks import _bracket_balance
+        self.assertIsNone(_bracket_balance("""var a = '}';
+// }
+/* } */
+var re = /[}]/;
+var t = `${a}}`;
+"""))
+
+    def test_번들은_건너뛴다(self):
+        # 번들러가 뱉은 한 줄짜리 파일은 정규식 리터럴을 가려낼 수 없어
+        # 거짓 경보만 낸다. 사람이 쓴 소스에는 이런 줄이 없다.
+        from v1.common.checks import _is_built_bundle
+        self.assertTrue(_is_built_bundle('var a=1;' * 400))
+        self.assertFalse(_is_built_bundle("""var a = 1;
+var b = 2;
+"""))
+
+    def test_미리보기_JS_의_전역이_최상위에_있다(self):
+        # 파일이 파싱되지 않으면 이 이름들이 window 에 안 붙는다.
+        from pathlib import Path
+        from django.conf import settings
+        js = (Path(settings.BASE_DIR) / 'static/js/label/label_preview.js'
+              ).read_text(encoding='utf-8')
+        for name in ('window.setAllFieldsWidth',
+                     'window.toggleAllFieldsVisibility',
+                     'window.resetFieldOrder'):
+            self.assertIn(name + ' = ', js)
+        self.assertIn('function getCookie(name)', js)
+
+
+class 계산기_JS_를_빌려_쓰는_화면(TestCase):
+    """
+    nutrition_calculator_popup.js 는 계산기 팝업과 제품 영양성분 편집기가
+    함께 읽는다. 편집기에는 계산기의 입력 표가 없는데, 팝업용 초기화가
+    거기서도 돌면서 3초를 기다린 뒤 콘솔에
+    "입력 표가 준비되지 않았습니다" 를 남기고 URL 파라미터를 읽으러 갔다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        self.js = (Path(settings.BASE_DIR)
+                   / 'static/js/label/nutrition_calculator_popup.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_입력_표가_없으면_초기화하지_않는다(self):
+        head = self.js.index("document.addEventListener('DOMContentLoaded'")
+        tail = self.js.index('buildInputForm();', head)
+        self.assertIn("if (!document.getElementById('basic-nutrient-inputs')) return;",
+                      self.js[head:tail])
+
+    def test_편집기에는_그_컨테이너가_없다(self):
+        # 이 전제가 깨지면 위의 방어가 무의미해진다.
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR) / 'templates'
+        editor = (base / 'products/nutrition_editor.html').read_text(encoding='utf-8')
+        popup = (base / 'label/nutrition_calculator_popup.html').read_text(encoding='utf-8')
+        self.assertNotIn('basic-nutrient-inputs', editor)
+        self.assertIn('basic-nutrient-inputs', popup)
+        self.assertIn('nutrition_calculator_popup.js', editor)
+
+
+class 영양성분_저장하면_단계_표시가_따라온다(TestCase):
+    """
+    탭 머리의 단계 번호는 서버가 그린다. 영양성분은 iframe 안에서 제 API 로
+    저장하고 화면을 다시 읽지 않으니, 저장을 눌러도 번호가 그대로였다 —
+    사용자는 저장이 안 된 줄 안다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR) / 'templates/products'
+        self.editor = (base / 'nutrition_editor.html').read_text(encoding='utf-8')
+        self.detail = (base / 'product_detail.html').read_text(encoding='utf-8')
+
+    def test_편집기가_열량이_있는지_함께_보낸다(self):
+        head = self.editor.index("type: 'nutritionSaved'")
+        tail = self.editor.index("}, '*');", head)
+        # 이름의 일부만 맞아도 통과하면 안 된다 — 키 자리에 있어야 한다
+        self.assertRegex(self.editor[head:tail],
+                         r'(?<![A-Za-z0-9_$])hasCalories\s*:')
+
+    def test_부모가_그_값으로_단계_표시를_고친다(self):
+        head = self.detail.index("event.data.type === 'nutritionSaved'")
+        tail = self.detail.index('previewSettingsSaved', head)
+        body = self.detail[head:tail]
+        self.assertRegex(
+            body, r"(?<![A-Za-z0-9_$])markWorkflowStep\('#tab-nutrition'")
+        self.assertIn('event.data.hasCalories', body)
+
+    def test_고치는_함수가_있다(self):
+        self.assertIn('function markWorkflowStep(tabTarget, done)', self.detail)
+        self.assertIn('wf-no-done', self.detail)
+
+    def test_서버와_같은_기준이다(self):
+        # 서버는 calories 가 채워졌는지로 판정한다 — 기준이 갈리면
+        # 새로고침할 때마다 표시가 뒤집힌다.
+        import inspect
+        from v1.products.views import _build_workflow_steps
+        src = inspect.getsource(_build_workflow_steps)
+        self.assertIn("'tab-nutrition': bool((label.calories", src)

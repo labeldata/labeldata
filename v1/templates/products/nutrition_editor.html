@@ -845,10 +845,15 @@ async function saveData() {
 
         // 부모(product_detail) 안에 있으면 부모 Snackbar 사용, 단독 실행 시 자체 Snackbar
         if (window.parent && window.parent !== window) {
+            /* 탭 머리의 단계 표시는 서버가 그린다 — `calories` 가 채워졌는지로
+               판정한다(products/views.py 의 _build_workflow_steps). 여기서
+               저장해도 그 표시는 **다음 새로고침까지 옛말을 한다.** 방금
+               저장한 사실을 부모에게 같이 알려서 그 자리에서 고치게 한다. */
             window.parent.postMessage({
                 type: 'nutritionSaved',
                 message: '영양성분이 저장되었습니다.',
-                labelId: LABEL_ID
+                labelId: LABEL_ID,
+                hasCalories: !!String(payload.calories == null ? '' : payload.calories).trim()
             }, '*');
         } else {
             showSaved('영양성분을 저장했습니다');
