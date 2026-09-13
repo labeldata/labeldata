@@ -38,6 +38,11 @@ urlpatterns = [
     path('devices/<str:device_id>/notifications/<int:noti_id>/read/', views.notification_read, name='notification_read'),
     path('devices/<str:device_id>/notifications/<int:noti_id>/', views.notification_delete, name='notification_delete'),
 
+    # 수거검사 알림이 나를 알아보는 기준(회사명·인허가번호).
+    # 이것이 없으면 수거검사 매칭 세 규칙 중 둘이 아예 돌지 않는다.
+    path('devices/<str:device_id>/inspection-profile/',
+         views.inspection_profile, name='inspection_profile'),
+
     # 앱 버전
     path('version-check/', views.version_check, name='version_check'),
 ]

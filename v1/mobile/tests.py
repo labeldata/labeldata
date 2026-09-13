@@ -1302,3 +1302,84 @@ class 키워드를_바꾸면_소급도_다시_돈다(TestCase):
             PushNotificationLog.objects
             .filter(device=self.device, trigger_label='우유', sent_at__isnull=True)
             .exists())
+
+
+class 수거검사_알림_기준을_앱에서도_켤_수_있다(TestCase):
+    """
+    수거검사 매칭은 세 규칙으로 돈다 — 품목보고번호 · 인허가번호 · 회사명.
+    뒤의 둘은 `UserProfile` 에 값이 있어야 작동한다.
+
+    웹에는 그 값을 넣는 자리가 있는데(부적합 화면의 알림 설정 모달) **앱에는
+    없었고 API 도 없었다.** 앱의 알림 탭에 '수거검사' 탭이 버젓이 있는데,
+    앱만 쓰는 사용자에게는 영영 비어 있을 수 있었다.
+    """
+
+    def setUp(self):
+        from v1.mobile.models import AppDevice
+        from v1.user_management.models import UserProfile
+
+        self.user = User.objects.create_user(username='insp', password='x')
+        UserProfile.objects.update_or_create(
+            user=self.user, defaults={'company_name': '어떤식품'})
+        self.device = AppDevice.objects.create(device_id='insp-device', user=self.user)
+        AppDevice.objects.create(device_id='insp-guest', user=None)
+
+    URL = '/api/mobile/devices/insp-device/inspection-profile/'
+
+    def test_지금_값을_읽을_수_있다(self):
+        r = self.client.get(self.URL)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['company_name'], '어떤식품')
+
+    def test_고쳐서_저장한다(self):
+        from v1.user_management.models import UserProfile
+
+        r = self.client.put(
+            self.URL,
+            data=json.dumps({'company_name': '새이름', 'license_number': '12345'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.company_name, '새이름')
+        self.assertEqual(profile.license_number, '12345')
+
+    def test_보낸_칸만_고친다(self):
+        """한 칸만 바꾸러 온 요청이 다른 칸을 지우면 안 된다."""
+        from v1.user_management.models import UserProfile
+
+        self.client.put(self.URL,
+                        data=json.dumps({'license_number': '999'}),
+                        content_type='application/json')
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.company_name, '어떤식품')
+        self.assertEqual(profile.license_number, '999')
+
+    def test_비우는_것은_할_수_있다(self):
+        from v1.user_management.models import UserProfile
+
+        self.client.put(self.URL,
+                        data=json.dumps({'company_name': ''}),
+                        content_type='application/json')
+        self.assertEqual(
+            UserProfile.objects.get(user=self.user).company_name, '')
+
+    def test_너무_길면_막는다(self):
+        r = self.client.put(self.URL,
+                            data=json.dumps({'company_name': '가' * 101}),
+                            content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_비회원_기기는_막고_까닭을_말한다(self):
+        r = self.client.get('/api/mobile/devices/insp-guest/inspection-profile/')
+        self.assertEqual(r.status_code, 403)
+        self.assertIn('로그인', r.json()['error'])
+
+    def test_웹과_같은_칸을_쓴다(self):
+        """웹이 쓰는 자리와 다른 데 저장하면 두 화면이 갈린다."""
+        from v1.user_management.models import UserProfile
+
+        self.client.put(self.URL,
+                        data=json.dumps({'company_name': '한곳', 'license_number': 'L1'}),
+                        content_type='application/json')
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual((profile.company_name, profile.license_number), ('한곳', 'L1'))

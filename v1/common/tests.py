@@ -144,6 +144,10 @@ class 로그인_없이_열려_있던_문(TestCase):
         # device_access_error 를 먼저 지나고, 계정이 안 붙은 기기면 403.
         # 앱은 세션 쿠키가 없으므로 @login_required 를 걸 수 없다. IP 당 10/분.
         'account_delete',
+        # 수거검사 알림 기준(회사명·인허가번호). 앱은 세션 쿠키가 없으므로
+        # @login_required 를 걸 수 없다. device_access_error 를 먼저 지나고,
+        # 계정이 안 붙은 기기면 403 으로 닫는다 — 값은 계정에 붙는다.
+        'inspection_profile',
     }
 
     AUTH = ('login_required', 'staff_member_required', 'permission_required',

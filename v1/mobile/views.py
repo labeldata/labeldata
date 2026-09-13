@@ -838,6 +838,62 @@ def notification_read_all(request, device_id):
     return Response({'detail': 'ok'})
 
 
+# ── 수거검사 알림 기준 ────────────────────────────────────────────────────────
+
+@api_view(['GET', 'PUT'])
+@permission_classes([AllowAny])
+def inspection_profile(request, device_id):
+    """
+    수거검사 알림이 나를 알아보는 기준 — 회사명·인허가번호.
+
+    **앱만 쓰는 사용자는 이것을 켤 방법이 없었다.** 수거검사 매칭은 세 규칙
+    으로 도는데(품목보고번호 · 인허가번호 · 회사명) 뒤의 둘은 `UserProfile`
+    에 값이 있어야 작동한다. 웹에는 그 값을 넣는 자리가 있는데(부적합 화면의
+    알림 설정 모달) 앱에는 없었고 API 도 없었다 — 앱의 알림 탭에 '수거검사'
+    탭이 있는데 **영영 비어 있을 수 있었다.**
+
+    회원 전용이다. 이 값은 계정에 붙는다(기기가 아니라).
+    """
+    device = _get_device_or_404(device_id)
+    if device is None:
+        return Response({'error': '기기를 찾을 수 없습니다.'},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied[0]}, status=denied[1])
+
+    if not device.user_id:
+        return Response(
+            {'error': '수거검사 알림은 로그인한 뒤에 설정할 수 있습니다.'},
+            status=status.HTTP_403_FORBIDDEN)
+
+    from v1.user_management.models import UserProfile
+
+    profile, _ = UserProfile.objects.get_or_create(user=device.user)
+
+    if request.method == 'PUT':
+        data = request.data or {}
+        # 보낸 칸만 고친다 — 한 칸만 바꾸러 온 요청이 다른 칸을 지우면 안 된다.
+        changed = []
+        for field in ('company_name', 'license_number'):
+            if field not in data:
+                continue
+            value = (data.get(field) or '').strip()
+            if len(value) > 100:
+                return Response({'error': '100자 이내로 입력해 주세요.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            setattr(profile, field, value)
+            changed.append(field)
+        if changed:
+            profile.save(update_fields=changed)
+
+    return Response({
+        'company_name': profile.company_name or '',
+        'license_number': profile.license_number or '',
+    })
+
+
 # ── 토큰 재발급 ───────────────────────────────────────────────────────────────
 
 @ratelimit(key='ip', rate='60/m', method='POST', block=False)
