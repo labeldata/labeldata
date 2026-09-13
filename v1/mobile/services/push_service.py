@@ -55,13 +55,61 @@ def _matches_rule(rule, product_name: str, company_name: str,
     return False
 
 
-def send_mobile_alerts_for_news(news) -> int:
+def build_alert_cache() -> dict:
+    """
+    수집 한 판 동안 재사용할 규칙·기기 묶음. **한 번만 읽는다.**
+
+    수집 커맨드는 뉴스 하나마다 `send_mobile_alerts_for_news` 를 부른다.
+    그 안에서 매번 활성 규칙 전건을 다시 읽고, 매칭된 사용자마다 기기를 또
+    읽고, 게스트 기기마다 규칙을 또 읽었다 — 수집 500건 × 게스트 기기
+    2,000대면 게스트 루프에서만 쿼리가 100만 번 나간다.
+
+    같은 커맨드의 BOM 매칭 쪽은 이미 `build_user_match_cache()` 를 한 번
+    만들어 재사용한다. 푸시 쪽만 그 처리가 없었다.
+
+    한 판이 도는 동안 규칙이 바뀌면 그 변경은 다음 판에 반영된다 — 수집은
+    분 단위로 끝나고, 그 사이 새로 만든 키워드는 등록 시점의 소급이
+    따로 훑는다(backfill_alerts_for_rule).
+    """
+    from v1.mobile.models import AlertRule, AppDevice
+
+    user_rules = list(
+        AlertRule.objects.filter(user__isnull=False, is_active=True))
+
+    devices_by_user = {}
+    for device in AppDevice.objects.filter(user__isnull=False):
+        devices_by_user.setdefault(device.user_id, []).append(device)
+
+    # 게스트 기기와 그 기기의 규칙을 **한 번에** 묶는다. 예전에는
+    # `prefetch_related('rules')` 를 걸어 두고 정작 `.filter()` 로 다시 읽어
+    # 프리페치 비용만 더 내고 N+1 은 그대로였다.
+    guest_map = {}
+    for rule in (AlertRule.objects
+                 .filter(user__isnull=True, is_active=True, device__isnull=False)
+                 .select_related('device')):
+        device = rule.device
+        if device is None or device.user_id is not None:
+            continue
+        guest_map.setdefault(device.pk, (device, []))[1].append(rule)
+
+    return {
+        'user_rules': user_rules,
+        'devices_by_user': devices_by_user,
+        'guest_devices': list(guest_map.values()),
+    }
+
+
+def send_mobile_alerts_for_news(news, cache: dict = None) -> int:
     """
     수집된 뉴스에 대해 PushNotificationLog만 생성한다. FCM은 발송하지 않는다.
     실제 FCM 발송은 send_pending_alerts 커맨드에서 배치로 처리한다.
 
     Returns: 신규 생성된 로그 수
     """
+    # 캐시를 안 주면 스스로 만든다 — 한 건만 처리하는 호출부가 그대로 돈다.
+    if cache is None:
+        cache = build_alert_cache()
+
     saved = 0
     # **제품·원료를 먼저 남긴다.**
     #
@@ -71,8 +119,8 @@ def send_mobile_alerts_for_news(news) -> int:
     # **내 제품이 걸렸다는 알림이 아예 안 만들어졌다.** 이 앱이 파는 것이
     # 바로 그 알림이고, `_trim_notifications` 의 티어 설계도 그것을 가장
     # 마지막까지 지키게 되어 있다.
-    saved += _save_product_ingredient_logs(news)
-    saved += _save_keyword_logs(news)
+    saved += _save_product_ingredient_logs(news, cache)
+    saved += _save_keyword_logs(news, cache)
     return saved
 
 
@@ -117,7 +165,7 @@ def save_keyword_match(news, rule) -> bool:
     return created
 
 
-def _save_keyword_logs(news) -> int:
+def _save_keyword_logs(news, cache: dict) -> int:
     """
     AlertRule 키워드 매칭.
 
@@ -127,7 +175,7 @@ def _save_keyword_logs(news) -> int:
     앱을 안 쓰는 사용자는 두 번째가 안 생기지만 첫 번째는 생긴다.
     """
     from django.conf import settings
-    from v1.mobile.models import AppDevice, AlertRule, PushNotificationLog
+    from v1.mobile.models import PushNotificationLog
 
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
     fields = news_fields_for_matching(news)
@@ -135,11 +183,7 @@ def _save_keyword_logs(news) -> int:
     saved = 0
 
     # ── 1. 유저 기반 규칙 (로그인 사용자) ───────────────────────────────────
-    user_rules = (
-        AlertRule.objects
-        .filter(user__isnull=False, is_active=True)
-        .select_related('user')
-    )
+    user_rules = cache['user_rules']
 
     # 사용자별로 **걸린 규칙을 모두** 모은다. 예전에는 첫 규칙 하나만 보고
     # 넘어갔는데, 그러면 상세에서 "무엇 때문에 왔는지" 를 한 개밖에 못 보여 준다.
@@ -155,7 +199,7 @@ def _save_keyword_logs(news) -> int:
 
         # 푸시는 사용자당 한 건이면 된다 — 기기 알림함이 같은 뉴스로 도배되지 않게
         first_rule = rules[0]
-        for device in AppDevice.objects.filter(user_id=user_id):
+        for device in cache['devices_by_user'].get(user_id, ()):
             if PushNotificationLog.objects.filter(device=device, news=news).exists():
                 continue
             _trim_notifications(device, max_noti)
@@ -170,16 +214,9 @@ def _save_keyword_logs(news) -> int:
             saved += 1
 
     # ── 2. 기기 기반 규칙 (비회원 게스트) ────────────────────────────────────
-    guest_devices = (
-        AppDevice.objects
-        .prefetch_related('rules')
-        .filter(user__isnull=True, rules__is_active=True, rules__user__isnull=True)
-        .distinct()
-    )
-
-    for device in guest_devices:
+    for device, device_rules in cache['guest_devices']:
         matched_rule = None
-        for rule in device.rules.filter(is_active=True, user__isnull=True):
+        for rule in device_rules:
             if _matches_rule(rule, *fields):
                 matched_rule = rule
                 break
@@ -203,10 +240,10 @@ def _save_keyword_logs(news) -> int:
     return saved
 
 
-def _save_product_ingredient_logs(news) -> int:
+def _save_product_ingredient_logs(news, cache: dict) -> int:
     """제품/원료 보관함 매칭 — PushNotificationLog 저장 (FCM 발송 없음)."""
     from django.conf import settings
-    from v1.mobile.models import AppDevice, PushNotificationLog
+    from v1.mobile.models import PushNotificationLog
     from v1.regulatory.models import NewsProductMatch, NewsIngredientMatch
 
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
@@ -250,11 +287,9 @@ def _save_product_ingredient_logs(news) -> int:
     if not user_trigger:
         return 0
 
-    devices = (
-        AppDevice.objects
-        .filter(user_id__in=user_trigger.keys())
-        .select_related('user')
-    )
+    devices = [d
+               for user_id in user_trigger
+               for d in cache['devices_by_user'].get(user_id, ())]
 
     saved = 0
     for device in devices:

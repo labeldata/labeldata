@@ -417,6 +417,11 @@ class Command(BaseCommand):
         # 사용자 데이터 1회 pre-fetch (DB 쿼리: 사용자 수만큼만)
         self.stdout.write('  → 사용자 데이터 캐싱 중...')
         user_cache = build_user_match_cache()
+        # 푸시 쪽도 같은 방식으로 한 번만 읽는다. 예전에는 뉴스 하나마다
+        # 규칙 전건과 기기를 다시 읽었다.
+        from v1.mobile.services.push_service import build_alert_cache
+
+        alert_cache = build_alert_cache()
         self.stdout.write(f'     캐시 완료: {len(user_cache)}명')
 
         self.stdout.write(f'  → 매칭 중 ({total_items}건 × {len(user_cache)}명)...')
@@ -438,7 +443,7 @@ class Command(BaseCommand):
                 logger.error(f'[매칭] {news.external_id} 오류: {exc}')
 
             try:
-                log_count = send_mobile_alerts_for_news(news)
+                log_count = send_mobile_alerts_for_news(news, cache=alert_cache)
                 if log_count > 0:
                     self.stdout.write(f'     📋 [{idx}/{total_items}] 알림 로그 {log_count}건 저장 (FCM은 send_pending_alerts에서)')
             except Exception as exc:

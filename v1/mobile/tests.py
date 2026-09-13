@@ -1383,3 +1383,110 @@ class 수거검사_알림_기준을_앱에서도_켤_수_있다(TestCase):
                         content_type='application/json')
         profile = UserProfile.objects.get(user=self.user)
         self.assertEqual((profile.company_name, profile.license_number), ('한곳', 'L1'))
+
+
+class 수집이_규칙_수에_따라_쿼리를_늘리지_않는다(TestCase):
+    """
+    수집 커맨드는 뉴스 **하나마다** `send_mobile_alerts_for_news` 를 부른다.
+    그 안에서 매번 활성 규칙 전건을 다시 읽고, 매칭된 사용자마다 기기를 다시
+    읽고, 게스트 기기마다 규칙을 또 읽었다.
+
+    수집 500건 × 게스트 기기 2,000대면 게스트 루프에서만 쿼리가 100만 번
+    나간다. 같은 커맨드의 BOM 매칭 쪽은 이미 `build_user_match_cache()` 를
+    한 번 만들어 재사용하는데 푸시 쪽만 그 처리가 없었다.
+
+    여기서 지키는 것은 하나다 — **규칙이 늘어도 뉴스 한 건을 처리하는 쿼리
+    수가 늘지 않는다.**
+    """
+
+    def setUp(self):
+        from v1.mobile.models import AppDevice
+        from v1.regulatory.models import RegulatoryNews
+
+        self.users = []
+        for i in range(3):
+            u = User.objects.create_user(username='q%d' % i, password='x')
+            AppDevice.objects.create(device_id='q-dev-%d' % i, user=u)
+            self.users.append(u)
+        self.news = RegulatoryNews.objects.create(
+            external_id='q-1', api_source='I2620', source='domestic',
+            product_name='우유식빵', ai_parsed=True,
+            collected_date='2026-09-01', ai_keywords=['우유'])
+
+    def _add_rules(self, n):
+        for u in self.users:
+            for i in range(n):
+                AlertRule.objects.get_or_create(
+                    user=u, category='INGREDIENT', keyword='낱말%d' % i,
+                    match_type='CONTAINS', defaults={'is_active': True})
+
+    def _queries_for_one_news(self):
+        from django.db import connection, reset_queries
+        from django.test.utils import CaptureQueriesContext
+
+        from v1.mobile.services.push_service import (
+            build_alert_cache, send_mobile_alerts_for_news,
+        )
+
+        reset_queries()
+        cache_obj = build_alert_cache()
+        with CaptureQueriesContext(connection) as ctx:
+            send_mobile_alerts_for_news(self.news, cache=cache_obj)
+        return len(ctx)
+
+    def test_규칙이_스무_배가_되어도_쿼리가_늘지_않는다(self):
+        self._add_rules(1)
+        few = self._queries_for_one_news()
+
+        from v1.mobile.models import PushNotificationLog
+
+        PushNotificationLog.objects.all().delete()
+        self._add_rules(20)
+        many = self._queries_for_one_news()
+        self.assertLessEqual(
+            many, few,
+            '규칙이 늘자 쿼리가 늘었다 (%d → %d)' % (few, many))
+
+    def test_캐시를_안_주면_스스로_만든다(self):
+        """한 건만 처리하는 옛 호출부가 그대로 돌아야 한다."""
+        from v1.mobile.services.push_service import send_mobile_alerts_for_news
+
+        self._add_rules(1)
+        self.assertIsInstance(send_mobile_alerts_for_news(self.news), int)
+
+    def test_캐시를_써도_결과가_같다(self):
+        from v1.mobile.models import PushNotificationLog
+        from v1.mobile.services.push_service import (
+            build_alert_cache, send_mobile_alerts_for_news,
+        )
+
+        self._add_rules(1)
+        AlertRule.objects.filter(user=self.users[0]).update(keyword='우유')
+        send_mobile_alerts_for_news(self.news, cache=build_alert_cache())
+        with_cache = set(PushNotificationLog.objects.values_list('device_id', flat=True))
+
+        PushNotificationLog.objects.all().delete()
+        send_mobile_alerts_for_news(self.news)
+        without = set(PushNotificationLog.objects.values_list('device_id', flat=True))
+        self.assertEqual(with_cache, without)
+        self.assertTrue(with_cache)
+
+    def test_게스트_기기도_규칙_수에_흔들리지_않는다(self):
+        from v1.mobile.models import AppDevice, PushNotificationLog
+
+        for i in range(3):
+            d = AppDevice.objects.create(device_id='q-guest-%d' % i, user=None)
+            AlertRule.objects.create(
+                device=d, user=None, category='INGREDIENT',
+                keyword='낱말0', match_type='CONTAINS', is_active=True)
+        few = self._queries_for_one_news()
+
+        PushNotificationLog.objects.all().delete()
+        for d in AppDevice.objects.filter(user__isnull=True):
+            for i in range(1, 20):
+                AlertRule.objects.create(
+                    device=d, user=None, category='INGREDIENT',
+                    keyword='낱말%d' % i, match_type='CONTAINS', is_active=True)
+        many = self._queries_for_one_news()
+        self.assertLessEqual(many, few,
+                             '게스트 규칙이 늘자 쿼리가 늘었다 (%d → %d)' % (few, many))
