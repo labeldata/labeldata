@@ -1157,3 +1157,148 @@ class 알림_카드에_개발자_값이_찍히지_않는다(TestCase):
         r = self.client.get('/api/mobile/devices/mtd-device/notifications/')
         keyword = r.json()[0]['rule_keyword']
         self.assertTrue(keyword.get('category_display'))
+
+
+class 소급이_알림함_상한을_넘기지_않는다(TestCase):
+    """
+    키워드를 새로 넣으면 최근 90일을 훑어 최대 100건까지 알림을 만든다.
+    그 전에 `_trim_notifications(device, max_noti)` 로 자리를 비우는데, 그
+    함수는 **한 자리만** 비운다(곧 하나 만들 참이라는 뜻이다).
+
+    그래서 이미 상한만큼 차 있던 기기가 99 로 줄었다가 199 가 됐다.
+    `MOBILE_MAX_NOTIFICATIONS` 가 다음 수집 때까지 두 배로 깨져 있었다.
+    """
+
+    def setUp(self):
+        from django.test import override_settings
+
+        from v1.mobile.models import AppDevice, PushNotificationLog
+        from v1.regulatory.models import RegulatoryNews
+
+        self.user = User.objects.create_user(username='cap', password='x')
+        self.device = AppDevice.objects.create(device_id='cap-device', user=self.user)
+        self._ov = override_settings(MOBILE_MAX_NOTIFICATIONS=10)
+        self._ov.enable()
+        self.addCleanup(self._ov.disable)
+
+        # 이미 상한만큼 차 있다 (전부 읽은 키워드 알림 — 가장 먼저 밀리는 것)
+        for i in range(10):
+            news = RegulatoryNews.objects.create(
+                external_id='old%d' % i, api_source='I2620', source='domestic',
+                product_name='옛것 %d' % i, ai_parsed=True,
+                collected_date='2026-08-01')
+            PushNotificationLog.objects.create(
+                device=self.device, news=news, trigger_type='keyword',
+                trigger_label='옛키워드', is_read=True,
+                sent_at='2026-08-02T00:00:00+09:00')
+
+        # 소급에 걸릴 새 뉴스 다섯 건
+        for i in range(5):
+            RegulatoryNews.objects.create(
+                external_id='new%d' % i, api_source='I2620', source='domestic',
+                product_name='치즈케이크 %d' % i, ai_parsed=True,
+                collected_date='2026-09-10', ai_keywords=['치즈'])
+
+        self.rule = AlertRule.objects.create(
+            user=self.user, category='INGREDIENT', keyword='치즈',
+            match_type='CONTAINS', is_active=True)
+
+    def _count(self):
+        from v1.mobile.models import PushNotificationLog
+
+        return PushNotificationLog.objects.filter(device=self.device).count()
+
+    def test_소급_뒤에도_상한을_지킨다(self):
+        from v1.mobile.services.push_service import backfill_alerts_for_rule
+
+        self.assertEqual(self._count(), 10)
+        backfill_alerts_for_rule(self.rule)
+        self.assertLessEqual(self._count(), 10)
+
+    def test_새로_걸린_것이_실제로_들어온다(self):
+        """상한을 지키느라 아무것도 안 넣으면 그것대로 잘못이다."""
+        from v1.mobile.models import PushNotificationLog
+        from v1.mobile.services.push_service import backfill_alerts_for_rule
+
+        backfill_alerts_for_rule(self.rule)
+        fresh = PushNotificationLog.objects.filter(
+            device=self.device, trigger_label='치즈').count()
+        self.assertEqual(fresh, 5)
+
+    def test_상한_안이면_아무것도_밀려나지_않는다(self):
+        from django.test import override_settings
+
+        from v1.mobile.services.push_service import backfill_alerts_for_rule
+
+        with override_settings(MOBILE_MAX_NOTIFICATIONS=100):
+            backfill_alerts_for_rule(self.rule)
+        self.assertEqual(self._count(), 15)
+
+
+class 키워드를_바꾸면_소급도_다시_돈다(TestCase):
+    """
+    POST 는 등록 직후 최근 90일을 훑는데 PATCH 는 **거두기만** 했다.
+
+    '우유' 를 '치즈' 로 고치면 최근 90일에 치즈 부적합이 있어도 0건이 되고,
+    같은 것을 지웠다 새로 등록하면 90일치가 다 걸린다 — 같은 결과를 얻는
+    두 길이 다르게 동작했다.
+    """
+
+    def setUp(self):
+        from v1.mobile.models import AppDevice
+        from v1.regulatory.models import RegulatoryNews
+
+        self.user = User.objects.create_user(username='rekw', password='x')
+        self.device = AppDevice.objects.create(device_id='rekw-device', user=self.user)
+        RegulatoryNews.objects.create(
+            external_id='rk-1', api_source='I2620', source='domestic',
+            product_name='치즈케이크', ai_parsed=True,
+            collected_date='2026-09-10', ai_keywords=['치즈'])
+        self.rule = AlertRule.objects.create(
+            user=self.user, category='INGREDIENT', keyword='우유',
+            match_type='CONTAINS', is_active=True)
+        cache.clear()
+
+    def _patch(self, body):
+        return self.client.patch(
+            '/api/mobile/devices/rekw-device/rules/%d/' % self.rule.pk,
+            data=json.dumps(body), content_type='application/json')
+
+    def test_바꾼_키워드로_지난_것을_훑는다(self):
+        r = self._patch({'keyword': '치즈'})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['matched_count'], 1)
+
+    def test_몇_건_걸렸는지_함께_말해_준다(self):
+        body = self._patch({'keyword': '치즈'}).json()
+        for key in ('matched_count', 'previews', 'window_days',
+                    'capped', 'backfill_failed'):
+            self.assertIn(key, body)
+
+    def test_켜고_끄기만_한_경우에는_소급하지_않는다(self):
+        """매칭 대상이 그대로면 다시 훑을 이유가 없다."""
+        body = self._patch({'is_active': False}).json()
+        self.assertNotIn('matched_count', body)
+
+    def test_꺼진_규칙은_바꿔도_소급하지_않는다(self):
+        self.rule.is_active = False
+        self.rule.save(update_fields=['is_active'])
+        body = self._patch({'keyword': '치즈'}).json()
+        self.assertNotIn('matched_count', body)
+
+    def test_옛_키워드로_걸려_있던_예약_푸시는_거둔다(self):
+        """이 성질은 원래 있던 것이다 — 소급을 붙이다 깨뜨리지 않았는지 본다."""
+        from v1.mobile.models import PushNotificationLog
+        from v1.regulatory.models import RegulatoryNews
+
+        old_news = RegulatoryNews.objects.create(
+            external_id='rk-old', api_source='I2620', source='domestic',
+            product_name='우유빵', ai_parsed=True, collected_date='2026-09-01')
+        PushNotificationLog.objects.create(
+            device=self.device, news=old_news, rule_triggered=self.rule,
+            trigger_type='keyword', trigger_label='우유', sent_at=None)
+        self._patch({'keyword': '치즈'})
+        self.assertFalse(
+            PushNotificationLog.objects
+            .filter(device=self.device, trigger_label='우유', sent_at__isnull=True)
+            .exists())

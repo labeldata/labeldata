@@ -579,10 +579,34 @@ def rule_detail(request, device_id, rule_id):
         # 걸려 있었다. 문자열만 바꾸면 옛 키워드로 만들어진 예약 푸시가
         # 그대로 남아 낮 배치에 나갔고, 본문에는 **더 이상 없는 키워드**가
         # 찍혔다(trigger_label 은 생성 시점 값이다).
-        if (not rule.is_active) or rule.keyword != was_keyword:
+        changed_target = rule.keyword != was_keyword
+        if (not rule.is_active) or changed_target:
             _cancel_rule_pushes(owner_user, device, rule)
             _mark_rule_matches_read(rule)
-        return Response(AlertRuleSerializer(rule).data)
+
+        data = dict(AlertRuleSerializer(rule).data)
+
+        # **키워드를 바꿨으면 소급도 다시 돈다.**
+        #
+        # POST 는 등록 직후 최근 90일을 훑는데 PATCH 는 거두기만 했다.
+        # '우유' 를 '치즈' 로 고치면 최근 90일에 치즈 부적합이 있어도 0건이
+        # 되고, 같은 것을 지웠다 새로 등록하면 90일치가 다 걸린다 — 같은
+        # 결과를 얻는 두 길이 다르게 동작했다.
+        if changed_target and rule.is_active:
+            backfill_result = {'created': 0, 'previews': [], 'log_ids': []}
+            backfill_failed = False
+            try:
+                backfill_result = backfill_alerts_for_rule(rule)
+                send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
+            except Exception:
+                backfill_failed = True
+                logger.exception('[키워드 소급] 변경 rule=%s 실패', rule.pk)
+            data['matched_count'] = backfill_result.get('created', 0)
+            data['previews'] = backfill_result.get('previews', [])
+            data['window_days'] = backfill_result.get('window_days')
+            data['capped'] = backfill_result.get('capped', False)
+            data['backfill_failed'] = backfill_failed
+        return Response(data)
 
     # 지우기 전에 예약된 푸시를 거둔다.
     # PushNotificationLog.rule_triggered 는 SET_NULL 이라, 먼저 지우면 로그가

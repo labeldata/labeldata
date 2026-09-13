@@ -434,6 +434,11 @@ def backfill_alerts_for_rule(rule) -> dict:
             # 알린 적 없이 사라졌다.
             #
             # 상한은 상한이다. 넘치면 그때 오래된 것부터 밀리면 된다.
+            #
+            # **다 만든 뒤에 한 번 더 맞춘다.** 여기서만 잘라 두면 한 자리만
+            # 비워지고(reserve=1) 그 뒤로 최대 100건이 들어와, 이미 100건이던
+            # 기기가 99 → 199 가 됐다. MOBILE_MAX_NOTIFICATIONS 가 다음
+            # 수집 때까지 두 배로 깨져 있었다.
             _trim_notifications(device, max_noti)
             for news in to_create:
                 if PushNotificationLog.objects.filter(device=device, news=news).exists():
@@ -447,6 +452,9 @@ def backfill_alerts_for_rule(rule) -> dict:
                     sent_at=now,  # 소급 데이터 — 배치 발송 대상 제외
                 )
                 created_ids.append(log.pk)
+
+            # 만든 뒤 상한을 정확히 맞춘다(reserve=0 — 더 만들 것이 없다).
+            _trim_notifications(device, max_noti, reserve=0)
 
     return {'created': created_count, 'previews': previews, 'log_ids': created_ids,
             'window_days': NEWS_BACKFILL_DAYS, 'capped': capped}
@@ -533,7 +541,7 @@ def _build_immediate_rule_message(rule, logs: list) -> tuple[str, str]:
     return title, body
 
 
-def _trim_notifications(device, max_count: int) -> None:
+def _trim_notifications(device, max_count: int, reserve: int = 1) -> None:
     """
     기기의 알림함이 `max_count` 를 넘지 않게 오래된 것부터 지운다.
 
@@ -551,8 +559,10 @@ def _trim_notifications(device, max_count: int) -> None:
     """
     from v1.mobile.models import PushNotificationLog
 
+    # `reserve` 는 **곧 만들 것의 자리**다. 기본 1 은 "하나 만들 참이니
+    # 한 자리 비워 달라" 는 뜻이고, 이미 만든 뒤에 상한만 맞추려면 0 을 준다.
     current = PushNotificationLog.objects.filter(device=device).count()
-    excess = current - max_count + 1
+    excess = current - max_count + reserve
     if excess <= 0:
         return
 
