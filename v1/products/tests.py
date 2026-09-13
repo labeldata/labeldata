@@ -10352,3 +10352,352 @@ class 문서_일괄_삭제가_말없이_사라지지_않는다(TestCase):
     def test_실패를_사람_말로_알린다(self):
         self.assertIn('showSnackbar', self.body)
         self.assertNotIn('alert(', self.body)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 제품 문서함 화면 — 사용자가 운영 화면에서 알려 준 네 가지
+#
+# 아래 네 벌은 전부 "화면이 사용자에게 거짓말을 한다" 는 한 가지 병의 변주다.
+# 열이 어긋나 보이고, 패널이 화면 밖으로 넘어가고, 받은 파일이 어느 제품
+# 것인지 알 수 없고, 방금 올린 파일이 없는 것처럼 보인다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _doc_tab_style():
+    """문서함 탭 템플릿의 <style> 블록 전부."""
+    import re as _re
+    return '\n'.join(_re.findall(r'<style>(.*?)</style>', _doc_tab_source(), _re.S))
+
+
+class 문서함_목록의_열_정렬이_한_규칙이다(TestCase):
+    """
+    '상태 / 만료일' 머리글은 칸 한가운데 있는데 `무기한`·`정상 27.03.12`
+    배지는 왼쪽 끝에 붙어 있어 열이 어긋나 보였다.
+
+    까닭은 두 군데다. `style.css` 의 `.table th` 가 머리글을 전부 가운데로
+    밀고 `.table td` 는 왼쪽 그대로이며, 거기에 `.table td:nth-child(2)` 가
+    `!important` 로 '구분' 칸만 다시 가운데로 당겼다. 그래서 어긋난 방향조차
+    열마다 달랐다 — 구분은 둘 다 가운데, 나머지는 머리글만 가운데.
+
+    한 규칙으로 맞춘다: **체크박스만 가운데, 나머지는 머리글도 내용도 왼쪽.**
+    가장 넓은 '문서명' 열이 왼쪽 정렬이니 거기에 맞춘다.
+    """
+
+    def setUp(self):
+        self.css = _doc_tab_style()
+        self.assertIn('text-align: left !important;', self.css,
+                      '열을 한 쪽으로 맞추는 규칙이 없다')
+        head = self.css[:self.css.index('text-align: left !important;')]
+        self.aligned = head[head.rindex('}') + 1:]
+
+    def test_상태_만료일_열이_머리글과_같은_쪽에_붙는다(self):
+        """사용자가 짚은 바로 그 열."""
+        self.assertIn('.compact-doc-table th.col-status', self.aligned)
+        self.assertIn('.compact-doc-table td.col-status', self.aligned)
+
+    def test_구분_열도_같은_규칙을_쓴다(self):
+        """`.table td:nth-child(2)` 의 `!important` 를 되받아야 한다."""
+        self.assertIn('.compact-doc-table th.col-type', self.aligned)
+        self.assertIn('.compact-doc-table td.col-type', self.aligned)
+
+    def test_버전과_등록자도_같은_규칙을_쓴다(self):
+        for col in ('col-version', 'col-uploader', 'col-name'):
+            self.assertIn('.compact-doc-table th.%s' % col, self.aligned, col)
+            self.assertIn('.compact-doc-table td.%s' % col, self.aligned, col)
+
+    def test_체크박스만_가운데다(self):
+        """예외는 하나뿐이고, 그것도 머리글과 내용이 같이 간다."""
+        self.assertNotIn('col-checkbox', self.aligned,
+                         '체크박스까지 왼쪽으로 밀면 칸 안에서 떠 보인다')
+        self.assertIn('.compact-doc-table th.col-checkbox', self.css)
+        self.assertIn('.compact-doc-table td.col-checkbox', self.css)
+
+    def test_표에는_가운데_정렬이_체크박스_하나뿐이다(self):
+        """열마다 다른 정렬을 새로 만들지 않는다 — 예외는 하나로 족하다."""
+        import re as _re
+        centered = [rule for rule in _re.findall(r'([^{}]*)\{([^{}]*)\}', self.css)
+                    if 'compact-doc-table' in rule[0]
+                    and 'text-align: center' in rule[1]]
+        self.assertEqual(len(centered), 1,
+                         '표에 가운데 정렬 규칙이 여럿이다: %s' % [r[0] for r in centered])
+        self.assertIn('col-checkbox', centered[0][0])
+
+
+class 문서_정보_패널이_한_화면에_들어온다(TestCase):
+    """
+    오른쪽 '문서 정보' 패널이 화면보다 길어서, 문서 하나 고치는데 [저장]도
+    설명도 등록 정보도 스크롤해야 보였다.
+
+    길이를 먹던 것은 셋이다.
+      - [다운로드]·[업로드]·[저장] 이 `v2-btn-stack`(아이콘 위·글자 아래)라
+        단추 하나가 두 줄치였다.
+      - '문서 구분'·'발행일'·'유효기간' 이 항목명 한 줄, 입력칸 한 줄이었다.
+      - 구역마다 `mb-3`(16px)에 설명은 세 줄, 안내문은 다섯 줄이었다.
+
+    **줄이되 지우지 않는다** — 유효기간 빠른 선택 여섯 개도, 영양성분 읽기
+    안내도 그대로 있다.
+    """
+
+    def setUp(self):
+        self.src = _doc_tab_source()
+        self.panel = _js_body(self.src, 'window.openEditPanel')
+
+    def _wrapper_of(self, needle):
+        """`needle` 을 감싼 바로 앞 <div …> 여는 태그."""
+        i = self.panel.index(needle)
+        j = self.panel.rindex('<div ', 0, i)
+        return self.panel[j:self.panel.index('>', j) + 1]
+
+    def _panel_classes(self):
+        """패널이 실제로 붙이는 class 값만 — 주석에 적힌 이름은 세지 않는다."""
+        import re as _re
+        return ' '.join(_re.findall(r'class="([^"]*)"', self.panel))
+
+    def test_단추_셋이_한_줄이다(self):
+        self.assertNotIn('v2-btn-stack', self._panel_classes(),
+                         '아이콘 위·글자 아래라 단추 하나가 두 줄을 먹는다')
+        self.assertIn('doc-panel-actions', self._panel_classes())
+
+    def test_단추_셋이_다_남아_있다(self):
+        for onclick in ('doc.downloadUrl', 'openUploadForUpdate()',
+                        'submitDocumentUpdate()'):
+            self.assertIn(onclick, self.panel, onclick)
+
+    def test_항목명과_입력칸이_한_줄에_있다(self):
+        for field in ('id="edit-doc-type"', 'id="edit-issue-date"',
+                      'id="edit-expiry-date"', 'id="edit-description"'):
+            self.assertIn('doc-field', self._wrapper_of(field), field)
+
+    def test_유효기간_빠른_선택을_지우지_않았다(self):
+        for label in ('+1개월', '+3개월', '+6개월', '+1년', '+2년', '무기한'):
+            self.assertIn('>%s</button>' % label, self.panel, label)
+
+    def test_영양성분_읽기_안내를_지우지_않았다(self):
+        self.assertIn('영양성분 읽기', self.panel)
+        self.assertIn('readSpecNutrition(', self.panel)
+
+    def test_안내가_길면_두_줄로_줄이고_나머지는_title_로_남긴다(self):
+        self.assertIn('doc-panel-note', self.panel)
+        self.assertIn('시험한 값이 계산한 값을 이깁니다', self.panel,
+                      '잘라낸 설명이 어디에도 남아 있지 않다')
+
+    def test_구역_간격을_줄였다(self):
+        self.assertNotIn('mb-3', self.panel,
+                         '구역마다 16px 씩 비우면 그만큼 아래가 밀린다')
+
+    def test_설명_칸이_세_줄을_먹지_않는다(self):
+        self.assertIn('rows="2"', self.panel)
+        self.assertNotIn('rows="3"', self.panel)
+
+    def test_한_줄짜리_단추_규칙이_CSS_에_있다(self):
+        css = _doc_tab_style()
+        self.assertIn('#doc-edit-panel .doc-panel-actions', css)
+        self.assertIn('#doc-edit-panel .doc-field', css)
+        self.assertIn('grid-template-columns', css,
+                      '항목명 폭이 고정되지 않으면 입력칸 왼쪽이 들쭉날쭉하다')
+
+    def test_전역_스낵바_규칙을_지킨다(self):
+        self.assertNotIn('alert(', self.panel)
+
+
+class 일괄_다운로드_ZIP_이름에_제품이_들어간다(TestCase):
+    """
+    받은 파일이 `documents_20260913_101500.zip` 이었다. 제품이 어디에도 없다.
+    여러 제품에서 서류를 받아 두면 내려받기 폴더에 `documents_…` 만 늘어서서
+    어느 제품 것인지 알려면 하나씩 열어 봐야 했다.
+
+    그리고 이름을 한글로 지어 헤더에 그대로 넣으면 더 나빠진다. Django 는
+    ASCII 가 아닌 헤더 값을 통째로 MIME 인코딩해 `=?utf-8?b?…?=` 한 덩어리로
+    내보내는데, 화면은 fetch + Blob 으로 받으면서 `filename=` 을 정규식으로
+    찾으므로 아무것도 못 찾고 대비용 `documents.zip` 으로 저장한다 —
+    **서버가 지은 이름과 저장된 이름이 다르다.**
+    """
+
+    def setUp(self):
+        from django.core.files.base import ContentFile
+
+        from v1.products.models import DocumentType, ProductDocument
+        self.ProductDocument = ProductDocument
+        self.ContentFile = ContentFile
+        self.owner = User.objects.create_user('주인', password='x', email='o@x.com')
+        self.dtype = DocumentType.objects.create(type_code='T', type_name='성적서')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='초코 브라우니', delete_YN='N')
+        self.doc = self._doc(self.label, 'a.pdf')
+
+    def _doc(self, label, name):
+        return self.ProductDocument.objects.create(
+            label=label, document_type=self.dtype,
+            file=self.ContentFile(b'%PDF-1.4', name=name),
+            original_filename=name, uploaded_by=self.owner)
+
+    def _download(self, docs):
+        self.client.force_login(self.owner)
+        return self.client.post(reverse('products:bulk_download'), {
+            'document_ids': ','.join(str(d.document_id) for d in docs)})
+
+    def _saved_name(self, response):
+        """화면(fetch + Blob)이 `Content-Disposition` 에서 읽어 내는 이름.
+
+        `_tab_documents.html` 의 `filenameFromDisposition` 과 같은 순서로 본다
+        — `filename*` 먼저, 없으면 `filename=`.
+        """
+        import re as _re
+        from urllib.parse import unquote
+        header = response['Content-Disposition']
+        star = _re.search(r"filename\*\s*=\s*UTF-8''([^;]+)", header, _re.I)
+        if star:
+            return unquote(star.group(1).strip())
+        plain = _re.search(r'filename\s*=\s*"?([^";]+)"?', header, _re.I)
+        return plain.group(1).strip() if plain else 'documents.zip'
+
+    def test_제품명이_들어간다(self):
+        self.assertIn('초코_브라우니', self._saved_name(self._download([self.doc])))
+
+    def test_날짜가_들어간다(self):
+        name = self._saved_name(self._download([self.doc]))
+        self.assertIn(timezone.localtime().strftime('%Y%m%d'), name)
+        self.assertTrue(name.endswith('.zip'), name)
+
+    def test_화면이_저장하는_이름과_서버가_지은_이름이_같다(self):
+        """예전에는 화면이 이름을 못 읽어 `documents.zip` 으로 저장했다."""
+        from v1.products.views import _documents_zip_filename
+        response = self._download([self.doc])
+        self.assertEqual(self._saved_name(response),
+                         _documents_zip_filename(['초코 브라우니']))
+
+    def test_헤더가_통째로_MIME_인코딩되지_않는다(self):
+        header = self._download([self.doc])['Content-Disposition']
+        self.assertTrue(header.startswith('attachment;'), header)
+        self.assertNotIn('=?utf-8?', header)
+        header.encode('ascii')   # 헤더는 ASCII 로만 나간다
+
+    def test_여러_제품이면_외_N건을_붙인다(self):
+        other = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='딸기 케이크', delete_YN='N')
+        name = self._saved_name(self._download([self.doc, self._doc(other, 'b.pdf')]))
+        self.assertIn('외1건', name)
+
+    def test_같은_제품_문서_여럿은_외_N건이_아니다(self):
+        name = self._saved_name(self._download([self.doc, self._doc(self.label, 'b.pdf')]))
+        self.assertNotIn('외', name)
+
+    def test_파일명에_못_쓰는_글자와_공백을_다듬는다(self):
+        from v1.products.views import _documents_zip_filename
+        name = _documents_zip_filename(['A/B:C*D?E"F<G>H|I\\J  K'])
+        for bad in '\\/:*?"<>|':
+            self.assertNotIn(bad, name, bad)
+        self.assertNotIn(' ', name, '공백이 남으면 셸·메일 첨부에서 이름이 갈린다')
+
+    def test_이름이_비면_대비할_이름을_쓴다(self):
+        from v1.products.views import _documents_zip_filename
+        for empty in ([], [''], [None], ['   '], ['///']):
+            name = _documents_zip_filename(empty)
+            self.assertTrue(name.startswith('제품문서_'), (empty, name))
+
+    def test_이름_한_조각이_밑줄만_남지_않는다(self):
+        from v1.products.views import _sanitize_filename_part
+        self.assertEqual(_sanitize_filename_part('  ///  '), '')
+        self.assertEqual(_sanitize_filename_part('초코 브라우니'), '초코_브라우니')
+
+    def test_한_제품_전체_받기도_같은_이름_규칙을_쓴다(self):
+        self.client.force_login(self.owner)
+        r = self.client.post(reverse('products:bulk_download_version',
+                                     args=[self.label.my_label_id]))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('초코_브라우니', self._saved_name(r))
+
+    def test_화면이_filename_별표를_먼저_본다(self):
+        """이 순서가 뒤집히면 한글 이름이 대비용 ASCII 이름으로 저장된다."""
+        body = _js_body(_doc_tab_source(), 'window.filenameFromDisposition')
+        self.assertIn('filename\\*', body)
+        self.assertIn('decodeURIComponent', body)
+        self.assertLess(body.index('filename\\*'), body.index('filename\\s*='),
+                        'filename= 를 먼저 보면 대비용 이름을 집어 든다')
+
+    def test_다운로드_경로가_그_함수를_쓴다(self):
+        body = _js_body(_doc_tab_source(), 'window.bulkDownloadCompact')
+        self.assertIn('filenameFromDisposition', body)
+
+
+class 업로드_뒤에도_문서함_탭에_남는다(TestCase):
+    """
+    문서를 올리면 화면이 세 번 바뀌었다.
+
+      1. "등록된 문서가 없습니다" — 아직 예전 화면이다. 새로고침이 끝날
+         때까지 브라우저는 예전 화면을 계속 보여 준다.
+      2. **기본 정보 탭** — 새 화면이 떴는데 서버가 그린 기본 활성 탭이다.
+      3. 그제야 문서함에 올린 파일이 보인다 — product_detail.html 의
+         DOMContentLoaded 가 sessionStorage 의 returnToTab 을 읽고 탭을 켠다.
+
+    2번은 탭 복원이 DOMContentLoaded 를 기다리기 때문이다. 이 화면은 탭
+    여섯 개에 iframe 까지 달려 파싱이 한참 걸리는데 브라우저는 그 전에
+    기본 정보 탭을 그려 버린다. 1번은 새로고침 동안 예전 목록이 그대로
+    남아 있기 때문이다.
+
+    올린 사람은 "잘못됐나" 하고 멈칫한다.
+    """
+
+    def setUp(self):
+        self.src = _doc_tab_source()
+        i = self.src.index('var wanted = null;')
+        self.restore = self.src[i:self.src.index('})();', i)]
+
+    def test_탭_복원이_DOMContentLoaded_를_기다리지_않는다(self):
+        """기다리면 그 사이에 기본 정보 탭이 한 번 그려진다."""
+        self.assertNotIn('DOMContentLoaded', self.restore)
+        self.assertNotIn('addEventListener', self.restore)
+
+    def test_문서함으로_돌아올_때만_손댄다(self):
+        self.assertIn('returnToTab', self.restore)
+        self.assertIn("!== 'docs'", self.restore)
+
+    def test_기본_정보_탭의_active_를_걷어내고_문서함을_켠다(self):
+        self.assertIn("classList.remove('show', 'active')", self.restore)
+        self.assertIn("getElementById('tab-docs')", self.restore)
+        self.assertIn("classList.add('show', 'active')", self.restore)
+        self.assertIn('[data-bs-target="#tab-docs"]', self.restore)
+
+    def test_저장된_값을_지우지_않는다(self):
+        """원래 주인(product_detail.html)이 읽고 지운다 — 여기서 지우면
+        그쪽이 URL 파라미터·해시를 보고 다른 탭을 켠다."""
+        self.assertNotIn('removeItem', self.restore)
+
+    def test_사생활_보호_모드에서_화면이_죽지_않는다(self):
+        """sessionStorage 접근 자체가 던지는 브라우저 설정이 있다."""
+        self.assertIn('catch', self.restore)
+
+    def test_새로고침_동안_빈_목록_대신_새로_고치는_중을_보여_준다(self):
+        self.assertIn('id="doc-refreshing"', self.src)
+        self.assertIn('문서함을 새로 고치는 중', self.src)
+        self.assertIn('.doc-refreshing', _doc_tab_style())
+
+    def test_업로드가_남의_파일이라_떠나는_순간을_잡는다(self):
+        """업로드는 smart_upload.js 가 하고 이 파일에서 손댈 수 없다."""
+        body = _js_body(self.src, 'window.showDocListRefreshing')
+        self.assertIn("getElementById('doc-refreshing')", body)
+        self.assertIn("classList.remove('d-none')", body)
+        self.assertIn("addEventListener('beforeunload'", self.src)
+
+    def test_이_파일의_새로고침도_스스로_덮는다(self):
+        """저장·삭제·필수문서관리 — 전부 location.reload() 로 끝난다."""
+        for marker in ('window.submitDocumentUpdate', 'window.bulkDeleteCompact',
+                       'window.submitSlotManager'):
+            body = _js_body(self.src, marker)
+            self.assertIn('showDocListRefreshing', body, marker)
+
+    def test_상세_화면에_그대로_실려_나간다(self):
+        """탭 단추와 기본 정보 칸이 **먼저** 그려져 있어야 손댈 수 있다."""
+        owner = User.objects.create_user('주인', password='x', email='o@x.com')
+        label = MyLabel.objects.create(
+            user_id=owner, my_label_name='브라우니', delete_YN='N')
+        ProductMetadata.objects.create(label=label, product_code='PRD-T-9')
+        self.client.force_login(owner)
+        html = self.client.get(reverse(
+            'products:product_detail', args=[label.my_label_id])).content.decode()
+
+        self.assertIn('var wanted = null;', html)
+        mark = html.index('var wanted = null;')
+        self.assertLess(html.index('data-bs-target="#tab-docs"'), mark,
+                        '탭 단추보다 먼저 돌면 켤 것을 찾지 못한다')
+        self.assertLess(html.index('id="tab-info"'), mark,
+                        '기본 정보 칸보다 먼저 돌면 active 를 걷어내지 못한다')

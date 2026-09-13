@@ -1,8 +1,74 @@
 ﻿{% csrf_token %}
 
+<script>
+/* 새로고침 뒤에도 문서함 탭에 남는다 — **그리기 전에** 되돌린다.
+ *
+ * 문서를 올리면 화면이 세 번 바뀌었다.
+ *   1. 아직 예전 화면이라 "등록된 문서가 없습니다" 가 그대로 보이고,
+ *   2. 새 화면이 뜨는데 서버가 그린 기본 활성 탭은 **기본 정보** 이고,
+ *   3. 한참 뒤 product_detail.html 의 DOMContentLoaded 가 returnToTab 을
+ *      읽어 문서함 탭을 켠다 — 그제야 올린 파일이 보인다.
+ *
+ * 3번이 DOMContentLoaded 를 기다린다는 것이 문제다. 이 화면은 탭 여섯 개에
+ * iframe 까지 달려 있어 파싱이 끝나기까지 한참인데, 브라우저는 그 전에
+ * 기본 정보 탭을 그려 버린다. 올린 사람은 "잘못 눌렀나" 하고 멈칫한다.
+ *
+ * 이 조각은 문서함 탭 <div> 안에서 **파싱 도중에** 돈다. 위쪽 탭 단추와
+ * 기본 정보 칸은 이미 DOM 에 있고 아직 첫 그림은 나가지 않았으므로, 여기서
+ * active 를 옮겨 두면 기본 정보 탭은 한 번도 보이지 않는다.
+ *
+ * sessionStorage 의 값은 지우지 않는다 — 원래 주인(product_detail.html)이
+ * 그것을 읽고 지운다. 부트스트랩의 Tab.show() 는 이미 active 인 단추면 바로
+ * 돌아 나가므로 두 번 켜지지 않는다.
+ */
+(function () {
+    var wanted = null;
+    try {
+        wanted = sessionStorage.getItem('returnToTab');
+    } catch (storageError) {
+        return;   // 사생활 보호 모드 등 — 탭 복원은 없어도 화면은 돈다
+    }
+    if (wanted !== 'docs') return;
+
+    var pane = document.getElementById('tab-docs');
+    var trigger = document.querySelector('#workspaceTab [data-bs-target="#tab-docs"]');
+    if (!pane || !trigger) return;
+
+    var openPane = document.querySelector('.tab-content > .tab-pane.active');
+    if (openPane && openPane !== pane) openPane.classList.remove('show', 'active');
+
+    var openTrigger = document.querySelector('#workspaceTab .nav-link.active');
+    if (openTrigger && openTrigger !== trigger) {
+        openTrigger.classList.remove('active');
+        openTrigger.setAttribute('aria-selected', 'false');
+    }
+    pane.classList.add('show', 'active');
+    trigger.classList.add('active');
+    trigger.setAttribute('aria-selected', 'true');
+})();
+</script>
+
 <!-- ==================== Google Workspace Compact UI ==================== -->
 <div class="doc-workspace-wrapper d-flex flex-nowrap bg-white position-relative">
-    
+
+    {% comment %}
+      새로고침이 시작되면 목록을 덮는다.
+
+      업로드·삭제·저장은 전부 location.reload() 로 끝난다. 그런데 새 화면이
+      뜨기 전까지 브라우저는 **예전 화면을 계속 보여 준다** — 첫 문서를 올린
+      사람에게는 "등록된 문서가 없습니다" 가 몇 초 더 남아 있다가 사라진다.
+      올린 것이 안 올라간 것처럼 보인다.
+
+      비어 있다고 말하는 대신 새로 고치는 중이라고 말한다.
+    {% endcomment %}
+    <div id="doc-refreshing" class="doc-refreshing d-none" aria-hidden="true">
+        <div class="doc-refreshing-box">
+            <span class="spinner-border spinner-border-sm"></span>
+            <span>문서함을 새로 고치는 중...</span>
+        </div>
+    </div>
+
+
     <!-- 메인 컨텐츠 영역 -->
     <div id="doc-main-content" class="flex-grow-1 d-flex flex-column">
     
@@ -234,7 +300,7 @@
         <div class="overflow-y-auto custom-scrollbar p-3" 
              style="max-height: calc(100vh - 250px); height: 100%;">
             
-            <div class="d-flex justify-content-between align-items-center mb-3 sticky-top bg-white pt-2" style="top: -12px; z-index: 5;">
+            <div class="d-flex justify-content-between align-items-center mb-2 sticky-top bg-white pt-2" style="top: -12px; z-index: 5;">
                 <h6 class="fw-bold text-muted small text-uppercase mb-0">문서 정보</h6>
                 <button type="button" class="btn btn-light border v2-btn-icon" onclick="closeEditPanel()" aria-label="닫기">
                     <i class="bi bi-x-lg"></i>
@@ -480,6 +546,7 @@ async function submitImportCompanyDoc() {
     }
     bootstrap.Modal.getInstance(document.getElementById('importCompanyDocModal')).hide();
     sessionStorage.setItem('returnToTab', 'docs');
+    if (typeof showDocListRefreshing === 'function') showDocListRefreshing();
     location.reload();
 }
 </script>
@@ -592,6 +659,30 @@ async function submitImportCompanyDoc() {
     .doc-chip.chip-active {
         border-color: var(--v2-blue, #1a73e8);
         background: var(--v2-blue-light, #e8f0fe);
+    }
+
+    /* 새로고침 중에 목록을 덮는 막. 예전 목록("등록된 문서가 없습니다")이
+       새 화면이 뜰 때까지 남아 있어, 방금 올린 사람이 실패한 줄 알았다. */
+    .doc-refreshing {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.86);
+    }
+    .doc-refreshing-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border: 1px solid var(--ez-border, #dadce0);
+        border-radius: 999px;
+        background: #fff;
+        font-size: 13px;
+        color: var(--ez-gray-700, #5f6368);
+        box-shadow: 0 1px 2px rgba(60, 64, 67, 0.2);
     }
 
     .doc-readonly {
@@ -755,6 +846,69 @@ async function submitImportCompanyDoc() {
     #doc-edit-panel .form-select {
         font-size: 13px;
     }
+
+    /* -------------------------------------------------------------
+       문서 정보 패널 — 세로로 줄인다
+
+       패널이 화면보다 길어서 [저장] 도, 설명도, 등록 정보도 스크롤해야
+       보였다. 문서 하나 고치는 자리인데 위아래로 오가야 했다.
+
+       세 가지를 줄였다. **단추는 한 줄**(예전에는 아이콘 위·글자 아래라
+       하나가 두 줄치였다), **항목명은 입력칸 옆**(위아래로 두면 항목마다
+       한 줄씩 더 먹는다), 그리고 구역 사이 간격 `mb-3`(16px) → `mb-2`(8px).
+
+       **줄이되 지우지 않는다** — 유효기간 빠른 선택 여섯 개도, 영양성분
+       읽기 안내도 그대로 있다. 안내는 두 줄로 줄이고 잘린 만큼은 title 로
+       남겼다.
+       ------------------------------------------------------------- */
+    #doc-edit-panel .doc-panel-actions {
+        display: flex;
+        gap: 4px;
+    }
+    #doc-edit-panel .doc-panel-actions > .btn {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+    /* 항목명 + 입력칸을 한 줄에. 항목명 폭을 고정해야 입력칸의 왼쪽 모서리가
+       세로로 한 줄로 선다 — 제각각이면 오히려 어수선하다. */
+    #doc-edit-panel .doc-field {
+        display: grid;
+        grid-template-columns: 58px 1fr;
+        align-items: center;
+        column-gap: 8px;
+    }
+    #doc-edit-panel .doc-field > .form-label {
+        margin-bottom: 0;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.3;
+        color: var(--ez-text-muted, #5f6368);
+    }
+    /* 설명처럼 여러 줄짜리 입력은 항목명을 위쪽에 맞춘다 */
+    #doc-edit-panel .doc-field-top { align-items: start; }
+    #doc-edit-panel .doc-field-top > .form-label { padding-top: 5px; }
+
+    /* 유효기간 빠른 선택 — 여섯 개를 그대로 두되 두 줄에 담기게 좁힌다 */
+    #doc-edit-panel .doc-expiry-quick {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+    }
+    #doc-edit-panel .doc-expiry-quick > .btn {
+        padding-left: 7px;
+        padding-right: 7px;
+    }
+
+    /* 안내 문구는 두 줄까지. 나머지는 title 로 남긴다 */
+    #doc-edit-panel .doc-panel-note {
+        font-size: 11px;
+        line-height: 1.4;
+    }
+    #doc-edit-panel .doc-panel-rule { margin: 10px 0; }
+    #doc-edit-panel .doc-panel-foot { font-size: 11px; }
     
     /* Google Drive 스타일 테이블 - 세로선 제거 */
     .compact-doc-table { 
@@ -769,6 +923,38 @@ async function submitImportCompanyDoc() {
         vertical-align: middle;
         overflow: hidden;
     }
+    /* -------------------------------------------------------------
+       열 정렬은 **한 규칙**이다: 체크박스만 가운데, 나머지는 전부 왼쪽.
+
+       예전에는 열마다 제각각이었다. `style.css` 의 `.table th` 가 머리글을
+       모두 가운데로 밀고 `.table td` 는 그대로 왼쪽이라, '상태 / 만료일'
+       머리글은 칸 한가운데 있는데 `무기한`·`정상 27.03.12` 배지는 왼쪽 끝에
+       붙어 열이 어긋나 보였다. 게다가 `.table td:nth-child(2)` 가
+       `!important` 로 '구분' 칸만 가운데로 당겨 놓아서, 어긋난 방향조차
+       열마다 달랐다.
+
+       가장 넓은 '문서명' 열이 왼쪽 정렬이니 거기에 맞춘다 — 글과 배지는
+       왼쪽 모서리가 한 줄로 서야 눈이 훑어 내려갈 수 있다.
+
+       `!important` 는 style.css 의 `!important` 를 되받기 위한 것이고,
+       `.col-*` 를 하나씩 적은 것은 `.table td:nth-child(2)` 와 구체성을
+       맞추기 위한 것이다(클래스 수가 적으면 진다).
+       ------------------------------------------------------------- */
+    .compact-doc-table th,
+    .compact-doc-table td,
+    .compact-doc-table th.col-type,
+    .compact-doc-table td.col-type,
+    .compact-doc-table th.col-name,
+    .compact-doc-table td.col-name,
+    .compact-doc-table th.col-status,
+    .compact-doc-table td.col-status,
+    .compact-doc-table th.col-version,
+    .compact-doc-table td.col-version,
+    .compact-doc-table th.col-uploader,
+    .compact-doc-table td.col-uploader {
+        text-align: left !important;
+    }
+
     /* 체크박스 컬럼 - padding/정렬만 제어 (col에서 너비 제어) */
     .compact-doc-table th.col-checkbox,
     .compact-doc-table td.col-checkbox {
@@ -935,6 +1121,27 @@ async function submitImportCompanyDoc() {
         console.error('CSRF 토큰을 찾을 수 없습니다');
         return null;
     }
+
+    /* 새로고침 중에는 "문서가 없습니다" 대신 "새로 고치는 중" 을 보여 준다.
+     *
+     * 업로드는 smart_upload.js 가 처리하고 그 파일은 여기서 손댈 수 없다.
+     * 대신 **화면을 떠나는 순간**을 잡는다 — 어느 경로로 새로고침하든
+     * 여기를 지나간다. 문서함으로 되돌아올 새로고침일 때만 덮는다(다른 탭
+     * 으로 가거나 화면을 아주 떠나는 길에는 가릴 이유가 없다). */
+    window.showDocListRefreshing = function() {
+        const veil = document.getElementById('doc-refreshing');
+        if (veil) veil.classList.remove('d-none');
+    };
+
+    window.addEventListener('beforeunload', function() {
+        let returning = null;
+        try {
+            returning = sessionStorage.getItem('returnToTab');
+        } catch (storageError) {
+            return;
+        }
+        if (returning === 'docs') window.showDocListRefreshing();
+    });
 
     // 문서 타입 목록 (서버에서 렌더링)
     const documentTypes = [
@@ -1163,6 +1370,29 @@ async function submitImportCompanyDoc() {
         updateCompactSelectionState();
     };
 
+    /* 서버가 지은 이름 그대로 저장한다.
+     *
+     * 제품명이 한글이면 `Content-Disposition` 의 `filename=` 에는 원래
+     * 이름이 실리지 않는다 — 헤더는 ASCII 만 담을 수 있어서 서버는 원래
+     * 이름을 RFC 5987 의 `filename*=UTF-8''…` 로 퍼센트 인코딩해 보내고,
+     * `filename=` 쪽에는 대비용 ASCII 이름만 넣는다. 그래서 **filename* 을
+     * 먼저 본다.** 그쪽을 건너뛰면 화면이 저장하는 이름과 서버가 지은
+     * 이름이 달라진다 — 예전에 모든 ZIP 이 `documents.zip` 으로 저장된
+     * 자리가 바로 여기다. */
+    window.filenameFromDisposition = function(disposition, fallback) {
+        const header = disposition || '';
+        const encoded = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+        if (encoded) {
+            try {
+                return decodeURIComponent(encoded[1].trim());
+            } catch (decodeError) {
+                console.error('[filenameFromDisposition] 인코딩이 깨졌다', decodeError);
+            }
+        }
+        const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+        return plain ? plain[1].trim() : fallback;
+    };
+
     /* 일괄 다운로드 — 실패해도 보던 화면을 잃지 않는다.
      *
      * 예전에는 폼을 만들어 form.submit() 으로 POST 했다. 성공하면 파일이
@@ -1206,11 +1436,10 @@ async function submitImportCompanyDoc() {
             /* 파일 저장은 그대로 된다 — Blob 으로 받아 내려받는다 */
             const blob = await response.blob();
             const disposition = response.headers.get('Content-Disposition') || '';
-            const matched = disposition.match(/filename="?([^";]+)"?/);
             const objectUrl = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = objectUrl;
-            link.download = matched ? matched[1] : 'documents.zip';
+            link.download = window.filenameFromDisposition(disposition, 'documents.zip');
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -1250,6 +1479,7 @@ async function submitImportCompanyDoc() {
             if (result.success) {
                 showSavedAfterReload(result.message || '삭제했습니다');
                 sessionStorage.setItem('returnToTab', 'docs');
+                window.showDocListRefreshing();
                 location.reload();
             } else {
                 showSnackbar(result.error || '삭제 중 오류가 발생했습니다.', 'error');
@@ -1555,19 +1785,18 @@ async function submitImportCompanyDoc() {
          * 사용자가 [업로드] 를 누르면 파일 선택 창이 열리고, 파일을 고르고
          * 등록까지 누른 뒤에야 "문서 업로드 권한이 없습니다" 로 되돌아왔다.
          * [다운로드] 는 남긴다 — 막는 것은 쓰기뿐이다. */
+        /* 단추는 **한 줄**이다.
+         *
+         * 예전에는 셋 다 `v2-btn-stack`(아이콘 위, 글자 아래)이라 단추 하나가
+         * 두 줄을 먹었다. 세 개가 나란히 있어도 높이는 두 줄치라, 그만큼
+         * 아래 항목들이 화면 밖으로 밀려 스크롤해야 보였다. */
         const writeButtons = !window.CAN_UPLOAD_DOCUMENTS ? '' : `
-                <div class="col-4">
-                    <button class="btn btn-outline-success v2-btn-sm v2-btn-stack w-100" onclick="openUploadForUpdate()" title="새 버전 업로드">
-                        <i class="bi bi-upload"></i>
-                        <span>업로드</span>
-                    </button>
-                </div>
-                <div class="col-4">
-                    <button class="btn btn-primary v2-btn-sm v2-btn-stack w-100" onclick="submitDocumentUpdate()" title="저장">
-                        <i class="bi bi-check-lg"></i>
-                        <span>저장</span>
-                    </button>
-                </div>
+                <button class="btn btn-outline-success v2-btn-sm" onclick="openUploadForUpdate()" title="새 버전 업로드">
+                    <i class="bi bi-upload"></i><span>업로드</span>
+                </button>
+                <button class="btn btn-primary v2-btn-sm" onclick="submitDocumentUpdate()" title="저장">
+                    <i class="bi bi-check-lg"></i><span>저장</span>
+                </button>
         `;  /* writeButtons 끝 */
 
         // 패널에 현재 데이터 채우기
@@ -1577,34 +1806,26 @@ async function submitImportCompanyDoc() {
             <input type="hidden" id="edit-doc-type-id" value="${doc.typeId}">
             <input type="hidden" id="edit-doc-type-name" value="${doc.typeName || ''}">
             
-            <div class="mb-3">
-                <div class="fw-bold text-dark mb-2 text-truncate" title="${doc.filename}">
-                    <i class="bi bi-file-earmark me-1"></i>${doc.filename}
-                </div>
-                <div class="small text-muted">${(doc.fileSize / 1024 / 1024).toFixed(2)} MB</div>
+            <div class="fw-bold text-dark text-truncate mb-2" title="${doc.filename}">
+                <i class="bi bi-file-earmark me-1"></i>${doc.filename}
             </div>
-            
-            <div class="row g-2 mb-3">
-                <div class="col-4">
-                    <a class="btn btn-outline-dark v2-btn-sm v2-btn-stack w-100" href="${doc.downloadUrl}" download title="다운로드">
-                        <i class="bi bi-download"></i>
-                        <span>다운로드</span>
-                    </a>
-                </div>
+
+            <div class="doc-panel-actions mb-2">
+                <a class="btn btn-outline-dark v2-btn-sm" href="${doc.downloadUrl}" download title="다운로드">
+                    <i class="bi bi-download"></i><span>다운로드</span>
+                </a>
                 ${writeButtons}
             </div>
 
             ${looksLikeSpecSheet(doc) ? `
-            <div class="border rounded p-2 mb-3" style="background:var(--ez-success-bg,#e6f4ea); border-color:var(--ez-success-border,#ceead6) !important;">
+            <div class="border rounded p-2 mb-2" style="background:var(--ez-success-bg,#e6f4ea); border-color:var(--ez-success-border,#ceead6) !important;">
                 <div class="fw-semibold mb-1" style="font-size:13px; color:var(--ez-success-on-bg,#137333);">
                     <i class="bi bi-clipboard-data me-1"></i>영양성분 읽기
                     <span class="badge bg-success-subtle text-success-emphasis" style="font-size:10px;">등급 A</span>
                 </div>
-                <div class="text-muted mb-2" style="font-size:11px; line-height:1.5;">
-                    완제품을 시험한 값이라 <b>배합으로 계산할 것이 없습니다</b> —
-                    시험한 값이 계산한 값을 이깁니다. 읽은 값은 <b>확인한 뒤에</b>
-                    이 제품의 영양성분으로 들어갑니다.
-                    (원료 성적서는 <b>원료 상세</b>에서 넣습니다.)
+                <div class="text-muted mb-2 doc-panel-note"
+                     title="완제품을 시험한 값이라 배합으로 계산할 것이 없습니다 — 시험한 값이 계산한 값을 이깁니다. 원료 성적서는 원료 상세에서 넣습니다.">
+                    완제품을 시험한 값입니다. <b>확인한 뒤</b> 이 제품의 영양성분으로 들어갑니다.
                 </div>
                 <button class="btn btn-outline-success v2-btn-sm w-100"
                         onclick="readSpecNutrition(${docId})">
@@ -1614,13 +1835,14 @@ async function submitImportCompanyDoc() {
             ` : ''}
 
             ${doc.typeCode === 'INGREDIENT_LABEL' ? `
-            <div class="border rounded p-2 mb-3" style="background:#f6f2fc; border-color:#d9c8f0 !important;">
+            <div class="border rounded p-2 mb-2" style="background:#f6f2fc; border-color:#d9c8f0 !important;">
                 <div class="fw-semibold mb-1" style="font-size:13px; color:#6b21a8;">
                     <i class="bi bi-box-seam me-1"></i>원료 표시사항
                 </div>
-                <div class="text-muted mb-2" style="font-size:11px; line-height:1.5;">
+                <div class="text-muted mb-2 doc-panel-note"
+                     title="사진을 판독해 BOM 탭에 원료로 등록합니다. 함량(%)은 사진에 없으므로 BOM 탭에서 직접 입력해야 합니다.">
                     사진을 판독해 BOM 탭에 원료로 등록합니다.
-                    ${doc.ingredientBomId ? '이미 등록된 사진입니다.' : '함량(%)은 사진에 없으므로 BOM 탭에서 직접 입력해야 합니다.'}
+                    ${doc.ingredientBomId ? '이미 등록된 사진입니다.' : '함량(%)은 BOM 탭에서 넣습니다.'}
                 </div>
                 <button class="btn btn-outline-primary v2-btn-sm w-100"
                         onclick="previewIngredientPhoto(${docId})">
@@ -1629,54 +1851,51 @@ async function submitImportCompanyDoc() {
             </div>
             ` : ''}
 
-            <hr>
-            
-            <div class="mb-3">
-                <label class="form-label fw-semibold small text-muted mb-2">문서 구분</label>
+            <hr class="doc-panel-rule">
+
+            <div class="doc-field mb-2">
+                <label class="form-label" for="edit-doc-type">문서 구분</label>
                 <select class="form-select form-select-sm" id="edit-doc-type">
-                    ${documentTypes.map(dtype => 
+                    ${documentTypes.map(dtype =>
                         `<option value="${dtype.id}" ${doc.typeId == dtype.id ? 'selected' : ''}>${dtype.name}</option>`
                     ).join('')}
                 </select>
             </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-semibold small text-muted mb-2">발행일</label>
+
+            <div class="doc-field mb-2">
+                <label class="form-label" for="edit-issue-date">발행일</label>
                 <input type="date" class="form-control form-control-sm" id="edit-issue-date" value="${doc.issueDate || ''}">
             </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-semibold small text-muted mb-2">유효기간 설정</label>
-                <div class="d-flex flex-wrap gap-1 mb-2">
-                    <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(1)">+1개월</button>
-                    <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(3)">+3개월</button>
-                    <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(6)">+6개월</button>
-                    <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByYears(1)">+1년</button>
-                    <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByYears(2)">+2년</button>
-                    <button type="button" class="btn btn-outline-success v2-btn-sm" onclick="clearExpiry()">무기한</button>
-                </div>
+
+            <div class="doc-field mb-1">
+                <label class="form-label" for="edit-expiry-date">유효기간</label>
                 <input type="date" class="form-control form-control-sm" id="edit-expiry-date" value="${doc.expiryDate || ''}">
             </div>
-            
-            <div class="mb-3">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="edit-notification-enabled" ${doc.expiryNotificationEnabled ? 'checked' : ''}>
-                    <label class="form-check-label small" for="edit-notification-enabled">
-                        만료 ${doc.expiryNotificationDays || 30}일 전 알림
-                    </label>
-                </div>
+            <div class="doc-expiry-quick mb-2">
+                <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(1)">+1개월</button>
+                <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(3)">+3개월</button>
+                <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(6)">+6개월</button>
+                <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByYears(1)">+1년</button>
+                <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByYears(2)">+2년</button>
+                <button type="button" class="btn btn-outline-success v2-btn-sm" onclick="clearExpiry()">무기한</button>
             </div>
-            
-            <div class="mb-3">
-                <label class="form-label fw-semibold small text-muted mb-2">설명</label>
-                <textarea class="form-control form-control-sm" id="edit-description" rows="3" placeholder="문서에 대한 설명을 입력하세요...">${doc.description || ''}</textarea>
+
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="edit-notification-enabled" ${doc.expiryNotificationEnabled ? 'checked' : ''}>
+                <label class="form-check-label small" for="edit-notification-enabled">
+                    만료 ${doc.expiryNotificationDays || 30}일 전 알림
+                </label>
             </div>
-            
-            <div class="mt-3 pt-3 border-top">
-                <div class="small text-muted">
-                    <div class="mb-1"><i class="bi bi-person me-1"></i>등록자: ${doc.uploadedBy}</div>
-                    <div><i class="bi bi-calendar me-1"></i>등록일: ${doc.uploadedDate}</div>
-                </div>
+
+            <div class="doc-field doc-field-top mb-2">
+                <label class="form-label" for="edit-description">설명</label>
+                <textarea class="form-control form-control-sm" id="edit-description" rows="2" placeholder="문서 설명...">${doc.description || ''}</textarea>
+            </div>
+
+            <div class="doc-panel-foot mt-2 pt-2 border-top text-muted">
+                <i class="bi bi-person me-1"></i>${doc.uploadedBy}
+                <span class="mx-1">·</span>${doc.uploadedDate}
+                <span class="mx-1">·</span>${(doc.fileSize / 1024 / 1024).toFixed(2)} MB
             </div>
         `;
         
@@ -1736,6 +1955,7 @@ async function submitImportCompanyDoc() {
                 showSavedAfterReload('문서 정보를 저장했습니다');
                 closeEditPanel();
                 sessionStorage.setItem('returnToTab', 'docs');
+                window.showDocListRefreshing();
                 window.location.reload();
             } else {
                 showSnackbar(result.error || '업데이트 중 오류가 발생했습니다.', 'error');
@@ -1884,6 +2104,7 @@ async function submitImportCompanyDoc() {
                 bootstrap.Modal.getInstance(document.getElementById('addSlotModal'))?.hide();
                 showSavedAfterReload('문서 목록을 저장했습니다');
                 sessionStorage.setItem('returnToTab', 'docs');
+                window.showDocListRefreshing();
                 location.reload();
             } else {
                 showSnackbar(`${failed.length}개 항목 처리 중 오류가 발생했습니다.`, 'error');

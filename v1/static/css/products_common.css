@@ -123,13 +123,10 @@
 .btn.v2-btn    { padding: 7px 18px; font-size: 13px; }
 .btn.v2-btn-sm { padding: 4px 12px; font-size: 12px; }
 
-/* 세로 쌓기(아이콘 위, 글자 아래) — 문서함 편집 패널의 3열 액션 */
-.btn.v2-btn-sm.v2-btn-stack {
-    flex-direction: column;
-    gap:            2px;
-    padding:        6px 4px;
-}
-.btn.v2-btn-stack .bi { font-size: 14px; }
+/* 세로 쌓기(아이콘 위, 글자 아래)는 없앴다. 쓰던 곳은 문서함 편집 패널의
+   [다운로드]·[업로드]·[저장] 하나뿐이었는데, 그 셋이 두 줄치 높이를 먹는
+   바람에 패널이 화면보다 길어져 아래 항목들을 스크롤해야 보였다.
+   지금은 셋 다 한 줄짜리 .v2-btn-sm 이다. */
 
 /* 본문 안에 섞여 들어가는 텍스트 링크형 버튼 — 위 3단계의 크기 체계가 아니다.
    주변 글에 맞춰 12px, 패딩 없음. */

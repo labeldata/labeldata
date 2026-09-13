@@ -25,6 +25,7 @@ from urllib.parse import quote
 import zipfile
 import io
 import os
+import re
 import json
 import logging
 import time as _time
@@ -4386,8 +4387,10 @@ def bulk_download(request):
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         used_filenames = {}  # 중복 파일명 처리용
-        
+        picked_products = []  # ZIP 이름에 쓸 제품명
+
         for doc in documents:
+            picked_products.append(doc.label.my_label_name or doc.label.prdlst_nm or '')
             try:
                 # 파일 경로 구성
                 if organize_by == 'product':
@@ -4431,13 +4434,14 @@ def bulk_download(request):
     
     # ZIP 응답
     zip_buffer.seek(0)
-    
-    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
-    zip_filename = f"documents_{timestamp}.zip"
-    
+
+    # 이름에 제품이 들어간다 — `documents_….zip` 만 내려주면 여러 제품에서
+    # 받았을 때 내려받기 폴더에서 어느 것이 어느 제품 서류인지 알 수 없다.
+    zip_filename = _documents_zip_filename(picked_products)
+
     response = HttpResponse(zip_buffer.read(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
-    
+    response['Content-Disposition'] = _attachment_disposition(zip_filename)
+
     return response
 
 
@@ -4490,13 +4494,13 @@ def bulk_download_version(request, label_id):
     
     zip_buffer.seek(0)
     
-    product_name = _sanitize_filename(label.my_label_name or label.prdlst_nm or '제품')
-    timestamp = timezone.now().strftime('%Y%m%d')
-    zip_filename = f"{product_name}_{timestamp}.zip"
-    
+    # 한글 제품명을 그대로 헤더에 넣으면 Django 가 헤더 전체를 MIME 인코딩해
+    # `=?utf-8?b?…?=` 한 덩어리로 내보낸다 — 받는 쪽이 이름을 못 읽는다.
+    zip_filename = _documents_zip_filename([label.my_label_name or label.prdlst_nm])
+
     response = HttpResponse(zip_buffer.read(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
-    
+    response['Content-Disposition'] = _attachment_disposition(zip_filename)
+
     return response
 
 
@@ -4599,6 +4603,73 @@ def _sanitize_filename(name):
     for char in invalid_chars:
         name = name.replace(char, '_')
     return name.strip()[:50]  # 50자 제한
+
+
+# ── 일괄 다운로드 ZIP 의 이름 ────────────────────────────────────────────────
+#
+# 예전 이름은 `documents_20260913_101500.zip` 이었다. 제품이 어디에도 없다.
+# 여러 제품에서 서류를 받아 두면 내려받기 폴더에 `documents_…` 만 늘어서서,
+# 어느 제품 것인지 알려면 하나씩 열어 봐야 했다.
+#
+# 제품명은 사람이 지은 이름이라 파일명에 못 쓰는 글자(`\ / : * ? " < > |`)와
+# 공백이 섞인다. 다듬지 않고 붙이면 이름이 깨지거나 저장이 실패한다.
+
+_FILENAME_BANNED = re.compile(r'[\\/:*?"<>|]')
+_FILENAME_BLANKS = re.compile(r'\s+')
+
+
+def _sanitize_filename_part(name):
+    """파일명 한 조각으로 다듬는다 — 못 쓰는 글자와 공백을 `_` 로 모은다.
+
+    다듬고 나면 아무것도 안 남을 수 있다(이름이 `///` 이거나 공백뿐이거나
+    비어 있을 때). 그때는 빈 문자열을 돌려주고, 부르는 쪽이 대비할 이름을
+    정한다 — 여기서 `_` 만 남기면 `_ _문서.zip` 같은 것이 나간다.
+    """
+    cleaned = _FILENAME_BANNED.sub('_', str(name or ''))
+    cleaned = _FILENAME_BLANKS.sub('_', cleaned)
+    # 제어문자·연속된 밑줄·양끝의 점(윈도우가 싫어한다)을 정리한다
+    cleaned = ''.join(ch for ch in cleaned if ch.isprintable())
+    cleaned = re.sub(r'_+', '_', cleaned).strip('_. ')
+    return cleaned[:50].strip('_. ')
+
+
+def _documents_zip_filename(product_names, when=None):
+    """일괄 다운로드 ZIP 의 파일명 — 제품명과 날짜를 담는다.
+
+    여러 제품이 섞이면 첫 제품에 `외 N건` 을 붙인다. 이름을 다듬고 나서
+    아무것도 안 남으면 `제품문서` 로 대신한다.
+    """
+    names = []
+    for raw in product_names:
+        part = _sanitize_filename_part(raw)
+        if part and part not in names:
+            names.append(part)
+
+    if not names:
+        stem = '제품문서'
+    elif len(names) == 1:
+        stem = names[0]
+    else:
+        stem = '%s_외%d건' % (names[0], len(names) - 1)
+
+    stamp = (when or timezone.localtime()).strftime('%Y%m%d')
+    return '%s_문서_%s.zip' % (stem, stamp)
+
+
+def _attachment_disposition(filename, ascii_fallback='documents.zip'):
+    """파일명을 담은 `Content-Disposition` 값.
+
+    **헤더 전체가 ASCII 여야 한다.** 한글을 그대로 넣으면 Django 가 헤더
+    값을 통째로 MIME 인코딩해서 `=?utf-8?b?…?=` 한 덩어리로 내보낸다 —
+    화면(fetch + Blob)이 `filename=` 을 찾지 못해 대비용 이름
+    `documents.zip` 으로 저장했고, 그래서 서버가 지은 이름과 실제로 저장된
+    이름이 달랐다.
+
+    RFC 5987 의 `filename*` 로 퍼센트 인코딩해 보내면 헤더는 ASCII 로
+    남고 브라우저도 화면도 같은 이름을 읽는다.
+    """
+    return ('attachment; filename="%s"; filename*=UTF-8\'\'%s'
+            % (ascii_fallback.replace('"', ''), quote(filename)))
 
 
 # ==================== 협업 기능 (Stub) ====================
