@@ -7,6 +7,7 @@ import os
 import logging
 from datetime import date
  
+from django.core.files.base import File as DjangoFile
 from django.shortcuts import render, redirect
 from django.http import Http404
 from django.views.decorators.http import require_POST
@@ -204,12 +205,19 @@ def vendor_submit_view(request, token):
             _, ext = os.path.splitext(uploaded_file.name)
             ai_group = infer_ai_group(doc_type.type_name, doc_type.type_code)
  
-            # 파일 포인터 리셋 후 ProductDocument에 저장
-            uploaded_file.seek(0)
+            # **같은 UploadedFile 을 두 모델에 잇달아 저장하면 안 된다.**
+            # FILE_UPLOAD_MAX_MEMORY_SIZE(2.5MB)를 넘는 업로드는 임시 파일로
+            # 오고, 첫 저장 때 스토리지가 그 임시 파일을 **옮겨 버린다**
+            # (file_move_safe 의 rename). 두 번째 저장은 사라진 경로를 열려다
+            # FileNotFoundError 로 500 이 난다 — 협력사는 오류 화면을 보고,
+            # 제출은 반쯤 들어간 채 요청 상태는 '요청 중' 으로 남는다.
+            # seek(0) 은 열린 fd 만 되감을 뿐 경로를 되살리지 못한다.
+            # 그래서 두 번째는 **방금 저장된 파일**을 스토리지에서 다시 읽는다.
+            saved_copy = submission.file.storage.open(submission.file.name, 'rb')
             product_doc = ProductDocument.objects.create(
                 label=dr.linked_label,
                 document_type=doc_type,
-                file=uploaded_file,
+                file=DjangoFile(saved_copy, name=uploaded_file.name),
                 original_filename=uploaded_file.name,
                 file_size=uploaded_file.size,
                 file_extension=ext.lower(),
@@ -224,6 +232,7 @@ def vendor_submit_view(request, token):
                     'submitted_by_name': vendor_name,
                 },
             )
+            saved_copy.close()
             submitted_files.append(product_doc.document_id)
  
             # Vision AI 비동기 처리 트리거

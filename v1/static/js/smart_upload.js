@@ -274,8 +274,8 @@ function handleFileSelect(file) {
     fileName.textContent = file.name;
     fileSize.textContent = formatFileSize(file.size);
     
-    // 아이콘 설정
-    const ext = file.name.split('.').pop().toLowerCase();
+    // 아이콘 설정 — 확장자는 위에서 이미 구했다. 여기서 const 로 다시
+    // 선언하면 같은 블록의 재선언이라 **파일 전체가 SyntaxError 로 죽는다.**
     if (ext === 'pdf') {
         fileIcon.className = 'bi bi-file-earmark-pdf text-danger me-3';
     } else if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {

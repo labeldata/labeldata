@@ -526,3 +526,177 @@ def check_templates_compile(app_configs, **kwargs):
                 # 않는다. 문법 오류만 본다.
                 continue
     return errors
+
+
+# ── 같은 블록에서 const/let 을 두 번 선언하면 파일 전체가 죽는다 ─────────────
+#
+# 이것은 실행 오류가 아니라 **파싱 오류**다. 그 자리만 안 도는 것이 아니라
+# `<script>` 나 .js 파일 **전체가 로드되지 않는다** — 그 안의 함수가 전부
+# 사라지고, 화면의 onclick 은 조용히 아무 일도 안 한다.
+#
+# 실제로 한 번 넣었다. `smart_upload.js` 에 확장자 검사를 더하면서 아래쪽
+# 아이콘 코드가 이미 쓰던 이름을 다시 선언했고, 그 순간부터 **문서 업로드가
+# 통째로 불가능**했다. 시험은 파이썬만 돌므로 못 잡았고 눈으로도 못 잡았다.
+
+_DECL = re.compile(r'\b(const|let)\s+([A-Za-z_$][\w$]*)')
+
+
+def _strip_js_noise(text):
+    """주석·문자열·정규식 리터럴을 같은 길이의 공백으로 바꾼다.
+
+    길이를 지켜야 줄 번호가 그대로 남는다. 여는 자리를 못 찾으면 그
+    파일은 검사하지 않는다 — 틀린 경고를 내느니 아무 말도 안 하는 편이 낫다.
+    """
+    out = list(text)
+    i, n = 0, len(text)
+    prev_significant = ''
+    while i < n:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ''
+        if ch == '/' and nxt == '/':
+            j = text.find(chr(10), i)
+            j = n if j == -1 else j
+            for k in range(i, j):
+                out[k] = ' '
+            i = j
+            continue
+        if ch == '/' and nxt == '*':
+            j = text.find('*/', i + 2)
+            if j == -1:
+                return None
+            for k in range(i, j + 2):
+                if out[k] != chr(10):
+                    out[k] = ' '
+            i = j + 2
+            continue
+        if ch in ('"', "'", '`'):
+            j = i + 1
+            while j < n:
+                if text[j] == chr(92):
+                    j += 2
+                    continue
+                if text[j] == ch:
+                    break
+                j += 1
+            if j >= n:
+                return None
+            for k in range(i, j + 1):
+                if out[k] != chr(10):
+                    out[k] = ' '
+            i = j + 1
+            prev_significant = 'x'
+            continue
+        if ch == '/' and prev_significant in ('', '(', ',', '=', ':', '[', '!', '&',
+                                              '|', '?', '{', '}', ';', '+', '-',
+                                              '*', '%', '<', '>', '~', '^'):
+            # 정규식 리터럴로 본다
+            j = i + 1
+            in_class = False
+            while j < n and text[j] != chr(10):
+                if text[j] == chr(92):
+                    j += 2
+                    continue
+                if text[j] == '[':
+                    in_class = True
+                elif text[j] == ']':
+                    in_class = False
+                elif text[j] == '/' and not in_class:
+                    break
+                j += 1
+            if j >= n or text[j] != '/':
+                # 나눗셈이었다 — 그냥 넘긴다
+                prev_significant = ch
+                i += 1
+                continue
+            for k in range(i, j + 1):
+                out[k] = ' '
+            i = j + 1
+            prev_significant = 'x'
+            continue
+        if not ch.isspace():
+            prev_significant = ch
+        i += 1
+    return ''.join(out)
+
+
+def _redeclared(text):
+    """(줄번호, 이름) 목록 — 같은 블록에서 두 번 선언된 것."""
+    clean = _strip_js_noise(text)
+    if clean is None:
+        return []
+    scopes = [set()]
+    paren = 0
+    hits = []
+    i, n = 0, len(clean)
+    while i < n:
+        ch = clean[i]
+        if ch == '(':
+            paren += 1
+        elif ch == ')':
+            paren = max(0, paren - 1)
+        elif ch == '{':
+            scopes.append(set())
+        elif ch == '}':
+            if len(scopes) > 1:
+                scopes.pop()
+            else:
+                return []          # 균형이 안 맞는다 — 말하지 않는다
+        elif ch in ('c', 'l'):
+            m = _DECL.match(clean, i)
+            if m and (i == 0 or not (clean[i - 1].isalnum()
+                                     or clean[i - 1] in '_$.')):
+                # for (let i…) · catch (e) 처럼 괄호 안의 선언은 제 스코프를
+                # 따로 가진다 — 같은 블록에 두 번 있어도 정상이다.
+                if paren == 0:
+                    name = m.group(2)
+                    if name in scopes[-1]:
+                        hits.append((clean.count(chr(10), 0, i) + 1, name))
+                    else:
+                        scopes[-1].add(name)
+                i = m.end()
+                continue
+        i += 1
+    return hits
+
+
+@register()
+def check_js_redeclared_bindings(app_configs, **kwargs):
+    """같은 블록의 const/let 재선언을 찾아 오류로 보고한다."""
+    base = Path(settings.BASE_DIR)
+    errors = []
+
+    static_root = base / 'static'
+    if static_root.exists():
+        for path in sorted(static_root.rglob('*.js')):
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            for line, name in _redeclared(text):
+                errors.append(Error(
+                    f'{path.name}:{line} 같은 블록에서 `{name}` 을 두 번 '
+                    f'선언합니다 — 이 파일 **전체**가 SyntaxError 로 로드되지 '
+                    f'않습니다.',
+                    hint='앞에서 이미 구한 값이면 다시 선언하지 말고 그대로 쓰세요.',
+                    obj=str(path),
+                    id='static.E001',
+                ))
+
+    for root in _template_dirs():
+        for path in root.rglob('*.html'):
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in _INLINE_SCRIPT.finditer(text):
+                base_line = text.count(chr(10), 0, m.start(1))
+                for line, name in _redeclared(m.group(1)):
+                    errors.append(Error(
+                        f'{path.name}:{base_line + line} 같은 블록에서 '
+                        f'`{name}` 을 두 번 선언합니다 — 이 <script> 블록 '
+                        f'전체가 죽습니다.',
+                        hint='앞에서 이미 구한 값이면 다시 선언하지 말고 그대로 쓰세요.',
+                        obj=str(path),
+                        id='static.E001',
+                    ))
+    return errors

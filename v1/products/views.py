@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 from django.contrib import messages
+from v1.common import quota, uploads
 from v1.common.media_access import (
     user_can_download_label_files, visible_documents,
     visible_documents_for_user)
@@ -4214,8 +4215,9 @@ def company_document_import_api(request, label_id):
         ).first()
         if auto_slot:
             auto_slot.current_document = document
-            auto_slot.status = DocumentSlot.SlotStatus.ACTIVE
-            auto_slot.save(update_fields=['current_document', 'status'])
+            # 상태는 만료일에서 나온다 — 손으로 정하지 않는다.
+            # (예전에는 없는 값 SlotStatus.ACTIVE 를 넣어 AttributeError 로 500 이 났다)
+            auto_slot.update_status()
 
     from .models import ProductActivityLog
     ProductActivityLog.objects.create(
@@ -5862,11 +5864,31 @@ def doc_request_submit(request, req_id):
     if dr.status == DocumentRequest.STATUS_CANCELLED:
         return JsonResponse({'error': '취소된 요청입니다.'}, status=400)
 
-    files   = request.FILES  # key = doc_type_name (또는 type_id)
     notes   = request.POST.get('notes', '')
     saved   = []
 
-    for key, f in files.items():
+    # `.items()` 는 키마다 **마지막 하나만** 준다 — 한 칸에 여러 개를 붙이면
+    # 나머지가 조용히 사라진다. 협력사 경로에서 같은 것을 고쳤다.
+    incoming = [(k, f) for k, files in request.FILES.lists() for f in files]
+
+    # 협력사(비로그인) 경로에는 크기·확장자·할당량 검사를 넣었는데 **로그인한
+    # 수신자가 내는 같은 기능**에는 없었다. `.html`·`.svg` 는 미디어가
+    # Content-Disposition 없이 내려주므로 같은 오리진에서 실행되고, 그 파일을
+    # 여는 사람은 바로 요청자다.
+    rejected = []
+    accepted = []
+    for key, f in incoming:
+        problem = uploads.check(dr.requester, f, kind='서류')
+        if problem:
+            rejected.append('%s — %s' % (f.name, problem))
+        else:
+            accepted.append((key, f))
+
+    if rejected and not accepted:
+        return JsonResponse({'error': ' / '.join(rejected)}, status=400)
+
+    new_subs = []
+    for key, f in accepted:
         sub = DocumentSubmission(
             request            = dr,
             document_type      = key,
@@ -5879,6 +5901,7 @@ def doc_request_submit(request, req_id):
             active_yn          = True,
         )
         sub.save()
+        new_subs.append(sub)
         saved.append({'document_type': key, 'filename': f.name})
 
     # 파일이 하나라도 오면 '제출 완료'. '수락'(하겠다) 과는 다른 상태다.
@@ -5886,27 +5909,42 @@ def doc_request_submit(request, req_id):
         dr.status = DocumentRequest.STATUS_SUBMITTED
         dr.save(update_fields=['status', 'updated_datetime'])
 
-        # 요청자의 제품(linked_label)에 제출된 파일을 ProductDocument로 자동 등록
+        # 요청자의 제품(linked_label)에 제출된 파일을 ProductDocument로 자동 등록.
+        # **이번에 낸 것만** 돈다. 예전에는 그 요청의 활성 제출 전체를 돌아,
+        # 두 번째 제출 때 첫 번째 파일이 요청자 문서함에 한 번 더 들어갔다.
         if dr.linked_label:
             from django.core.files.base import File as DjangoFile
-            for sub in DocumentSubmission.objects.filter(request=dr, active_yn=True):
+            for sub in new_subs:
                 # document_type 매핑: DocumentSubmission.document_type (문자열) → DocumentType
                 dtype = DocumentType.objects.filter(type_name__iexact=sub.document_type, active_yn=True).first()
-                if dtype and sub.file:
-                    try:
-                        sub.file.seek(0)
-                        ProductDocument.objects.create(
-                            label=dr.linked_label,
-                            document_type=dtype,
-                            file=DjangoFile(sub.file, name=sub.original_filename),
-                            original_filename=sub.original_filename,
-                            file_size=sub.file_size or 0,
-                            uploaded_by=dr.requester,
-                        )
-                    except Exception:
-                        pass  # 파일 복사 실패 시 제출 자체는 유지
+                if not dtype:
+                    logger.warning('자료 요청 제출: 문서 종류 "%s" 를 못 찾아 '
+                                   '제품 문서함 등록을 건너뜀 (submission=%s)',
+                                   sub.document_type, sub.pk)
+                    continue
+                if not sub.file:
+                    continue
+                try:
+                    # 방금 저장된 파일을 스토리지에서 다시 읽는다. 업로드
+                    # 객체를 재사용하면 큰 파일(임시 파일)에서 경로가 이미
+                    # 옮겨져 FileNotFoundError 가 난다.
+                    saved_copy = sub.file.storage.open(sub.file.name, 'rb')
+                    ProductDocument.objects.create(
+                        label=dr.linked_label,
+                        document_type=dtype,
+                        file=DjangoFile(saved_copy, name=sub.original_filename),
+                        original_filename=sub.original_filename,
+                        file_size=sub.file_size or 0,
+                        uploaded_by=dr.requester,
+                    )
+                    saved_copy.close()
+                except Exception:
+                    # 제출 자체는 유지하되 **조용히 넘어가지는 않는다.**
+                    logger.exception('자료 요청 제출 파일을 제품 문서함에 '
+                                     '옮기지 못했습니다 (submission=%s)', sub.pk)
 
-    return JsonResponse({'success': True, 'submitted': saved})
+    return JsonResponse({'success': True, 'submitted': saved,
+                         'rejected': rejected})
 
 
 @login_required
@@ -6746,7 +6784,6 @@ def ingredient_photo_upload(request, label_id):
     document_ingredient_photo_to_bom 이 맡는다 - OCR 은 틀리고, 틀린 원료가
     BOM 에 들어가면 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
     """
-    from v1.common import quota
     from v1.products.services.ingredient_photo import (
         parse_ingredient_photo, read_document_image,
     )
@@ -7804,9 +7841,9 @@ def document_spec_nutrition(request, document_id):
         return JsonResponse({'success': False, 'error': '문서에 파일이 없습니다.'},
                             status=400)
 
-    usage = quota.consume(request.user, 'ocr_label')
-    if not usage.get('ok'):
-        return JsonResponse({'success': False, 'error': usage['message']}, status=429)
+    allowed, room = quota.check_and_charge(request.user, 'ocr_label')
+    if not allowed:
+        return JsonResponse({'success': False, 'error': room['message']}, status=429)
 
     try:
         with doc.file.open('rb') as fh:
@@ -7915,9 +7952,9 @@ def ingredient_spec_nutrition(request, ingredient_id):
     if not upload:
         return JsonResponse({'success': False, 'error': '파일이 없습니다.'}, status=400)
 
-    usage = quota.consume(request.user, 'ocr_label')
-    if not usage.get('ok'):
-        return JsonResponse({'success': False, 'error': usage['message']}, status=429)
+    allowed, room = quota.check_and_charge(request.user, 'ocr_label')
+    if not allowed:
+        return JsonResponse({'success': False, 'error': room['message']}, status=429)
 
     try:
         got = spec_nutrition.read(upload)

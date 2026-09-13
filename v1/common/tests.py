@@ -959,3 +959,61 @@ class 화면에_들어가게_줄인다(TestCase):
         self.assertIn("'gained'", src)
         html = Path('v1/templates/admin/dashboard.html').read_text(encoding='utf-8')
         self.assertIn('step.gained', html)
+
+
+class V2_화면은_계정_톱바를_잃지_않는다(SimpleTestCase):
+    """
+    `{% include "includes/_topbar_account.html" %}` 이 base_v2.html 의
+    **`{% block topbar %}` 안에** 있다. 그 블록을 덮는 화면은 계정 메뉴·알림
+    벨·로그아웃 폼을 통째로 잃는다 — 그리고 그 로그아웃 폼의
+    `{% csrf_token %}` 이 대부분의 V2 화면에서 **유일한**
+    `[name=csrfmiddlewaretoken]` 입력칸이다.
+
+    화면 스크립트 열다섯 곳 넘게가 그 칸을 **널 검사 없이** 읽는다
+    (`document.querySelector('[name=csrfmiddlewaretoken]').value`). 칸이
+    사라지면 그 자리에서 TypeError 가 나고, 사용자에게는 아무 반응 없는
+    단추만 남는다. 서버는 멀쩡한데 아무 일도 일어나지 않는 종류다.
+
+    지금은 덮는 화면 열여섯 개가 **전부** 다시 include 하고 있어 깨지지
+    않는다. 열일곱 번째가 잊는 순간 조용히 깨지므로 여기서 잠근다.
+    """
+
+    TPL = Path('v1/templates')
+    FRAGMENT = 'includes/_topbar_account.html'
+
+    def _overriders(self):
+        out = []
+        for path in sorted(self.TPL.rglob('*.html')):
+            if path.name == 'base_v2.html':
+                continue
+            text = path.read_text(encoding='utf-8', errors='replace')
+            if '{% block topbar %}' in text:
+                out.append(path)
+        return out
+
+    def test_톱바를_덮는_화면은_계정_조각을_다시_넣는다(self):
+        forgot = [
+            str(p).replace(chr(92), '/')
+            for p in self._overriders()
+            if self.FRAGMENT not in p.read_text(encoding='utf-8', errors='replace')
+        ]
+        self.assertEqual(forgot, [], '톱바를 덮으면서 계정 조각을 안 넣은 화면')
+
+    def test_덮는_화면이_실제로_있다(self):
+        """조건이 바뀌어 이 시험이 빈 목록만 보고 통과하는 일을 막는다."""
+        self.assertGreater(len(self._overriders()), 5)
+
+    def test_계정_조각이_csrf_입력칸을_들고_있다(self):
+        text = (self.TPL / 'includes' / '_topbar_account.html').read_text(
+            encoding='utf-8', errors='replace')
+        self.assertIn('{% csrf_token %}', text)
+
+    def test_그_조각의_include_가_topbar_블록_안에_있다(self):
+        """
+        블록 밖으로 옮기면 이 시험 전체가 뜻을 잃는다 — 그때는 시험을 지우는
+        것이 맞다. 조용히 무의미해지지 않게 위치를 함께 잠근다.
+        """
+        text = (self.TPL / 'base_v2.html').read_text(encoding='utf-8')
+        start = text.index('{% block topbar %}')
+        end = text.index('{% endblock %}', start)
+        self.assertIn(self.FRAGMENT, text[start:end])

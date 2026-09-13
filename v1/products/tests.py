@@ -9637,3 +9637,224 @@ class 표에서_친_값이_저장_때_되돌아가지_않는다(TestCase):
         grid = js[i:i + 400]
         for prop in ('allergens', 'gmo', 'report_no'):
             self.assertIn(prop, grid)
+
+
+class 성적서_판독이_서버에서_죽지_않는다(TestCase):
+    """
+    영양성분 A등급을 만드는 유일한 경로가 **양쪽 다** 막혀 있었다.
+
+    · 화면: 파일 고르개를 만들자마자 `load()` 의 `innerHTML` 이 지웠다 (고침)
+    · 서버: `quota.consume(...)` 을 부르는데 **그런 함수가 없다.** 게다가
+      `quota` 라는 이름 자체가 그 함수 스코프에 없었다 — `v1/products/views.py`
+      는 `quota` 를 모듈 최상단이 아니라 **다른 함수 안에서만** 들여왔다.
+      그래서 두 경로 모두 `NameError` 로 500 이었다.
+
+    화면을 되살린 뒤에야 서버 쪽이 드러났다. 되살린 단추가 500 에 닿는
+    상태였으므로 여기서 함께 잠근다.
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from v1.label.models import MyIngredient
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='spec', password='pw12345!')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='성적서제품', delete_YN='N')
+        dtype = DocumentType.objects.create(
+            type_name='자가품질검사성적서', type_code='SPEC',
+            active_yn=True, display_order=1)
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dtype,
+            file=SimpleUploadedFile('spec.pdf', b'%PDF-1.4 body', 'application/pdf'),
+            original_filename='spec.pdf', file_size=13, uploaded_by=self.user)
+        self.ingredient = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='성적서원료', delete_YN='N')
+
+    def _fake_read(self):
+        from unittest.mock import patch
+
+        return patch(
+            'v1.label.services.spec_nutrition.read',
+            return_value={'values': {'calories': 100}, 'basis_amount': 100,
+                          'basis_unit': 'g', 'text': '열량 100kcal', 'error': ''})
+
+    def test_문서함_성적서_판독이_200_이다(self):
+        with self._fake_read():
+            r = self.client.post(reverse('products:document_spec_nutrition',
+                                         args=[self.doc.pk]))
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertTrue(r.json()['success'])
+
+    def test_원료_성적서_판독이_200_이다(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        with self._fake_read():
+            r = self.client.post(
+                reverse('label:ingredient_spec_nutrition', args=[self.ingredient.pk]),
+                {'file': SimpleUploadedFile('s.pdf', b'%PDF-1.4', 'application/pdf')})
+        self.assertEqual(r.status_code, 200, r.content[:300])
+
+    def test_한도를_넘기면_429_와_한국어_안내를_준다(self):
+        from unittest.mock import patch
+
+        with patch('v1.common.quota.limit_for', return_value=0):
+            with self._fake_read():
+                r = self.client.post(reverse('products:document_spec_nutrition',
+                                             args=[self.doc.pk]))
+        self.assertEqual(r.status_code, 429)
+        self.assertIn('한도', r.json()['error'])
+
+    def test_판독이_한도를_실제로_깎는다(self):
+        """`consume` 은 없는 함수였다 — 깎는지 실제로 확인한다."""
+        from v1.common import quota
+
+        before = quota.used(self.user, 'ocr_label')
+        with self._fake_read():
+            self.client.post(reverse('products:document_spec_nutrition',
+                                     args=[self.doc.pk]))
+        self.assertEqual(quota.used(self.user, 'ocr_label'), before + 1)
+
+
+class 고정_서류_불러오기가_슬롯을_잇는다(TestCase):
+    """
+    `auto_slot.status = DocumentSlot.SlotStatus.ACTIVE` — **`ACTIVE` 라는 값이
+    없다.** 선택지는 EMPTY/VALID/EXPIRING/EXPIRED 넷뿐이라 `AttributeError`
+    가 나고, 그 자리는 try 밖이라 그대로 500 이다.
+
+    그런데 `ProductDocument` 는 이미 만들어진 **뒤**라 파일은 들어가 있다.
+    사용자는 "일부 서류를 불러오지 못했습니다" 를 보고 다시 누르고,
+    **중복 문서가 쌓인다.**
+
+    상태는 손으로 정할 값이 아니다 — 만료일에서 나온다(`update_status`).
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from v1.products.models import DocumentSlot, DocumentType
+        from v1.user_management.models import CompanyDocument
+
+        self.user = User.objects.create_user(username='imp', password='pw12345!')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='불러오기제품', delete_YN='N')
+        self.dtype = DocumentType.objects.create(
+            type_name='HACCP인증서', type_code='HACCP',
+            active_yn=True, display_order=1)
+        self.slot = DocumentSlot.objects.create(
+            label=self.label, document_type=self.dtype, hidden_yn=False)
+        self.company_doc = CompanyDocument.objects.create(
+            user=self.user, doc_type='haccp', doc_name='HACCP',
+            doc_file=SimpleUploadedFile('haccp.pdf', b'%PDF-1.4 x', 'application/pdf'))
+
+    def _import(self):
+        return self.client.post(
+            reverse('products:company_document_import_api', args=[self.label.my_label_id]),
+            {'company_document_id': self.company_doc.pk,
+             'document_type_id': self.dtype.type_id})
+
+    def test_불러오면_200_이고_슬롯이_이어진다(self):
+        from v1.products.models import DocumentSlot
+
+        r = self._import()
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        slot = DocumentSlot.objects.get(pk=self.slot.pk)
+        self.assertIsNotNone(slot.current_document)
+
+    def test_슬롯_상태가_선택지_안의_값이다(self):
+        from v1.products.models import DocumentSlot
+
+        self._import()
+        slot = DocumentSlot.objects.get(pk=self.slot.pk)
+        self.assertIn(slot.status, dict(DocumentSlot.SlotStatus.choices))
+
+    def test_한_번_불러오면_문서가_하나만_생긴다(self):
+        from v1.products.models import ProductDocument
+
+        self._import()
+        self.assertEqual(
+            ProductDocument.objects.filter(label=self.label).count(), 1)
+
+
+class 자료_요청_제출이_협력사_경로와_같은_문을_지난다(TestCase):
+    """
+    비로그인 협력사 경로(`vendor_views`)에는 크기·확장자·할당량 검사를
+    넣었는데, **로그인한 수신자가 연락처 화면에서 내는 같은 기능**에는
+    하나도 없었다.
+
+    `.html`·`.svg` 는 미디어가 `Content-Disposition` 없이 내려주므로 같은
+    오리진에서 inline 으로 실행된다 — 그 파일을 여는 사람은 바로 요청자다.
+
+    그리고 두 가지가 더 있었다.
+    · `request.FILES.items()` 는 키마다 **마지막 하나만** 준다 — 한 칸에
+      여러 개를 붙이면 나머지가 조용히 사라진다(협력사 쪽에서 고친 것과 같은 꼴)
+    · 제품 문서함 복사가 그 요청의 **활성 제출 전체**를 돌아, 두 번째 제출 때
+      첫 번째 파일이 한 번 더 들어갔다
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+
+        from v1.products.models import DocumentRequest, DocumentType
+
+        self.requester = User.objects.create_user(username='req', password='x')
+        self.sender = User.objects.create_user(
+            username='snd@example.com', email='snd@example.com', password='x')
+        self.client.force_login(self.sender)
+        self.label = MyLabel.objects.create(
+            user_id=self.requester, my_label_name='요청제품', delete_YN='N')
+        DocumentType.objects.create(type_name='성적서', type_code='SPEC',
+                                    active_yn=True, display_order=1)
+        self.dr = DocumentRequest.objects.create(
+            requester=self.requester, linked_label=self.label,
+            recipient_email='snd@example.com',
+            due_date=timezone.now().date() + timedelta(days=7),
+            status=DocumentRequest.STATUS_PENDING)
+
+    def _file(self, name, size=64):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(name, b'x' * size, 'application/pdf')
+
+    def _submit(self, payload):
+        return self.client.post(
+            reverse('products:doc_request_submit', args=[self.dr.request_id]), payload)
+
+    def _subs(self):
+        from v1.products.models import DocumentSubmission
+
+        return DocumentSubmission.objects.filter(request=self.dr)
+
+    def test_실행되는_확장자는_막는다(self):
+        r = self._submit({'성적서': self._file('x.html')})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('확장자', r.json()['error'])
+        self.assertEqual(self._subs().count(), 0)
+
+    def test_너무_큰_파일도_막는다(self):
+        from v1.common.uploads import MAX_UPLOAD_MB
+
+        r = self._submit({'성적서': self._file(
+            'big.pdf', size=(MAX_UPLOAD_MB * 1024 * 1024) + 1)})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self._subs().count(), 0)
+
+    def test_한_칸에_여러_개를_붙이면_다_저장된다(self):
+        self._submit({'성적서': [self._file('a.pdf'),
+                                 self._file('b.pdf'),
+                                 self._file('c.pdf')]})
+        names = set(self._subs().values_list('original_filename', flat=True))
+        self.assertEqual(names, {'a.pdf', 'b.pdf', 'c.pdf'})
+
+    def test_다시_제출해도_앞의_것이_또_들어가지_않는다(self):
+        from v1.products.models import ProductDocument
+
+        self._submit({'성적서': self._file('first.pdf')})
+        self._submit({'성적서': self._file('second.pdf')})
+        names = sorted(ProductDocument.objects
+                       .filter(label=self.label)
+                       .values_list('original_filename', flat=True))
+        self.assertEqual(names, ['first.pdf', 'second.pdf'])
