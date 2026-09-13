@@ -503,17 +503,7 @@ function showValidationModal(results) {
     window.recyclingMarkFunctionsReady = false;
     
     // 함수 준비 상태 확인 헬퍼 (즉시 사용 가능)
-    window.checkRecyclingMarkReady = function() {
-        return {
-            ready: !!window.recyclingMarkFunctionsReady,
-            functions: {
-                applyRecommendedRecyclingMark: typeof window.applyRecommendedRecyclingMark,
-                getCurrentRecyclingMarkStatus: typeof window.getCurrentRecyclingMarkStatus,
-                debugRecyclingMark: typeof window.debugRecyclingMark,
-                updateRecyclingMarkUI: typeof window.updateRecyclingMarkUI
-            }
-        };
-    };
+    /* [제거] checkRecyclingMarkReady — 분리배출마크 준비 상태를 콘솔에서 보려고 만든 헬퍼. 호출자 0. */
     
     // 기본 함수들 (DOM 로드 전)
     window.applyRecommendedRecyclingMark = function() {
@@ -2708,19 +2698,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * 안 생겨서 2단 배치·필드 폭·getCookie 가 전부 ReferenceError 였다.
      * checks.py 의 static.E002 가 이제 이 종류를 잡는다.
      */
-    function calculateNutrientValue(type, baseAmount, servings, val100g, displayUnit) {
-        if (isNaN(val100g) || isNaN(baseAmount)) return 0;
-        let raw = 0;
-        
-        if (displayUnit === 'total') {
-            raw = (val100g * baseAmount * servings) / 100;
-        } else if (displayUnit === 'unit') {
-            raw = (val100g * baseAmount) / 100;
-        } else {
-            raw = val100g;
-        }
-        return nutritionText(type, raw);
-    }
+    /* [제거] calculateNutrientValue — 영양성분 값 환산. 표를 그리는 길이 nutrientCell → nutritionText 하나로 모이면서 남았다. 호출자 0. */
 
     /* 열량은 "5kcal 미만" 처럼 **단위가 이미 붙은 문자열**로 올 수 있다.
      * 그 뒤에 'kcal' 을 또 붙이면 `5kcal 미만kcal` 이 인쇄된다. */
@@ -3659,86 +3637,10 @@ window.addEventListener('message', function(e) {
 });
 
 // 제품명 금지문구 검증 (기존 로직 활용)
-function checkForbiddenPhrasesInProduct() {
-    // HTML의 기존 checkForbiddenPhrases 로직을 호출
-    if (typeof window.checkForbiddenPhrases === 'function') {
-        return window.checkForbiddenPhrases();
-    }
-    
-    // 폴백 로직
-    const errors = [];
-    const suggestions = [];
-    const productName = (checkedFields.prdlst_nm || '').trim();
-    
-    if (!productName) {
-        return { ok: true, errors, suggestions };
-    }
-    
-    const forbiddenPhrases = window.LABEL_CONSTANTS?.forbiddenPhrases || ['천연', '자연', '슈퍼', '생명'];
-    const foundForbiddenPhrases = forbiddenPhrases.filter(phrase => 
-        productName.toLowerCase().includes(phrase.toLowerCase())
-    );
-    
-    if (foundForbiddenPhrases.length > 0) {
-        errors.push(`제품명에 사용금지 문구가 포함되어 있습니다: ${foundForbiddenPhrases.join(', ')}`);
-        suggestions.push('사용금지 문구를 제품명에서 제거하세요. (식품 등의 표시기준 제8조)');
-    }
-    
-    return {
-        ok: errors.length === 0,
-        errors,
-        suggestions
-    };
-}
+/* [제거] checkForbiddenPhrasesInProduct — 금지 표현 검사. 규정 검증이 서버 API 로 간 뒤로 호출자 0. */
 
 // 농수산물 성분 함량 표시 검증 (기존 로직 활용)
-function checkFarmSeafoodContentDisplay() {
-    
-    // checkedFields 데이터 확인
-    if (!checkedFields) {
-        console.warn('checkedFields 데이터 없음');
-        return { ok: true, errors: [], suggestions: [] };
-    }
-    
-    // HTML의 기존 checkFarmSeafoodCompliance 로직을 호출
-    if (typeof window.checkFarmSeafoodCompliance === 'function') {
-        return window.checkFarmSeafoodCompliance();
-    }
-    
-    // 폴백 로직 (기존 HTML 로직과 동일)
-    const errors = [];
-    const suggestions = [];
-    const productName = checkedFields.prdlst_nm || '';
-    const ingredientInfo = checkedFields.ingredient_info || '';
-    
-    // 농수산물 목록 (constants.js에서 가져오기)
-    const farmSeafoodItems = window.LABEL_CONSTANTS?.farmSeafoodItems || window.farmSeafoodItems || [];
-
-    // 제품명에 포함된 농수산물명 추출 (긴 이름부터 처리)
-    const foundItems = farmSeafoodItems
-        .filter(item => productName.includes(item))
-        .sort((a, b) => b.length - a.length);
-
-    if (foundItems.length === 0) {
-        return { ok: true, errors: [], suggestions: [] };
-    }
-
-    foundItems.forEach(item => {
-        // '특정성분 함량' 필드에 해당 성분명과 함량(%)이 모두 포함되어 있는지 확인
-        const complianceRegex = new RegExp(`${item}[^,]*\\d+(\\.\\d+)?\\s*%`);
-        const isCompliant = complianceRegex.test(ingredientInfo);
-
-        if (!isCompliant) {
-            errors.push(`제품명에 사용된 '${item}'의 함량을 '특정성분 함량' 항목에 표시하세요 (예: ${item} 100%).`);
-        }
-    });
-
-    return {
-        ok: errors.length === 0,
-        errors,
-        suggestions
-    };
-}
+/* [제거] checkFarmSeafoodContentDisplay — 농수산물 함량 표시 검사. 같은 이유로 호출자 0. */
 
 // 필수 문구 및 식품유형별 검증 (HTML에서 이동)
 window.checkFoodTypePhrasesUnified = function checkFoodTypePhrasesUnified() {
@@ -4596,29 +4498,7 @@ window.setAllFieldsWidth = function(width) {
 };
 
 // 필드 내용 분석 함수
-function analyzeFieldContents(data) {
-    const analysis = [];
-    
-    Object.keys(data).forEach(key => {
-        const value = data[key];
-        if (!value) return;
-        
-        const textContent = typeof value === 'string' ? value : String(value);
-        const length = textContent.length;
-        const lines = textContent.split('\n').length;
-        const wordCount = textContent.split(/\s+/).length;
-        
-        analysis.push({
-            key: key,
-            length: length,
-            lines: lines,
-            wordCount: wordCount,
-            score: length + (lines * 20) // 줄바꿈에 가중치 부여
-        });
-    });
-    
-    return analysis;
-}
+/* [제거] analyzeFieldContents — 항목 내용 길이 분석. 자동 배치가 폭 설정(50%/100%)만 보게 되면서 호출자 0. */
 
 // 스마트 자동 최적화 함수
 window.autoOptimizeLayout = function(options = {}) {
@@ -4778,12 +4658,7 @@ window.resetFieldOrder = function() {
 };
 
 // 레이아웃 모드 초기화
-window.resetLayoutMode = function() {
-    fieldOrderData.layoutMode = 'vertical';
-    saveFieldOrder();
-    initializeLayoutButtons();
-    renderTableWithCurrentData();
-};
+/* [제거] resetLayoutMode — 배치를 세로로 되돌리는 함수. 화면에 그 단추가 없다. 호출자 0. */
 
 // 필드 순서 저장
 function saveFieldOrder() {
