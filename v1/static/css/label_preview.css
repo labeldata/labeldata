@@ -1133,6 +1133,20 @@ tbody.layout-vertical tr td {
     width: var(--label-col-width, 90px);
 }
 
+/* 값 칸도 적어 둔다 — 남는 폭을 브라우저가 나누게 두면 안 된다.
+
+   첫 줄이 `<th> + <td colspan=3>` (한 줄을 통째로 쓰는 항목)일 때,
+   table-layout: fixed 는 폭 없는 열을 첫 줄의 칸에서 얻으려 하는데 그
+   칸 하나가 세 열을 덮고 있다. 거기에 `max-width: 0` 까지 걸려 있어
+   2단에서 값 칸이 한 글자 폭으로 찌부러졌다. */
+.preview-table col.pv-col-value {
+    width: calc(100% - var(--label-col-width, 90px));
+}
+
+.preview-table.pv-2col col.pv-col-value {
+    width: calc((100% - 2 * var(--label-col-width, 90px)) / 2);
+}
+
 /* 세로 배치에서 th 를 25% 로 잡던 옛 규칙은 colgroup 과 싸운다 */
 .preview-table th {
     width: auto;

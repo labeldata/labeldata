@@ -5346,8 +5346,27 @@ function applyColumnGroup(tbody, layoutMode) {
         const label = document.createElement('col');
         label.className = 'pv-col-label';
         group.appendChild(label);
-        group.appendChild(document.createElement('col'));
+        /*
+         * **값 칸도 폭을 명시한다.**
+         *
+         * 예전에는 여기에 맨 <col> 을 넣고 남는 폭을 브라우저가 알아서
+         * 나누게 두었다. 그런데 이 표의 첫 줄은 한 줄을 통째로 쓰는 항목이
+         * 자주 온다 — `<th> + <td colspan=3>` 이다. table-layout: fixed 는
+         * 폭이 없는 열을 **첫 줄의 칸**에서 얻으려 하고, colspan 칸 하나가
+         * 세 열을 덮고 있으면 그 셋이 무엇을 가져갈지가 브라우저에 달린다.
+         * 게다가 그 칸에는 `max-width: 0` 이 걸려 있다(2단은 칸이 좁아서
+         * 긴 토막이 표 밖으로 흐르지 않게 하려고). 그래서 2단에서 값 칸이
+         * 한 글자 폭으로 찌부러졌다.
+         *
+         * 네 열을 다 적어 두면 나눌 것이 남지 않는다 — 폭은
+         * label_preview.css 가 --label-col-width 하나에서 계산한다.
+         */
+        const value = document.createElement('col');
+        value.className = 'pv-col-value';
+        group.appendChild(value);
     }
+    // 값 칸 폭 계산식이 1단·2단에서 다르다. 표가 그 사실을 들고 있는다.
+    table.classList.toggle('pv-2col', pairs === 2);
     table.insertBefore(group, table.firstChild);
 }
 

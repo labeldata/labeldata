@@ -11058,3 +11058,50 @@ class 이단_배치의_열_너비(TestCase):
         head = self.body.index('if (!usable) {')
         tail = self.body.index('}', self.body.index('requestAnimationFrame', head))
         self.assertIn("cell.style.whiteSpace = ''", self.body[head:tail])
+
+
+class 표의_네_열을_다_적어_둔다(TestCase):
+    """
+    값 칸에 폭을 안 주고 남는 폭을 브라우저가 나누게 두었다.
+
+    이 표의 첫 줄은 한 줄을 통째로 쓰는 항목이 자주 온다 —
+    `<th> + <td colspan=3>`. table-layout: fixed 는 폭 없는 열을 **첫 줄의
+    칸**에서 얻으려 하는데, colspan 칸 하나가 세 열을 덮고 있으면 그 셋이
+    무엇을 가져갈지가 브라우저에 달린다. 게다가 그 칸에는 `max-width: 0`
+    이 걸려 있다(2단은 칸이 좁아 긴 토막이 표 밖으로 흐르지 않게 하려고).
+    그래서 2단에서 값 칸이 한 글자 폭으로 찌부러졌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR)
+        js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        head = js.index('function applyColumnGroup(tbody, layoutMode)')
+        self.fn = js[head:js.index('function renderVerticalLayout', head)]
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+
+    def test_값_칸에도_class_를_준다(self):
+        self.assertIn("value.className = 'pv-col-value'", self.fn)
+        self.assertNotIn("group.appendChild(document.createElement('col'))", self.fn)
+
+    def test_짝수만큼_넣는다(self):
+        # label 하나에 value 하나. 짝이 안 맞으면 열이 밀린다.
+        self.assertEqual(self.fn.count("group.appendChild(label)"), 1)
+        self.assertEqual(self.fn.count("group.appendChild(value)"), 1)
+        self.assertIn("layoutMode === 'horizontal' ? 2 : 1", self.fn)
+
+    def test_2단인지를_표가_들고_있는다(self):
+        # colgroup 의 col 은 tbody 의 class 로 고를 수 없다.
+        self.assertIn("table.classList.toggle('pv-2col', pairs === 2)", self.fn)
+
+    def test_폭은_항목명_칸_하나에서_계산된다(self):
+        self.assertIn(
+            'width: calc(100% - var(--label-col-width, 90px));', self.css)
+        self.assertIn(
+            'width: calc((100% - 2 * var(--label-col-width, 90px)) / 2);', self.css)
+
+    def test_2단_규칙이_1단_규칙보다_뒤에_온다(self):
+        one = self.css.index('.preview-table col.pv-col-value')
+        two = self.css.index('.preview-table.pv-2col col.pv-col-value')
+        self.assertLess(one, two, '앞에 오면 1단 규칙이 2단을 덮는다')
