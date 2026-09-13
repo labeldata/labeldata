@@ -2828,6 +2828,29 @@ def preview_popup(request):
             'label_data': _script_json(label_data),
             # 표의 항목 배치(순서·폭·세로/2단). 라벨에 붙어 있어야 다른 사람도
             # 같은 모양을 본다 — 예전에는 브라우저 localStorage 에만 있었다.
+            # 미리보기 설정. **손으로 JSON 을 조립하지 않는다.**
+            # 예전에는 템플릿이 `{ "width": "{{ label.prv_width }}", … }` 를
+            # 직접 지었는데, 그 안의 분리배출마크 추가 문구는 사용자 자유
+            # 문자열이다. Django 자동 이스케이프는 역슬래시와 줄바꿈을 건드리지
+            # 않으므로 문구에 그것이 하나만 들어가도 `JSON.parse` 가 던지고,
+            # try/catch 가 삼켜 **설정이 통째로 기본값으로 돌아갔다** —
+            # 가로·글자 크기·자간·줄간격·글꼴이 저장돼 있는데도 화면이 못 읽었다.
+            # 큰따옴표는 `&quot;` 로 인쇄되기까지 했다.
+            'preview_settings': _script_json({
+                'width': label.prv_width or '10',
+                'length': label.prv_length or '11',
+                'font': label.prv_font or 'Noto Sans KR',
+                'font_size': label.prv_font_size or '10',
+                'letter_spacing': label.prv_letter_spacing or '-5',
+                'line_spacing': label.prv_line_spacing or '1.2',
+                'recycling_mark': {
+                    'enabled': label.prv_recycling_mark_enabled == 'Y',
+                    'type': label.prv_recycling_mark_type or '',
+                    'position_x': label.prv_recycling_mark_position_x or '0',
+                    'position_y': label.prv_recycling_mark_position_y or '0',
+                    'text': label.prv_recycling_mark_text or '',
+                },
+            }),
             'display_checked': _script_json(preview_display_checked(label)),
             'field_layout': _script_json(label.prv_field_layout or {}),
             # 규정 검증(AI) 버튼을 보일 것인가. 기능은 그대로 두고 버튼만 감춘다

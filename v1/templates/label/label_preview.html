@@ -435,23 +435,12 @@
   </div>
 
   <!-- Hidden data passed from backend -->
-  <script id="preview-settings-data" type="application/json">
-    {
-      "width": "{{ label.prv_width|default:'10' }}",
-      "length": "{{ label.prv_length|default:'11' }}",
-      "font": "{{ label.prv_font|default:'Noto Sans KR' }}",
-      "font_size": "{{ label.prv_font_size|default:'10' }}",
-      "letter_spacing": "{{ label.prv_letter_spacing|default:'-5' }}",
-      "line_spacing": "{{ label.prv_line_spacing|default:'1.2' }}",
-      "recycling_mark": {
-        "enabled": {% if label.prv_recycling_mark_enabled == 'Y' %}true{% else %}false{% endif %},
-        "type": "{{ label.prv_recycling_mark_type|default:'' }}",
-        "position_x": "{{ label.prv_recycling_mark_position_x|default:'0' }}",
-        "position_y": "{{ label.prv_recycling_mark_position_y|default:'0' }}",
-        "text": "{{ label.prv_recycling_mark_text|default:'' }}"
-      }
-    }
-  </script>
+  {% comment %}
+    손으로 조립하지 않는다 — 서버가 만든 JSON 을 그대로 싣는다.
+    마크 추가 문구에 역슬래시나 줄바꿈이 하나만 들어가도 JSON.parse 가 던져
+    설정이 통째로 기본값으로 돌아갔다.
+  {% endcomment %}
+  <script id="preview-settings-data" type="application/json">{{ preview_settings|safe }}</script>
   {% comment %}
     영양성분 값. preview_popup 이 진작부터 context 로 넘기고 있었는데 이 자리가
     없어서 화면이 읽을 수가 없었다. 그 탓에 초기화 코드가 통째로 멈춰 있었다

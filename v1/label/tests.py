@@ -6933,10 +6933,34 @@ class NutritionOnLabelTests(TestCase):
         self.assertNotIn("data-bs-target') === '#nutrition-tab'", block)
 
     def test_세로_길이에_영양정보_높이가_들어간다(self):
-        """빼고 재면 인쇄물이 잘린다."""
+        """
+        빼고 재면 인쇄물이 잘린다.
+
+        예전에는 `calculateHeight` 가 표 높이에 `nutritionHeight` 를 손으로
+        더했다. 지금은 재는 곳이 인라인 `updatePreviewStyles` 한 곳이고
+        `#previewContent` 전체를 재는데, **영양정보 표가 그 안에 있으므로**
+        같은 것이 포함된다. 지키는 것은 그대로다 — 재는 방식만 바뀌었다.
+        (두 벌이던 시절에는 cm 환산 상수가 서로 달라 33% 어긋났다.)
+        """
         head = self.js.index('function calculateHeight')
-        block = self.js[head:head + 900]
-        self.assertIn('nutritionHeight', block)
+        block = self.js[head:head + 200]
+        self.assertIn('updatePreviewStyles()', block)
+
+        html = self.html if hasattr(self, 'html') else None
+        if html is None:
+            from pathlib import Path
+
+            from django.conf import settings as dj
+
+            html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                    ).read_text(encoding='utf-8')
+        self.assertIn('previewContent.scrollHeight', html)
+        # 영양정보 표가 재는 상자 **안**에 있어야 한다
+        start = html.index('id="previewContent"')
+        nutrition = html.index('id="nutritionPreview"')
+        self.assertGreater(nutrition, start)
+        self.assertLess(html.count('</div>', start, nutrition),
+                        html.count('<div', start, nutrition))
 
     def test_영양성분_탭은_같은_길을_안내한다(self):
         self.assertIn('한글표시사항도안', self.editor)
@@ -19245,3 +19269,130 @@ class 인쇄되는_표와_화면의_표가_같은_규칙을_쓴다(SimpleTestCas
                                 text.index(consumer),
                                 '%s 에서 공유 파일이 뒤에 실린다' % path.name)
         self.assertGreaterEqual(checked, 3)
+
+
+class 미리보기_설정이_문구_하나로_기본값이_되지_않는다(TestCase):
+    """
+    `preview-settings-data` JSON 을 템플릿이 **손으로 조립했다** —
+    `{ "width": "{{ label.prv_width }}", … }`.
+
+    그 안의 분리배출마크 추가 문구는 사용자 자유 문자열이다. Django 자동
+    이스케이프는 `"`·`&`·`<` 만 엔티티로 바꾸고 **역슬래시와 줄바꿈은 그대로
+    둔다.** 하나만 들어가도 `JSON.parse` 가 던지고, try/catch 가 삼켜
+    `settings = {}` 가 된다.
+
+    사용자가 보는 것: 가로·글자 크기·자간·줄간격·글꼴이 **전부 기본값으로
+    돌아간다.** 저장은 되어 있는데 화면이 못 읽는 것이라 원인을 짐작할 수
+    없다. 큰따옴표를 넣으면 마크 문구가 `&quot;` 로 인쇄되기까지 했다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='prvjson', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='설정', delete_YN='N',
+            prv_width='12', prv_font_size='9', prv_line_spacing='1.5')
+
+    def _settings(self):
+        import json
+        import re
+
+        r = self.client.get(reverse('label:preview_popup'),
+                            {'label_id': self.label.my_label_id})
+        self.assertEqual(r.status_code, 200)
+        html = r.content.decode('utf-8')
+        m = re.search(
+            r'<script id="preview-settings-data"[^>]*>(.*?)</script>', html, re.S)
+        self.assertIsNotNone(m, 'preview-settings-data 블록이 없다')
+        return json.loads(m.group(1))
+
+    def test_평범한_경우에_값이_그대로_온다(self):
+        got = self._settings()
+        self.assertEqual(got['width'], '12')
+        self.assertEqual(got['font_size'], '9')
+        self.assertEqual(got['line_spacing'], '1.5')
+
+    def test_역슬래시가_든_문구가_JSON_을_깨지_않는다(self):
+        self.label.prv_recycling_mark_text = r'플라스틱\PET 분리'
+        self.label.save(update_fields=['prv_recycling_mark_text'])
+        got = self._settings()
+        self.assertEqual(got['recycling_mark']['text'], r'플라스틱\PET 분리')
+        self.assertEqual(got['width'], '12')      # 나머지 설정도 살아 있다
+
+    def test_줄바꿈이_든_문구도_괜찮다(self):
+        self.label.prv_recycling_mark_text = '첫 줄' + chr(10) + '둘째 줄'
+        self.label.save(update_fields=['prv_recycling_mark_text'])
+        got = self._settings()
+        self.assertEqual(got['recycling_mark']['text'],
+                         '첫 줄' + chr(10) + '둘째 줄')
+
+    def test_큰따옴표가_엔티티로_인쇄되지_않는다(self):
+        self.label.prv_recycling_mark_text = '"에코" 표시'
+        self.label.save(update_fields=['prv_recycling_mark_text'])
+        got = self._settings()
+        self.assertEqual(got['recycling_mark']['text'], '"에코" 표시')
+
+    def test_스크립트를_닫는_문구도_막는다(self):
+        """자유 문자열이므로 </script> 가 들어올 수 있다."""
+        self.label.prv_recycling_mark_text = '</script><script>x=1</script>'
+        self.label.save(update_fields=['prv_recycling_mark_text'])
+        got = self._settings()
+        self.assertEqual(got['recycling_mark']['text'],
+                         '</script><script>x=1</script>')
+
+    def test_템플릿이_더는_손으로_짓지_않는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                ).read_text(encoding='utf-8')
+        i = html.index('id="preview-settings-data"')
+        block = html[i:i + 400]
+        self.assertNotIn('"width":', block)
+        self.assertIn('preview_settings', block)
+
+
+class 세로_길이를_재는_곳이_하나다(SimpleTestCase):
+    """
+    `#heightInput` 과 `#areaDisplay` 에 쓰는 코드가 **두 벌**이었고 cm 환산
+    상수가 서로 달랐다 — JS 는 `/ 28.35`, 인라인은 `/ 37.795`.
+
+    `offsetHeight`·`scrollHeight` 는 CSS 픽셀이므로 1cm = 37.795px 가 맞다.
+    28.35 는 pt/cm 이라 JS 쪽이 약 **33% 큰 값**을 냈다. 둘 다 같은 네
+    입력(가로·글자크기·자간·줄간격)에 걸려 있어서, 어느 쪽이 마지막에
+    돌았느냐에 따라 값이 달라졌다.
+
+    그 값은 그대로 흘러간다 — 「설정 저장」이 `#heightInput` 을 읽어
+    DB(prv_length)에 넣고, PDF 내보내기가 그것을 페이지 높이로 쓴다.
+    `pdf.addImage` 는 비율을 지키지 않으므로 **인쇄물이 세로로 늘어난다.**
+    형식도 달랐다: 한쪽은 `Math.ceil` 한 정수, 다른 쪽은 "18.5 cm".
+    """
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return _strip_comments(
+            (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js')
+            .read_text(encoding='utf-8'))
+
+    def test_틀린_상수가_코드에_없다(self):
+        self.assertNotIn('28.35', self._js())
+
+    def test_재는_함수가_인라인으로_넘긴다(self):
+        js = self._js()
+        i = js.index('function calculateHeight()')
+        block = js[i:i + 200]
+        self.assertIn('updatePreviewStyles()', block)
+        self.assertNotIn('offsetHeight', block)
+
+    def test_인라인_쪽이_옳은_상수를_쓴다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                ).read_text(encoding='utf-8')
+        self.assertIn('CM_TO_PX = 37.795', html)

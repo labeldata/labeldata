@@ -3062,22 +3062,24 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // 세로 길이 계산
+    /*
+     * 세로 길이·정보표시면 면적은 **인라인의 updatePreviewStyles 한 곳에서만**
+     * 잰다.
+     *
+     * 예전에는 여기에도 한 벌이 있었고 cm 환산 상수가 서로 달랐다 —
+     * 여기는 `/ 28.35`, 인라인은 `/ 37.795`. `offsetHeight`·`scrollHeight` 는
+     * CSS 픽셀이므로 1cm = 37.795px 가 맞고, 28.35 는 pt/cm 이다. 이쪽이
+     * 약 33% 큰 값을 냈다.
+     *
+     * 둘 다 같은 네 입력(가로·글자크기·자간·줄간격)에 걸려 있고 둘 다
+     * `#heightInput`·`#areaDisplay` 에 쓰므로, **어느 쪽이 마지막에 돌았느냐**
+     * 에 따라 값이 달라졌다. 그 값은 그대로 흘러간다 — 「설정 저장」은
+     * `#heightInput` 을 읽어 DB(prv_length)에 넣고, PDF 내보내기는 그것을
+     * 페이지 높이로 쓴다(비율을 지키지 않으므로 **인쇄물이 세로로 늘어난다**).
+     * 형식도 달랐다: 여기는 `Math.ceil` 한 정수, 인라인은 "18.5 cm".
+     */
     function calculateHeight() {
-        const width = parseFloat(document.getElementById('widthInput').value);
-        const fontSize = parseFloat(document.getElementById('fontSizeInput').value);
-        const letterSpacing = parseInt(document.getElementById('letterSpacingInput').value);
-        const lineHeight = parseFloat(document.getElementById('lineHeightInput').value);
-        const table = document.getElementById('previewTableBody');
-        // 영양정보 표는 표 아래에 따로 붙는다. 빼고 재면 인쇄물이 잘린다.
-        const nutrition = document.getElementById('nutritionPreview');
-        const nutritionHeight = (nutrition && nutrition.style.display !== 'none')
-            ? nutrition.offsetHeight : 0;
-        const contentHeight = table.offsetHeight + nutritionHeight + 80;
-        const totalHeight = contentHeight / 28.35;
-        const heightInput = document.getElementById('heightInput');
-        heightInput.value = Math.ceil(totalHeight);
-        updateArea();
+        updatePreviewStyles();
     }
 
     // 초기화
