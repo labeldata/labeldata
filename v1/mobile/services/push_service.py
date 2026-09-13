@@ -402,8 +402,16 @@ def backfill_alerts_for_rule(rule) -> dict:
 
         # ② 기기 푸시 로그 — 앱 알림함용. 기기가 없으면 이 단계는 통째로 건너뛴다.
         for device in target_devices:
-            target_trim = max(1, max_noti - len(to_create))
-            _trim_notifications(device, target_trim)
+            # **알림함을 통째로 비우지 않는다.**
+            #
+            # 예전에는 `max(1, max_noti - len(to_create))` 였다. 소급이 100건
+            # 걸리면 그 값이 1 이 되어 `_trim_notifications(device, 1)` 이
+            # 기존 알림을 **0개까지** 지웠다. 흔한 낱말("우유")을 키워드로
+            # 넣는 순간, 안 읽은 "내 제품 부적합" 을 포함한 알림 100건이
+            # 알린 적 없이 사라졌다.
+            #
+            # 상한은 상한이다. 넘치면 그때 오래된 것부터 밀리면 된다.
+            _trim_notifications(device, max_noti)
             for news in to_create:
                 if PushNotificationLog.objects.filter(device=device, news=news).exists():
                     continue
@@ -503,40 +511,48 @@ def _build_immediate_rule_message(rule, logs: list) -> tuple[str, str]:
 
 
 def _trim_notifications(device, max_count: int) -> None:
-    """기기의 알림 수가 max_count 이상이면 가장 오래된 것부터 삭제."""
+    """
+    기기의 알림함이 `max_count` 를 넘지 않게 오래된 것부터 지운다.
+
+    **무엇을 먼저 지우는가가 중요하다.** 예전에는 `trigger_type='keyword'`
+    가 **아닌 것을 먼저** 지웠다. 그러면 나이와 무관하게 "내 제품이 부적합에
+    걸렸다" 는 알림 — 이 앱에서 가장 중요한 것 — 이 몇 달 된 키워드 알림보다
+    먼저 사라졌다. 독스트링은 "가장 오래된 것부터" 라고 적혀 있었는데 코드는
+    반대였다.
+
+    지우는 차례:
+      1. 읽은 키워드 알림 (오래된 것부터)
+      2. 읽은 그 밖의 알림
+      3. 안 읽은 키워드 알림
+      4. 안 읽은 제품·원료 알림  ← 마지막까지 지키는 것
+    """
     from v1.mobile.models import PushNotificationLog
 
     current = PushNotificationLog.objects.filter(device=device).count()
-    if current < max_count:
-        return
-
     excess = current - max_count + 1
-
-    non_kw_ids = list(
-        PushNotificationLog.objects
-        .filter(device=device)
-        .exclude(trigger_type='keyword')
-        .order_by('created_at')
-        .values_list('id', flat=True)[:excess]
-    )
-    if non_kw_ids:
-        PushNotificationLog.objects.filter(id__in=non_kw_ids).delete()
-        excess -= len(non_kw_ids)
-
     if excess <= 0:
         return
 
-    kw_ids = list(
-        PushNotificationLog.objects
-        .filter(device=device, trigger_type='keyword')
-        .order_by('created_at')
-        .values_list('id', flat=True)[:excess]
+    tiers = (
+        {'is_read': True,  'trigger_type': 'keyword'},
+        {'is_read': True},
+        {'is_read': False, 'trigger_type': 'keyword'},
+        {},
     )
-    if kw_ids:
-        PushNotificationLog.objects.filter(id__in=kw_ids).delete()
+    for tier in tiers:
+        if excess <= 0:
+            return
+        ids = list(
+            PushNotificationLog.objects
+            .filter(device=device, **tier)
+            .order_by('created_at')
+            .values_list('id', flat=True)[:excess]
+        )
+        if not ids:
+            continue
+        PushNotificationLog.objects.filter(id__in=ids).delete()
+        excess -= len(ids)
 
-
-# ── FCM 공통 유틸 ─────────────────────────────────────────────────────────────
 
 def _get_fcm_access_token() -> str:
     """Service Account JSON으로 FCM v1 API용 OAuth2 액세스 토큰 발급."""

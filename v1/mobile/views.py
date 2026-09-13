@@ -5,6 +5,8 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from rest_framework import status
+from django.db import IntegrityError
+from django_ratelimit.decorators import ratelimit
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -32,8 +34,76 @@ def _get_device_or_404(device_id):
         return None
 
 
+def device_access_error(request, device):
+    """
+    이 요청이 이 기기의 자료에 닿아도 되는가. 안 되면 할 말을 돌려준다.
+
+    ── 지금 인증은 사실상 device_id 하나다 ────────────────────────────────
+
+    `login` 이 JWT 를 발급하는데 **이 앱의 어느 뷰도 그것을 검사하지
+    않는다** — `request.user` 가 `v1/mobile/views.py` 에 한 번도 나오지
+    않았다. 소유자 판정을 전부 URL 의 `device_id` → `AppDevice.user` 로만
+    했다. `device_id` 는 경로에 들어 있어 프록시·액세스 로그·Referer 에
+    그대로 남는 값인데 그것이 유일한 자격증명이었다.
+
+    게다가 그 값을 **클라이언트가 정한다.** 길이·형식 검사가 없어 일부
+    기기가 Android `Build.ID` 를 쓰고 있고(그래서 아래 탐지 코드가 있다),
+    그 값은 같은 모델·같은 펌웨어면 모두 같다 — 악의 없이도 이미 서로의
+    알림함이 보인다.
+
+    ── 왜 기본값이 꺼짐인가 ──────────────────────────────────────────────
+
+    막으려면 앱이 Authorization 헤더를 보내야 한다. 지금 배포된 앱이 그렇게
+    하는지 이 저장소만으로는 알 수 없다. 켜 놓고 안 보내면 **모든 사용자가
+    그 자리에서 앱을 못 쓴다.**
+
+    그래서 판정은 여기 두되 기본은 끈다. 앱이 헤더를 싣는 판을 배포한 뒤
+    `.env` 에 `MOBILE_REQUIRE_AUTH=True` 를 넣으면 그날부터 막힌다.
+    **토큰을 보낸 요청은 지금도 검사한다** — 남의 토큰으로 남의 기기를
+    만지는 길은 오늘 닫힌다.
+    """
+    from django.conf import settings as _settings
+
+    if device is None or device.user_id is None:
+        return None                      # 비회원 기기 — 기기 자체가 신원이다
+
+    user = getattr(request, 'user', None)
+    if user is not None and getattr(user, 'is_authenticated', False):
+        if user.pk != device.user_id:
+            return '이 기기의 자료에 접근할 권한이 없습니다.'
+        return None
+
+    if getattr(_settings, 'MOBILE_REQUIRE_AUTH', False):
+        return '로그인이 필요합니다.'
+    return None
+
+
+def _rule_quota_error(owner_user, device):
+    """
+    키워드를 하나 더 **활성**으로 둘 수 있는가. 안 되면 할 말을 돌려준다.
+
+    등록(POST)과 다시 켜기(PATCH) 두 길이 같은 것을 물어야 한다. 예전에는
+    POST 에만 있어서, 만들고 끄기를 반복한 뒤 전부 켜면 상한이 사라졌다.
+    """
+    from django.conf import settings as _settings
+
+    if owner_user:
+        limit = _settings.MOBILE_MEMBER_MAX_RULES
+        active = AlertRule.objects.filter(user=owner_user, is_active=True).count()
+    else:
+        limit = _settings.MOBILE_GUEST_MAX_RULES
+        active = device.rules.filter(user__isnull=True, is_active=True).count()
+    if active >= limit:
+        return '최대 %d개까지 등록 가능합니다.' % limit
+    return None
+
+
 # ── 기기 등록 ────────────────────────────────────────────────────────────────
 
+# 기기를 무제한으로 만들 수 있으면 게스트 키워드·보관함 한도가 뜻을 잃는다
+# (한도가 기기당이라 기기를 늘리면 늘어난다). 사람이 쓰는 속도를 넉넉히
+# 넘는 선에서 끊는다.
+@ratelimit(key='ip', rate='30/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_device(request):
@@ -73,6 +143,10 @@ def register_device(request):
 
 # ── 인증 ─────────────────────────────────────────────────────────────────────
 
+# 웹 로그인은 막혀 있는데(user_management.views.login_view 의 20/m) **같은
+# 자격증명을 쓰는 앱 로그인은 안 막혀 있었다.** 같은 집 뒷문에 자물쇠를 안
+# 단 셈이라, 초당 수백 번 비밀번호를 시도해도 아무것도 세지 않았다.
+@ratelimit(key='ip', rate='20/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
@@ -158,35 +232,37 @@ def logout(request):
 
         AppDevice.objects.filter(device_id=device_id).update(user=None)
 
-        # 비회원 한도(MOBILE_GUEST_MAX_RULES)를 초과하는 키워드를 비활성화
+        # ── 로그아웃은 **이 기기의 연결을 끊는 일**이다 ────────────────────
+        #
+        # 예전에는 여기서 `AlertRule.objects.filter(user=user_obj)` 로
+        # **그 계정의 키워드 전체**를 훑어, 비회원 한도(5개)를 넘는 것을
+        # `is_active=False` 로 껐다. 세 가지가 한꺼번에 잘못됐다.
+        #
+        #   · 범위 — device 조건이 없어, 폰 두 대 쓰는 사람이 한 대에서
+        #     로그아웃하면 **다른 폰과 웹의 키워드까지** 꺼졌다
+        #   · 되돌릴 길 — 껐다가 다시 켜 주는 코드가 앱에도 웹에도 없다.
+        #     로그인해도 비회원 규칙만 승격시킬 뿐이다. 회원이 등록한
+        #     키워드 25개가 사실상 사라지고 사용자가 복구할 수 없었다
+        #   · 알림 없음 — 목록에는 남아 있고 알림만 안 온다. 원인을
+        #     짐작할 수 없다
+        #
+        # 회원 규칙은 **계정의 것**이지 기기의 것이 아니다. 기기를 떼는
+        # 일이 계정 자료를 지울 이유가 없다. 손대지 않는다.
+        #
+        # 비회원 규칙은 그 기기에 매달려 있으므로 한도가 뜻을 갖는다.
         guest_max = settings.MOBILE_GUEST_MAX_RULES
-
-        if user_obj:
-            # 회원 전용(user-based) 규칙에서 초과분 비활성화
-            user_rules_qs = AlertRule.objects.filter(
-                user=user_obj, is_active=True
-            ).order_by('created_at')
-            excess_ids = list(user_rules_qs.values_list('id', flat=True)[guest_max:])
-            if excess_ids:
-                AlertRule.objects.filter(id__in=excess_ids).update(is_active=False)
-                logger.info(
-                    '[LOGOUT] user=%s 초과 키워드 %d개 비활성화',
-                    user_obj.pk, len(excess_ids),
-                )
-        else:
-            # 비회원(device-based) 규칙 초과분 비활성화 (user 없이 등록된 경우)
-            excess_ids = list(
-                device.rules
-                .filter(is_active=True, user__isnull=True)
-                .order_by('created_at')
-                .values_list('id', flat=True)[guest_max:]
+        excess_ids = list(
+            device.rules
+            .filter(is_active=True, user__isnull=True)
+            .order_by('created_at')
+            .values_list('id', flat=True)[guest_max:]
+        )
+        if excess_ids:
+            device.rules.filter(id__in=excess_ids).update(is_active=False)
+            logger.info(
+                '[LOGOUT] device_id=%s 비회원 초과 키워드 %d개 비활성화',
+                device_id, len(excess_ids),
             )
-            if excess_ids:
-                device.rules.filter(id__in=excess_ids).update(is_active=False)
-                logger.info(
-                    '[LOGOUT] device_id=%s 초과 키워드 %d개 비활성화',
-                    device_id, len(excess_ids),
-                )
     return Response({'detail': 'ok'})
 
 
@@ -205,7 +281,15 @@ def news_list(request):
     if q:
         qs = qs.filter(Q(product_name__icontains=q) | Q(company_name__icontains=q))
 
-    page = max(int(request.query_params.get('page', 1)), 1)
+    # 주소창에 무엇이든 올 수 있다. `int('abc')` 가 그대로 올라가면 DRF 가
+    # 잡지 않아 **HTML 500** 이 나가고, JSON 을 기대하는 앱은 파싱에서 죽는다.
+    # 웹에서 같은 자리를 고쳤는데(`?id=abc`) 앱은 안 봤다.
+    try:
+        page = max(int(request.query_params.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+    # 아주 큰 수는 그대로 OFFSET 으로 들어가 드라이버에서 터진다
+    page = min(page, 100000)
     page_size = 20
     offset = (page - 1) * page_size
     total = qs.count()
@@ -238,6 +322,10 @@ def rules_list(request, device_id):
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+
     owner_user = device.user  # 로그인이면 User, 비회원이면 None
 
     if request.method == 'GET':
@@ -248,15 +336,9 @@ def rules_list(request, device_id):
         return Response(AlertRuleSerializer(rules, many=True).data)
 
     # POST — 신규 키워드 등록
-    max_rules = settings.MOBILE_MEMBER_MAX_RULES if owner_user else settings.MOBILE_GUEST_MAX_RULES
-
-    if owner_user:
-        active_count = AlertRule.objects.filter(user=owner_user, is_active=True).count()
-    else:
-        active_count = device.rules.filter(user__isnull=True, is_active=True).count()
-
-    if active_count >= max_rules:
-        return Response({'error': f'최대 {max_rules}개까지 등록 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+    over = _rule_quota_error(owner_user, device)
+    if over:
+        return Response({'error': over}, status=status.HTTP_400_BAD_REQUEST)
 
     serializer = AlertRuleSerializer(data=request.data)
     if serializer.is_valid():
@@ -286,15 +368,25 @@ def rules_list(request, device_id):
         if not created:
             return Response({'error': '이미 등록된 키워드입니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # 웹의 같은 자리는 이미 고쳤다(regulatory.views.alert_rules_api).
+        # 삼키면 created=0 이 되고 앱은 그것을 "일치하는 정보가 없습니다" 로
+        # 읽는다 — 실패와 0건은 사용자에게 전혀 다른 말이다.
         backfill_result = {'created': 0, 'previews': [], 'log_ids': []}
+        backfill_failed = False
         try:
             backfill_result = backfill_alerts_for_rule(rule)
             send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
         except Exception:
-            pass
+            backfill_failed = True
+            logger.exception('[키워드 소급] rule=%s 실패', rule.pk)
         data = dict(AlertRuleSerializer(rule).data)
         data['matched_count'] = backfill_result.get('created', 0)
         data['previews'] = backfill_result.get('previews', [])
+        # 앱이 "최근 90일 기준입니다"·"100건에서 잘렸습니다"·"소급이 실패했다"
+        # 를 말할 수 있어야 한다. 웹은 이미 이 셋을 받는다.
+        data['window_days'] = backfill_result.get('window_days')
+        data['capped'] = backfill_result.get('capped', False)
+        data['backfill_failed'] = backfill_failed
         return Response(data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -305,6 +397,10 @@ def rule_detail(request, device_id, rule_id):
     device = _get_device_or_404(device_id)
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
 
     owner_user = device.user
 
@@ -317,17 +413,48 @@ def rule_detail(request, device_id, rule_id):
         return Response({'error': '규칙을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'PATCH':
+        was_active = rule.is_active
+        was_keyword = rule.keyword
+
+        # **다시 켤 때도 한도를 본다.**
+        #
+        # 한도 검사가 POST 에만 있었다. 30개를 만들고 전부 끈 뒤 또 30개를
+        # 만들고… 를 반복한 다음 전부 PATCH 로 켜면 **활성 규칙 수에 상한이
+        # 사라진다.** 활성 규칙은 수집 때마다 전건 RapidFuzz 매칭을 도므로
+        # 서버 부하로 바로 이어진다.
+        turning_on = (not was_active
+                      and str(request.data.get('is_active', '')).lower()
+                      in ('true', '1'))
+        if turning_on:
+            over = _rule_quota_error(owner_user, device)
+            if over:
+                return Response({'error': over}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = AlertRuleSerializer(rule, data=request.data, partial=True)
-        if serializer.is_valid():
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
             serializer.save()
-            # 규칙을 껐으면(is_active=False) 그 키워드로 예약돼 있던 푸시를 거두고,
-            # 그 키워드로 걸린 매칭도 미확인에서 내린다. 끄고 나서도 낮 배치에
-            # 울리거나 배지에 숫자가 남아 있으면, 껐다는 사실을 못 믿게 된다.
-            if not serializer.instance.is_active:
-                _cancel_rule_pushes(owner_user, device, rule)
-                _mark_rule_matches_read(rule)
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            # unique_together(device/user, category, keyword, match_type) 인데
+            # device·user 가 serializer 필드에 없어 DRF 가 그 검사를 못 붙인다.
+            # 같은 키워드로 바꾸면 IntegrityError 가 그대로 올라가 500 이 났다.
+            return Response({'error': '이미 등록된 키워드입니다.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        rule.refresh_from_db()
+        # 규칙을 껐으면(is_active=False) 그 키워드로 예약돼 있던 푸시를 거두고,
+        # 그 키워드로 걸린 매칭도 미확인에서 내린다. 끄고 나서도 낮 배치에
+        # 울리거나 배지에 숫자가 남아 있으면, 껐다는 사실을 못 믿게 된다.
+        #
+        # **키워드를 바꾼 경우에도 거둔다.** 예전에는 끄기와 지우기에만
+        # 걸려 있었다. 문자열만 바꾸면 옛 키워드로 만들어진 예약 푸시가
+        # 그대로 남아 낮 배치에 나갔고, 본문에는 **더 이상 없는 키워드**가
+        # 찍혔다(trigger_label 은 생성 시점 값이다).
+        if (not rule.is_active) or rule.keyword != was_keyword:
+            _cancel_rule_pushes(owner_user, device, rule)
+            _mark_rule_matches_read(rule)
+        return Response(AlertRuleSerializer(rule).data)
 
     # 지우기 전에 예약된 푸시를 거둔다.
     # PushNotificationLog.rule_triggered 는 SET_NULL 이라, 먼저 지우면 로그가
@@ -366,6 +493,10 @@ def bookmarks_list(request, device_id):
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+
     if request.method == 'GET':
         bookmarks = device.bookmarks.select_related('news').all()
         return Response(BookmarkSerializer(bookmarks, many=True).data)
@@ -375,6 +506,11 @@ def bookmarks_list(request, device_id):
         return Response({'error': f'최대 {max_bookmarks}개까지 저장 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
     news_id = request.data.get('news_id')
+    try:
+        news_id = int(news_id)
+    except (TypeError, ValueError):
+        return Response({'error': '존재하지 않는 뉴스입니다.'},
+                        status=status.HTTP_404_NOT_FOUND)
     try:
         news = RegulatoryNews.objects.get(pk=news_id)
     except RegulatoryNews.DoesNotExist:
@@ -390,6 +526,10 @@ def bookmark_detail(request, device_id, bookmark_id):
     device = _get_device_or_404(device_id)
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
 
     try:
         bookmark = device.bookmarks.get(pk=bookmark_id)
@@ -408,6 +548,10 @@ def notifications_list(request, device_id):
     device = _get_device_or_404(device_id)
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
 
     # 일반 알림 (키워드·제품·원료 매칭)
     # sent_at IS NOT NULL: 배치 발송 완료된 항목만 표시 (신규 키워드 즉시 발송분 포함)
@@ -448,6 +592,10 @@ def notification_read(request, device_id, noti_id):
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+
     noti_type = request.query_params.get('type', 'log')
 
     if noti_type == 'inspection':
@@ -477,6 +625,10 @@ def notification_delete(request, device_id, noti_id):
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+
     noti_type = request.query_params.get('type', 'log')
 
     if noti_type == 'inspection':
@@ -501,6 +653,10 @@ def notification_read_all(request, device_id):
     device = _get_device_or_404(device_id)
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
     # 발송 완료된 항목만 읽음 처리 (sent_at IS NOT NULL)
     device.notifications.filter(is_read=False, sent_at__isnull=False).update(is_read=True)
     if device.user_id:
@@ -576,6 +732,10 @@ def alert_mutes_list(request, device_id):
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+
     user, denied = _mute_user_or_error(device)
     if denied:
         return denied
@@ -644,6 +804,10 @@ def alert_mute_detail(request, device_id, mute_id):
     device = _get_device_or_404(device_id)
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
 
     user, denied = _mute_user_or_error(device)
     if denied:

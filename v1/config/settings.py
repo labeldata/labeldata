@@ -484,6 +484,18 @@ CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:
 # 열어야 하는 곳에서 명시적으로 켠다.
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
 
+# 앱 API 가 **JWT 를 실제로 검사할 것인가.**
+#
+# login 이 토큰을 발급하는데 mobile/views.py 는 그것을 한 번도 보지 않았다 —
+# 소유자 판정을 URL 의 device_id 하나로만 했다. device_id 는 경로에 들어 있어
+# 로그에 그대로 남고, 값을 클라이언트가 정하며, 일부 기기는 같은 모델끼리
+# 겹치는 Android Build.ID 를 쓰고 있다.
+#
+# 켜려면 **앱이 Authorization 헤더를 보내야 한다.** 그 판을 배포한 뒤 여기를
+# True 로 올린다. 그전에 켜면 모든 사용자가 그 자리에서 앱을 못 쓴다.
+# (토큰을 보낸 요청은 이 값과 무관하게 지금도 검사한다.)
+MOBILE_REQUIRE_AUTH = config('MOBILE_REQUIRE_AUTH', default=False, cast=bool)
+
 # 비회원 키워드 최대 수
 MOBILE_GUEST_MAX_RULES = 5
 # 회원 키워드 최대 수
