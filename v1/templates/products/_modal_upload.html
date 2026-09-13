@@ -28,7 +28,15 @@
                                 <button type="button" class="btn v2-btn-sm btn-primary mt-3" id="select-file-btn">
                                     <i class="bi bi-folder2-open me-1"></i>파일 선택
                                 </button>
-                                <input type="file" id="document-upload-input" class="d-none">
+                                {% comment %}
+                                  같은 id 가 _tab_documents.html:1835 에도 있다.
+                                  문서 순서상 그쪽이 이기므로 **이 입력칸은
+                                  아무도 읽지 않는 죽은 마크업**이었다.
+                                  그 탓에 resetUploadForm 의 form.reset() 은
+                                  죽은 칸만 비웠고, 파일 선택창의 확장자
+                                  필터도 저쪽 accept 가 정했다.
+                                  id 를 없애고 저쪽 하나만 남긴다.
+                                {% endcomment %}
                             </div>
                             
                             <div id="selected-file-info" class="smart-preview p-4" style="display: none;">

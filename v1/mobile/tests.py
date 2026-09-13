@@ -178,9 +178,35 @@ class 남의_토큰으로_남의_기기를_만지지_못한다(TestCase):
         from django.test import override_settings
 
         with override_settings(MOBILE_REQUIRE_AUTH=True):
-            self.assertEqual(self._rules('owner-device').status_code, 403)
+            # **401 이다.** 자격증명이 아예 없는 것이라 앱이 토큰을 새로 받아
+            # 다시 시도할 수 있다 — api_client.dart 의 onError 는 401 에서만
+            # _tryRefreshToken 을 부르고, 실패하면 로그인 화면으로 돌린다.
+            self.assertEqual(self._rules('owner-device').status_code, 401)
             # 게스트 기기는 그때도 열려 있어야 한다
             self.assertEqual(self._rules('guest-device').status_code, 200)
+
+    def test_버전_비교가_자리_수에_흔들리지_않는다(self):
+        from v1.mobile.models import AppVersion
+
+        AppVersion.objects.create(platform='android', min_version='1.2',
+                                  latest_version='1.3.0', store_url='x')
+        # 1.2.0 은 1.2 와 같다 — 강제 업데이트가 뜨면 안 된다
+        r = self.client.get('/api/mobile/version-check/?platform=android&version=1.2.0')
+        self.assertFalse(r.json()['force_update'])
+        # 낮은 판은 걸린다
+        r = self.client.get('/api/mobile/version-check/?platform=android&version=1.1.9')
+        self.assertTrue(r.json()['force_update'])
+
+    def test_빌드_번호가_붙어도_판정한다(self):
+        from v1.mobile.models import AppVersion
+
+        AppVersion.objects.create(platform='android', min_version='1.2.0',
+                                  latest_version='1.3.0', store_url='x')
+        # Flutter 의 x.y.z+build — 예전에는 int() 가 던져 조용히 무력화됐다
+        r = self.client.get('/api/mobile/version-check/?platform=android&version=1.1.0%2B17')
+        self.assertTrue(r.json()['force_update'])
+        r = self.client.get('/api/mobile/version-check/?platform=android&version=1.2.0%2B17')
+        self.assertFalse(r.json()['force_update'])
 
     def test_기본값은_꺼짐이다(self):
         """앱이 헤더를 싣기 전에 켜면 모든 사용자가 그 자리에서 못 쓴다."""

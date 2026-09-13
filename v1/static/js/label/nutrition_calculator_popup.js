@@ -525,6 +525,10 @@ function sendNutritionDataToParent() {
       nutritionInputs: formattedData,
       settings: {
         serving_size: baseAmount,
+        /* 화면에 g/ml 고르개가 있는데(html:36) 이 값을 안 보냈다. 부모가
+           `|| 'g'` 로 채우므로, ml 로 표시하는 제품이 계산기 저장 한 번에
+           g 가 됐다. */
+        serving_size_unit: valueOf('serving_size_unit') || 'g',
         units_per_package: servingsPerPackage,
         nutrition_display_unit: style,
         basic_display_type: basicDisplayType,
@@ -1131,23 +1135,41 @@ document.addEventListener('DOMContentLoaded', function() {
   // buildInputForm이 완료될 때까지 충분히 기다린 후 데이터 로드
   setTimeout(() => {
     
-    // DOM 요소가 실제로 생성되었는지 여러 번 확인
+    /* ═══ 이 조건이 영원히 거짓이었다 ══════════════════════════════════
+     *
+     * `sodium`·`carbohydrate` 라는 id 는 없다. 입력칸 id 는 NUTRITION_DATA
+     * 의 키(`natriums`·`carbohydrates`)다 — buildInputForm 이 그렇게 만든다.
+     *
+     * 그래서 `loadDataAfterFormReady()` 가 **한 번도 불리지 않았다**:
+     *   · 부모 폼에서 저장하지 않은 입력이 계산기에 안 실렸다
+     *   · URL 로 실어 보낸 값도 전부 버려졌다
+     *   · 그리고 100ms 타이머가 창이 닫힐 때까지 끝없이 돌았다
+     *
+     * 이름을 손으로 적지 않는다 — 표를 만든 그 목록에서 가져온다.
+     * 그리고 무한정 기다리지 않는다.
+     * ═══════════════════════════════════════════════════════════════════ */
+    const REQUIRED_IDS = Object.keys(window.NUTRITION_DATA || {}).slice(0, 3);
+    let waited = 0;
+
     const waitForFormReady = () => {
-      const testFields = [
-        document.getElementById('calories'),
-        document.getElementById('sodium'), 
-        document.getElementById('carbohydrate')
-      ];
-      
-      const allFieldsReady = testFields.every(field => field !== null);
-      
+      const allFieldsReady = REQUIRED_IDS.length > 0
+        && REQUIRED_IDS.every(id => document.getElementById(id) !== null);
+
       if (allFieldsReady) {
         loadDataAfterFormReady();
-      } else {
-        setTimeout(waitForFormReady, 100);
+        return;
       }
+      waited += 100;
+      if (waited >= 3000) {
+        // 3초를 기다려도 표가 없다면 그 자체가 문제다. 조용히 영원히
+        // 도는 것보다 한 번 시도하고 남기는 편이 낫다.
+        console.warn('[영양성분 계산기] 입력 표가 준비되지 않았습니다', REQUIRED_IDS);
+        loadDataAfterFormReady();
+        return;
+      }
+      setTimeout(waitForFormReady, 100);
     };
-    
+
     waitForFormReady();
   }, 200);
 
@@ -1208,47 +1230,21 @@ function loadDataFromUrlParams() {
     // 영양성분 데이터 로드
     const nutritionInputs = {};
     
-    // 필드명 매핑 (URL 파라미터 -> NUTRITION_DATA 키)
-    const fieldMapping = {
-      'calories': 'calories',
-      'natriums': 'sodium',
-      'carbohydrates': 'carbohydrate', 
-      'sugars': 'sugars',
-      'fats': 'fat',
-      'trans_fats': 'trans_fat',
-      'saturated_fats': 'saturated_fat',
-      'cholesterols': 'cholesterol',
-      'proteins': 'protein',
-      // 추가 영양성분 매핑
-      'dietary_fiber': 'dietary_fiber',
-      'calcium': 'calcium',
-      'iron': 'iron',
-      'potassium': 'potassium',
-      'magnesium': 'magnesium',
-      'zinc': 'zinc',
-      'phosphorus': 'phosphorus',
-      'vitamin_a': 'vitamin_a',
-      'vitamin_d': 'vitamin_d',
-      'vitamin_e': 'vitamin_e',
-      'vitamin_c': 'vitamin_c',
-      'thiamine': 'thiamine',
-      'riboflavin': 'riboflavin',
-      'niacin': 'niacin',
-      'vitamin_b6': 'vitamin_b6',
-      'folic_acid': 'folic_acid',
-      'vitamin_b12': 'vitamin_b12',
-      'selenium': 'selenium',
-      // 추가 영양성분들
-      'pantothenic_acid': 'pantothenic_acid',
-      'biotin': 'biotin',
-      'iodine': 'iodine',
-      'vitamin_k': 'vitamin_k',
-      'copper': 'copper',
-      'manganese': 'manganese',
-      'chromium': 'chromium',
-      'molybdenum': 'molybdenum'
-    };
-    
+    /* ═══ 매핑이 **없는 키**를 향하고 있었다 ═══════════════════════════
+     *
+     * `natriums → sodium`, `carbohydrates → carbohydrate`, `fats → fat` …
+     * 로 적어 두었는데 NUTRITION_DATA 에 그런 키는 없다(constants.js:129-).
+     * 여기서 만든 값이 표에 들어갈 자리를 못 찾는다.
+     *
+     * URL 파라미터 이름과 데이터 키가 같으므로 매핑 자체가 필요 없다.
+     * 목록을 손으로 적으면 성분이 늘 때마다 또 빠진다 — 표를 만든 그
+     * 목록에서 그대로 가져온다.
+     * ═══════════════════════════════════════════════════════════════════ */
+    const fieldMapping = {};
+    Object.keys(window.NUTRITION_DATA || {}).forEach(key => {
+        fieldMapping[key] = key;
+    });
+
     Object.entries(fieldMapping).forEach(([urlKey, dataKey]) => {
       const value = urlParams.get(urlKey);
       if (value && value.trim() !== '') {

@@ -95,6 +95,15 @@
         if (!d.success) { showSnackbar(d.error || '저장하지 못했습니다', 'error'); return false; }
         flash(payload.kind === 'clear' ? '지웠습니다' : '저장했습니다');
         return true;
+      })
+      .catch(function () {
+        /* 이 구역은 **즉시 저장**이라 사용자는 저장된 줄 알기 쉽다.
+           500(HTML 본문)·403 CSRF·네트워크 끊김이면 r.json() 이 던지는데
+           잡는 곳이 없어 그대로 조용히 끝났다 — load() 로 다시 그리지도
+           않으니 화면은 눌리기 전 그대로다. 같은 파일의 load·search·
+           specRead 는 .catch 를 갖고 있다. 저장 둘만 빠져 있었다. */
+        showSnackbar('저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+        return false;
       });
   }
 
@@ -108,6 +117,15 @@
         if (!d || !d.success) { showSnackbar((d && d.error) || '저장하지 못했습니다', 'error'); return false; }
         flash('저장했습니다');
         return true;
+      })
+      .catch(function () {
+        /* 이 구역은 **즉시 저장**이라 사용자는 저장된 줄 알기 쉽다.
+           500(HTML 본문)·403 CSRF·네트워크 끊김이면 r.json() 이 던지는데
+           잡는 곳이 없어 그대로 조용히 끝났다 — load() 로 다시 그리지도
+           않으니 화면은 눌리기 전 그대로다. 같은 파일의 load·search·
+           specRead 는 .catch 를 갖고 있다. 저장 둘만 빠져 있었다. */
+        showSnackbar('저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+        return false;
       });
   }
 
@@ -292,6 +310,10 @@
     var el = document.createElement('div');
     el.id = 'ingNutSpec';
     el.className = 'ing-nut-manual';
+    /* 그 클래스는 CSS 에서 `display:none` 이다(직접 입력 칸이 접혀 있어야
+       하므로). 직접 입력 쪽은 act==='manual' 이 켜 주는데 판독 결과는
+       켜 주는 코드가 없어, 위 고르개를 고쳐도 결과가 안 보였다. */
+    el.style.display = 'block';
     el.innerHTML = ''
       + '<div class="ing-nut-why">성적서 기준량 '
       + esc(String(d.basis_amount || '-')) + esc(d.basis_unit || '')
@@ -306,20 +328,31 @@
     el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
   }
 
-  /* 파일 고르개는 화면에 안 보인다. 단추를 누르면 이것이 열린다 —
-     칸을 따로 두면 영양성분 표 옆에 빈 상자가 늘 서 있게 된다. */
-  (function () {
+  /* ═══ 파일 고르개는 **누를 때 만든다** ═══════════════════════════════
+   *
+   * 예전에는 여기서 한 번 만들어 `box` 에 붙였다. 그런데 바로 다음 줄의
+   * `load()` 가 `box.innerHTML = '불러오는 중…'` 을 하고, 그 뒤 `render()`
+   * 도 매번 `box.innerHTML` 을 갈아 끼운다 — **방금 붙인 고르개가 지워진다.**
+   *
+   * 그래서 [성적서에서 읽기] 를 눌러도 `getElementById('ingNutSpecFile')`
+   * 이 늘 null 이라 파일 대화상자가 안 떴고, 오류 문구도 없었다.
+   * **성적서 판독으로 A 등급을 만드는 경로 전체가 도달 불가**였다 —
+   * 아래 주석이 "A 를 만들 수 있는 경로는 성적서뿐" 이라고 적어 둔 그 길이다.
+   *
+   * 살아남는 부모(document.body)에 그때그때 만들고 쓰고 버린다.
+   * ═══════════════════════════════════════════════════════════════════ */
+  function openSpecPicker() {
     var f = document.createElement('input');
     f.type = 'file';
-    f.id = 'ingNutSpecFile';
     f.accept = 'image/*';
     f.style.display = 'none';
     f.addEventListener('change', function () {
       if (f.files && f.files[0]) specRead(f.files[0]);
-      f.value = '';            // 같은 파일을 다시 골라도 열리게
+      f.remove();
     });
-    box.appendChild(f);
-  })();
+    document.body.appendChild(f);
+    f.click();
+  }
 
   box.addEventListener('click', function (ev) {
     var cnd = ev.target.closest('.ing-nut-cand');
@@ -358,8 +391,7 @@
      * 안 보인다.** 무엇을 보고 넣었는지는 파일 이름으로 남긴다.
      * ───────────────────────────────────────────────────────────── */
     if (act === 'spec') {
-      var picker = document.getElementById('ingNutSpecFile');
-      if (picker) picker.click();
+      openSpecPicker();
       return;
     }
 

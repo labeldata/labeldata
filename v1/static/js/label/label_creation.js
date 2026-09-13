@@ -3308,13 +3308,24 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // 기본 설정 데이터 - 모델 필드명으로 매핑
     if (popupData.settings) {
-      convertedData.settings = {
-        // 계산기에서 전송한 필드명을 부모창 필드명으로 매핑
+      /* ═══ 팝업이 보낸 것을 버리지 않는다 ═══════════════════════════
+       *
+       * 여기서 네 칸만 옮겨 담았다. 그래서 팝업에서 고른 **표시기준**
+       * (basic_display_type·parallel_display_type)이 사라지고, 아래
+       * settingsMap 의 `|| 'total'`·`|| 'unit_total'` 이 기본값으로
+       * 덮어썼다 — "100g당" 을 골라 [데이터 저장] 을 누르면 부모가
+       * 총량당으로 되돌아갔다.
+       *
+       * 1회 섭취참고량·고열량저영양·산출근거·허용오차도 팝업은 보내는데
+       * 받을 칸이 없었다. 함께 담아 둔다 — 부모에 hidden 이 있는 것만
+       * 실제로 남고, 없는 것은 아래 settingsMap 이 조용히 건너뛴다.
+       * ═══════════════════════════════════════════════════════════════ */
+      convertedData.settings = Object.assign({}, popupData.settings, {
         serving_size: popupData.settings.serving_size,
         units_per_package: popupData.settings.units_per_package,
         nutrition_display_unit: popupData.settings.nutrition_display_unit,
         serving_size_unit: popupData.settings.serving_size_unit || 'g'
-      };
+      });
     } else {
       // 하위 호환성을 위한 fallback
       convertedData.settings = {

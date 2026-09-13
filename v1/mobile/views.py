@@ -70,11 +70,17 @@ def device_access_error(request, device):
     user = getattr(request, 'user', None)
     if user is not None and getattr(user, 'is_authenticated', False):
         if user.pk != device.user_id:
-            return '이 기기의 자료에 접근할 권한이 없습니다.'
+            # 남의 기기다. 토큰을 새로 받아도 달라지지 않으므로 403.
+            return ('이 기기의 자료에 접근할 권한이 없습니다.', 403)
         return None
 
     if getattr(_settings, 'MOBILE_REQUIRE_AUTH', False):
-        return '로그인이 필요합니다.'
+        # **401 이다, 403 이 아니다.** 자격증명이 아예 없는 것이라
+        # 앱이 토큰을 새로 받아 다시 시도할 수 있는 상황이다 —
+        # api_client.dart 의 onError 가 401 에서만 _tryRefreshToken 을
+        # 부르고, 실패하면 clearTokens 로 로그인 화면으로 돌린다.
+        # 403 을 주면 그 흐름을 못 타고 막다른 길이 된다.
+        return ('로그인이 필요합니다.', 401)
     return None
 
 
@@ -324,7 +330,7 @@ def rules_list(request, device_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     owner_user = device.user  # 로그인이면 User, 비회원이면 None
 
@@ -400,7 +406,7 @@ def rule_detail(request, device_id, rule_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     owner_user = device.user
 
@@ -495,7 +501,7 @@ def bookmarks_list(request, device_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     if request.method == 'GET':
         bookmarks = device.bookmarks.select_related('news').all()
@@ -529,7 +535,7 @@ def bookmark_detail(request, device_id, bookmark_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     try:
         bookmark = device.bookmarks.get(pk=bookmark_id)
@@ -551,7 +557,7 @@ def notifications_list(request, device_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     # 일반 알림 (키워드·제품·원료 매칭)
     # sent_at IS NOT NULL: 배치 발송 완료된 항목만 표시 (신규 키워드 즉시 발송분 포함)
@@ -594,7 +600,7 @@ def notification_read(request, device_id, noti_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     noti_type = request.query_params.get('type', 'log')
 
@@ -627,7 +633,7 @@ def notification_delete(request, device_id, noti_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     noti_type = request.query_params.get('type', 'log')
 
@@ -656,7 +662,7 @@ def notification_read_all(request, device_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
     # 발송 완료된 항목만 읽음 처리 (sent_at IS NOT NULL)
     device.notifications.filter(is_read=False, sent_at__isnull=False).update(is_read=True)
     if device.user_id:
@@ -680,12 +686,30 @@ def version_check(request):
     except AppVersion.DoesNotExist:
         return Response({'force_update': False, 'latest_version': current, 'store_url': '', 'message': ''})
 
-    try:
-        def _ver(s):
-            return tuple(int(x) for x in s.split('.')[:3])
-        force_update = _ver(current) < _ver(v.min_version)
-    except Exception:
-        force_update = False
+    def _ver(text):
+        """
+        '1.0.11' · '1.2' · '1.0.11+17' 을 모두 (1, 0, 11) 꼴로 읽는다.
+
+        예전에는 `tuple(int(x) for x in s.split('.')[:3])` 였다. 두 가지가
+        걸렸다.
+          · 자리 수가 다르면 오탐 — `(1,2) < (1,2,0)` 은 True 다. 최소
+            버전이 1.2.0 인데 1.2 로 보고하면 최신인데도 강제 업데이트가 뜬다
+          · Flutter 의 `x.y.z+build` 표기가 오면 int() 가 던지고, 그것을
+            except 가 삼켜 **강제 업데이트가 아무에게도 안 걸린다**
+            (지금 앱은 info.version 만 보내 3자리라 안 걸리지만, 관리자가
+             min_version 에 그 꼴을 넣으면 그 순간 조용히 무력화된다)
+        세 자리로 채워 견준다.
+        """
+        head = str(text or '').split('+')[0].split('-')[0]
+        parts = []
+        for chunk in head.split('.')[:3]:
+            digits = ''.join(c for c in chunk if c.isdigit())
+            parts.append(int(digits) if digits else 0)
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts)
+
+    force_update = _ver(current) < _ver(v.min_version)
 
     return Response({
         'force_update': force_update,
@@ -734,7 +758,7 @@ def alert_mutes_list(request, device_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     user, denied = _mute_user_or_error(device)
     if denied:
@@ -807,7 +831,7 @@ def alert_mute_detail(request, device_id, mute_id):
 
     denied = device_access_error(request, device)
     if denied:
-        return Response({'error': denied}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': denied[0]}, status=denied[1])
 
     user, denied = _mute_user_or_error(device)
     if denied:

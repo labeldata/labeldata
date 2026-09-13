@@ -49,6 +49,8 @@ function resetUploadForm() {
     if (customExpiryInput) {
         customExpiryInput.value = '';
     }
+    const form = document.getElementById('smart-upload-form');
+    if (form) delete form.dataset.expiryUserPicked;   // 다음 업로드는 새로 판단
     const unlimitedRadio = document.getElementById('expiry-unlimited');
     if (unlimitedRadio) {
         unlimitedRadio.checked = true;
@@ -122,8 +124,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const typeSelect = document.getElementById('document-type-select');
     if (typeSelect) {
         typeSelect.addEventListener('change', function() {
-            const selectedExpiry = document.querySelector('input[name="expiry-option"]:checked');
-            if (selectedExpiry) {
+            /* ═══ 이 아래가 **한 번도 실행되지 않았다** ═══════════════════
+             *
+             * `if (selectedExpiry) return;` 이 있었다. 그런데 라디오는 늘
+             * 하나가 골라져 있다 — HTML 기본값이 '무기한' 이고,
+             * `resetUploadForm()` 이 form.reset() 뒤에 그것을 다시 못박은
+             * 다음 openUploadModal 이 이 change 를 쏘기 때문이다.
+             *
+             * 그래서 `data-validity` 를 읽는 분기가 통째로 죽어 있었고,
+             * 자가품질검사성적서(180일)·원산지증명서(365일)·HACCP(1095일)을
+             * 그냥 올리면 **전부 만료일 없음**으로 들어갔다. 서버 쪽 안전망
+             * (ProductDocument.save 의 default_validity_days)도 화면이 보낸
+             * `expiry_unlimited=true` 때문에 함께 꺼졌다.
+             * D-day·만료 배지·만료 알림·준수율이 그 문서들에 대해 영영 안 돌았다.
+             *
+             * **사람이 손으로 고른 것은 지킨다.** 그 표시는 아래 라디오
+             * change 핸들러가 남긴다(dataset.userPicked).
+             * ═══════════════════════════════════════════════════════════ */
+            const wrap = document.querySelector('input[name="expiry-option"]');
+            if (wrap && wrap.form && wrap.form.dataset.expiryUserPicked === '1') {
                 return;
             }
             const selected = this.options[this.selectedIndex];
@@ -158,6 +177,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 유효기간 라디오 버튼 변경 시
     document.querySelectorAll('input[name="expiry-option"]').forEach(radio => {
+        /* 사람이 직접 고른 것인지 표시해 둔다. 위 문서 종류 change 가
+           그 선택을 덮지 않게 하려는 것이다 — `isTrusted` 는 실제 사용자
+           입력일 때만 참이라, 코드가 쏜 change 와 갈린다. */
+        radio.addEventListener('change', function (ev) {
+            if (ev.isTrusted && this.form) this.form.dataset.expiryUserPicked = '1';
+        });
         radio.addEventListener('change', function() {
             if (this.value === 'custom') {
                 document.getElementById('custom-expiry-input').style.display = 'block';
@@ -214,7 +239,31 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // 파일 선택 처리
+/* 화면이 "최대 30MB" 라고 적어 두었는데 여기에 검사가 없었다. 유일한
+   클라이언트 검사는 handleSlotDrop 안에 있었는데 그 함수는 호출 0회다.
+   서버가 친절한 문구로 막긴 하나 30MB 를 다 올린 뒤다 — 모바일 회선에서는
+   몇 분이 그냥 버려진다. */
+const UPLOAD_MAX_MB = 30;
+const UPLOAD_ALLOWED_EXTS = [
+    'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp',
+    'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+    'hwp', 'hwpx', 'txt', 'csv', 'zip',
+];
+
 function handleFileSelect(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (UPLOAD_ALLOWED_EXTS.indexOf(ext) === -1) {
+        showSnackbar('올릴 수 없는 확장자입니다 (.' + ext + '). '
+                     + '올릴 수 있는 것: ' + UPLOAD_ALLOWED_EXTS.join(', '), 'error');
+        return;
+    }
+    if (file.size > UPLOAD_MAX_MB * 1024 * 1024) {
+        showSnackbar('파일 하나는 ' + UPLOAD_MAX_MB + ' MB 까지 올릴 수 있습니다 (지금 '
+                     + formatFileSize(file.size) + '). 사진이면 해상도를 줄이거나 '
+                     + '여러 장으로 나눠 올려 주세요.', 'error');
+        return;
+    }
+
     selectedFile = file;
     
     // 파일 정보 표시
