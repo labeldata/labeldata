@@ -89,6 +89,25 @@ class _CountedPaginator(Paginator):
         return self._known_count
 
 
+def _as_iso_date(raw):
+    """
+    주소로 들어온 날짜 문자열을 YYYY-MM-DD 로만 받는다. 아니면 빈 문자열.
+
+    검증 없이 `_eff`(DateField) 비교에 넣으면 `ValidationError` 가 그대로
+    올라와 목록 화면이 통째로 500 이 난다. `?date_from=abc` 하나로 그랬다.
+    """
+    from datetime import date as _date
+
+    value = (raw or '').strip()
+    if not value:
+        return ''
+    try:
+        _date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return ''
+    return value
+
+
 def _scope_qs(request, scope):
     """내 알림 / 일반 알림 / 전체 를 오가는 주소."""
     params = request.GET.copy()
@@ -196,8 +215,10 @@ def news_list(request):
     # "내 알림이 왜 안 보이지?" 하게 되는 경우가 많았다.
     days      = request.GET.get('days', 'all')  # '3' | '7' | '30' | 'all'
     sort      = request.GET.get('sort', 'desc')  # 'desc' | 'asc'
-    date_from = request.GET.get('date_from', '').strip()  # YYYY-MM-DD
-    date_to   = request.GET.get('date_to',   '').strip()  # YYYY-MM-DD
+    # 주소는 사용자가 직접 치기도 하고 링크가 잘못 만들어지기도 한다.
+    # 검증 없이 DateField 비교에 넣으면 ValidationError 로 500 이다.
+    date_from = _as_iso_date(request.GET.get('date_from', ''))
+    date_to   = _as_iso_date(request.GET.get('date_to',   ''))
     tab       = request.GET.get('tab', '')    # 'insp-news' | 'admin' | 'insp' | ''
     # 내 알림 / 일반 알림 가르기. '' = 기본(내 알림 몇 건만 고정 + 일반 알림 목록)
     scope     = request.GET.get('scope', '')
@@ -262,9 +283,11 @@ def news_list(request):
         days = 'all'  # 버튼 active 표시 없애는 용도
     elif days != 'all':
         try:
+            # OverflowError 는 ValueError 의 자식이 **아니다.**
+            # `?days=1000000000` 하나로 500 이 났다.
             cutoff = (timezone.now() - timedelta(days=int(days))).date()
             qs = qs.filter(_eff__gte=cutoff)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             pass
 
     # 카테고리 필터 (수거검사 제외한 일반 카테고리)
@@ -580,7 +603,7 @@ def news_list(request):
         try:
             cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
             ins_qs = ins_qs.filter(inspection__tkawydtm__gte=cutoff_str)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             pass
 
     # 진행 중 / 완료 필터 — 수거검사 탭 전용 칩이므로 이 탭에서만 적용된다.
@@ -632,7 +655,7 @@ def news_list(request):
             try:
                 cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
                 pub_qs = pub_qs.filter(tkawydtm__gte=cutoff_str)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, OverflowError):
                 pass
 
         if q:
@@ -734,16 +757,18 @@ def news_list(request):
     selected_insp = None
     if selected_insp_id:
         try:
+            # `int()` 를 try 안에 둔다 — 숫자가 아닌 pk 는 DoesNotExist 가
+            # 아니라 ValueError 를 던진다. `?id=abc` 와 같은 꼴이다.
             selected_insp = (
                 InspectionMatch.objects
                 .select_related('inspection', 'label')
-                .get(pk=selected_insp_id, user=request.user)
+                .get(pk=int(selected_insp_id), user=request.user)
             )
             if not selected_insp.read_yn:
                 selected_insp.read_yn = True
                 selected_insp.read_at = timezone.now()
                 selected_insp.save(update_fields=['read_yn', 'read_at'])
-        except InspectionMatch.DoesNotExist:
+        except (InspectionMatch.DoesNotExist, TypeError, ValueError):
             pass
 
     # ── 공개 수거검사 상세 패널 (pub_insp_id 파라미터) ───────────────────────
@@ -751,8 +776,9 @@ def news_list(request):
     selected_pub_insp = None
     if selected_pub_insp_id and not selected_insp:
         try:
-            selected_pub_insp = InspectionResult.objects.get(pk=selected_pub_insp_id)
-        except InspectionResult.DoesNotExist:
+            selected_pub_insp = InspectionResult.objects.get(
+                pk=int(selected_pub_insp_id))
+        except (InspectionResult.DoesNotExist, TypeError, ValueError):
             pass
 
     # ── 지금 어느 탭인가 — **서버가 정한다** ────────────────────────────────
@@ -1699,7 +1725,7 @@ def inspection_export_api(request):
         try:
             cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
             qs = qs.filter(tkawydtm__gte=cutoff_str)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             pass
     # days/since 미지정 시 기간 제한 없이 전체 조회
 

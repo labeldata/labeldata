@@ -37,6 +37,12 @@ ACTION_STATUSES = ('monitoring', 'resolved')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 지운 제품의 매칭은 세지 않는다.
+#
+# 매칭을 **만드는** 쪽(services/matcher.py)은 delete_YN='N' 을 제대로 거는데
+# **읽는** 쪽인 여기는 안 걸었다. 제품 삭제는 소프트 삭제라 행이 남으므로,
+# 지운 뒤에도 사이드바 배지가 그 건을 세고 상세 패널의 「영향받는 내 제품」에
+# 지운 제품이 나왔다. 그 줄의 링크를 누르면 404 다 — 끌 방법이 없었다.
 # 뉴스(부적합·행정처분) 매칭 집계
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -45,7 +51,7 @@ def actionable_news_ids(user) -> set:
     return (
         set(
             NewsProductMatch.objects
-            .filter(product__user_id=user, false_positive_yn=False)
+            .filter(product__user_id=user, product__delete_YN='N', false_positive_yn=False)
             .values_list('news_id', flat=True)
         )
         | set(
@@ -61,7 +67,7 @@ def unread_news_ids(user) -> set:
     return (
         set(
             NewsProductMatch.objects
-            .filter(product__user_id=user, false_positive_yn=False, read_yn=False)
+            .filter(product__user_id=user, product__delete_YN='N', false_positive_yn=False, read_yn=False)
             .values_list('news_id', flat=True)
         )
         | set(
@@ -127,7 +133,8 @@ def user_match_context(user) -> dict:
     두고 목록 쿼리에서는 상수 IN 목록만 쓰는 편이 훨씬 싸다.
     """
     prod_qs = (NewsProductMatch.objects
-               .filter(product__user_id=user, false_positive_yn=False)
+               .filter(product__user_id=user, product__delete_YN='N',
+                       false_positive_yn=False)
                .values_list('news_id', 'read_yn', 'risk_level', 'risk_score'))
     ing_qs = (NewsIngredientMatch.objects
               .filter(user=user, dismissed_yn=False)

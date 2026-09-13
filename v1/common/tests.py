@@ -1025,3 +1025,52 @@ class V2_화면은_계정_톱바를_잃지_않는다(SimpleTestCase):
         start = text.index('{% block topbar %}')
         end = text.index('{% endblock %}', start)
         self.assertIn(self.FRAGMENT, text[start:end])
+
+
+class 판독_정답지_사진은_아무나_받을_수_없다(TestCase):
+    """
+    `ocr_truth/` 접두가 ACCESS_RULES 에 없어 기본 규칙
+    (`_allow_authenticated` — 로그인만 하면 통과)으로 떨어졌다.
+
+    그 사진은 실제 사용자 제품의 **표시사항 실물 사진**이고
+    (`source_label` 로 그 제품에 연결된다), 올리는 것은 staff 만 할 수 있다.
+    문서·게시판·회사서류에는 전용 검사가 있는데 이것만 빠져 있었다.
+    """
+
+    def setUp(self):
+        from v1.common.models import OcrTruthCase
+
+        self.owner = User.objects.create_user(
+            username='ocrown', password='x', is_staff=True)
+        self.other = User.objects.create_user(username='ocroth', password='x')
+        self.staff = User.objects.create_user(
+            username='ocrstaff', password='x', is_staff=True)
+        self.case = OcrTruthCase.objects.create(
+            name='정답1', image='ocr_truth/2026/09/label.jpg',
+            created_by=self.owner, expected={})
+
+    def _allowed(self, user, path):
+        from django.test import RequestFactory
+
+        from v1.common.media_access import _check_ocr_truth
+
+        req = RequestFactory().get('/media/' + path)
+        req.user = user
+        return _check_ocr_truth(req, path)
+
+    def test_남은_못_받는다(self):
+        self.assertFalse(self._allowed(self.other, 'ocr_truth/2026/09/label.jpg'))
+
+    def test_올린_사람은_받는다(self):
+        self.assertTrue(self._allowed(self.owner, 'ocr_truth/2026/09/label.jpg'))
+
+    def test_관리자는_받는다(self):
+        self.assertTrue(self._allowed(self.staff, 'ocr_truth/2026/09/label.jpg'))
+
+    def test_아무_정답지에도_안_붙은_파일은_막는다(self):
+        self.assertFalse(self._allowed(self.staff, 'ocr_truth/2026/09/nowhere.jpg'))
+
+    def test_규칙표가_그_함수를_쓴다(self):
+        from v1.common.media_access import ACCESS_RULES, _check_ocr_truth
+
+        self.assertIs(dict(ACCESS_RULES)['ocr_truth/'], _check_ocr_truth)

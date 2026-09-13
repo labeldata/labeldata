@@ -112,8 +112,16 @@ def parse_conditions(keys, values):
                 continue
             value = ','.join(picked)
         elif spec['type'] == 'date':
-            # <input type="date"> 는 yyyy-mm-dd 로 보내고 DateField 도 같은 형식이라 그대로 쓴다
-            pass
+            # <input type="date"> 는 yyyy-mm-dd 로 보내지만, 주소는 사람이 직접
+            # 치기도 한다. 검증 없이 DateField 비교에 넣으면 ValidationError 가
+            # 그대로 올라와 **화면 전체가 500** 이다. 모르는 값은 버린다 —
+            # 이 함수의 규약이 원래 "모르는 key·빈 값은 버린다" 다.
+            from datetime import date as _date
+
+            try:
+                _date.fromisoformat(value)
+            except (TypeError, ValueError):
+                continue
         if not value:
             continue
         parsed.append({

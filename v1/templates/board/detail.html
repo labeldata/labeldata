@@ -1,5 +1,6 @@
 {% extends 'base_v2.html' %}
 {% load static django_bootstrap5 %}
+{% load board_filters %}
 {% block title %}{{ object.title }} - 질문 및 요청{% endblock %}
 
 {% block topbar %}
@@ -32,7 +33,7 @@
                 <h1 class="detail-title">{{ object.title }}{% if object.attachment %} <i class="bi bi-paperclip board-icon-paperclip"></i>{% endif %}</h1>
             </div>
             <div class="detail-meta">
-                <span class="detail-meta-item"><i class="bi bi-person"></i>{% if object.author.is_staff %}관리자{% else %}{{ object.author.email|slice:":2" }}****{% endif %}</span>
+                <span class="detail-meta-item"><i class="bi bi-person"></i>{{ object.author|board_author }}</span>
                 <span class="detail-meta-item"><i class="bi bi-calendar3"></i>{{ object.created_at|date:"Y.m.d H:i" }}</span>
                 <span class="detail-meta-item"><i class="bi bi-eye"></i>조회 {{ object.views }}</span>
             </div>
@@ -75,7 +76,7 @@
         <div class="comment-item">
             <div class="d-flex justify-content-between align-items-start mb-1">
                 <div>
-                    <span class="comment-author"><i class="bi bi-person-circle me-1"></i>{{ comment.author.username|default:"시스템 관리자" }}</span>
+                    <span class="comment-author"><i class="bi bi-person-circle me-1"></i>{{ comment.author|board_author }}</span>
                     <span class="comment-date ms-2">{{ comment.created_at|date:"Y.m.d H:i" }}</span>
                 </div>
                 {% if comment.author == user or user.is_staff %}

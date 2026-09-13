@@ -2227,3 +2227,117 @@ class 상세_패널의_조치는_실패했을_때_말한다(TestCase):
             content_type='application/json')
         self.assertEqual(r.status_code, 404)
         self.assertTrue(r.json().get('error'))
+
+
+class 주소창에_아무_값이나_넣어도_500_이_아니다(TestCase):
+    """
+    `?id=abc` 는 고쳤는데 **같은 꼴이 네 군데 더 남아 있었다.**
+
+    · `?insp_id=abc` · `?pub_insp_id=abc` — `except DoesNotExist` 만 잡는데
+      숫자가 아닌 pk 는 `ValueError` 를 던진다
+    · `?date_from=abc` — `_eff`(DateField) 에 임의 문자열을 넘기면
+      `ValidationError` 가 그대로 올라온다. 조건 패널의 날짜 조건
+      (`?f=event_date_from&v=abc`)도 검증을 건너뛰어 같다
+    · `?days=1000000000` — `timedelta(days=…)` 가 **`OverflowError`** 를
+      던지는데 `except (ValueError, TypeError)` 로만 잡는다. OverflowError
+      는 그 둘의 자식이 아니다
+
+    주소는 사용자가 직접 치기도 하고, 링크가 잘못 만들어지기도 하고,
+    크롤러가 훑기도 한다. 그때마다 500 이 나면 오류 로그가 묻힌다.
+    """
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='badparam', password='pw12345!')
+        self.client.force_login(self.user)
+        RegulatoryNews.objects.create(
+            external_id='bp-1', api_source='I2620', source='domestic',
+            product_name='뉴스', ai_parsed=True, collected_date='2026-09-01')
+
+    def _get(self, query):
+        return self.client.get('/regulatory/' + query)
+
+    def test_수거검사_상세_id_가_숫자가_아니어도_200(self):
+        for q in ('?tab=insp&insp_id=abc', '?tab=insp&insp_id=',
+                  '?tab=insp&insp_id=-1', '?tab=insp&insp_id=1.5'):
+            self.assertEqual(self._get(q).status_code, 200, q)
+
+    def test_공개_수거검사_상세_id_도_마찬가지다(self):
+        for q in ('?pub_insp_id=abc', '?pub_insp_id=-3', '?pub_insp_id=x1'):
+            self.assertEqual(self._get(q).status_code, 200, q)
+
+    def test_날짜_칸에_아무_글자나_들어와도_200(self):
+        for q in ('?date_from=abc', '?date_to=abc', '?date_from=2026-13-45',
+                  '?date_from=abc&date_to=def'):
+            self.assertEqual(self._get(q).status_code, 200, q)
+
+    def test_조건_패널의_날짜_조건도_마찬가지다(self):
+        for q in ('?f=event_date_from&v=abc', '?f=event_date_to&v=2026-99-99'):
+            self.assertEqual(self._get(q).status_code, 200, q)
+
+    def test_기간이_터무니없이_커도_200(self):
+        for q in ('?days=1000000000', '?days=99999999999999999999',
+                  '?days=-5', '?days=abc'):
+            self.assertEqual(self._get(q).status_code, 200, q)
+
+    def test_제대로_된_날짜는_여전히_걸린다(self):
+        """검증을 붙이다 정상 동작을 죽이지 않았는지 함께 본다."""
+        r = self._get('?date_from=2026-09-01&date_to=2026-09-30')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.context['news_list']), 1)
+        r2 = self._get('?date_from=2026-10-01')
+        self.assertEqual(len(r2.context['news_list']), 0)
+
+
+class 지운_제품의_부적합_매칭은_더_보이지_않는다(TestCase):
+    """
+    매칭을 **만드는** 쪽(`services/matcher.py`)은 `delete_YN='N'` 을 제대로
+    거는데, **읽는** 쪽(`selectors.py`)은 안 걸었다.
+
+    그래서 제품을 지운 뒤에도 사이드바 빨간 배지가 그 건을 세고, 상세 패널
+    「영향받는 내 제품」에 지운 제품이 나오고, 그 줄의 링크를 누르면 404 가
+    난다. 사용자는 지운 제품에 대한 알림을 끌 방법이 없다.
+    """
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='delmatch', password='pw12345!')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='지울제품', delete_YN='N')
+        self.news = RegulatoryNews.objects.create(
+            external_id='dm-1', api_source='I2620', source='domestic',
+            product_name='지울제품', ai_parsed=True, collected_date='2026-09-01')
+        NewsProductMatch.objects.create(
+            news=self.news, product=self.label,
+            matched_keyword='지울제품', matched_ingredient='지울제품',
+            match_score=90, risk_score=50)
+
+    def _delete_product(self):
+        self.label.delete_YN = 'Y'
+        self.label.save(update_fields=['delete_YN'])
+
+    def test_살아_있는_동안에는_센다(self):
+        from v1.regulatory import selectors
+
+        self.assertEqual(selectors.unread_news_count(self.user), 1)
+        self.assertIn(self.news.pk, selectors.actionable_news_ids(self.user))
+
+    def test_제품을_지우면_배지에서_빠진다(self):
+        from v1.regulatory import selectors
+
+        self._delete_product()
+        self.assertEqual(selectors.unread_news_count(self.user), 0)
+
+    def test_조치할_것_목록에서도_빠진다(self):
+        from v1.regulatory import selectors
+
+        self._delete_product()
+        self.assertNotIn(self.news.pk, selectors.actionable_news_ids(self.user))
+
+    def test_목록의_내_매칭_표시에서도_빠진다(self):
+        from v1.regulatory import selectors
+
+        self._delete_product()
+        ctx = selectors.user_match_context(self.user)
+        self.assertNotIn(self.news.pk, ctx['prod_matched'])

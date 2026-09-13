@@ -253,3 +253,80 @@ class 비밀글_첨부는_미디어_주소로도_새지_않는다(TestCase):
         rules = dict(ACCESS_RULES)
         self.assertIs(rules['board_files/'], _check_board_file)
         self.assertIs(rules['board_images/'], _check_board_file)
+
+
+class 게시판이_남의_이메일을_그대로_보여주지_않는다(TestCase):
+    """
+    가입은 `create_user(username=email, email=email, …)` 이라 **username 이
+    곧 이메일**이다.
+
+    목록과 상세의 글쓴이 자리는 `앞 두 글자 + ****` 로 가리는데, **답변
+    작성자만** `{{ comment.author.username }}` 로 원문이 나갔다. 그리고
+    `BoardDetailView` 에는 `LoginRequiredMixin` 이 없어 **로그인하지 않은
+    사람도** 그 페이지를 연다.
+
+    같은 화면 안에서 규칙이 셋으로 갈려 있었다:
+      · 목록      — is_staff → '관리자', email → 마스킹, 없으면 username 마스킹
+      · 상세 글쓴이 — is_staff → '관리자', 아니면 email 마스킹 (**대체값 없음** —
+                     이메일이 빈 게스트 계정은 `****` 만 남는다)
+      · 상세 답변  — **원문 그대로**
+
+    `board_filters.mask_email` 이 이미 있었는데 세 자리 모두 쓰지 않았다.
+    """
+
+    def setUp(self):
+        from v1.board.models import Board, Comment
+
+        self.author = User.objects.create_user(
+            username='writer@example.com', email='writer@example.com', password='x')
+        self.replier = User.objects.create_user(
+            username='replier@example.com', email='replier@example.com', password='x')
+        self.guest = User.objects.create_user(username='guest_abc123', email='',
+                                              password='x')
+        self.staff = User.objects.create_user(
+            username='admin@example.com', email='admin@example.com',
+            password='x', is_staff=True)
+        self.post = Board.objects.create(
+            title='[기능 요청] 공개글', content='내용', author=self.author)
+        Comment.objects.create(board=self.post, author=self.replier, content='답변')
+
+    def _html(self):
+        r = self.client.get('/board/%d/' % self.post.pk)
+        self.assertEqual(r.status_code, 200)
+        return r.content.decode('utf-8')
+
+    def test_로그인_안_한_사람에게_답변자_이메일이_안_보인다(self):
+        html = self._html()
+        self.assertNotIn('replier@example.com', html)
+
+    def test_글쓴이_이메일도_안_보인다(self):
+        self.assertNotIn('writer@example.com', self._html())
+
+    def test_가린_형태는_보인다(self):
+        """통째로 지우면 누가 쓴 글인지 알 수 없다 — 가리되 남긴다."""
+        html = self._html()
+        self.assertIn('re****', html)
+        self.assertIn('wr****', html)
+
+    def test_관리자는_관리자로_보인다(self):
+        from v1.board.models import Comment
+
+        Comment.objects.create(board=self.post, author=self.staff, content='관리자 답변')
+        html = self._html()
+        self.assertNotIn('admin@example.com', html)
+        self.assertIn('관리자', html)
+
+    def test_이메일이_없는_계정도_별표만_남지_않는다(self):
+        from v1.board.models import Board
+
+        post = Board.objects.create(
+            title='[오류 제보] 게스트글', content='내용', author=self.guest)
+        r = self.client.get('/board/%d/' % post.pk)
+        html = r.content.decode('utf-8')
+        self.assertIn('gu****', html)
+
+    def test_목록에서도_같은_규칙이다(self):
+        r = self.client.get('/board/')
+        html = r.content.decode('utf-8')
+        self.assertNotIn('writer@example.com', html)
+        self.assertIn('wr****', html)

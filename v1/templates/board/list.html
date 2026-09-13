@@ -1,5 +1,6 @@
 {% extends 'base_v2.html' %}
 {% load static django_bootstrap5 list_pagination %}
+{% load board_filters %}
 {% block title %}게시판{% endblock %}
 
 {% block topbar %}
@@ -141,10 +142,7 @@
                         {{ board.created_at|date:"m/d H:i" }}
                     </td>
                     <td class="text-center d-none d-lg-table-cell text-muted small">
-                        {% if board.author.is_staff %}관리자
-                        {% elif board.author.email %}{{ board.author.email|slice:":2" }}****
-                        {% else %}{{ board.author.username|slice:":2" }}****
-                        {% endif %}
+                        {{ board.author|board_author }}
                     </td>
                     <td class="text-center d-none d-md-table-cell text-muted small">{{ board.views }}</td>
                     <td class="text-center">

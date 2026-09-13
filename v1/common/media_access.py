@@ -186,6 +186,30 @@ def _check_board_file(request, path) -> bool:
     return request.user.is_authenticated
 
 
+def _check_ocr_truth(request, path) -> bool:
+    """
+    판독 정답지 사진. **staff 와 올린 사람만.**
+
+    이 사진은 실제 사용자 제품의 **표시사항 실물 사진**이고
+    (`source_label` 로 그 제품에 연결된다), 올릴 수 있는 사람은 staff 뿐이다
+    (`views_ocr_lab.py` 의 @staff_member_required). 그런데 미디어 쪽에는
+    규칙이 없어 기본값 `_allow_authenticated` 로 떨어졌다 — 경로만 알면
+    **아무 로그인 계정**에게나 내려갔다. 문서·게시판·회사서류는 전용 검사가
+    있는데 이것만 빠져 있었다.
+    """
+    from v1.common.models import OcrTruthCase
+
+    if not request.user.is_authenticated:
+        return False
+    rows = OcrTruthCase.objects.filter(image=path)
+    if not rows.exists():
+        # 어느 정답지에도 안 붙은 파일은 내려주지 않는다 — 게시판 규칙과 같다
+        return False
+    if request.user.is_staff:
+        return True
+    return rows.filter(created_by_id=request.user.id).exists()
+
+
 # 앞부분이 긴 것부터 검사한다
 ACCESS_RULES = (
     ('v2/product_documents/', _check_product_document),
@@ -197,6 +221,7 @@ ACCESS_RULES = (
     ('board_images/',         _check_board_file),
     ('profiles/',             _allow_authenticated),
     ('label_attachments/',    _allow_authenticated),
+    ('ocr_truth/',           _check_ocr_truth),
 )
 
 
