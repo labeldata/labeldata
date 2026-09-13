@@ -18595,6 +18595,22 @@ class 원료_등록_한도가_모든_입구에_걸린다(TestCase):
         self.assertEqual(body['over_quota'], 1)
         self.assertIn('한도', body['message'])
 
+    def test_일괄_복사도_한도에서_멈춘다(self):
+        from v1.label.models import MyIngredient
+
+        self._fill(1)
+        src = MyIngredient.objects.filter(user_id=self.user)[:1]
+        ids = [i.my_ingredient_id for i in src]
+        # 같은 원료를 세 번 복사하려 든다 — 자리는 하나뿐이다
+        body = self.client.post(
+            reverse('label:bulk_copy_my_ingredients'),
+            data=json.dumps({'ingredient_ids': ids * 3}),
+            content_type='application/json').json()
+        self.assertEqual(body['copied_count'], 1)
+        self.assertEqual(body['over_quota'], 2)
+        self.assertIn('한도', body['message'])
+        self.assertEqual(self._count(), 2)
+
     def test_모든_생성_경로가_한도를_본다(self):
         """
         새 입구가 생겼을 때 여기서 걸린다 — MyIngredient 를 만드는 곳은
@@ -18606,7 +18622,10 @@ class 원료_등록_한도가_모든_입구에_걸린다(TestCase):
         from django.conf import settings as dj
 
         text = (Path(dj.BASE_DIR) / 'label/views.py').read_text(encoding='utf-8')
-        creates = [m.start() for m in re.finditer(r'MyIngredient\.objects\.create\(', text)]
+        # `objects.create(` 만 보면 놓친다 — pk 를 지우고 save() 하는
+        # 일괄 복사가 그렇게 한도를 통째로 비켜 갔다.
+        creates = [m.start() for m in
+                   re.finditer(r'MyIngredient\.objects\.create\(|my_ingredient_id = None', text)]
         self.assertTrue(creates)
         for at in creates:
             head = text[max(0, at - 3000):at]

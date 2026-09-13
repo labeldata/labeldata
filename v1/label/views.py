@@ -1928,6 +1928,11 @@ def bulk_copy_my_ingredients(request):
         if not ingredient_ids:
             return JsonResponse({'success': False, 'error': '복사할 원료를 선택해주세요.'})
         copied_count = 0
+        over_count = 0
+        # 이 경로는 `MyIngredient.objects.create` 가 아니라 pk 를 지우고
+        # save() 하는 꼴이라 한도 검사에서 통째로 빠져 있었다. 만드는 방법이
+        # 다를 뿐 만드는 것은 같다.
+        room = _ingredient_room(request.user)
         for ingredient_id in ingredient_ids:
             try:
                 ingredient = MyIngredient.objects.get(
@@ -1935,6 +1940,10 @@ def bulk_copy_my_ingredients(request):
                     user_id=request.user,
                     delete_YN='N'
                 )
+                if room <= 0:
+                    over_count += 1
+                    continue
+                room -= 1
                 # pk=None 설정으로 새 레코드 생성
                 ingredient.my_ingredient_id = None
                 ingredient.prdlst_nm = (ingredient.prdlst_nm or '') + '_복사'
@@ -1944,7 +1953,13 @@ def bulk_copy_my_ingredients(request):
                 copied_count += 1
             except MyIngredient.DoesNotExist:
                 continue
-        return JsonResponse({'success': True, 'copied_count': copied_count})
+        payload = {'success': True, 'copied_count': copied_count,
+                   'over_quota': over_count}
+        if over_count:
+            # 조용히 버리면 사용자는 다 복사된 줄 안다
+            payload['message'] = (f'{copied_count}건을 복사했습니다. '
+                                  f'{over_count}건은 등록 한도에 걸려 복사하지 못했습니다.')
+        return JsonResponse(payload)
     except Exception as e:
         logger.exception('[처리 실패]')
         return _server_error()

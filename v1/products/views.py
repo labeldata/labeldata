@@ -7602,17 +7602,40 @@ def document_ai_apply_to_bom(request, document_id):
  
         origin = origins.get(material, '')
  
-        _, created = ProductBOM.objects.get_or_create(
-            parent_label=doc.label,
-            ingredient_name=material,
-            defaults={
-                'usage_ratio': ratio,
-                'origin': origin,
-                'allergens': allergen_str,
-            },
-        )
-        if created:
-            created_count += 1
+        # **살아 있는 줄만 찾는다.**
+        #
+        # 예전에는 active_yn 을 안 봤다. BOM 을 한 번이라도 저장하면 서버가
+        # 옛 줄을 전부 active_yn=False 로 눕히는데(bom_save_api), 그 죽은
+        # 줄에 get_or_create 가 걸려 "이미 있다" 로 넘어갔다. 화면은
+        # "0종 추가" 라고 답하고 BOM 은 그대로 비어 있다 — 목록은 활성만
+        # 보여 주기 때문이다.
+        bom = ProductBOM.objects.filter(
+            parent_label=doc.label, ingredient_name=material, active_yn=True,
+        ).first()
+        if bom:
+            continue
+
+        # 눕혀 둔 같은 이름의 줄이 있으면 **되살린다**. 새로 만들면 같은
+        # 원료가 표에 둘로 쌓인다.
+        dead = ProductBOM.objects.filter(
+            parent_label=doc.label, ingredient_name=material, active_yn=False,
+        ).order_by('-bom_id').first()
+        if dead:
+            dead.active_yn = True
+            dead.usage_ratio = ratio if ratio is not None else dead.usage_ratio
+            dead.origin = origin or dead.origin
+            dead.allergens = allergen_str or dead.allergens
+            dead.save(update_fields=['active_yn', 'usage_ratio', 'origin', 'allergens'])
+        else:
+            ProductBOM.objects.create(
+                parent_label=doc.label,
+                ingredient_name=material,
+                usage_ratio=ratio,
+                origin=origin,
+                allergens=allergen_str,
+                active_yn=True,
+            )
+        created_count += 1
  
     log_activity(request, 'document', 'ai_apply_to_bom', document_id)
     return JsonResponse({'success': True, 'created': created_count, 'total': len(raw_materials)})

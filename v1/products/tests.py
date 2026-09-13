@@ -9282,3 +9282,69 @@ class 최근_사용_API_를_걷어냈다(TestCase):
 
         with self.assertRaises(NoReverseMatch):
             reverse('label:recent_usage_api')
+
+
+class BOM_적용이_죽은_줄에_매달리지_않는다(TestCase):
+    """
+    `get_or_create(parent_label, ingredient_name)` 이 active_yn 을 안 봤다.
+    BOM 을 한 번이라도 저장하면 서버가 옛 줄을 전부 눕히는데(bom_save_api),
+    그 죽은 줄에 걸려 "이미 있다" 로 넘어간다. 화면은 **"0종 추가"** 라고
+    답하고 BOM 은 그대로 비어 있다 — 목록은 활성만 보여 주기 때문이다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='apu', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='적용', delete_YN='N')
+        dt = DocumentType.objects.create(type_name='성적서', type_code='SPEC')
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dt, active_yn=True,
+            metadata={'extracted_data': {'raw_materials': ['정제수', '설탕']}})
+
+    def _apply(self):
+        return self.client.post(
+            reverse('products:document_ai_apply_to_bom',
+                    args=[self.doc.document_id]),
+            data=json.dumps({}), content_type='application/json')
+
+    def _live(self):
+        from v1.bom.models import ProductBOM
+
+        return set(ProductBOM.objects
+                   .filter(parent_label=self.label, active_yn=True)
+                   .values_list('ingredient_name', flat=True))
+
+    def test_처음_적용하면_들어간다(self):
+        r = self._apply()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['created'], 2)
+        self.assertEqual(self._live(), {'정제수', '설탕'})
+
+    def test_저장으로_눕힌_뒤에도_다시_들어간다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply()
+        # bom_save_api 가 저장할 때마다 하는 일
+        ProductBOM.objects.filter(parent_label=self.label).update(active_yn=False)
+        self.assertEqual(self._live(), set())
+
+        body = self._apply().json()
+        self.assertEqual(body['created'], 2)
+        self.assertEqual(self._live(), {'정제수', '설탕'})
+
+    def test_되살릴_뿐_사본을_만들지_않는다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply()
+        ProductBOM.objects.filter(parent_label=self.label).update(active_yn=False)
+        self._apply()
+        self.assertEqual(
+            ProductBOM.objects.filter(parent_label=self.label).count(), 2)
+
+    def test_이미_살아_있으면_또_넣지_않는다(self):
+        self._apply()
+        self.assertEqual(self._apply().json()['created'], 0)
+        self.assertEqual(self._live(), {'정제수', '설탕'})
