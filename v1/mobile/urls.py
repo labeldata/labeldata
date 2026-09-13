@@ -10,6 +10,11 @@ urlpatterns = [
     # 인증
     path('login/', views.login, name='login'),
     path('logout/', views.logout, name='logout'),
+    # 앱이 401 을 받으면 반드시 치는 경로. 없으면 앱이 리프레시 토큰까지
+    # 지우고 조용히 로그아웃된다.
+    path('token/refresh/', views.token_refresh, name='token_refresh'),
+    # 개인정보처리방침이 약속한 [회원 탈퇴]. 없어서 늘 실패했다.
+    path('account/delete/', views.account_delete, name='account_delete'),
 
     # 부적합 피드
     path('news/', views.news_list, name='news_list'),

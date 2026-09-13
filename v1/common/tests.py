@@ -135,6 +135,14 @@ class 로그인_없이_열려_있던_문(TestCase):
         # **제품 내용은 보여주지 않는다** — 누가·무엇을·어떤 역할로 주었는지만
         # 이고, 그 셋은 초대 메일에 이미 적혀 있다.
         'share_invite_landing',
+        # 앱이 401 을 받았을 때 치는 자리다. 토큰이 만료된 상태에서 부르므로
+        # 로그인을 요구할 수 없다 — 자격증명은 리프레시 토큰 자체이고,
+        # 그것이 유효하지 않으면 401 로 닫는다. IP 당 60/분.
+        'token_refresh',
+        # 회원 탈퇴. 기기의 계정을 쓰되 **비밀번호를 다시 확인한다.**
+        # device_access_error 를 먼저 지나고, 계정이 안 붙은 기기면 403.
+        # 앱은 세션 쿠키가 없으므로 @login_required 를 걸 수 없다. IP 당 10/분.
+        'account_delete',
     }
 
     AUTH = ('login_required', 'staff_member_required', 'permission_required',

@@ -10,6 +10,7 @@ from django_ratelimit.decorators import ratelimit
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from v1.regulatory.models import RegulatoryNews, InspectionMatch
@@ -17,7 +18,8 @@ from .models import AppDevice, AlertRule, PushNotificationLog, Bookmark, AppVers
 from .serializers import (
     AppDeviceSerializer, AlertRuleSerializer,
     PushNotificationLogSerializer, BookmarkSerializer,
-    RegulatoryNewsSerializer, InspectionMatchNotificationSerializer,
+    RegulatoryNewsSerializer, RegulatoryNewsDetailSerializer,
+    InspectionMatchNotificationSerializer,
 )
 from .services.push_service import backfill_alerts_for_rule, send_immediate_for_rule
 
@@ -25,6 +27,43 @@ logger = logging.getLogger(__name__)
 
 # Android Build.ID 형식: BP2A.250605.031.A3 / QKR1.191246.002 등
 _ANDROID_BUILD_ID_RE = re.compile(r'^[A-Z0-9]{4,}\.[0-9]{6}\.[0-9A-Z.]+$')
+
+
+# 알림 목록은 두 표를 하나로 합쳐 준다 — PushNotificationLog 와
+# InspectionMatch. 둘 다 1부터 도는 제 pk 를 쓰는데 직렬화 결과에서는 둘 다
+# 그냥 `id` 라 **네임스페이스가 없었다.** 앱은 그 번호 하나로 원소를 되찾아
+# `?type=` 을 정하므로(`notifications_provider.dart` 의 firstWhere), 번호가
+# 겹치면 수거검사 알림을 지웠는데 엉뚱한 부적합 알림이 사라졌다.
+#
+# 수거검사 쪽 번호를 이 값만큼 밀어 **한 목록 안에서 겹치지 않게** 한다.
+# 되돌리는 것은 서버가 하므로 앱은 고치지 않아도 된다. 이미 깔려 있는 앱이
+# 보내는 원래 pk 도 `?type=inspection` 과 함께 그대로 받는다.
+INSPECTION_ID_OFFSET = 1_000_000_000
+
+
+def _split_notification_id(noti_id, noti_type):
+    """(갈래, 그 표에서의 pk) 로 되돌린다."""
+    if noti_id is not None and noti_id >= INSPECTION_ID_OFFSET:
+        return 'inspection', noti_id - INSPECTION_ID_OFFSET
+    return noti_type, noti_id
+
+
+def _rate_limited(request):
+    """
+    `@ratelimit(block=True)` 은 `Ratelimited`(PermissionDenied 의 자식)를
+    던진다. 그 데코레이터가 `@api_view` **바깥**에 있어 DRF 예외 처리를
+    안 타고 Django 코어로 올라가고, 이 저장소의 handler403 이 그것을
+    **HTML 404** 로 바꾼다. 앱은 JSON 을 기대하므로 "알 수 없는 오류" 만
+    보고 자기가 횟수를 넘긴 줄 모른다.
+
+    그래서 막는 것은 `block=False` 로 표시만 하게 두고, 여기서 JSON 429 로
+    답한다.
+    """
+    if getattr(request, 'limited', False):
+        return Response(
+            {'error': '시도가 너무 잦습니다. 잠시 후 다시 시도해 주세요.'},
+            status=status.HTTP_429_TOO_MANY_REQUESTS)
+    return None
 
 
 def _get_device_or_404(device_id):
@@ -109,10 +148,14 @@ def _rule_quota_error(owner_user, device):
 # 기기를 무제한으로 만들 수 있으면 게스트 키워드·보관함 한도가 뜻을 잃는다
 # (한도가 기기당이라 기기를 늘리면 늘어난다). 사람이 쓰는 속도를 넉넉히
 # 넘는 선에서 끊는다.
-@ratelimit(key='ip', rate='30/m', method='POST', block=True)
+@ratelimit(key='ip', rate='30/m', method='POST', block=False)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_device(request):
+    limited = _rate_limited(request)
+    if limited:
+        return limited
+
     device_id = request.data.get('device_id')
     if not device_id:
         return Response({'error': 'device_id 필수'}, status=status.HTTP_400_BAD_REQUEST)
@@ -136,14 +179,35 @@ def register_device(request):
             device_id, existing.user_id, existing.user,
         )
 
-    device, created = AppDevice.objects.update_or_create(
+    # **보낸 칸만 고친다.** 앱은 이 엔드포인트를 서로 다른 두 곳에서
+    # 부르고 보내는 칸이 겹치지 않는다 — 시작할 때는 platform·app_version,
+    # FCM 토큰이 바뀔 때는 fcm_token. 예전에는 defaults 에 세 칸을 다 넣어,
+    # 한쪽이 부를 때마다 **다른 쪽이 넣어 둔 값이 지워졌다.**
+    #
+    #   · iPhone 의 platform 이 DB 에서 영구히 'android' 가 됐다
+    #   · app_version 이 늘 빈 문자열이라 어느 기기가 어느 판인지 몰랐다
+    #   · 앱을 켤 때마다 fcm_token 이 한 번 NULL 이 됐다 — 그 틈에 발송
+    #     배치가 돌면 그 기기는 다음 실행까지 푸시를 못 받는다
+    device, created = AppDevice.objects.get_or_create(
         device_id=device_id,
         defaults={
-            'platform': request.data.get('platform', 'android'),
-            'app_version': request.data.get('app_version', ''),
-            'fcm_token': request.data.get('fcm_token'),
+            'platform': request.data.get('platform') or 'android',
+            'app_version': request.data.get('app_version') or '',
+            'fcm_token': request.data.get('fcm_token') or None,
         },
     )
+    if not created:
+        changed = []
+        for field in ('platform', 'app_version', 'fcm_token'):
+            value = request.data.get(field)
+            # 빈 값은 "지워 달라" 가 아니라 "이번엔 안 보냈다" 로 읽는다.
+            if value in (None, ''):
+                continue
+            if getattr(device, field) != value:
+                setattr(device, field, value)
+                changed.append(field)
+        if changed:
+            device.save(update_fields=changed)
     return Response(AppDeviceSerializer(device).data, status=status.HTTP_200_OK)
 
 
@@ -152,10 +216,14 @@ def register_device(request):
 # 웹 로그인은 막혀 있는데(user_management.views.login_view 의 20/m) **같은
 # 자격증명을 쓰는 앱 로그인은 안 막혀 있었다.** 같은 집 뒷문에 자물쇠를 안
 # 단 셈이라, 초당 수백 번 비밀번호를 시도해도 아무것도 세지 않았다.
-@ratelimit(key='ip', rate='20/m', method='POST', block=True)
+@ratelimit(key='ip', rate='20/m', method='POST', block=False)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
+    limited = _rate_limited(request)
+    if limited:
+        return limited
+
     username = request.data.get('username', '').strip()
     password = request.data.get('password', '')
     device_id = request.data.get('device_id')
@@ -316,7 +384,7 @@ def news_detail(request, pk):
         news = RegulatoryNews.objects.get(pk=pk)
     except RegulatoryNews.DoesNotExist:
         return Response({'error': '존재하지 않는 정보입니다.'}, status=status.HTTP_404_NOT_FOUND)
-    return Response(RegulatoryNewsSerializer(news).data)
+    return Response(RegulatoryNewsDetailSerializer(news).data)
 
 
 # ── 알림 규칙 ─────────────────────────────────────────────────────────────────
@@ -581,6 +649,10 @@ def notifications_list(request, device_id):
             .order_by('-notified_at')
         )
         insp_data = InspectionMatchNotificationSerializer(insp_matches, many=True).data
+        # 같은 목록 안에서 두 표의 pk 가 겹치지 않게 민다. 되돌리는 것은
+        # notification_read / notification_delete 가 한다.
+        for item in insp_data:
+            item['id'] = item['id'] + INSPECTION_ID_OFFSET
 
     # 두 목록을 created_at 내림차순으로 병합
     merged = sorted(
@@ -602,7 +674,8 @@ def notification_read(request, device_id, noti_id):
     if denied:
         return Response({'error': denied[0]}, status=denied[1])
 
-    noti_type = request.query_params.get('type', 'log')
+    noti_type, noti_id = _split_notification_id(
+        noti_id, request.query_params.get('type', 'log'))
 
     if noti_type == 'inspection':
         if not device.user_id:
@@ -635,7 +708,8 @@ def notification_delete(request, device_id, noti_id):
     if denied:
         return Response({'error': denied[0]}, status=denied[1])
 
-    noti_type = request.query_params.get('type', 'log')
+    noti_type, noti_id = _split_notification_id(
+        noti_id, request.query_params.get('type', 'log'))
 
     if noti_type == 'inspection':
         if not device.user_id:
@@ -670,6 +744,106 @@ def notification_read_all(request, device_id):
             user_id=device.user_id, read_yn=False,
             notified_at__isnull=False,
         ).update(read_yn=True)
+    return Response({'detail': 'ok'})
+
+
+# ── 토큰 재발급 ───────────────────────────────────────────────────────────────
+
+@ratelimit(key='ip', rate='60/m', method='POST', block=False)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def token_refresh(request):
+    """
+    앱의 인터셉터는 **401 을 받으면 무조건** 이 경로를 친다
+    (`api_client.dart:80-96`). 그런데 서버에 이 라우트가 없었다.
+
+    없으면 Django 가 HTML 404 를 주고, 앱의 `catch (_)` 가 그것을 잡아
+    `clearTokens()` 로 **리프레시 토큰까지 지운다.** 사용자는 조용히
+    로그아웃되고 화면은 여전히 로그인한 것처럼 보인다. 액세스 토큰 수명이
+    7일이므로 8일째 앱을 켜는 모든 사용자가 이 길을 탔다.
+
+    그리고 이것 때문에 `MOBILE_REQUIRE_AUTH` 를 켤 수 없었다 — 켜는 순간
+    토큰이 만료된 사용자가 전부 여기로 와서 튕긴다.
+
+    실패는 **401** 로 답한다. 앱이 그때 토큰을 지우고 다시 로그인시키는 것이
+    맞다. 400/404 면 앱이 그 판단을 못 한다.
+    """
+    limited = _rate_limited(request)
+    if limited:
+        return limited
+
+    raw = (request.data or {}).get('refresh')
+    if not raw:
+        return Response({'error': '리프레시 토큰이 필요합니다.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    try:
+        refresh = RefreshToken(raw)
+        access = str(refresh.access_token)
+    except (TokenError, KeyError, TypeError, ValueError):
+        return Response({'error': '다시 로그인해 주세요.'},
+                        status=status.HTTP_401_UNAUTHORIZED)
+    return Response({'access': access})
+
+
+# ── 회원 탈퇴 ─────────────────────────────────────────────────────────────────
+
+@ratelimit(key='ip', rate='10/m', method='POST', block=False)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def account_delete(request):
+    """
+    앱의 [회원 탈퇴] 가 부르는 경로. 이것도 서버에 없어서 **버튼이 늘
+    "알 수 없는 오류" 로 끝났다.**
+
+    빠뜨려도 되는 기능이 아니다 — 개인정보처리방침이 "[내 정보/설정 →
+    회원 탈퇴] 기능을 통해 직접 계정 삭제 및 정보 파기를 요청할 수
+    있습니다" 라고 적어 두었고, "기기 식별 정보는 즉시 파기됩니다" 라고
+    약속했다. 앱스토어 심사 필수 항목이기도 하다.
+
+    **여기서 하는 일**
+
+    · 비밀번호를 다시 확인한다(앱이 받아서 보낸다)
+    · 그 계정의 **기기 정보를 그 자리에서 지운다** — AppDevice 를 지우면
+      보관함·알림 내역이 함께 지워진다(FK CASCADE). 알림 키워드도 지운다
+    · 계정을 비활성으로 돌린다 — 웹·앱 어느 쪽으로도 다시 못 들어온다
+
+    **일부러 남기는 것.** 그 계정이 만든 표시사항·제품·원료는 여기서
+    지우지 않는다. 앱의 탈퇴 버튼 하나로 웹에서 몇 년 쌓은 작업을 되돌릴
+    수 없게 지우는 것은 이 화면이 감당할 결정이 아니다. 방침의 "법령에
+    따라 일정 기간 보관이 필요한 경우 안전하게 보관 후 파기" 안쪽이며,
+    최종 파기는 운영에서 따로 처리한다.
+    """
+    limited = _rate_limited(request)
+    if limited:
+        return limited
+
+    device_id = (request.data or {}).get('device_id')
+    password = (request.data or {}).get('password') or ''
+
+    device = _get_device_or_404(device_id) if device_id else None
+    if device is None:
+        return Response({'error': '기기를 찾을 수 없습니다.'},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    denied = device_access_error(request, device)
+    if denied:
+        return Response({'error': denied[0]}, status=denied[1])
+
+    if not device.user_id:
+        return Response({'error': '로그인한 계정이 없습니다.'},
+                        status=status.HTTP_403_FORBIDDEN)
+
+    user = device.user
+    if not user.check_password(password):
+        return Response({'error': '비밀번호가 맞지 않습니다.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    AlertRule.objects.filter(user=user).delete()
+    AppDevice.objects.filter(user=user).delete()   # 보관함·알림 내역이 함께 간다
+
+    user.is_active = False
+    user.save(update_fields=['is_active'])
+    logger.info('[ACCOUNT_DELETE] user_id=%s 앱에서 탈퇴 처리', user.pk)
     return Response({'detail': 'ok'})
 
 

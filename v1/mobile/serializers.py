@@ -104,6 +104,23 @@ class AlertRuleSerializer(serializers.ModelSerializer):
         return obj.get_match_type_display()
 
 
+class RegulatoryNewsDetailSerializer(RegulatoryNewsSerializer):
+    """
+    상세 화면 전용. 앱에는 "검출 물질"·"관련 원재료"·"원문" 세 섹션이
+    구현돼 있는데(`news_detail_screen.dart:151-234`) 이 셋이 목록용
+    시리얼라이저의 `fields` 에 없어 **값이 늘 null** 이었다 — 그 UI 80여
+    줄이 한 번도 렌더된 적이 없다.
+
+    목록에는 싣지 않는다. `raw_detail_text` 는 원문 전체라 20건마다
+    실으면 피드 응답이 통째로 무거워진다.
+    """
+
+    class Meta(RegulatoryNewsSerializer.Meta):
+        fields = RegulatoryNewsSerializer.Meta.fields + [
+            'raw_detail_text', 'ai_issues', 'ai_substances',
+        ]
+
+
 class PushNotificationLogSerializer(serializers.ModelSerializer):
     news = RegulatoryNewsSerializer(read_only=True)
     rule_keyword = serializers.SerializerMethodField()
