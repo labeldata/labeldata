@@ -1609,6 +1609,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 servingsPerPackage: nutritionData.units_per_package,
                 servingUnitText: nutritionData.serving_size_unit === 'ml' ? '개' : '개',
                 displayUnit: nutritionData.display_unit || 'unit',
+                /* 표의 모양(기본형/병행표시)과 병행표시 유형. 기준
+                   (displayUnit)과는 다른 것이다 — 이 둘을 안 읽어서
+                   사용자가 병행표시를 골라도 인쇄물은 한 열이었다. */
+                displayStyle: nutritionData.display_style || 'basic',
+                parallelType: nutritionData.parallel_display_type || 'unit_total',
                 totalWeight: nutritionData.serving_size * nutritionData.units_per_package,
                 values: []
             };
@@ -1757,28 +1762,6 @@ document.addEventListener('DOMContentLoaded', function () {
         nutrition_text: '영양성분'
     };
 
-    // 표시사항 작성 페이지 순서에 맞는 필드 순서
-    const FIELD_ORDER = [
-        'my_label_name',      // 라벨명
-        'prdlst_dcnm',        // 식품유형
-        'prdlst_nm',          // 제품명
-        'rawmtrl_nm_display', // 원재료명
-        'ingredient_info',    // 특정성분 함량
-        'content_weight',     // 내용량
-        'weight_calorie',     // 내용량(열량)
-        'prdlst_report_no',   // 품목보고번호
-        'country_of_origin',  // 원산지
-        'storage_method',     // 보관 방법
-        'frmlc_mtrqlt',       // 용기·포장재질
-        'bssh_nm',            // 제조원 소재지
-        'distributor_address', // 유통전문판매원
-        'repacker_address',   // 소분원
-        'importer_address',   // 수입원
-        'pog_daycnt',         // 소비기한
-        'cautions',           // 주의사항
-        'additional_info',    // 기타표시사항
-        'nutrition_text'      // 영양성분
-    ];
 
     // 필드 데이터 저장소
     let checkedFields = {};
@@ -1815,170 +1798,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // [제거] 국가명 볼드 처리 함수 (constants.py로 이동)
 
-    // 국가명 목록 초기화 (중복 제거된 코드)
-    const countryList = safeLoadJsonData('country-list-data', [], '국가명 목록');
+    /* 국가명 목록은 표를 그리는 쪽(인라인)이 읽는다 — window.countryList. */
 
-    // 입력 데이터 반영 (테스트용)
+    /*
+     * 부모 화면이 보낸 표시사항을 **받아만 둔다.**
+     *
+     * 여기에 표를 그리는 렌더러가 한 벌 더 있었다. `tbody.innerHTML = ''` 로
+     * 표를 지우고 제 순서(FIELD_ORDER)로 다시 그렸는데, 사용자가 정한
+     * 순서·폭·2단 배치를 모르는 표였다. 게다가 원산지 칸에서
+     * `convertCountryCodeToKorean(value)` 를 불렀다 — 그 함수는
+     * label_preview.html 인라인 클로저의 지역 함수라 이 파일에서는 보이지
+     * 않는다. **원산지에 값이 있으면 ReferenceError** 가 났고, 그 순간 이
+     * 처리기가 통째로 멈춰 뒤에 있던 분리배출마크 자동 설정까지 함께
+     * 죽었다.
+     *
+     * 화면에 남는 표는 어차피 뒤에 등록되는 인라인 쪽(renderTable →
+     * renderTableWithLayout)이 다시 그린 것이었다. 표를 그리는 길은 그
+     * 한 곳이다.
+     *
+     * 받아 두는 것은 남긴다 — `dataLoaded` 를 세우지 않으면 위의 5 초
+     * 타임아웃이 멀쩡히 그려진 표를 "로딩에 실패하였습니다" 로 덮는다.
+     */
     window.addEventListener('message', function(e) {
         if (e.data?.type === 'previewCheckedFields' && e.data.checked) {
-            dataLoaded = true; // 데이터 로딩 성공 플래그 설정
+            dataLoaded = true;
             checkedFields = e.data.checked;
-            // const tbody = document.getElementById('previewTableBody'); // 상단에서 이미 정의됨
-            if (!tbody) return;
-
-            tbody.innerHTML = ''; // 로딩 또는 에러 메시지 제거
-            
-            // 표시사항 작성 페이지 순서에 맞게 필드를 정렬하여 렌더링
-            FIELD_ORDER.forEach(field => {
-                const value = checkedFields[field];
-                if (FIELD_LABELS[field] && value) {
-                    const tr = document.createElement('tr');
-                    const th = document.createElement('th');
-                    const td = document.createElement('td');
-                    th.textContent = FIELD_LABELS[field];
-
-                    if (field === 'rawmtrl_nm_display') {
-                        const allergenMatch = value.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/);
-                        const gmoMatch = value.match(/\[GMO\s*성분\s*:\s*([^\]]+)\]/);
-                        const container = document.createElement('div');
-                        container.style.cssText = `
-                            position: relative;
-                            width: 100%;
-                        `;
-
-                        let mainText = value
-                            .replace(/\[알레르기 성분\s*:[^\]]+\]/, '')
-                            .replace(/\[GMO\s*성분\s*:[^\]]+\]/, '')
-                            .trim();
-
-                        if (!mainText) {
-                            // mainText가 비어있으면 빈 문자열로 처리 (null 또는 undefined 방지)
-                            mainText = '';
-                        }
-
-                        // 국가명 볼드 처리 적용
-                        const processedText = boldCountryNames(mainText, countryList);
-
-                        const mainDiv = document.createElement('div');
-                        mainDiv.innerHTML = processedText
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            .replace(/&lt;strong&gt;/g, '<strong>')
-                            .replace(/&lt;\/strong&gt;/g, '</strong>');
-                        mainDiv.style.cssText = `
-                            margin-bottom: 8px;
-                            word-break: break-all;
-                        `;
-                        container.appendChild(mainDiv);
-
-                        // 알레르기 성분 표시
-                        if (allergenMatch) {
-                            const allergens = allergenMatch[1].trim();
-                            const allergenDiv = document.createElement('div');
-                            allergenDiv.textContent = `${allergens} 함유`;
-                            // 스타일은 CSS 클래스가 갖는다 — 인라인 9pt 로 박으면
-                            // 글자 크기 설정을 올려도 이 줄만 그대로 남는다.
-                            allergenDiv.className = 'pv-allergen-box';
-                            container.appendChild(allergenDiv);
-                        }
-
-                        // GMO 성분 표시
-                        if (gmoMatch) {
-                            const gmo = gmoMatch[1].trim();
-                            const gmoDiv = document.createElement('div');
-                            gmoDiv.textContent = `${gmo}(GMO)`;
-                            gmoDiv.className = 'pv-allergen-box pv-gmo-box';
-                            container.appendChild(gmoDiv);
-                        }
-
-                        // 플로트 클리어를 위한 클리어픽스
-                        const clearDiv = document.createElement('div');
-                        clearDiv.style.cssText = 'clear: both;';
-                        container.appendChild(clearDiv);
-
-                        td.appendChild(container);
-                    } else if (field === 'country_of_origin') {
-                        // 원산지 필드: 국가 코드를 한글명으로 변환 후 국가명 볼드 처리
-                        const convertedValue = convertCountryCodeToKorean(value);
-                        const processedOriginText = boldCountryNames(convertedValue, countryList);
-                        td.innerHTML = processedOriginText
-                            .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;')
-                            .replace(/&lt;strong&gt;/g, '<strong>')
-                            .replace(/&lt;\/strong&gt;/g, '</strong>');
-                    } else {
-                        // 다른 필드들은 국가 코드 변환 없이 국가명이 포함된 경우만 볼드 처리
-                        if (typeof value === 'string') {
-                            td.innerHTML = boldCountryNames(value, countryList);
-                        } else {
-                            td.textContent = value;
-                        }
-                    }
-                    tr.appendChild(th);
-                    tr.appendChild(td);
-                    tbody.appendChild(tr);
-                }
-            });
-
-            // 분리배출마크 UI 렌더링 및 자동 설정
-            renderRecyclingMarkUI();
-
-            // 테이블 내용 생성 후 스타일 적용 (분리배출마크 생성 전에 실행하여 간섭 방지)
-            updatePreviewStyles();
-            
-            // 포장재질 기반 자동 분리배출마크 설정
-            const frmlc = checkedFields.frmlc_mtrqlt || '';
-            
-            if (frmlc) {
-                // 포장재질 감지: frmlc
-                // 이 함수는 label_preview.html 인라인 스크립트에 있다. 없는
-                // 화면에서 부르면 ReferenceError 가 나고, **그 순간 이 핸들러가
-                // 통째로 멈춘다** — 분리배출마크를 옮기지도 지우지도 못하게 된
-                // 것이 이것 때문이었다.
-                const recommendedMark = (typeof recommendRecyclingMarkByMaterial === 'function')
-                    ? recommendRecyclingMarkByMaterial(frmlc) : '';
-                if (recommendedMark) {
-                    // UI가 렌더링된 후 자동 설정
-                    waitForElement('recyclingMarkSelect', () => {
-                        const selectElement = document.getElementById('recyclingMarkSelect');
-                        if (selectElement) {
-                            // 옵션 확인 및 자동 적용
-                            selectElement.value = recommendedMark;
-                            setRecyclingMark(recommendedMark, true);
-                            
-                            // UI 상태 업데이트
-                            const addBtn = document.getElementById('addRecyclingMarkBtn');
-                            if (addBtn) {
-                                addBtn.textContent = '해제';
-                                addBtn.classList.remove('btn-outline-primary');
-                                addBtn.classList.add('btn-danger');
-                            }
-                            
-                            const additionalInputBox = document.getElementById('additionalTextInputBox');
-                            if (additionalInputBox) {
-                                additionalInputBox.style.display = isCompositeMaterial(recommendedMark) ? 'flex' : 'none';
-                            }
-                            
-                            // 리스트 UI 업데이트
-                            renderRecyclingListFromContainer();
-                        }
-                    });
-                } else {
-                    // 추천 마크 없음: 선택박스만 업데이트
-                    waitForElement('recyclingMarkSelect', () => {
-                        const select = document.getElementById('recyclingMarkSelect');
-                        if (select) {
-                            select.value = '';
-                        }
-                    });
-                }
-            } else {
-                // 포장재질 정보 없음: 초기화
-                const recommendSpan = document.getElementById('recyclingMarkRecommend');
-                const select = document.getElementById('recyclingMarkSelect');
-                if (recommendSpan) recommendSpan.textContent = '';
-                if (select) select.value = '';
-            }
+            window.checkedFields = checkedFields;
         }
     });
 
@@ -2883,12 +2728,35 @@ document.addEventListener('DOMContentLoaded', function () {
         const servingsPerPackage = data.servingsPerPackage || 1;
         const totalWeight = servingSize * servingsPerPackage;
 
-        // 계산기와 동일한 표시 형식 매핑
-        const tabMap = {
-            total: `총 내용량 ${comma(totalWeight)}${servingUnit}`,
-            unit: `단위내용량 ${comma(servingSize)}${servingUnit}`,
-            '100g': `100${servingUnit}당`
-        };
+        /*
+         * 표의 **모양**. 표시 기준(displayUnit)과는 다른 것이다 —
+         * 'basic' 은 한 열, 'parallel' 은 병행표시(2단)이고, 서버가
+         * label.nutrition_display_unit 로 내려보낸다. 유형 이름은 계산기
+         * (nutrition_calculator_popup.js 의 generateParallelDisplayV3)와
+         * 같은 것을 쓴다 — 두 화면이 다른 이름을 쓰면 한쪽이 조용히
+         * 기본값으로 떨어진다.
+         */
+        const PARALLEL_TYPES = ['unit_total', 'unit_100g', 'serving_total', 'serving_100ml'];
+        const isParallel = data.displayStyle === 'parallel';
+        const parallelType = PARALLEL_TYPES.includes(data.parallelType)
+            ? data.parallelType : 'unit_total';
+
+        /*
+         * **표 머리와 표 본문은 서로 다른 것을 말한다.**
+         *
+         *   머리   "총 내용량 130g / 416kcal"   — 언제나 포장 전체다
+         *   본문   "총량당 / 단위량당 / 100g당" — 사용자가 고른 기준이다
+         *
+         * 예전에는 머리도 기준을 따라갔다(tabMap[displayUnit]). 65 g 짜리
+         * 2 개들이 제품에 100g당을 고르면 머리에 "100g당 / 320kcal" 이
+         * 찍혔고, 내용량 칸에 병기하는 총 열량(416kcal)과 어긋났다. 그
+         * 숫자를 그대로 옮겨 적은 사용자가 규정 검증에서 "열량이 맞지
+         * 않습니다" 를 계속 봤다 — 검증이 아니라 표가 틀렸다.
+         *
+         * 계산기는 이미 같은 규칙으로 고쳤다(generateBasicDisplayV3 주석).
+         */
+        let headerAmount = `총 내용량 ${comma(totalWeight)}${servingUnit}`;
+        let headerKcal = comma(getKcalValue('total', servingSize, servingsPerPackage, data.calorie)) + 'kcal';
 
         /*
          * 표의 열 머리는 **기준을 밝히는 말**이라 "당" 이 빠지면 안 된다.
@@ -2904,10 +2772,42 @@ document.addEventListener('DOMContentLoaded', function () {
             '100g': `100${servingUnit}당`
         };
 
-        // 열량 계산 (계산기와 완전히 동일한 로직)
-        let kcal = 0;
-        if (data.calorie !== undefined && data.calorie !== null) {
-            kcal = getKcalValue(displayUnit, servingSize, servingsPerPackage, data.calorie);
+        /* 병행표시의 두 열. 배수도 열 머리도 계산기와 같은 것을 쓴다. */
+        let leftMultiplier = servingSize / 100;
+        let rightMultiplier = totalWeight / 100;
+        let subHeaderLeft = '1조각당';
+        let subHeaderRight = '총내용량당';
+        if (isParallel) {
+            switch (parallelType) {
+                case 'unit_100g':
+                    rightMultiplier = 1;
+                    subHeaderRight = `100${servingUnit}당`;
+                    break;
+                case 'serving_total':
+                    subHeaderLeft = '1회량당';
+                    break;
+                case 'serving_100ml':
+                    rightMultiplier = 1;
+                    subHeaderLeft = '1회량당';
+                    subHeaderRight = '100ml당';
+                    break;
+                default:                       // unit_total
+                    break;
+            }
+            /*
+             * 병행표시의 머리도 양은 언제나 총 내용량이다. 다만 열량은 그
+             * 옆에 무엇 당인지 적어 함께 밝힌다("1조각(65g)당 309kcal") —
+             * 표시기준의 병행표시 서식이고, 계산기가 그리는 것과 같다.
+             * 1회량 유형은 낱개로 나뉘지 않으므로 (65g X 2)를 붙이지 않는다.
+             */
+            const perUnitLabel = (parallelType === 'serving_total'
+                || parallelType === 'serving_100ml') ? '1회량' : '1조각';
+            if (perUnitLabel === '1조각') {
+                headerAmount = `총 내용량 ${comma(totalWeight)}${servingUnit}`
+                    + `(${comma(servingSize)}${servingUnit} X ${comma(servingsPerPackage)})`;
+            }
+            headerKcal = `${perUnitLabel}(${comma(servingSize)}${servingUnit})당 `
+                + comma(getKcalValue('unit', servingSize, servingsPerPackage, data.calorie)) + 'kcal';
         }
 
         // 계산기와 동일한 미리보기 박스 구조
@@ -2915,8 +2815,8 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="nutrition-preview-box" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between;">
                 <div class="nutrition-preview-title" style="margin-bottom:0;font-size:2rem;">영양정보</div>
                 <div style="display:flex;flex-direction:column;align-items:flex-end;">
-                    <span class="nutrition-preview-total-small" style="font-size:0.95rem;font-weight:500;color:#fff;">${tabMap[displayUnit]}</span>
-                    <span class="nutrition-preview-kcal" style="font-size:1.15rem;font-weight:700;color:#fff;line-height:1;">${comma(kcal)}kcal</span>
+                    <span class="nutrition-preview-total-small" style="font-size:0.95rem;font-weight:500;color:#fff;">${headerAmount}</span>
+                    <span class="nutrition-preview-kcal" style="font-size:1.15rem;font-weight:700;color:#fff;line-height:1;">${headerKcal}</span>
                 </div>
             </div>
         `;
@@ -2930,50 +2830,87 @@ document.addEventListener('DOMContentLoaded', function () {
         const tdValueClass = 'style="font-weight:400;text-align:left;padding:6px 0 6px 0;"';
         const tdPercentClass = 'style="font-weight:700;text-align:right;padding:6px 0 6px 0;"';
 
-        const tableHeader = `
+        const tableHeader = isParallel ? `
+            <thead>
+                <tr>
+                    <th ${thSmall} colspan="2">
+                        <div style="display:flex;justify-content:space-between;gap:8px;">
+                            <span>${subHeaderLeft}</span>
+                            <span>1일 영양성분 기준치에 대한 비율</span>
+                        </div>
+                    </th>
+                    <th ${thRightSmall} colspan="2">${subHeaderRight}</th>
+                </tr>
+            </thead>
+        ` : `
             <thead>
                 <tr>
                     <th ${thSmall}>${tabMapShort[displayUnit]}</th>
                     <th ${thRightSmall}>1일 영양성분 기준치에 대한 비율</th>
                 </tr>
             </thead>
-        `;        // 계산기와 동일한 들여쓰기 항목 정의
+        `;
+
+        // 계산기와 동일한 들여쓰기 항목 정의
         const indentItems = ['당류', '트랜스지방', '포화지방'];
-        
+
+        /* 한 성분의 한 칸. 기준(배수)만 다르고 반올림·"미만" 규칙은 같다. */
+        function nutrientCell(item, multiplier) {
+            const raw = item.value * multiplier;
+            const shown = nutritionText(item.label, raw);
+            const percent = nutritionPercent(shown, raw, item.limit);
+            // "0.5g 미만" 처럼 단위가 이미 붙은 표기에는 단위를 또 붙이지 않는다
+            const text = (typeof shown === 'string' && shown.indexOf('미만') !== -1)
+                ? shown : (shown + item.unit);
+            const percentHtml = percent === ''
+                ? ''
+                : (percent.indexOf('미만') !== -1 ? percent : `<strong>${percent}</strong>%`);
+            return { text: text, percentHtml: percentHtml };
+        }
+
+        const basicMultiplier = (displayUnit === 'total')
+            ? (servingSize * servingsPerPackage) / 100
+            : ((displayUnit === 'unit') ? servingSize / 100 : 1);
+
         let rows = '';
         (data.values || []).forEach(item => {
             if (!item.value && item.value !== 0) return; // 값이 없으면 표시하지 않음
             if (item.label === '열량') return; // 열량은 별도 표시
-            
-            let raw = item.value;
-            if (displayUnit === 'total') {
-                raw = (item.value * servingSize * servingsPerPackage) / 100;
-            } else if (displayUnit === 'unit') {
-                raw = (item.value * servingSize) / 100;
-            }
-            const shown = nutritionText(item.label, raw);
-            const percent = nutritionPercent(shown, raw, item.limit);
-            // "0.5g 미만" 처럼 단위가 이미 붙은 표기에는 단위를 또 붙이지 않는다
-            const shownWithUnit = (typeof shown === 'string' && shown.indexOf('미만') !== -1)
-                ? shown : (shown + item.unit);
 
             const indent = indentItems.includes(item.label);
             const tdClass = indent ? tdLabelIndentClass : tdLabelClass;
             const indentClass = indent ? ' nutrient-label-indent' : '';
+
+            if (isParallel) {
+                const left = nutrientCell(item, leftMultiplier);
+                const right = nutrientCell(item, rightMultiplier);
+                rows += `<tr>
+                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${left.text}</span></td>
+                <td ${tdPercentClass}>${left.percentHtml}</td>
+                <td ${tdValueClass}>${right.text}</td>
+                <td ${tdPercentClass}>${right.percentHtml}</td>
+            </tr>`;
+                return;
+            }
+
+            const cell = nutrientCell(item, basicMultiplier);
             rows += `<tr>
-                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${shownWithUnit}</span></td>
-                <td ${tdPercentClass}>${percent === '' ? '' : (percent.indexOf('미만') !== -1 ? percent : `<strong>${percent}</strong>%`)}</td>
+                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${cell.text}</span></td>
+                <td ${tdPercentClass}>${cell.percentHtml}</td>
             </tr>`;
         });
 
         // 계산기와 동일한 하단 텍스트
+        const footerColspan = isParallel ? 'colspan="4"' : 'colspan="2"';
         rows += `
             <tr>
-                <td colspan="2" class="nutrition-preview-footer-inside">
+                <td ${footerColspan} class="nutrition-preview-footer-inside">
                     <strong>1일 영양성분 기준치에 대한 비율(%)</strong>은 2000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.
                 </td>
             </tr>
-        `;        const tableHtml = `
+        `;
+
+        const tableHtml = `
             <table class="nutrition-preview-table table" style="${tableStyle}">
                 ${tableHeader}
                 <tbody>${rows}</tbody>
@@ -4279,13 +4216,27 @@ function getFieldDefinitions() {
     return fields;
 }
 
+/*
+ * 배치를 담아 두는 localStorage 키. **라벨 id 가 들어간다.**
+ *
+ * 예전에는 라벨 id 없는 키 한 개였다. 라벨별이 아니라 브라우저별이라, 라벨
+ * A 에서 2단 배치·항목 순서를 만지면 배치를 저장한 적 없는 라벨 B 를 열 때
+ * 그 배치가 그대로 얹혔다. 그 상태로 「설정 저장」을 누르면 B 의
+ * DB(prv_field_layout)에 박힌다 — 건드린 적도 없는 라벨의 인쇄물 모양이
+ * 조용히 바뀌었다.
+ */
+function fieldLayoutStorageKey() {
+    const fromInput = document.querySelector('input[name="label_id"]')?.value;
+    const fromUrl = new URLSearchParams(window.location.search).get('label_id');
+    const labelId = String(fromInput || fromUrl || '').trim();
+    return `labelFieldOrder:${labelId || 'new'}`;
+}
+
 // 필드 순서 초기화
 /*
  * 배치를 읽어 온다. 순서는 **라벨에 저장된 것**이 먼저다.
  *
- * 예전에는 localStorage 의 'labelFieldOrder' 키 하나뿐이었다. 라벨별이 아니라
- * 브라우저별이라, 한 라벨에서 맞춰 둔 순서가 다른 라벨에 그대로 얹혔고 옆자리
- * 동료는 아예 다른 순서를 봤다. 인쇄물의 모양인데 그럴 수 없다.
+ * 브라우저별이 아니라 라벨별이어야 한다(fieldLayoutStorageKey 주석).
  *
  * localStorage 는 아직 서버에 저장한 적 없는 라벨을 위한 폴백으로만 남긴다.
  */
@@ -4311,7 +4262,8 @@ function loadFieldLayout() {
         return;
     }
     try {
-        const local = JSON.parse(localStorage.getItem('labelFieldOrder') || 'null');
+        const local = JSON.parse(
+            localStorage.getItem(fieldLayoutStorageKey()) || 'null');
         fieldOrderData = clean(local);
     } catch (e) {
         fieldOrderData = clean(null);
@@ -4792,7 +4744,7 @@ function saveFieldOrder() {
     }
     // 라벨에 저장하는 것은 "설정 저장" 이 한다(savePreviewSettings). 여기서는
     // 창을 닫았다 열어도 방금 만진 배치가 남아 있게만 해 둔다.
-    localStorage.setItem('labelFieldOrder', JSON.stringify(fieldOrderData));
+    localStorage.setItem(fieldLayoutStorageKey(), JSON.stringify(fieldOrderData));
 }
 
 /* "설정 저장" 이 서버로 보낼 배치. 표시 여부는 여기 없다 — chckd_* 가 갖는다. */

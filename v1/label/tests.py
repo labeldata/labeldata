@@ -7836,9 +7836,15 @@ class SingleRecyclingMarkOwnerTests(TestCase):
         인라인 스크립트에만 있는 함수를 여기서 부르면 ReferenceError 가 나고,
         그 순간 핸들러가 통째로 멈춘다 — 마크를 옮기지도 지우지도 못하게 된
         것이 이것 때문이었다.
+
+        그 자리(previewCheckedFields 를 받아 표를 제 순서로 다시 그리던 옛
+        렌더러)는 통째로 걷어냈다. 재질을 보고 마크를 고르는 일은 인라인
+        쪽으로 넘긴다 — window 에 걸린 이름이라 없으면 없는 대로 넘어간다.
         """
-        head = self.js.index("const recommendedMark = (typeof recommendRecyclingMarkByMaterial")
-        self.assertIn("=== 'function'", self.js[head:head + 200])
+        self.assertNotIn('recommendRecyclingMarkByMaterial(frmlc)', self.js)
+        head = self.js.index('window.updateRecyclingMarkUI = function')
+        self.assertIn("typeof window.recommendRecyclingMarkInline === 'function'",
+                      self.js[head:head + 800])
 
 
 class NutritionBasisFieldTests(TestCase):
@@ -19396,3 +19402,203 @@ class 세로_길이를_재는_곳이_하나다(SimpleTestCase):
         html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
                 ).read_text(encoding='utf-8')
         self.assertIn('CM_TO_PX = 37.795', html)
+
+
+def _preview_js():
+    """미리보기 스크립트 — 주석은 걷어낸다(_strip_comments 주석 참고)."""
+    from pathlib import Path
+
+    from django.conf import settings as dj
+
+    return _strip_comments(
+        (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js')
+        .read_text(encoding='utf-8'))
+
+
+def _update_nutrition_display_body():
+    """`updateNutritionDisplay` 함수 본문만 잘라 낸다."""
+    js = _preview_js()
+    i = js.index('function updateNutritionDisplay(')
+    j = js.index('function isNutritionShown(', i)
+    return js[i:j]
+
+
+class 영양정보_머리는_언제나_총_내용량이다(SimpleTestCase):
+    """
+    65 g 짜리 2 개들이(총 130 g) 제품에서 표시 기준을 '100g당' 으로 고르면,
+    미리보기 영양정보표의 **머리**에 `100g당 / 320kcal` 이 찍혔다.
+
+    표 머리와 표 본문은 서로 다른 것을 말한다.
+
+      머리   "총 내용량 130 g / 416 kcal"  — 언제나 포장 전체다
+      본문   "총량당 / 단위량당 / 100g당"  — 사용자가 고른 기준이다
+
+    계산기는 같은 잘못을 이미 고쳤다(nutrition_calculator_popup.js 의
+    generateBasicDisplayV3 주석). 미리보기만 옛 규칙으로 남아 있어서, 사용자가
+    내용량 칸에 병기한 총 열량(416kcal)과 인쇄된 표 머리의 열량(320kcal)이
+    서로 다른 라벨이 나왔다 — 규정 검증이 "열량이 맞지 않습니다" 를 내는데,
+    틀린 것은 값이 아니라 표였다.
+    """
+
+    def test_머리의_양이_고른_기준을_따라가지_않는다(self):
+        body = _update_nutrition_display_body()
+        self.assertNotIn('tabMap[displayUnit]', body,
+                         '머리가 표시 기준을 따라간다')
+
+    def test_머리의_열량은_총_내용량_전체의_열량이다(self):
+        body = _update_nutrition_display_body()
+        self.assertNotIn('getKcalValue(displayUnit', body)
+        self.assertIn("getKcalValue('total'", body)
+
+    def test_열_머리는_그대로_고른_기준을_밝힌다(self):
+        """본문 열의 머리(tabMapShort)까지 총량으로 바꾸면 반대로 틀린다."""
+        body = _update_nutrition_display_body()
+        self.assertIn('tabMapShort[displayUnit]', body)
+
+
+class 병행표시를_고르면_인쇄물도_두_열이다(TestCase):
+    """
+    사용자가 계산기에서 병행표시(2단 영양표시)를 고르고 두 열짜리 표를
+    확인했는데, 미리보기와 인쇄물은 언제나 한 열이었다.
+
+    서버가 표의 **모양**(label.nutrition_display_unit — 'basic'/'parallel')과
+    **유형**(label.parallel_display_type)을 미리보기 화면에 아예 안
+    내려보냈고, 화면도 읽지 않았다. 화면에서 확인한 표와 인쇄되는 표가 다른
+    것이라, 사용자는 인쇄를 걸고 나서야 알았다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='parallelnut', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='병행', delete_YN='N',
+            serving_size='65', serving_size_unit='g', units_per_package='2',
+            nutrition_display_unit='parallel', parallel_display_type='unit_100g',
+            basic_display_type='total', nutrition_text='Y', calories='320')
+
+    def _nutrition_data(self):
+        import json as _json
+        import re
+
+        r = self.client.get(reverse('label:preview_popup'),
+                            {'label_id': self.label.my_label_id})
+        self.assertEqual(r.status_code, 200)
+        m = re.search(r'<script id="nutrition-data"[^>]*>(.*?)</script>',
+                      r.content.decode('utf-8'), re.S)
+        self.assertIsNotNone(m, 'nutrition-data 블록이 없다')
+        return _json.loads(m.group(1))
+
+    def test_서버가_표의_모양을_내려보낸다(self):
+        self.assertEqual(self._nutrition_data()['display_style'], 'parallel')
+
+    def test_서버가_병행표시_유형을_내려보낸다(self):
+        self.assertEqual(
+            self._nutrition_data()['parallel_display_type'], 'unit_100g')
+
+    def test_고르지_않았으면_기본형이다(self):
+        self.label.nutrition_display_unit = ''
+        self.label.parallel_display_type = ''
+        self.label.save(update_fields=['nutrition_display_unit',
+                                       'parallel_display_type'])
+        got = self._nutrition_data()
+        self.assertEqual(got['display_style'], 'basic')
+        self.assertEqual(got['parallel_display_type'], 'unit_total')
+
+    def test_표의_기준은_그대로_basic_display_type_이다(self):
+        """display_unit 에 'parallel' 이 들어가면 머리글이 undefined 로 찍힌다."""
+        self.assertEqual(self._nutrition_data()['display_unit'], 'total')
+
+    def test_화면이_그_두_값을_읽는다(self):
+        js = _preview_js()
+        i = js.index('function initNutritionData()')
+        block = js[i:js.index('initNutritionData();', i)]
+        self.assertIn('display_style', block)
+        self.assertIn('parallel_display_type', block)
+
+    def test_화면이_두_열을_그린다(self):
+        body = _update_nutrition_display_body()
+        self.assertIn("'parallel'", body)
+        # 계산기(generateParallelDisplayV3)와 같은 네 유형을 안다
+        for kind in ('unit_total', 'unit_100g', 'serving_total', 'serving_100ml'):
+            self.assertIn(kind, body, '병행표시 유형 %s 를 모른다' % kind)
+        # 두 열이면 성분 한 줄이 네 칸이고 꼬리말도 네 칸을 덮는다
+        self.assertIn('colspan="4"', body)
+
+
+class 미리보기_표를_그리는_곳이_하나다(SimpleTestCase):
+    """
+    `previewCheckedFields` 처리기가 두 벌이었다.
+
+    먼저 등록되는 label_preview.js 쪽이 `tbody.innerHTML = ''` 로 표를 지우고
+    제 순서(FIELD_ORDER)로 다시 그렸다 — 사용자가 정한 순서·폭·2단 배치를
+    무시한 표다. 게다가 원산지 칸에서 `convertCountryCodeToKorean(value)` 를
+    부르는데 그 함수는 label_preview.html 인라인 클로저의 지역 함수라,
+    **원산지에 값이 있으면 ReferenceError** 가 나고 그 순간 처리기가 통째로
+    멈췄다(뒤에 있던 분리배출마크 자동 설정까지 함께).
+
+    최종 화면은 뒤에 등록되는 renderTable → renderTableWithLayout 가 다시
+    그려 맞았다. 앞의 것은 지워진 표를 한 번 더 그리는 헛일이었다.
+    """
+
+    def test_없는_함수를_원산지에서_부르지_않는다(self):
+        self.assertNotIn('convertCountryCodeToKorean', _preview_js())
+
+    def test_표를_지우고_제_순서로_다시_그리지_않는다(self):
+        js = _preview_js()
+        self.assertNotIn('FIELD_ORDER', js)
+        # 받아 두기만 한다 — 이 처리기는 표에 손대지 않는다
+        i = js.index("e.data?.type === 'previewCheckedFields'")
+        block = js[i:i + 400]
+        self.assertNotIn('innerHTML', block)
+        self.assertNotIn('createElement', block)
+
+    def test_그리는_길은_renderTableWithLayout_하나다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = _strip_comments(
+            (Path(dj.BASE_DIR) / 'templates/label/label_preview.html')
+            .read_text(encoding='utf-8'))
+        i = html.index('function renderTable(data)')
+        self.assertIn('window.renderTableWithLayout', html[i:i + 1200])
+
+    def test_로딩_실패_문구가_멀쩡한_표를_덮지_않는다(self):
+        """
+        데이터가 오면 5 초 뒤의 '로딩에 실패하였습니다' 가 뜨지 않아야 한다.
+        렌더러를 걷어내면서 이 표시를 함께 잃으면, 표가 그려진 뒤 5 초 만에
+        빨간 실패 문구로 덮인다.
+        """
+        js = _preview_js()
+        self.assertIn('dataLoaded = true', js)
+
+
+class 표_배치는_라벨마다_따로_남는다(SimpleTestCase):
+    """
+    라벨에 저장된 배치가 비면 localStorage 로 떨어지는데, 그 키가
+    `'labelFieldOrder'` — 라벨 id 가 없는 한 개짜리였다.
+
+    그래서 라벨 A 에서 2단 배치·항목 순서를 만지면, 배치를 저장한 적 없는
+    라벨 B 를 열 때 그 배치가 그대로 얹혔다. 그 상태로 「설정 저장」을 누르면
+    B 의 DB(prv_field_layout)에 박힌다 — 건드린 적 없는 라벨의 인쇄물 모양이
+    조용히 바뀌었다.
+    """
+
+    def test_읽는_키에_라벨_id_가_들어간다(self):
+        js = _preview_js()
+        i = js.index('function loadFieldLayout()')
+        block = js[i:js.index('window.initializeFieldOrder', i)]
+        self.assertNotIn("getItem('labelFieldOrder')", block)
+        self.assertIn('fieldLayoutStorageKey()', block)
+
+    def test_쓰는_키도_같은_키다(self):
+        js = _preview_js()
+        i = js.index('function saveFieldOrder()')
+        block = js[i:i + 1200]
+        self.assertNotIn("setItem('labelFieldOrder'", block)
+        self.assertIn('fieldLayoutStorageKey()', block)
+
+    def test_키를_짓는_곳이_한_곳이다(self):
+        js = _preview_js()
+        self.assertIn('function fieldLayoutStorageKey()', js)
+        self.assertNotIn("'labelFieldOrder'", js)

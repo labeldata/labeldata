@@ -2746,9 +2746,15 @@ def preview_popup(request):
             'units_per_package': label.units_per_package or '1',
             # 표의 기준은 basic_display_type(total/unit/100g)이다.
             # nutrition_display_unit 은 표의 **모양**(기본형/병행표시)이라
-            # 그 값을 기준으로 쓰면 tabMap 에 없는 키가 되어 머리글이
+            # 그 값을 기준으로 쓰면 화면이 모르는 기준이 되어 머리글이
             # "undefined" 로 찍힌다.
             'display_unit': label.basic_display_type or 'total',
+            # 표의 **모양**. 'basic'(한 열) / 'parallel'(병행표시 2단)이고
+            # DB 칸 이름은 nutrition_display_unit 이다. 이 두 값을 안 내려보내서
+            # 사용자가 계산기에서 병행표시를 고르고 두 열짜리 표를 확인해도
+            # 미리보기와 인쇄물은 언제나 한 열이었다.
+            'display_style': label.nutrition_display_unit or 'basic',
+            'parallel_display_type': label.parallel_display_type or 'unit_total',
             'nutrients': {
                 'calorie': {
                     'value': label.calories,
