@@ -11455,3 +11455,86 @@ class 배합비에_숫자가_아닌_값(TestCase):
 
     def test_원문은_로그로_남긴다(self):
         self.assertEqual(self.view.count('logger.exception('), 2)
+
+
+class 칸_고르기는_한_번에_적용한다(TestCase):
+    """
+    체크 한 번마다 서버에 저장하고 `location.reload()` 를 불렀다. 칸 넷을
+    감추려면 화면이 네 번 새로 그려지고 그때마다 표를 다시 읽는다 — 고르는
+    동안 아무것도 못 한다. 게다가 중간 상태가 계정에 그대로 남아서, 고르다
+    그만두면 원하지 않던 조합이 저장돼 있었다.
+
+    새로고침 자체는 남긴다(Handsontable 은 칸 구성을 바꾸면 편집 상태가
+    얽힌다). 다만 **한 번만** 한다.
+    """
+
+    @staticmethod
+    def _no_comments(src):
+        import re
+        src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+        return re.sub(r'(?m)//.*$', '', src)
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        html = (Path(settings.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+        self.html = self._no_comments(html)
+        head = self.html.index('function wireColumnPicker()')
+        self.fn = self.html[head:self.html.index('const SHOWN_COLUMNS', head)]
+
+    def test_체크만으로는_저장하지_않는다(self):
+        # change 처리기는 단추 상태만 바꾼다.
+        head = self.fn.index("box.addEventListener('change'")
+        tail = self.fn.index('});', head)
+        handler = self.fn[head:tail]
+        self.assertNotIn('fetch(', handler)
+        self.assertNotIn('location.reload', handler)
+
+    def test_적용_단추가_한_번만_보낸다(self):
+        head = self.fn.index("applyBtn.addEventListener('click'")
+        body = self.fn[head:]
+        self.assertIn("fetch('/common/grid-order/'", body)
+        self.assertIn('window.location.reload();', body)
+        self.assertEqual(self.fn.count('window.location.reload();'), 1)
+        self.assertEqual(self.fn.count("fetch('/common/grid-order/'"), 1)
+
+    def test_바뀐_것이_없으면_적용을_막는다(self):
+        self.assertIn('id="bom-col-apply" disabled', self.fn)
+        self.assertIn('applyBtn.disabled = !dirty;', self.fn)
+        self.assertIn('if (!changed()) return;', self.fn)
+
+    def test_되돌리기가_있다(self):
+        self.assertIn("cancelBtn.addEventListener('click'", self.fn)
+        self.assertIn('saved.indexOf(el.dataset.col) < 0', self.fn)
+
+    def test_고르는_동안_드롭다운이_닫히지_않는다(self):
+        self.assertIn('e.stopPropagation();', self.fn)
+
+    def test_저장에_실패하면_말한다(self):
+        self.assertIn("showSnackbar('칸 설정을 저장하지 못했습니다.', 'error')", self.fn)
+
+
+class 고르는_곁판은_다른_칸을_누르면_닫힌다(TestCase):
+    """
+    알레르기·GMO 칸을 누르면 그 줄 아래에 고르는 판이 펴진다. 그런데 닫는
+    코드가 없어서 한 번 열리면 다른 칸으로 옮겨도 계속 떠 있었고, 그 아래
+    줄들을 가린 채 남았다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        self.html = (Path(settings.BASE_DIR) / 'templates/products/bom_detail.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_열_때와_닫을_때가_짝이다(self):
+        head = self.html.index('function updateContextPanel(data, rowIndex, openPanel)')
+        body = self.html[head:self.html.index('fillRowNutrition', head)]
+        self.assertIn('if (openPanel) {', body)
+        self.assertIn('openRowDetail(rowIndex);', body)
+        self.assertIn('closeRowDetail();', body)
+
+    def test_고르는_칸은_알레르기와_GMO_뿐이다(self):
+        # 모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다.
+        self.assertIn("PICKER_PROPS = new Set(['allergens', 'gmo'])", self.html)

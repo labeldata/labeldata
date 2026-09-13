@@ -701,38 +701,105 @@ body.in-iframe .bom-page-header { display: none !important; }
         }, delay == null ? 250 : delay);
     }
 
-    /* 칸 고르기. 켜고 끄면 계정에 남기고 화면을 다시 그린다(새로고침).
-       Handsontable 은 칸 구성을 바꾸면 편집 상태가 얽히므로, 저장하고 다시
-       여는 편이 안전하다 — 자주 하는 일이 아니다. */
+    /*
+     * 칸 고르기 — **모두 고르고 한 번에 적용한다.**
+     *
+     * 예전에는 체크 한 번마다 서버에 저장하고 `location.reload()` 를 불렀다.
+     * 칸 네 개를 감추려면 화면이 네 번 새로 그려지고, 그때마다 표를 다시
+     * 읽는다 — 고르는 동안 아무것도 못 한다. 게다가 중간 상태가 계정에
+     * 그대로 남아서, 고르다 그만두면 원하지 않던 조합이 저장돼 있었다.
+     *
+     * 새로고침 자체는 남긴다. Handsontable 은 칸 구성을 바꾸면 편집 상태가
+     * 얽혀서, 저장하고 다시 여는 편이 안전하다. 다만 **한 번만** 한다.
+     */
     function wireColumnPicker() {
         const box = document.getElementById('bom-col-picker');
         if (!box) return;
-        box.innerHTML = BOM_SHEET_HEADERS.concat(
-                (window.NOTE_COLUMN_NAMES || [])).map(function (name) {
-            const fixed = BOM_FIXED_HEADERS.indexOf(name) >= 0;
-            const on = BOM_HIDDEN.indexOf(name) < 0;
-            return '<label class="dropdown-item d-flex gap-2 align-items-center'
-                + (fixed ? ' text-muted' : '') + '" style="cursor:pointer;">'
-                + '<input type="checkbox" data-col="' + name + '"'
-                + (on ? ' checked' : '') + (fixed ? ' disabled' : '') + '>'
-                + '<span>' + name + '</span>'
-                + (fixed ? '<span class="small ms-auto">고정</span>' : '')
-                + '</label>';
-        }).join('');
-        box.addEventListener('change', function (e) {
-            const input = e.target.closest('input[data-col]');
-            if (!input) return;
-            const hidden = Array.prototype.filter
+
+        const saved = (window.GRID_HIDDEN || []).slice();
+        const rows = BOM_SHEET_HEADERS.concat(window.NOTE_COLUMN_NAMES || [])
+            .map(function (name) {
+                const fixed = BOM_FIXED_HEADERS.indexOf(name) >= 0;
+                const on = saved.indexOf(name) < 0;
+                return '<label class="dropdown-item d-flex gap-2 align-items-center'
+                    + (fixed ? ' text-muted' : '') + '" style="cursor:pointer;">'
+                    + '<input type="checkbox" data-col="' + name + '"'
+                    + (on ? ' checked' : '') + (fixed ? ' disabled' : '') + '>'
+                    + '<span>' + name + '</span>'
+                    + (fixed ? '<span class="small ms-auto">고정</span>' : '')
+                    + '</label>';
+            }).join('');
+
+        box.innerHTML = rows
+            + '<div class="dropdown-divider"></div>'
+            + '<div class="d-flex align-items-center gap-2 px-3 py-2">'
+            + '<span class="small text-muted flex-grow-1" id="bom-col-dirty"></span>'
+            + '<button type="button" class="btn btn-light border v2-btn-sm"'
+            + ' id="bom-col-cancel">되돌리기</button>'
+            + '<button type="button" class="btn btn-primary v2-btn-sm"'
+            + ' id="bom-col-apply" disabled>적용</button>'
+            + '</div>';
+
+        const applyBtn = box.querySelector('#bom-col-apply');
+        const cancelBtn = box.querySelector('#bom-col-cancel');
+        const note = box.querySelector('#bom-col-dirty');
+
+        function picked() {
+            return Array.prototype.filter
                 .call(box.querySelectorAll('input[data-col]'), function (el) {
                     return !el.checked;
                 })
                 .map(function (el) { return el.dataset.col; });
+        }
+
+        function changed() {
+            const now = picked();
+            return now.length !== saved.length
+                || now.some(function (n) { return saved.indexOf(n) < 0; });
+        }
+
+        function refresh() {
+            const dirty = changed();
+            applyBtn.disabled = !dirty;
+            note.textContent = dirty ? '적용하면 표를 다시 그립니다' : '';
+        }
+
+        box.addEventListener('change', function (e) {
+            if (e.target.closest('input[data-col]')) refresh();
+        });
+
+        /* 드롭다운 안을 눌러도 닫히지 않게 한다 — 여러 개를 고르는 자리다 */
+        box.addEventListener('click', function (e) {
+            if (e.target.closest('#bom-col-apply, #bom-col-cancel')) return;
+            e.stopPropagation();
+        });
+
+        cancelBtn.addEventListener('click', function () {
+            Array.prototype.forEach.call(
+                box.querySelectorAll('input[data-col]'), function (el) {
+                    el.checked = saved.indexOf(el.dataset.col) < 0;
+                });
+            refresh();
+        });
+
+        applyBtn.addEventListener('click', function () {
+            if (!changed()) return;
+            applyBtn.disabled = true;
+            note.textContent = '적용하는 중…';
             fetch('/common/grid-order/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-CSRFToken': getCsrfToken() },
-                body: JSON.stringify({ screen: 'bom_grid', hidden: hidden })
-            }).then(function () { window.location.reload(); });
+                body: JSON.stringify({ screen: 'bom_grid', hidden: picked() })
+            }).then(function (res) {
+                if (!res.ok) throw new Error(res.status);
+                window.location.reload();
+            }).catch(function (err) {
+                console.error('[BOM] 칸 설정을 저장하지 못했습니다', err);
+                note.textContent = '';
+                applyBtn.disabled = false;
+                showSnackbar('칸 설정을 저장하지 못했습니다.', 'error');
+            });
         });
     }
 
@@ -2489,7 +2556,14 @@ body.in-iframe .bom-page-header { display: none !important; }
             return;
         }
 
-        if (openPanel) openRowDetail(rowIndex);
+        /* 고르는 칸(알레르기·GMO)을 눌렀을 때만 편다. **다른 칸을 누르면
+           닫는다** — 예전에는 닫는 코드가 없어서 한 번 열리면 계속 떠 있었고,
+           그 아래 줄들을 가린 채 남았다. */
+        if (openPanel) {
+            openRowDetail(rowIndex);
+        } else {
+            closeRowDetail();
+        }
 
         /* 영양성분 줄은 요약이 서버에서 받아 둔 답을 쓴다(같은 답을 두 번
            묻지 않기 위해). 요약이 아직 안 왔으면 '확인 중' 이 뜬다. */
