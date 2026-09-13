@@ -9924,3 +9924,431 @@ class 무기한을_고르면_만료일이_되살아나지_않는다(TestCase):
         self._update({'expiry_date': '2027-01-31'})
         self.doc.refresh_from_db()
         self.assertNotIn('expiry_unlimited', self.doc.metadata or {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 제품 문서함(문서 관리) 회귀 시험
+#
+# 아래 여섯 벌은 모두 "화면은 열어 주고 서버가 막는다" 또는 "실패했는데
+# 실패했다고 말하지 않는다" 는 한 가지 병의 변주다. 둘 다 사용자가 자기가
+# 무엇을 잘못했는지 알 수 없게 만든다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _doc_tab_source():
+    """문서함 탭 템플릿(_tab_documents.html) 원문."""
+    from pathlib import Path
+
+    from django.conf import settings as dj
+    return (Path(dj.BASE_DIR) / 'templates' / 'products'
+            / '_tab_documents.html').read_text(encoding='utf-8')
+
+
+def _js_body(src, marker):
+    """`window.<이름> = …` 한 벌의 본문만 중괄호 짝을 세어 잘라낸다.
+
+    옆 함수의 코드가 섞여 들어오면 "고쳤다" 는 거짓 통과가 난다 — 문서함
+    탭은 한 <script> 안에 함수가 수십 개다.
+    """
+    if marker not in src:
+        raise AssertionError(marker + ' 이(가) 템플릿에 없다')
+    i = src.index(marker)
+    depth = 0
+    for k in range(src.index('{', i), len(src)):
+        if src[k] == '{':
+            depth += 1
+        elif src[k] == '}':
+            depth -= 1
+            if depth == 0:
+                return src[i:k + 1]
+    raise AssertionError(marker + ' 의 끝(닫는 중괄호)을 찾지 못했다')
+
+
+class 문서_일괄_삭제가_한_건_삭제와_같은_규칙을_쓴다(TestCase):
+    """
+    문서함의 [삭제] 단추는 `can_upload_documents` 로 열린다. 그런데 서버의
+    일괄 삭제는 `label__user_id=request.user` — **제품 주인만** 골랐다.
+
+    공유 편집자가 자기가 올린 파일을 골라 지우면 하나도 안 지워졌는데
+    `success: true` 와 함께 "0개의 문서가 삭제되었습니다" 가 떴다. 화면은
+    새로고침되고 파일은 그대로 남아 있다. 몇 번을 눌러도 같은 말을 한다 —
+    실패를 성공이라고 말하니 사용자는 자기가 잘못 골랐다고 생각한다.
+
+    한 건 삭제(document_delete_api)는 이미 "올린 사람 + 업로드 권한 공유자"
+    를 허용한다. 같은 단추가 한 건이냐 여러 건이냐로 다른 규칙을 쓸 이유가
+    없다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType, ProductDocument
+        self.ProductDocument = ProductDocument
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='브라우니', delete_YN='N')
+        self.dtype = DocumentType.objects.create(type_code='T', type_name='성적서')
+        self.editor = self._member('EDITOR', 'ed@x.com')
+        self.mine = self._doc('편집자가올린것.pdf', self.editor)
+        self.theirs = self._doc('주인이올린것.pdf', self.owner)
+
+    def _member(self, role, email):
+        user = User.objects.create_user(role, password='x', email=email)
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email=email, recipient_user=user,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=share).apply_role_defaults(
+            role_code=role, save=True)
+        return user
+
+    def _doc(self, name, uploader):
+        from django.core.files.base import ContentFile
+        return self.ProductDocument.objects.create(
+            label=self.label, document_type=self.dtype,
+            file=ContentFile(b'%PDF-1.4', name=name),
+            original_filename=name, uploaded_by=uploader)
+
+    def _delete(self, user, docs):
+        self.client.force_login(user)
+        return self.client.post(
+            reverse('products:bulk_delete_documents'),
+            data=json.dumps({'document_ids': [d.document_id for d in docs]}),
+            content_type='application/json')
+
+    def _alive(self, doc):
+        doc.refresh_from_db()
+        return doc.active_yn
+
+    def test_공유_편집자가_자기가_올린_문서를_지운다(self):
+        r = self._delete(self.editor, [self.mine])
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertTrue(r.json()['success'])
+        self.assertFalse(self._alive(self.mine))
+
+    def test_지운_것이_없으면_성공이라고_말하지_않는다(self):
+        """0개를 지우고 `success: true` 를 돌려주던 바로 그 자리."""
+        r = self._delete(self.editor, [self.theirs])
+        self.assertFalse(r.json()['success'],
+                         '아무것도 안 지우고 성공이라고 말했다')
+        self.assertTrue(self._alive(self.theirs))
+
+    def test_남이_올린_문서는_섞여_있어도_안_지워진다(self):
+        self._delete(self.editor, [self.mine, self.theirs])
+        self.assertFalse(self._alive(self.mine))
+        self.assertTrue(self._alive(self.theirs), '남이 올린 문서까지 지웠다')
+
+    def test_업로드_권한이_없으면_막는다(self):
+        rv = self._member('REVIEWER', 'rv@x.com')
+        theirs = self._doc('검토자가올린것.pdf', rv)
+        r = self._delete(rv, [theirs])
+        self.assertEqual(r.status_code, 403)
+        self.assertTrue(self._alive(theirs))
+
+    def test_공유가_없는_남은_못_지운다(self):
+        stranger = User.objects.create_user('남', password='x', email='no@x.com')
+        r = self._delete(stranger, [self.mine, self.theirs])
+        self.assertFalse(r.json()['success'])
+        self.assertTrue(self._alive(self.mine))
+        self.assertTrue(self._alive(self.theirs))
+
+    def test_공유가_끊기면_못_지운다(self):
+        ProductShare.objects.filter(label=self.label).update(active_yn=False)
+        r = self._delete(self.editor, [self.mine])
+        self.assertFalse(r.json()['success'])
+        self.assertTrue(self._alive(self.mine))
+
+    def test_주인은_남이_올린_것도_지운다(self):
+        r = self._delete(self.owner, [self.mine, self.theirs])
+        self.assertTrue(r.json()['success'], r.content[:200])
+        self.assertFalse(self._alive(self.mine))
+        self.assertFalse(self._alive(self.theirs))
+
+    def test_영어_원문을_사용자에게_보내지_않는다(self):
+        stranger = User.objects.create_user('남2', password='x', email='no2@x.com')
+        r = self._delete(stranger, [self.theirs])
+        self.assertNotIn('matches the given query', r.json().get('error', ''))
+
+
+class 필수_문서_관리가_공유_편집자를_영어로_막지_않는다(TestCase):
+    """
+    [필수 문서 관리] 단추는 `can_upload_documents` 로 열리는데, 슬롯 추가·
+    제거 뷰는 `user_id=request.user` — 제품 주인만 받았다. 게다가
+    `get_object_or_404` 가 던진 `Http404` 를 바로 아래 `except Exception` 이
+    삼켜 500 으로 바꾸는 바람에, 공유 편집자에게
+    `No MyLabel matches the given query.` 라는 **영어 원문**이 스낵바에 떴다.
+
+    무엇을 잘못했는지도, 누구에게 물어야 하는지도 알 수 없는 문장이다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentSlot, DocumentType
+        self.DocumentSlot = DocumentSlot
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='브라우니', delete_YN='N')
+        self.dtype = DocumentType.objects.create(
+            type_code='T', type_name='성적서', active_yn=True)
+        self.other_type = DocumentType.objects.create(
+            type_code='U', type_name='원산지증명', active_yn=True)
+        self.slot = DocumentSlot.objects.create(
+            label=self.label, document_type=self.dtype)
+        self.editor = self._member('EDITOR', 'ed@x.com')
+
+    def _member(self, role, email):
+        user = User.objects.create_user(role, password='x', email=email)
+        share = ProductShare.objects.create(
+            label=self.label, recipient_email=email, recipient_user=user,
+            share_mode='PRIVATE', active_yn=True, created_by=self.owner)
+        SharePermission.objects.create(share=share).apply_role_defaults(
+            role_code=role, save=True)
+        return user
+
+    def _add(self, user, type_id=None):
+        self.client.force_login(user)
+        return self.client.post(
+            reverse('products:add_document_slot', args=[self.label.my_label_id]),
+            data=json.dumps({'document_type_id': type_id or self.other_type.type_id}),
+            content_type='application/json')
+
+    def _remove(self, user, slot=None):
+        self.client.force_login(user)
+        return self.client.post(
+            reverse('products:remove_document_slot',
+                    args=[(slot or self.slot).slot_id]))
+
+    def test_공유_편집자가_슬롯을_추가한다(self):
+        r = self._add(self.editor)
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertTrue(r.json()['success'], r.content[:200])
+        self.assertTrue(self.DocumentSlot.objects.filter(
+            label=self.label, document_type=self.other_type).exists())
+
+    def test_공유_편집자가_슬롯을_제거한다(self):
+        r = self._remove(self.editor)
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertTrue(r.json()['success'], r.content[:200])
+        self.slot.refresh_from_db()
+        self.assertTrue(self.slot.hidden_yn)
+
+    def test_업로드_권한이_없으면_한국어로_막는다(self):
+        rv = self._member('REVIEWER', 'rv@x.com')
+        r = self._add(rv)
+        self.assertEqual(r.status_code, 403)
+        self.assertIn('권한이 없습니다', r.json()['error'])
+
+    def test_제거도_업로드_권한을_본다(self):
+        rv = self._member('REVIEWER', 'rv2@x.com')
+        r = self._remove(rv)
+        self.assertEqual(r.status_code, 403)
+        self.assertIn('권한이 없습니다', r.json()['error'])
+        self.slot.refresh_from_db()
+        self.assertFalse(self.slot.hidden_yn)
+
+    def test_추가가_영어_원문을_스낵바로_보내지_않는다(self):
+        """`No MyLabel matches the given query.` 가 그대로 떴다."""
+        stranger = User.objects.create_user('남', password='x', email='no@x.com')
+        r = self._add(stranger)
+        self.assertNotEqual(r.status_code, 500)
+        error = r.json().get('error', '')
+        self.assertNotIn('MyLabel', error)
+        self.assertNotIn('matches the given query', error)
+
+    def test_제거가_영어_원문을_스낵바로_보내지_않는다(self):
+        stranger = User.objects.create_user('남2', password='x', email='no2@x.com')
+        r = self._remove(stranger)
+        self.assertNotEqual(r.status_code, 500)
+        error = r.json().get('error', '')
+        self.assertNotIn('DocumentSlot', error)
+        self.assertNotIn('matches the given query', error)
+
+    def test_주인은_그대로_된다(self):
+        self.assertTrue(self._add(self.owner).json()['success'])
+        self.assertTrue(self._remove(self.owner).json()['success'])
+
+
+class 편집_패널의_업로드가_읽기_전용_사용자를_파일_선택까지_보내지_않는다(TestCase):
+    """
+    바로 위 `handleSlotClick` 에는 `window.CAN_UPLOAD_DOCUMENTS` 확인이
+    있는데 `openUploadForUpdate` 에는 없었다. 검토자·뷰어가 오른쪽 편집
+    패널의 [업로드] 를 누르면 파일 선택 창이 열리고, 파일을 고르고 등록까지
+    누른 뒤에야 "문서 업로드 권한이 없습니다" 로 되돌아왔다.
+
+    패널의 [업로드]·[저장] 두 단추는 애초에 그려지지 않아야 한다 — 누를 수
+    없는 단추를 보여 주는 것 자체가 거짓말이다.
+    """
+
+    def setUp(self):
+        self.src = _doc_tab_source()
+        self.panel = _js_body(self.src, 'window.openEditPanel')
+
+    def _write_block(self):
+        """권한이 있을 때만 만들어지는 조각(writeButtons)의 본문."""
+        self.assertIn('const writeButtons', self.panel,
+                      '패널이 권한에 따라 갈리는 조각을 갖고 있지 않다')
+        self.assertIn('writeButtons 끝', self.panel)
+        i = self.panel.index('const writeButtons')
+        return self.panel[i:self.panel.index('writeButtons 끝', i)]
+
+    def test_업로드_단추가_권한을_먼저_본다(self):
+        body = _js_body(self.src, 'window.openUploadForUpdate')
+        self.assertIn('CAN_UPLOAD_DOCUMENTS', body,
+                      '읽기 전용 사용자를 파일 선택 창까지 보낸다')
+
+    def test_업로드_저장_단추는_권한_안에서만_만들어진다(self):
+        block = self._write_block()
+        self.assertIn('CAN_UPLOAD_DOCUMENTS', block)
+        self.assertIn('openUploadForUpdate()', block)
+        self.assertIn('submitDocumentUpdate()', block)
+
+    def test_권한_밖에는_그_단추가_없다(self):
+        rest = self.panel.replace(self._write_block(), '')
+        self.assertNotIn('openUploadForUpdate()', rest)
+        self.assertNotIn('submitDocumentUpdate()', rest)
+
+    def test_다운로드는_읽기_전용에게도_남는다(self):
+        """볼 수 있는 사람은 받을 수 있다 — 막는 것은 쓰기뿐이다."""
+        rest = self.panel.replace(self._write_block(), '')
+        self.assertIn('doc.downloadUrl', rest)
+
+    def test_전역_스낵바를_쓴다(self):
+        self.assertNotIn('alert(', _js_body(self.src, 'window.openUploadForUpdate'))
+
+    def test_읽기_전용_화면에는_권한_깃발이_꺼져_나간다(self):
+        """JS 가 보는 깃발이 서버가 계산한 권한과 같은 값인지 — 끝에서 끝까지."""
+        from v1.products.models import ProductMetadata
+        owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        label = MyLabel.objects.create(
+            user_id=owner, my_label_name='브라우니', delete_YN='N')
+        ProductMetadata.objects.create(label=label, product_code='PRD-T-1')
+        rv = User.objects.create_user('검토자', password='x', email='rv@x.com')
+        share = ProductShare.objects.create(
+            label=label, recipient_email='rv@x.com', recipient_user=rv,
+            share_mode='PRIVATE', active_yn=True, created_by=owner)
+        SharePermission.objects.create(share=share).apply_role_defaults(
+            role_code='REVIEWER', save=True)
+
+        self.client.force_login(rv)
+        html = self.client.get(reverse(
+            'products:product_detail', args=[label.my_label_id])).content.decode()
+        self.assertIn('window.CAN_UPLOAD_DOCUMENTS = false', html)
+
+        self.client.force_login(owner)
+        html = self.client.get(reverse(
+            'products:product_detail', args=[label.my_label_id])).content.decode()
+        self.assertIn('window.CAN_UPLOAD_DOCUMENTS = true', html)
+
+
+class 일괄_다운로드_실패가_보던_화면을_JSON_원문으로_바꾸지_않는다(TestCase):
+    """
+    `bulkDownloadCompact` 가 폼을 만들어 `form.submit()` 으로 POST 했다.
+    성공하면 파일이 내려오지만 **실패하면 그 JSON 응답이 현재 창을 통째로
+    대체한다** — 제품 상세 화면이 `{"success": false, "error": …}` 한 줄로
+    바뀌고 열어 두었던 탭도, 입력하던 값도 사라진다. 뒤로 가기로 돌아와도
+    작성 중이던 것은 없다.
+
+    fetch 로 받아 실패는 스낵바로 말하고, 성공은 Blob 으로 받아 그대로
+    내려받게 한다 — 파일 저장은 그대로 되어야 한다.
+    """
+
+    def setUp(self):
+        from django.core.files.base import ContentFile
+
+        from v1.products.models import DocumentType, ProductDocument
+        self.src = _doc_tab_source()
+        self.body = _js_body(self.src, 'window.bulkDownloadCompact')
+        self.owner = User.objects.create_user('주인', password='x', email='owner@x.com')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='브라우니', delete_YN='N')
+        dtype = DocumentType.objects.create(type_code='T', type_name='성적서')
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dtype,
+            file=ContentFile(b'%PDF-1.4', name='a.pdf'),
+            original_filename='a.pdf', uploaded_by=self.owner)
+
+    def test_현재_창을_대체하지_않는다(self):
+        self.assertNotIn('form.submit()', self.body,
+                         '오류 응답이 보던 화면을 덮어쓴다')
+
+    def test_fetch_로_받는다(self):
+        self.assertIn('fetch(', self.body)
+
+    def test_성공하면_파일로_저장한다(self):
+        self.assertIn('blob(', self.body)
+        self.assertIn('createObjectURL', self.body)
+
+    def test_실패는_스낵바로_말한다(self):
+        self.assertIn('showSnackbar', self.body)
+        self.assertNotIn('alert(', self.body)
+
+    def test_통신이_끊겨도_말한다(self):
+        self.assertIn('catch', self.body)
+
+    def test_받을_수_있으면_zip_이_온다(self):
+        """고치면서 성공 경로를 잃지 않았는지 — 서버 쪽 기준선."""
+        self.client.force_login(self.owner)
+        r = self.client.post(reverse('products:bulk_download'),
+                             {'document_ids': str(self.doc.document_id)})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r['Content-Type'], 'application/zip')
+
+    def test_받을_수_없으면_json_으로_거절한다(self):
+        """이 응답이 예전에는 제품 상세 화면을 대체했다."""
+        stranger = User.objects.create_user('남', password='x', email='no@x.com')
+        self.client.force_login(stranger)
+        r = self.client.post(reverse('products:bulk_download'),
+                             {'document_ids': str(self.doc.document_id)})
+        self.assertEqual(r.status_code, 404)
+        self.assertFalse(r.json()['success'])
+
+
+class 성적서_판독_상자가_패널을_따라_사라진다(TestCase):
+    """
+    `#specNutritionResult` 는 `#doc-edit-panel` 의 첫 자식으로 붙는데
+    `closeEditPanel` 도 `openEditPanel` 도 그것을 지우지 않았다.
+
+    A 문서에서 [성적서에서 영양성분 읽기] → 패널 닫기 → B 문서 열기 를 하면
+    **B 의 패널에 A 의 판독값**이 그대로 붙어 있다. 게다가 저장 핸들러는
+    클로저로 A 의 docId 를 쥐고 있어서, B 를 보면서 [이 제품의 영양성분으로
+    저장] 을 누르면 A 의 값이 저장된다. 어느 화면에도 A 라는 표시가 없으니
+    잘못 저장된 것을 알아챌 방법이 없다.
+    """
+
+    def setUp(self):
+        self.src = _doc_tab_source()
+
+    def test_패널을_닫을_때_지운다(self):
+        body = _js_body(self.src, 'window.closeEditPanel')
+        self.assertIn('specNutritionResult', body,
+                      '패널을 닫아도 판독 상자가 남는다')
+        self.assertIn('remove()', body)
+
+    def test_다른_문서를_열_때도_지운다(self):
+        body = _js_body(self.src, 'window.openEditPanel')
+        self.assertIn('specNutritionResult', body,
+                      '앞 문서의 판독값이 다음 문서 패널에 그대로 붙는다')
+        self.assertIn('remove()', body)
+
+
+class 문서_일괄_삭제가_말없이_사라지지_않는다(TestCase):
+    """
+    `bulkDeleteCompact` 의 `fetch` 와 `response.json()` 이 try 밖에 있었다.
+    서버가 JSON 이 아닌 것(500 HTML, 로그인 페이지)을 주거나 통신이 끊기면
+    미처리 rejection 으로 조용히 사라진다 — 확인창에서 [확인] 을 눌렀는데
+    스낵바도 없고 목록도 그대로다. 눌린 건지 아닌지조차 알 수 없다.
+    """
+
+    def setUp(self):
+        self.body = _js_body(_doc_tab_source(), 'window.bulkDeleteCompact')
+
+    def test_통신_실패를_붙잡는다(self):
+        self.assertIn('catch', self.body, '미처리 rejection 으로 사라진다')
+
+    def test_fetch_가_try_안에_있다(self):
+        self.assertIn('try', self.body)
+        self.assertLess(self.body.index('try'), self.body.index('fetch('),
+                        'fetch 가 try 밖에 있다')
+
+    def test_json_이_아닌_응답도_try_안에서_읽는다(self):
+        self.assertLess(self.body.index('try'), self.body.index('.json()'),
+                        'response.json() 이 try 밖에 있다')
+
+    def test_실패를_사람_말로_알린다(self):
+        self.assertIn('showSnackbar', self.body)
+        self.assertNotIn('alert(', self.body)

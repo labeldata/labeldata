@@ -4242,15 +4242,43 @@ def company_document_import_api(request, label_id):
     })
 
 
+def user_can_delete_document(user, document):
+    """
+    이 문서를 지울 수 있는가 — **한 벌뿐인 규칙.**
+
+    제품 소유자, 또는 **자기가 올린 문서**를 지우는 업로드 권한 공유자.
+    예전에는 소유자만이었다. 올릴 권한은 줬는데 취소할 권한이 없어서, 협력사가
+    잘못 올렸다고 연락하면 소유자가 대신 지워 줘야 했다.
+
+    한 건 삭제와 일괄 삭제가 규칙을 따로 갖고 있었다. 일괄 삭제 쪽은
+    `label__user_id=request.user` 로 **소유자만** 골랐는데 화면의 [삭제]
+    단추는 can_upload_documents 로 열렸다. 공유 편집자가 자기가 올린 파일을
+    지우면 하나도 안 지워진 채 "0개의 문서가 삭제되었습니다" 만 떴다.
+    규칙이 두 벌이면 언젠가 한쪽만 고쳐진다 — 그래서 여기 한 벌로 둔다.
+    """
+    if document.label.user_id_id == user.id:
+        return True
+    if document.uploaded_by_id != user.id:
+        return False
+    return ProductShare.objects.filter(
+        label=document.label,
+        active_yn=True,
+        share_mode='PRIVATE',
+        permission__can_upload_documents=True,
+    ).filter(
+        Q(recipient_user=user) | Q(recipient_email__iexact=user.email)
+    ).filter(
+        Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+    ).exists()
+
+
 @login_required
 @require_POST
 def document_delete_api(request, document_id):
     """
     문서 삭제 AJAX API - JSON 응답 반환.
 
-    제품 소유자, 또는 **자기가 올린 문서**를 지우는 업로드 권한자.
-    예전에는 소유자만이었다. 올릴 권한은 줬는데 취소할 권한이 없어서, 협력사가
-    잘못 올렸다고 연락하면 소유자가 대신 지워 줘야 했다.
+    권한 규칙은 user_can_delete_document 한 곳에 있다 — 일괄 삭제도 같은 것을 본다.
     """
     try:
         document = get_object_or_404(
@@ -4258,24 +4286,10 @@ def document_delete_api(request, document_id):
             document_id=document_id,
             active_yn=True
         )
-        if document.label.user_id_id != request.user.id:
-            if document.uploaded_by_id != request.user.id:
-                return JsonResponse(
-                    {'success': False, 'error': '이 문서를 삭제할 권한이 없습니다.'}, status=403)
-            share = ProductShare.objects.filter(
-                label=document.label,
-                active_yn=True,
-                share_mode='PRIVATE',
-                permission__can_upload_documents=True,
-            ).filter(
-                Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
-            ).filter(
-                Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
-            ).first()
-            if not share:
-                return JsonResponse(
-                    {'success': False, 'error': '이 문서를 삭제할 권한이 없습니다.'}, status=403)
-        
+        if not user_can_delete_document(request.user, document):
+            return JsonResponse(
+                {'success': False, 'error': '이 문서를 삭제할 권한이 없습니다.'}, status=403)
+
         # 삭제 전 정보 저장
         file_name = document.original_filename
         document_type_name = document.document_type.type_name if document.document_type else '미분류'
@@ -4737,27 +4751,52 @@ def comment_delete(request, comment_id):
 @login_required
 @require_POST
 def bulk_delete_documents(request):
-    """문서 일괄 삭제"""
+    """
+    문서 일괄 삭제.
+
+    권한은 한 건 삭제와 **같은 규칙**(user_can_delete_document)을 쓴다.
+    예전에는 여기만 `label__user_id=request.user` 로 소유자를 골랐다.
+    화면의 [삭제] 단추는 can_upload_documents 로 열리므로, 공유 편집자가
+    자기가 올린 파일을 골라 지우면 아무것도 안 지워진 채
+    `success: true` + "0개의 문서가 삭제되었습니다" 가 떴다. 새로고침해도
+    파일은 그대로였고, 몇 번을 눌러도 같은 말만 돌아왔다.
+
+    **지운 것이 없으면 성공이라고 말하지 않는다.** 일부만 지워졌으면
+    몇 개를 그대로 두었는지 함께 말한다.
+    """
     import json
     from .models import ProductActivityLog
-    
+
     try:
         data = json.loads(request.body)
         document_ids = data.get('document_ids', [])
-        
+
         if not document_ids:
             return JsonResponse({
                 'success': False,
                 'error': '삭제할 문서를 선택해주세요.'
             }, status=400)
-        
-        # 권한 확인 및 삭제
-        documents = ProductDocument.objects.filter(
+
+        candidates = list(ProductDocument.objects.select_related('label').filter(
             document_id__in=document_ids,
-            label__user_id=request.user,
             active_yn=True
-        )
-        
+        ))
+        if not candidates:
+            return JsonResponse({
+                'success': False,
+                'error': '삭제할 문서를 찾을 수 없습니다. 이미 삭제되었을 수 있습니다.'
+            }, status=404)
+
+        documents = [d for d in candidates
+                     if user_can_delete_document(request.user, d)]
+        skipped_count = len(candidates) - len(documents)
+        if not documents:
+            return JsonResponse({
+                'success': False,
+                'error': '선택한 문서를 삭제할 권한이 없습니다. '
+                         '올린 사람이나 제품 담당자만 삭제할 수 있습니다.'
+            }, status=403)
+
         deleted_count = 0
         for document in documents:
             file_name = document.original_filename
@@ -4780,16 +4819,23 @@ def bulk_delete_documents(request):
             )
             
             deleted_count += 1
-        
+
+        message = f'{deleted_count}개의 문서가 삭제되었습니다.'
+        if skipped_count:
+            message += f' {skipped_count}개는 삭제 권한이 없어 그대로 두었습니다.'
+
         return JsonResponse({
             'success': True,
-            'message': f'{deleted_count}개의 문서가 삭제되었습니다.'
+            'message': message,
+            'deleted_count': deleted_count,
+            'skipped_count': skipped_count,
         })
-        
-    except Exception as e:
+
+    except Exception:
+        logger.exception('bulk_delete_documents 실패')
         return JsonResponse({
             'success': False,
-            'error': f'삭제 중 오류가 발생했습니다: {str(e)}'
+            'error': '삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
         }, status=500)
 
 
@@ -5076,19 +5122,53 @@ def toggle_slot_visibility(request, slot_id):
         }, status=500)
 
 
+def user_can_manage_document_slots(user, label):
+    """
+    [필수 문서 관리] 를 쓸 수 있는가 — 화면이 그 단추를 여는 조건과 같다.
+
+    화면은 can_upload_documents 로 [관리] 단추를 그리는데 서버는 소유자만
+    받았다. 공유 편집자가 슬롯을 늘리거나 줄이면 get_object_or_404 의
+    Http404 가 아래 `except Exception` 에 삼켜져 500 이 되고,
+    `No MyLabel matches the given query.` 라는 **영어 원문**이 스낵바에 떴다.
+    무엇을 잘못했는지도 누구에게 물어야 하는지도 알 수 없는 문장이다.
+
+    삭제 규칙(user_can_delete_document)과 같은 공유를 본다.
+    """
+    if label.user_id_id == user.id:
+        return True
+    return ProductShare.objects.filter(
+        label=label,
+        active_yn=True,
+        share_mode='PRIVATE',
+        permission__can_upload_documents=True,
+    ).filter(
+        Q(recipient_user=user) | Q(recipient_email__iexact=user.email)
+    ).filter(
+        Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+    ).exists()
+
+
 @login_required
 @require_POST
 def add_document_slot(request, label_id):
     """문서 슬롯 추가 (필수 문서 확장)"""
     import json
 
-    try:
-        label = get_object_or_404(
-            MyLabel,
-            my_label_id=label_id,
-            user_id=request.user
-        )
+    #  찾는 일과 막는 일은 try **밖**에서 한다. 안에 두면 Http404 가
+    #  아래 `except Exception` 에 잡혀 영어 원문이 사용자에게 나간다.
+    label = MyLabel.objects.filter(my_label_id=label_id).first()
+    if not label:
+        return JsonResponse({
+            'success': False,
+            'error': '제품을 찾을 수 없습니다.'
+        }, status=404)
+    if not user_can_manage_document_slots(request.user, label):
+        return JsonResponse({
+            'success': False,
+            'error': '필수 문서를 관리할 권한이 없습니다.'
+        }, status=403)
 
+    try:
         data = json.loads(request.body)
         document_type_id = data.get('document_type_id')
         if not document_type_id:
@@ -5097,7 +5177,13 @@ def add_document_slot(request, label_id):
                 'error': '문서 종류를 선택해주세요.'
             }, status=400)
 
-        document_type = get_object_or_404(DocumentType, type_id=document_type_id, active_yn=True)
+        document_type = DocumentType.objects.filter(
+            type_id=document_type_id, active_yn=True).first()
+        if not document_type:
+            return JsonResponse({
+                'success': False,
+                'error': '문서 종류를 찾을 수 없습니다.'
+            }, status=404)
 
         slot = DocumentSlot.objects.filter(label=label, document_type=document_type).first()
         if slot:
@@ -5117,10 +5203,11 @@ def add_document_slot(request, label_id):
             'slot_id': slot.slot_id,
             'document_type': document_type.type_name
         })
-    except Exception as e:
+    except Exception:
+        logger.exception('add_document_slot 실패')
         return JsonResponse({
             'success': False,
-            'error': f'문서 추가 중 오류가 발생했습니다: {str(e)}'
+            'error': '문서 추가 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
         }, status=500)
 
 
@@ -5128,13 +5215,22 @@ def add_document_slot(request, label_id):
 @require_POST
 def remove_document_slot(request, slot_id):
     """문서 슬롯 삭제 (숨김 처리 — 필수 문서 포함)"""
-    try:
-        slot = get_object_or_404(
-            DocumentSlot,
-            slot_id=slot_id,
-            label__user_id=request.user
-        )
+    #  추가와 같은 권한 규칙을 보고, 못 찾은 것도 한국어로 말한다.
+    slot = (DocumentSlot.objects
+            .select_related('label', 'document_type')
+            .filter(slot_id=slot_id).first())
+    if not slot:
+        return JsonResponse({
+            'success': False,
+            'error': '문서 슬롯을 찾을 수 없습니다.'
+        }, status=404)
+    if not user_can_manage_document_slots(request.user, slot.label):
+        return JsonResponse({
+            'success': False,
+            'error': '필수 문서를 관리할 권한이 없습니다.'
+        }, status=403)
 
+    try:
         slot.hidden_yn = True
         slot.save()
 
@@ -5155,10 +5251,11 @@ def remove_document_slot(request, slot_id):
             'message': f'"{slot.document_type.type_name}" 슬롯이 제거되었습니다.'
         })
 
-    except Exception as e:
+    except Exception:
+        logger.exception('remove_document_slot 실패')
         return JsonResponse({
             'success': False,
-            'error': f'슬롯 삭제 중 오류가 발생했습니다: {str(e)}'
+            'error': '슬롯 삭제 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
         }, status=500)
 
 
