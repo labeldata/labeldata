@@ -1144,6 +1144,20 @@ tbody.layout-vertical tr td {
     table-layout: fixed;
 }
 
+/* 줄 묶음은 언제나 표의 일부다.
+
+   `<tbody>` 가 block 이 되면 그 안의 줄들이 **열 모델에서 빠져 나와**
+   colgroup 이 정한 너비를 쓰지 않는다. 칸은 제 내용 최소 크기로 잡히고,
+   2단 칸에는 `overflow-wrap: anywhere` 가 걸려 있어 그 최소가 한 글자다 —
+   글자가 세로로 흘렀다.
+
+   실제로 그런 코드가 있었다(autoOptimizeLayout 의 "강제 리플로우"가
+   display 를 none → block 으로 되돌렸다). 지웠지만, 이 표의 너비가 걸린
+   문제라 인라인 스타일로도 못 깨게 막아 둔다. */
+.preview-table > tbody {
+    display: table-row-group !important;
+}
+
 .preview-table col.pv-col-label {
     width: var(--label-col-width, 90px);
 }

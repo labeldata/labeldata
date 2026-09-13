@@ -4703,18 +4703,30 @@ window.autoOptimizeLayout = function(options = {}) {
     renderFieldOrderList();
     renderTableWithCurrentData();
     
-    // DOM 업데이트를 위한 강제 리플로우
-    if (currentLayoutMode === 'horizontal') {
-        setTimeout(() => {
-            const tbody = document.getElementById('previewTableBody');
-            if (tbody) {
-                tbody.style.display = 'none';
-                tbody.offsetHeight; // 강제 리플로우
-                tbody.style.display = 'block';
-            }
-        }, 50);
-    }
-    
+    /* ═══ 여기 "강제 리플로우" 가 표를 망가뜨리고 있었다 ═══════════════════
+     *
+     *     tbody.style.display = 'none';
+     *     tbody.offsetHeight;
+     *     tbody.style.display = 'block';   // ← 원래 값은 table-row-group
+     *
+     * `<tbody>` 가 block 이 되면 그 안의 줄들이 **표의 열 모델에서 빠져
+     * 나온다.** colgroup 이 105 / 195 / 105 / 195 로 정해 두어도 칸은 그것을
+     * 쓰지 않고 제 내용 최소 크기로 잡힌다. 2단 칸에는 긴 토막을 끊으려고
+     * `overflow-wrap: anywhere` 가 걸려 있어서 최소 크기가 **한 글자**다 —
+     * 글자가 세로로 흘렀다.
+     *
+     * 이 대목은 `currentLayoutMode === 'horizontal'` 일 때만 돌았다. 2단만
+     * 깨지고 1단은 멀쩡했던 까닭이 이것이다.
+     *
+     * 화면에서 잰 값이 이렇게 말하고 있었다 — 열은 105/195/105/195 인데
+     * 칸은 33/21/33/21. 열은 처음부터 옳았고, 폭을 **계산하는** 쪽을 네 번
+     * 고치는 동안 화면이 한 번도 안 바뀐 것도 그래서다.
+     *
+     * 리플로우 자체가 필요 없다. 바로 위 renderTableWithCurrentData() 가
+     * 표를 다시 그리고, 그 끝에서 updatePreviewStyles() 가 폭을 다시 잰다.
+     * ═══════════════════════════════════════════════════════════════════ */
+
+
     // 사용자 피드백 (silent 모드가 아닐 때만)
     if (!silent) {
         alert(`✨ 자동 최적화 완료!\n\n표시 중인 ${visibleCount}개 항목 중 ${optimizedCount}개를 100% 너비로 설정했습니다.`);

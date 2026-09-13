@@ -11156,3 +11156,73 @@ class 이단_칸이_여백_너비로_눌리던_것(TestCase):
         one = self.css[head:self.css.index('}', head)]
         self.assertIn('max-width: 0', one)
         self.assertNotIn('box-sizing', one)
+
+
+class 줄_묶음을_block_으로_만들지_않는다(TestCase):
+    """
+    2단 배치에서 글자가 한 글자씩 세로로 흘렀다. 화면에서 잰 값이 이랬다.
+
+        열 : 105 / 195 / 105 / 195   (합계 600 = 표 폭 601)
+        칸 : TH=33 TD=21 TH=33 TD=21
+        display: {표: table, tr: table-row, th: table-cell, **tbody: block**}
+
+    `autoOptimizeLayout` 의 "강제 리플로우" 가 tbody 를 `none` 으로 껐다가
+    **`block`** 으로 되돌렸다 — 원래 값은 `table-row-group` 이다. block 이
+    되면 줄들이 표의 열 모델에서 빠져 나와 colgroup 을 쓰지 않고, 칸은 제
+    내용 최소 크기로 잡힌다. 2단 칸에는 긴 토막을 끊으려고
+    `overflow-wrap: anywhere` 가 걸려 있어 그 최소가 한 글자다.
+
+    그 대목은 `currentLayoutMode === 'horizontal'` 일 때만 돌았다 — 2단만
+    깨지고 1단은 멀쩡했던 까닭이다. 열은 처음부터 옳았고, 폭을 **계산하는**
+    쪽을 네 번 고치는 동안 화면이 한 번도 안 바뀌었다.
+    """
+
+    @staticmethod
+    def _no_comments(src):
+        """
+        **주석만** 걷어낸다.
+
+        checks.py 의 `_strip_js_noise` 는 문자열 속까지 비워 버린다. 그것으로
+        훑으면 `'previewTableBody'` 도 `'none'` 도 사라져서, 무엇을 찾든
+        늘 통과한다 — 실제로 이 시험이 그렇게 헛돌았다.
+        """
+        import re
+        src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+        return re.sub(r'(?m)//.*$', '', src)
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR)
+        js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        # 주석에 재발 방지용으로 옛 코드를 적어 두었다 — 걷어내고 본다
+        self.js = self._no_comments(js)
+        self.html = self._no_comments(
+            (base / 'templates/label/label_preview.html').read_text(encoding='utf-8'))
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+
+    def test_JS_가_tbody_의_display_를_건드리지_않는다(self):
+        # 변수 이름은 무엇이든 될 수 있다(tbody · tb · el…). 줄 묶음을 집은
+        # 자리에서 가까운 곳에 display 대입이 있으면 걸린다.
+        import re
+        for src, name in ((self.js, 'label_preview.js'),
+                          (self.html, 'label_preview.html')):
+            for m in re.finditer(r"getElementById\('previewTableBody'\)", src):
+                near = src[m.start():m.start() + 400]
+                self.assertNotIn('.style.display', near,
+                                 name + ' 에서 줄 묶음의 display 를 바꿉니다')
+
+    def test_CSS_가_되돌려_준다(self):
+        # 인라인으로 다시 걸리더라도 표가 안 깨지게 못을 박아 둔다.
+        head = self.css.index('.preview-table > tbody')
+        self.assertIn('display: table-row-group !important;',
+                      self.css[head:self.css.index('}', head)])
+
+    def test_강제_리플로우_대목이_사라졌다(self):
+        head = self.js.index('window.autoOptimizeLayout = function')
+        tail = self.js.index('console.log', head)
+        body = self.js[head:tail]
+        self.assertNotIn("style.display = 'none'", body)
+        self.assertNotIn("style.display = 'block'", body)
+        # 표를 다시 그리는 일은 그대로 남아 있어야 한다
+        self.assertIn('renderTableWithCurrentData();', body)
