@@ -2,7 +2,7 @@ import logging
 import re
 
 from django.conf import settings
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Q
 from rest_framework import status
 from django.db import IntegrityError
@@ -25,6 +25,8 @@ from .serializers import (
 from .services.push_service import backfill_alerts_for_rule, send_immediate_for_rule
 
 logger = logging.getLogger(__name__)
+
+User = get_user_model()
 
 # Android Build.ID 형식: BP2A.250605.031.A3 / QKR1.191246.002 등
 _ANDROID_BUILD_ID_RE = re.compile(r'^[A-Z0-9]{4,}\.[0-9]{6}\.[0-9A-Z.]+$')
@@ -122,6 +124,21 @@ def device_access_error(request, device):
         # 403 을 주면 그 흐름을 못 타고 막다른 길이 된다.
         return ('로그인이 필요합니다.', 401)
     return None
+
+
+def _mark_read_for_web(user, news):
+    """
+    웹과 같은 기준으로 읽음을 남긴다.
+
+    규칙을 여기에 다시 적지 않는다 — 웹이 이미 세 표(제품·원료·키워드)를
+    함께 내리고 배지 캐시까지 지우는 함수를 갖고 있다. 그것을 부른다.
+    한쪽만 고쳐지는 일을 막는 유일한 방법이다.
+    """
+    if user is None or news is None:
+        return
+    from v1.regulatory.views import _mark_news_read
+
+    _mark_news_read(user, news)
 
 
 def _rule_quota_error(owner_user, device):
@@ -234,6 +251,22 @@ def login(request):
 
     user = authenticate(request, username=username, password=password)
     if user is None:
+        # **비밀번호가 맞는데 인증만 안 된 경우를 갈라 준다.**
+        #
+        # 인증 전 계정은 is_active=False 라 authenticate 가 None 을 준다.
+        # 그것을 "아이디 또는 비밀번호가 올바르지 않습니다" 로 옮기면, 방금
+        # 가입한 사람이 비밀번호를 틀린 줄 알고 계속 다시 친다 — 20회/분에
+        # 걸리면 "시도가 너무 잦습니다" 로 원인에서 더 멀어진다.
+        # 웹은 같은 자리에서 인증 안내를 한다.
+        #
+        # 비밀번호를 **먼저 확인한다.** 그러지 않으면 아이디만으로
+        # 계정 존재 여부를 알 수 있게 된다.
+        pending = User.objects.filter(username=username, is_active=False).first()
+        if pending is not None and pending.check_password(password):
+            return Response(
+                {'error': '이메일 인증이 완료되지 않았습니다. '
+                          '가입할 때 받은 메일의 링크를 눌러 주세요.'},
+                status=status.HTTP_403_FORBIDDEN)
         return Response({'error': '아이디 또는 비밀번호가 올바르지 않습니다.'}, status=status.HTTP_401_UNAUTHORIZED)
 
     if device_id:
@@ -256,6 +289,18 @@ def login(request):
             guest_rules = list(
                 AlertRule.objects.filter(device=_device, user__isnull=True)
             )
+            # **한도를 보면서 올린다.**
+            #
+            # 예전에는 검사가 없었다. 회원 한도를 채운 사람이 로그아웃 →
+            # 비회원으로 몇 개 더 추가 → 재로그인 하면 한도를 넘은 상태가
+            # 만들어졌고, 활성 규칙 수는 수집 때마다의 전건 매칭 부하로
+            # 그대로 이어진다.
+            #
+            # 넘치는 것은 **지우지 않고 꺼서** 올린다 — 사용자가 만든 것이다.
+            # 다른 것을 지우면 화면에서 켤 수 있다.
+            member_max = getattr(settings, 'MOBILE_MEMBER_MAX_RULES', 30)
+            active_now = AlertRule.objects.filter(
+                user=user, is_active=True).count()
             migrated = 0
             for r in guest_rules:
                 dup_exists = AlertRule.objects.filter(
@@ -270,7 +315,12 @@ def login(request):
                 else:
                     r.user = user
                     r.device = None
-                    r.save(update_fields=['user', 'device'])
+                    if r.is_active:
+                        if active_now >= member_max:
+                            r.is_active = False
+                        else:
+                            active_now += 1
+                    r.save(update_fields=['user', 'device', 'is_active'])
                     migrated += 1
             if migrated:
                 logger.info(
@@ -697,6 +747,10 @@ def notification_read(request, device_id, noti_id):
             return Response({'error': '알림을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
         log.is_read = True
         log.save(update_fields=['is_read'])
+        # **읽음은 사람 단위다.** 웹 배지는 NewsKeywordMatch 를 세는데
+        # 예전에는 기기의 로그만 바꿨다 — 앱에서 다 읽어도 웹 숫자가 그대로였고
+        # 반대도 마찬가지였다. 웹과 같은 함수를 부른다(캐시도 그쪽이 지운다).
+        _mark_read_for_web(device.user, log.news)
 
     return Response({'detail': 'ok'})
 
@@ -742,7 +796,16 @@ def notification_read_all(request, device_id):
     if denied:
         return Response({'error': denied[0]}, status=denied[1])
     # 발송 완료된 항목만 읽음 처리 (sent_at IS NOT NULL)
+    unread = list(device.notifications
+                  .filter(is_read=False, sent_at__isnull=False)
+                  .values_list('news_id', flat=True))
     device.notifications.filter(is_read=False, sent_at__isnull=False).update(is_read=True)
+    if device.user_id and unread:
+        # 웹 배지와 같은 표를 함께 내린다 — 위 notification_read 의 주석 참고
+        from v1.regulatory.models import RegulatoryNews
+
+        for news in RegulatoryNews.objects.filter(pk__in=set(unread)):
+            _mark_read_for_web(device.user, news)
     if device.user_id:
         InspectionMatch.objects.filter(
             user_id=device.user_id, read_yn=False,

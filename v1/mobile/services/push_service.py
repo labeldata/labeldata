@@ -63,8 +63,16 @@ def send_mobile_alerts_for_news(news) -> int:
     Returns: 신규 생성된 로그 수
     """
     saved = 0
-    saved += _save_keyword_logs(news)
+    # **제품·원료를 먼저 남긴다.**
+    #
+    # 두 함수 다 `(device, news)` 가 이미 있으면 건너뛴다 — 한 뉴스에 한
+    # 사람당 알림은 하나면 되기 때문이다. 그런데 키워드를 먼저 돌리면,
+    # 같은 뉴스가 등록해 둔 키워드에도 걸릴 때(흔한 낱말 하나면 그렇게 된다)
+    # **내 제품이 걸렸다는 알림이 아예 안 만들어졌다.** 이 앱이 파는 것이
+    # 바로 그 알림이고, `_trim_notifications` 의 티어 설계도 그것을 가장
+    # 마지막까지 지키게 되어 있다.
     saved += _save_product_ingredient_logs(news)
+    saved += _save_keyword_logs(news)
     return saved
 
 
@@ -205,24 +213,39 @@ def _save_product_ingredient_logs(news) -> int:
 
     product_match_users = (
         NewsProductMatch.objects
-        .filter(news=news, false_positive_yn=False)
-        .select_related('product')
+        # 지운 제품으로는 알리지 않는다. 만드는 쪽(matcher)은 이 조건을
+        # 거는데 여기는 안 걸어서, 소프트 삭제된 제품이 알림을 냈다.
+        .filter(news=news, false_positive_yn=False, product__delete_YN='N')
         .values_list('product__user_id', 'product__prdlst_nm')
     )
     ingredient_match_users = (
         NewsIngredientMatch.objects
         .filter(news=news, dismissed_yn=False)
-        .select_related('ingredient')
         .values_list('user_id', 'ingredient__prdlst_nm')
     )
 
-    user_trigger = {}
+    # 사람마다 걸린 것을 **전부** 모은다. 예전에는 `not in user_trigger` 로
+    # 첫 건만 잡아서, 제품 셋이 걸려도 알림에는 하나만 적혔다 — 나머지 둘은
+    # 없는 셈이 됐다.
+    by_user = {}
     for user_id, product_name in product_match_users:
-        if user_id and user_id not in user_trigger:
-            user_trigger[user_id] = ('product', product_name or '내 제품')
+        if user_id:
+            by_user.setdefault(user_id, {'product': [], 'ingredient': []})
+            by_user[user_id]['product'].append(product_name or '내 제품')
     for user_id, ingr_name in ingredient_match_users:
-        if user_id and user_id not in user_trigger:
-            user_trigger[user_id] = ('ingredient', ingr_name or '원료')
+        if user_id:
+            by_user.setdefault(user_id, {'product': [], 'ingredient': []})
+            by_user[user_id]['ingredient'].append(ingr_name or '원료')
+
+    user_trigger = {}
+    for user_id, found in by_user.items():
+        # 제품이 원료보다 급하다 — 내 제품이 걸린 것은 바로 조치할 일이다.
+        kind = 'product' if found['product'] else 'ingredient'
+        names = found[kind]
+        label = names[0]
+        if len(names) > 1:
+            label = '%s 외 %d건' % (label, len(names) - 1)
+        user_trigger[user_id] = (kind, label)
 
     if not user_trigger:
         return 0

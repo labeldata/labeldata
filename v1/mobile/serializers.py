@@ -130,12 +130,22 @@ class PushNotificationLogSerializer(serializers.ModelSerializer):
         fields = ['id', 'news', 'rule_keyword', 'trigger_type', 'trigger_label', 'is_read', 'sent_at', 'created_at']
 
     def get_rule_keyword(self, obj):
-        if obj.rule_triggered is None:
+        """
+        원본값과 **사람이 읽는 값**을 함께 보낸다.
+
+        예전에는 원본만 보내서 앱 알림 카드에 `#마늘 · CONTAINS` 가 찍혔다.
+        같은 값을 설정 화면은 '포함' 이라고 잘 보여 주고 있었다 — 두 화면이
+        같은 것을 다르게 말한 까닭이 여기다.
+        """
+        rule = obj.rule_triggered
+        if rule is None:
             return None
         return {
-            'keyword': obj.rule_triggered.keyword,
-            'category': obj.rule_triggered.category,
-            'match_type': obj.rule_triggered.match_type,
+            'keyword': rule.keyword,
+            'category': rule.category,
+            'category_display': rule.get_category_display(),
+            'match_type': rule.match_type,
+            'match_type_display': rule.get_match_type_display(),
         }
 
 

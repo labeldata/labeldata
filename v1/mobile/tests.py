@@ -808,3 +808,352 @@ class 앱을_지운_비회원_기기가_영원히_남지_않는다(TestCase):
                          content_type='application/json')
         self._run('--apply')
         self.assertTrue(AppDevice.objects.filter(device_id='guest-old').exists())
+
+
+class 내_제품_알림이_키워드_알림에_가려지지_않는다(TestCase):
+    """
+    이 앱이 파는 것은 "**내 것**이 걸렸다" 를 알려 주는 일이다. 그런데 그
+    알림이 만들어지지 않는 길이 있었다.
+
+    `send_mobile_alerts_for_news` 가 키워드 로그를 **먼저** 만들고, 그 다음
+    제품·원료 로그를 만든다. 둘 다 `(device, news)` 가 이미 있으면 건너뛴다.
+    그래서 같은 뉴스가 등록해 둔 키워드에도 걸리면 — 흔한 낱말 하나만
+    등록해 두어도 그렇게 된다 — **제품 매칭 로그가 아예 안 생긴다.**
+
+    사용자가 보는 것: 내 제품이 실제로 부적합에 걸렸는데 알림 제목이
+    `⚠️ 키워드 알림: #우유` 다. `⚠️ 내 제품 관련 알림` 은 오지 않는다.
+    `_trim_notifications` 의 티어 설계가 "안 읽은 제품·원료 알림을 마지막까지
+    지킨다" 고 명시할 만큼 중요하게 다루는 그 알림이, 애초에 만들어지지
+    않았다.
+
+    한 뉴스에 한 사람당 알림은 하나면 된다 — 그 하나가 **더 중요한 쪽**이어야
+    한다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyLabel
+        from v1.mobile.models import AlertRule, AppDevice
+        from v1.regulatory.models import NewsProductMatch, RegulatoryNews
+
+        self.user = User.objects.create_user(username='ownprod', password='x')
+        self.device = AppDevice.objects.create(device_id='prod-device', user=self.user)
+        self.news = RegulatoryNews.objects.create(
+            external_id='pk-1', api_source='I2620', source='domestic',
+            product_name='우유식빵', company_name='어떤제과', ai_parsed=True,
+            collected_date='2026-09-01', ai_keywords=['우유'])
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='내 우유식빵', delete_YN='N',
+            prdlst_nm='내 우유식빵')
+        NewsProductMatch.objects.create(
+            news=self.news, product=self.label,
+            matched_keyword='우유', matched_ingredient='우유',
+            match_score=90, risk_score=50)
+        AlertRule.objects.create(
+            user=self.user, category='INGREDIENT', keyword='우유',
+            match_type='CONTAINS', is_active=True)
+
+    def _run(self):
+        from v1.mobile.services.push_service import send_mobile_alerts_for_news
+
+        return send_mobile_alerts_for_news(self.news)
+
+    def _logs(self):
+        from v1.mobile.models import PushNotificationLog
+
+        return list(PushNotificationLog.objects.filter(device=self.device))
+
+    def test_제품_매칭이_있으면_그것으로_알린다(self):
+        self._run()
+        logs = self._logs()
+        self.assertEqual(len(logs), 1, '한 뉴스에 알림은 하나여야 한다')
+        self.assertEqual(logs[0].trigger_type, 'product')
+        self.assertIn('내 우유식빵', logs[0].trigger_label)
+
+    def test_키워드_매칭_기록_자체는_그대로_남는다(self):
+        """웹 목록의 '키워드' 배지가 그것을 본다 — 없애면 안 된다."""
+        from v1.regulatory.models import NewsKeywordMatch
+
+        self._run()
+        self.assertTrue(
+            NewsKeywordMatch.objects.filter(user=self.user, news=self.news).exists())
+
+    def test_제품_매칭이_없으면_키워드로_알린다(self):
+        from v1.mobile.models import PushNotificationLog
+        from v1.regulatory.models import NewsProductMatch
+
+        NewsProductMatch.objects.all().delete()
+        self._run()
+        logs = self._logs()
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0].trigger_type, 'keyword')
+        self.assertEqual(logs[0].trigger_label, '우유')
+
+    def test_두_번_돌려도_알림이_늘지_않는다(self):
+        self._run()
+        self._run()
+        self.assertEqual(len(self._logs()), 1)
+
+    def test_제품이_여럿이면_몇_건인지_말해_준다(self):
+        """
+        예전에는 첫 건만 이름을 남기고 나머지는 없는 셈이 됐다 —
+        `if user_id not in user_trigger`.
+        """
+        from v1.label.models import MyLabel
+        from v1.regulatory.models import NewsProductMatch
+
+        second = MyLabel.objects.create(
+            user_id=self.user, my_label_name='내 우유케이크', delete_YN='N',
+            prdlst_nm='내 우유케이크')
+        NewsProductMatch.objects.create(
+            news=self.news, product=second,
+            matched_keyword='우유', matched_ingredient='우유',
+            match_score=80, risk_score=40)
+        self._run()
+        label = self._logs()[0].trigger_label
+        self.assertIn('외 1건', label)
+
+    def test_지운_제품은_알리지_않는다(self):
+        from v1.regulatory.models import NewsProductMatch
+
+        NewsProductMatch.objects.all().delete()
+        self.label.delete_YN = 'Y'
+        self.label.save(update_fields=['delete_YN'])
+        NewsProductMatch.objects.create(
+            news=self.news, product=self.label,
+            matched_keyword='우유', matched_ingredient='우유',
+            match_score=90, risk_score=50)
+        self._run()
+        logs = self._logs()
+        # 지운 제품 때문에 '내 제품' 알림이 가지는 않는다 (키워드로는 갈 수 있다)
+        self.assertTrue(all(l.trigger_type != 'product' for l in logs))
+
+
+class 앱과_웹이_같은_알림을_두_번_읽게_하지_않는다(TestCase):
+    """
+    웹 사이드바 배지는 `NewsKeywordMatch.read_yn` 을 센다(selectors). 앱의
+    읽음 처리는 `PushNotificationLog.is_read` 만 바꿨다 — **다른 표다.**
+
+    그래서 앱에서 '모두 읽음' 을 눌러 알림함을 비워도 웹에 들어가면 배지
+    숫자가 그대로다. 같은 알림을 두 화면에서 두 번 읽어야 한다. 60초 캐시도
+    지우지 않아 그 위에 한 번 더 어긋난다.
+    """
+
+    def setUp(self):
+        from v1.mobile.models import AppDevice, PushNotificationLog
+        from v1.regulatory.models import NewsKeywordMatch, RegulatoryNews
+
+        self.user = User.objects.create_user(username='rdsync', password='x')
+        self.device = AppDevice.objects.create(device_id='rd-device', user=self.user)
+        self.news = RegulatoryNews.objects.create(
+            external_id='rd-1', api_source='I2620', source='domestic',
+            product_name='뉴스', ai_parsed=True, collected_date='2026-09-01')
+        self.rule = AlertRule.objects.create(
+            user=self.user, category='INGREDIENT', keyword='우유',
+            match_type='CONTAINS', is_active=True)
+        self.match = NewsKeywordMatch.objects.create(
+            user=self.user, news=self.news, rule=self.rule,
+            matched_keyword='우유', read_yn=False, dismissed_yn=False)
+        self.log = PushNotificationLog.objects.create(
+            device=self.device, news=self.news, rule_triggered=self.rule,
+            trigger_type='keyword', trigger_label='우유',
+            sent_at='2026-09-02T00:00:00+09:00')
+        cache.clear()
+
+    def _web_unread(self):
+        from v1.regulatory import selectors
+
+        return selectors.unread_news_count(self.user)
+
+    def test_처음에는_웹_배지가_센다(self):
+        self.assertEqual(self._web_unread(), 1)
+
+    def test_앱에서_한_건_읽으면_웹_배지가_내려간다(self):
+        r = self.client.patch(
+            '/api/mobile/devices/rd-device/notifications/%d/read/' % self.log.pk)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._web_unread(), 0)
+
+    def test_앱에서_모두_읽으면_웹_배지가_비워진다(self):
+        r = self.client.post(
+            '/api/mobile/devices/rd-device/notifications/read-all/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._web_unread(), 0)
+
+    def test_배지_캐시도_함께_지운다(self):
+        """60초 캐시가 남아 있으면 그동안은 여전히 어긋난다."""
+        from django.core.cache import cache as dj_cache
+
+        key = 'regulatory_alert_count_%s' % self.user.pk
+        dj_cache.set(key, 7, 60)
+        self.client.post('/api/mobile/devices/rd-device/notifications/read-all/')
+        self.assertIsNone(dj_cache.get(key))
+
+    def test_남의_알림까지_읽지는_않는다(self):
+        from v1.regulatory.models import NewsKeywordMatch
+
+        other = User.objects.create_user(username='rdother', password='x')
+        other_rule = AlertRule.objects.create(
+            user=other, category='INGREDIENT', keyword='우유',
+            match_type='CONTAINS', is_active=True)
+        other_match = NewsKeywordMatch.objects.create(
+            user=other, news=self.news, rule=other_rule,
+            matched_keyword='우유', read_yn=False, dismissed_yn=False)
+        self.client.post('/api/mobile/devices/rd-device/notifications/read-all/')
+        other_match.refresh_from_db()
+        self.assertFalse(other_match.read_yn)
+
+
+class 가입_직후_로그인이_막다른_길이_아니다(TestCase):
+    """
+    이메일 인증 전 계정은 `is_active=False` 라 `authenticate()` 가 None 을
+    준다. 앱은 그것을 **"아이디 또는 비밀번호가 올바르지 않습니다"** 로
+    옮겼다.
+
+    방금 가입한 사람이 비밀번호를 틀린 줄 알고 계속 다시 친다. 20회/분에
+    걸리면 그다음은 "시도가 너무 잦습니다" 라 원인에서 더 멀어진다.
+    웹은 같은 자리에서 "이메일 인증이 완료되지 않았습니다" 라고 말한다.
+    """
+
+    def setUp(self):
+        from v1.user_management.models import UserProfile
+
+        self.user = User.objects.create_user(
+            username='unv@example.com', email='unv@example.com',
+            password='pw12345!', is_active=False)
+        UserProfile.objects.update_or_create(
+            user=self.user, defaults={'email_verified_yn': False})
+        cache.clear()
+
+    def _login(self, password):
+        return self.client.post(
+            '/api/mobile/login/',
+            data=json.dumps({'username': 'unv@example.com', 'password': password}),
+            content_type='application/json')
+
+    def test_인증_전이면_그렇다고_말한다(self):
+        r = self._login('pw12345!')
+        self.assertEqual(r.status_code, 403)
+        self.assertIn('인증', r.json()['error'])
+
+    def test_비밀번호가_틀리면_여전히_401_이다(self):
+        """인증 여부를 비밀번호 확인 없이 알려 주면 계정 존재가 샌다."""
+        r = self._login('wrong-password')
+        self.assertEqual(r.status_code, 401)
+        self.assertNotIn('인증', r.json()['error'])
+
+    def test_없는_계정도_401_이다(self):
+        r = self.client.post(
+            '/api/mobile/login/',
+            data=json.dumps({'username': 'nobody@example.com', 'password': 'x'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 401)
+
+    def test_인증된_계정은_그대로_들어온다(self):
+        from v1.user_management.models import UserProfile
+
+        self.user.is_active = True
+        self.user.save(update_fields=['is_active'])
+        UserProfile.objects.update_or_create(
+            user=self.user, defaults={'email_verified_yn': True})
+        r = self._login('pw12345!')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['access'])
+
+
+class 로그인_승격이_키워드_한도를_넘기지_않는다(TestCase):
+    """
+    비회원으로 5개를 만들고 로그인하면 그 5개가 계정으로 승격된다. 그런데
+    승격 루프에 한도 검사가 없었다.
+
+    회원 한도를 이미 채운 사람이 로그아웃 → 비회원으로 5개 추가 → 재로그인
+    하면 **한도를 넘은 상태**가 만들어진다. 활성 규칙 수는 수집 때마다의
+    전건 매칭 부하로 바로 이어진다.
+    """
+
+    def setUp(self):
+        from django.test import override_settings
+
+        from v1.mobile.models import AppDevice
+
+        self.user = User.objects.create_user(username='promo', password='pw12345!')
+        self.device = AppDevice.objects.create(device_id='promo-device')
+        self._ov = override_settings(MOBILE_MEMBER_MAX_RULES=3)
+        self._ov.enable()
+        self.addCleanup(self._ov.disable)
+        cache.clear()
+
+    def _guest_rule(self, keyword):
+        AlertRule.objects.create(
+            device=self.device, user=None, category='INGREDIENT',
+            keyword=keyword, match_type='CONTAINS', is_active=True)
+
+    def _login(self):
+        return self.client.post(
+            '/api/mobile/login/',
+            data=json.dumps({'username': 'promo', 'password': 'pw12345!',
+                             'device_id': 'promo-device'}),
+            content_type='application/json')
+
+    def test_한도_안이면_다_올라간다(self):
+        self._guest_rule('a')
+        self._guest_rule('b')
+        self.assertEqual(self._login().status_code, 200)
+        self.assertEqual(
+            AlertRule.objects.filter(user=self.user, is_active=True).count(), 2)
+
+    def test_넘치는_것은_꺼진_채로_올라간다(self):
+        """지우지는 않는다 — 사용자가 만든 것이다. 다만 한도를 넘겨 돌지 않는다."""
+        for kw in ('a', 'b', 'c', 'd', 'e'):
+            self._guest_rule(kw)
+        self.assertEqual(self._login().status_code, 200)
+        self.assertEqual(
+            AlertRule.objects.filter(user=self.user, is_active=True).count(), 3)
+        self.assertEqual(AlertRule.objects.filter(user=self.user).count(), 5)
+
+    def test_이미_채운_계정에는_더_켜지_않는다(self):
+        for kw in ('x', 'y', 'z'):
+            AlertRule.objects.create(
+                user=self.user, category='INGREDIENT', keyword=kw,
+                match_type='CONTAINS', is_active=True)
+        self._guest_rule('a')
+        self._guest_rule('b')
+        self.assertEqual(self._login().status_code, 200)
+        self.assertEqual(
+            AlertRule.objects.filter(user=self.user, is_active=True).count(), 3)
+
+
+class 알림_카드에_개발자_값이_찍히지_않는다(TestCase):
+    """
+    앱 알림 카드가 `#마늘 · CONTAINS` 를 찍었다. 서버가 `match_type` 원본만
+    보내서다. 같은 값을 설정 화면은 '포함' 이라고 잘 보여 준다 — 서버가
+    사람이 읽는 값도 함께 보내면 두 화면이 같아진다.
+    """
+
+    def setUp(self):
+        from v1.mobile.models import AppDevice, PushNotificationLog
+        from v1.regulatory.models import RegulatoryNews
+
+        self.user = User.objects.create_user(username='mtd', password='x')
+        self.device = AppDevice.objects.create(device_id='mtd-device', user=self.user)
+        news = RegulatoryNews.objects.create(
+            external_id='mtd-1', api_source='I2620', source='domestic',
+            product_name='뉴스', ai_parsed=True, collected_date='2026-09-01')
+        rule = AlertRule.objects.create(
+            user=self.user, category='INGREDIENT', keyword='마늘',
+            match_type='CONTAINS', is_active=True)
+        PushNotificationLog.objects.create(
+            device=self.device, news=news, rule_triggered=rule,
+            trigger_type='keyword', trigger_label='마늘',
+            sent_at='2026-09-02T00:00:00+09:00')
+
+    def test_사람이_읽는_값을_함께_보낸다(self):
+        r = self.client.get('/api/mobile/devices/mtd-device/notifications/')
+        self.assertEqual(r.status_code, 200)
+        keyword = r.json()[0]['rule_keyword']
+        self.assertEqual(keyword['match_type'], 'CONTAINS')
+        self.assertEqual(keyword['match_type_display'], '포함')
+
+    def test_분류도_함께_보낸다(self):
+        r = self.client.get('/api/mobile/devices/mtd-device/notifications/')
+        keyword = r.json()[0]['rule_keyword']
+        self.assertTrue(keyword.get('category_display'))
