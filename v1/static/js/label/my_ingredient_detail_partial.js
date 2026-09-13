@@ -679,6 +679,16 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
     })
     .then(data => {
         if (data.success) {
+            /* 새로 만든 원료의 id 를 숨은 칸에 곧바로 채운다.
+               예전에는 안 채웠다. 저장한 뒤 한 번 더 [저장] 을 누르면 폼은
+               여전히 "새로 만드는 중" 이라, 서버가 "동일한 이름의 원료가 이미
+               존재합니다" 를 내고 — 확인하고 넘기면 진짜 사본이 하나 더
+               생겼다. */
+            var idField = document.getElementById('my_ingredient_id');
+            if (idField && !idField.value && data.ingredient_id) {
+                idField.value = data.ingredient_id;
+            }
+
             // 저장 성공 버튼 피드백
             if (saveBtn) {
                 setSaveBtn('ok', '저장했습니다');
@@ -709,9 +719,13 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
             }
             
             // 버튼 피드백 표시 후 리스트 갱신 (300ms 지연)
+            /* 위에서 숨은 칸을 채웠으므로, "신규였는가" 는 그 칸으로 다시
+               물으면 안 된다 — 응답이 알려 준 값으로 판정한다. */
+            var wasNew = !!(data.ingredient_id && data.created);
+
             setTimeout(() => {
                 // 신규 등록된 원료의 페이지 계산 및 이동
-                if (data.ingredient_id && !document.getElementById('my_ingredient_id').value) {
+                if (wasNew) {
                     // 신규 등록의 경우 해당 원료가 있는 페이지 계산
                     calculateIngredientPage(data.ingredient_id, queryString, function(targetPage) {
                         const urlParams = new URLSearchParams(queryString.replace('?', ''));
@@ -781,6 +795,27 @@ function calculateIngredientPage(ingredientId, queryString, callback) {
 
 // 리스트 갱신 및 원료 선택
 function updateIngredientListAndSelect(queryString, ingredientId) {
+    /*
+     * 이 함수 전체가 V2 에서는 **한 번도 돈 적이 없다.**
+     *
+     * `#ingredientTable` 은 V1 목록(my_ingredient_list_combined_v1.html)에만
+     * 있는 id 다. V2 는 열 구성을 사용자가 고르는 표라 그 id 도, 이 함수가
+     * 끼워 넣는 partial 의 다섯 칸도 맞지 않는다. 그런데 `if (tbody)` 가
+     * 조용히 삼켜서, 저장했다는 말은 뜨는데 왼쪽 목록은 그대로였다.
+     *
+     * V2 는 `?open=<id>` 로 상세를 여는 길을 이미 갖고 있다. 그쪽으로 보낸다 —
+     * 목록·쪽수·정렬이 서버가 그리는 것 그대로 다시 맞고, 방금 저장한 원료가
+     * 선택된 채로 열린다.
+     */
+    const tbodyV1 = document.querySelector('#ingredientTable tbody');
+    if (!tbodyV1) {
+        const url = new URL(window.location.href);
+        if (ingredientId) url.searchParams.set('open', ingredientId);
+        url.searchParams.delete('page');
+        window.location.href = url.toString();
+        return;
+    }
+
     fetch('/label/my-ingredient-table-partial/' + queryString)
         .then(res => res.text())
         .then(tableHtml => {

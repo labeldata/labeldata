@@ -1069,6 +1069,26 @@ def label_creation(request, label_id=None):
         return render(request, _get_template(request, 'label/label_creation.html'), context)
 
 
+def _ingredient_quota_error(user, amount=1):
+    """
+    원료를 `amount` 건 더 만들 수 있는가. 안 되면 사용자에게 할 말을 돌려준다.
+
+    한도를 보던 곳은 **붙여넣기 하나뿐**이었다. 신규 등록·검색에서 복사·
+    엑셀 업로드·첨가물 일괄 복사는 아무리 넣어도 통과했다. 한도를 건 목적이
+    나중에 유료로 돌릴 자리를 만드는 것인데, 우회로가 넷이면 한도가 아니다.
+
+    Returns: 문제없으면 None, 아니면 사람에게 보여 줄 문구
+    """
+    allowed, info = quota.check(user, 'ingredient', amount=amount)
+    return None if allowed else info['message']
+
+
+def _ingredient_room(user):
+    """앞으로 몇 건 더 만들 수 있나. 일괄 경로가 어디서 멈출지 정한다."""
+    info = quota.usage(user, 'ingredient')
+    return max(0, info['limit'] - info['used'])
+
+
 @login_required
 @csrf_exempt
 def save_to_my_ingredients(request, prdlst_report_no=None):
@@ -1154,6 +1174,10 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             ingredient_display_name = rawmtrl_nm or "미정"
             prdlst_dcnm_for_save = prdlst_dcnm
         # ---------------------------------------------------
+
+        over = _ingredient_quota_error(request.user)
+        if over:
+            return JsonResponse({'success': False, 'error': over}, status=429)
 
         new_ingredient = MyIngredient.objects.create(
             user_id=request.user,
@@ -1260,10 +1284,18 @@ def my_ingredient_list(request):
     """my_ingredient_list_combined으로 통합됨 - 리다이렉트"""
     return redirect('label:my_ingredient_list_combined')
 
-@login_required
-def my_ingredient_list_combined(request):
-    label_id = request.GET.get('label_id')
+def _my_ingredient_conditions(request):
+    """
+    내 원료 목록의 **검색 조건 한 벌**.
 
+    목록과 엑셀 다운로드가 같은 것을 봐야 한다. 예전에는 다운로드가
+    `get_search_conditions`(칸별 검색)와 food_category 만 보고 **통합 검색어
+    `q` 를 통째로 무시했다.** 화면에서 "대두" 로 걸러 12건을 보고 내려받으면
+    2,000건이 담긴 파일이 왔다.
+
+    Returns: (search_conditions, search_values, joins_bom, search_q, search_field)
+      joins_bom 이 참이면 ProductBOM 조인이 걸린 것이라 distinct 가 필요하다.
+    """
     # 통합 검색어 + 검색 필드 선택
     search_q = request.GET.get('q', '').strip()
     search_field = request.GET.get('search_field', 'all').strip() or 'all'
@@ -1291,10 +1323,16 @@ def my_ingredient_list_combined(request):
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
 
+    # 비고(ProductBOM.notes)는 원료가 아니라 **그 원료를 쓴 자리**에 붙는다.
+    # 조인이 걸리면 한 원료가 쓰인 횟수만큼 줄이 늘고, 건수도 그만큼 부풀려진다
+    # ("3건이라는데 같은 원료가 세 줄"). 조인이 걸릴 때만 distinct 를 건다.
+    joins_bom = bool(search_values.get('notes'))
+
     # 통합 검색어 처리
     if search_q:
         search_values['q'] = search_q
         if search_field == 'notes':
+            joins_bom = True
             # "거래처: 대상" 도 "거래처:대상" 도 찾는다. 우리가 적어 넣는 꼴은
             # 하나뿐이라, 띄어쓰기를 안 쓰면 안 찾혔다.
             from v1.label.services.note_fields import search_terms
@@ -1306,6 +1344,7 @@ def my_ingredient_list_combined(request):
         elif search_field != 'all' and search_field in _ing_field_map:
             search_conditions &= Q(**{f"{_ing_field_map[search_field]}__icontains": search_q})
         else:
+            joins_bom = True          # 전체 검색은 비고까지 본다
             search_conditions &= (
                 Q(prdlst_nm__icontains=search_q) |
                 Q(prdlst_report_no__icontains=search_q) |
@@ -1323,6 +1362,24 @@ def my_ingredient_list_combined(request):
     food_category = request.GET.get('food_category', '').strip()
     if food_category:
         search_conditions &= Q(food_category=food_category)
+    return search_conditions, search_values, joins_bom, search_q, search_field
+
+
+@login_required
+def my_ingredient_list_combined(request):
+    label_id = request.GET.get('label_id')
+
+    (search_conditions, search_values, joins_bom,
+     search_q, search_field) = _my_ingredient_conditions(request)
+    _ing_field_map = {
+        'prdlst_nm': 'prdlst_nm',
+        'prdlst_report_no': 'prdlst_report_no',
+        'prdlst_dcnm': 'prdlst_dcnm',
+        'bssh_nm': 'bssh_nm',
+        'ingredient_display_name': 'ingredient_display_name',
+        'allergens': 'allergens',
+    }
+    food_category = request.GET.get('food_category', '').strip()
 
     sort_field, active_sort, sort_order = list_sort.my_ingredient(
         request.GET.get('sort'), request.GET.get('order'))
@@ -1361,6 +1418,9 @@ def my_ingredient_list_combined(request):
         ).order_by('_match_priority', sort_field)
     else:
         my_ingredients = base_qs.order_by(sort_field)
+
+    if joins_bom:
+        my_ingredients = my_ingredients.distinct()
 
     total_count = my_ingredients.count()
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
@@ -1455,6 +1515,15 @@ def my_ingredient_detail(request, ingredient_id=None):
         mode = 'create'
 
     if request.method == 'POST':
+        # 새로 만드는 것이면 한도를 먼저 본다 — 다 쓰고 나서 막으면
+        # 사용자는 적어 둔 것을 잃는다
+        if mode == 'create':
+            over = _ingredient_quota_error(request.user)
+            if over:
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': over}, status=429)
+                messages.error(request, over)
+                return redirect('label:my_ingredient_list')
         # 공용 원료(user_id=None)는 수정 불가
         if getattr(ingredient, 'user_id', None) is None:
             msg = '공용 원료는 수정할 수 없습니다.'
@@ -1547,6 +1616,10 @@ def my_ingredient_detail(request, ingredient_id=None):
                     'success': True,
                     'message': msg,
                     'ingredient_id': new_ingredient.my_ingredient_id,
+                    # 방금 **만든** 것인지 고친 것인지. 화면은 저장 직후
+                    # 숨은 id 칸을 채우므로, 그 칸으로는 더 이상 신규 여부를
+                    # 물을 수 없다 — 서버가 말해 준다.
+                    'created': mode == 'create',
                     'synced_bom_count': synced_bom_count,
                     'affected_product_count': len(affected_product_ids),
                     'affected_label_ids': list(affected_product_ids),
@@ -2065,6 +2138,9 @@ def register_my_ingredient(request):
         # 중복 체크: 동일한 이름의 내 원료가 이미 존재하면 에러 반환
         if MyIngredient.objects.filter(user_id=request.user, prdlst_nm=prdlst_nm, delete_YN='N').exists():
             return JsonResponse({'success': False, 'error': '동일한 이름의 원료가 이미 존재합니다.'}, status=400)
+        over = _ingredient_quota_error(request.user)
+        if over:
+            return JsonResponse({'success': False, 'error': over}, status=429)
         MyIngredient.objects.create(
             user_id=request.user,
             prdlst_nm=prdlst_nm,
@@ -4264,19 +4340,13 @@ def download_my_ingredients_excel(request):
     """
     현재 사용자의 '내 원료' 목록을 엑셀 파일로 다운로드합니다.
     """
-    # ... (기존의 queryset 필터링 로직은 그대로 유지) ...
-    search_fields = {
-        'prdlst_nm': 'prdlst_nm',
-        'prdlst_report_no': 'prdlst_report_no',
-        'prdlst_dcnm': 'prdlst_dcnm',
-        'bssh_nm': 'bssh_nm',
-        'ingredient_display_name': 'ingredient_display_name',
-    }
-    search_conditions, _ = get_search_conditions(request, search_fields)
-    search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user.id) | Q(user_id__isnull=True))
-    food_category = request.GET.get('food_category', '').strip()
-    if food_category:
-        search_conditions &= Q(food_category=food_category)
+    # 목록과 **같은 조건**을 본다.
+    #
+    # 예전에는 여기서 칸별 검색과 food_category 만 다시 조립하고 통합 검색어
+    # `q` 를 통째로 무시했다. 화면에서 "대두" 로 걸러 12건을 보고 내려받으면
+    # 2,000건이 담긴 파일이 왔다 — 같은 화면의 두 단추가 서로 다른 목록을
+    # 말한 것이다.
+    search_conditions, _values, joins_bom, _q, _field = _my_ingredient_conditions(request)
 
     # 목록에서 고른 것만. 없으면 지금 조건에 걸린 전부.
     #
@@ -4287,6 +4357,9 @@ def download_my_ingredients_excel(request):
         search_conditions &= Q(my_ingredient_id__in=picked)
 
     queryset = MyIngredient.objects.filter(search_conditions).order_by('prdlst_nm')
+    if joins_bom:
+        # 비고 조인이 걸리면 같은 원료가 쓰인 횟수만큼 줄이 늘어난다
+        queryset = queryset.distinct()
 
     workbook = openpyxl.Workbook()
     sheet = workbook.active
@@ -4389,6 +4462,9 @@ def upload_my_ingredients_excel(request):
         headers = [cell.value for cell in sheet[1]]
         reverse_food_category_map = {'가공식품': 'processed', '식품첨가물': 'additive', '농수산물': 'agricultural', '정제수': 'water'}
         
+        # 남은 한도. 예전에는 엑셀로 몇 만 건이든 통과했다.
+        room = _ingredient_room(request.user)
+
         for index, row_cells in enumerate(sheet.iter_rows(min_row=2), start=2):
             row = [cell.value for cell in row_cells]
             if not any(row):
@@ -4422,6 +4498,15 @@ def upload_my_ingredients_excel(request):
                     failure_count += 1
                     failure_details['동일원료'] = failure_details.get('동일원료', 0) + 1
                     continue
+
+                # 한도에 닿으면 거기서 멈춘다. 파일 전체를 미리 거절하지는
+                # 않는다 — 대부분이 중복인 파일이면 실제로 만들 것은 몇 건뿐이라,
+                # 줄 수만 보고 막으면 넣을 수 있는 것도 못 넣는다.
+                if room <= 0:
+                    failure_count += 1
+                    failure_details['한도 초과'] = failure_details.get('한도 초과', 0) + 1
+                    continue
+                room -= 1
 
                 allergens = [h for h in ALLERGEN_LIST if str(row_dict.get(h, '')).strip().upper() == 'O']
                 gmos = [h for h in GMO_LIST if str(row_dict.get(h, '')).strip().upper() == 'O']
@@ -4956,6 +5041,10 @@ def copy_additives_to_ingredients(request):
         created_count = 0
         skipped_count = 0
         pending_count = 0   # 표시명을 확정할 수 없어 비워둔 건수
+        over_count = 0      # 한도에 걸려 못 만든 건수
+        # 예전에는 한도를 보지 않았다 — 첨가물 목록을 통째로 골라 담으면
+        # 몇 천 건이 그대로 들어갔다
+        room = _ingredient_room(request.user)
 
         # 요청에 담긴 이름으로 원본 레코드를 한 번에 조회 (표시기준 판정에 사용)
         names = [a.get('name_kr') for a in additives if a.get('name_kr')]
@@ -4975,6 +5064,11 @@ def copy_additives_to_ingredients(request):
             if existing:
                 skipped_count += 1
                 continue
+
+            if room <= 0:
+                over_count += 1
+                continue
+            room -= 1
 
             # 원재료 표시명은 표시기준 표4·5·6 규칙으로 결정한다.
             # 표4(명칭+용도) 대상에 명칭만 넣으면 표시기준에 어긋나므로,
@@ -4998,6 +5092,11 @@ def copy_additives_to_ingredients(request):
         lines = [f'{created_count}개의 식품첨가물이 내 원료로 복사되었습니다.']
         if skipped_count > 0:
             lines[0] += f' ({skipped_count}개는 이미 존재하여 건너뛰었습니다.)'
+        if over_count > 0:
+            lines.append(
+                f'{over_count}개는 등록 한도에 걸려 복사하지 못했습니다. '
+                f'쓰지 않는 원료를 정리한 뒤 다시 시도해 주세요.'
+            )
         if pending_count > 0:
             lines.append(
                 f'{pending_count}개는 "명칭+용도"로 표시해야 하는 첨가물이라 표시명을 비워뒀습니다. '
@@ -5008,6 +5107,7 @@ def copy_additives_to_ingredients(request):
             'success': True,
             'message': '\n'.join(lines),
             'pending': pending_count,
+            'over_quota': over_count,
         })
         
     except Exception as e:

@@ -126,6 +126,10 @@
 .pv-sort:hover .bi { opacity: .8; }
 .pv-sort--on { color: var(--ez-info-strong, #1558b0); font-weight: 700; }
 .pv-sort--on .bi { opacity: 1; font-size: 10px; }
+/* 정렬할 수 없는 칸 — 비고에서 갈라 낸 것처럼 값이 문자열 안에 묻혀 있어
+   SQL 로 줄 세울 수 없는 칸이다. 눌러도 될 것처럼 보이면 안 된다. */
+.pv-sort--off { cursor: default; }
+.pv-sort--off:hover { color: inherit; }
 
 /* ── 목록 조작 바 (카드형 화면의 정렬·페이지당 개수) ───────────── */
 .rf-listctl {

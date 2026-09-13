@@ -59,11 +59,6 @@ class BoardForm(forms.ModelForm):
         required=False,
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
-    is_notice = forms.BooleanField(
-        label='공지사항',
-        required=False,
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
     image = forms.ImageField(
         label='이미지 첨부',
         required=False,
@@ -78,7 +73,13 @@ class BoardForm(forms.ModelForm):
 
     class Meta:
         model = Board
-        fields = ['is_hidden', 'is_notice', 'title', 'content', 'attachment', 'image']  # 폼 필드에는 삭제필드 미포함
+        # is_notice 는 폼에 두지 않는다.
+        #
+        # 화면에 «공지사항» 체크박스와 «구분» select 두 벌이 있었는데,
+        # form_valid 가 select 의 값으로 is_notice 를 **무조건 덮어썼다**.
+        # 체크박스는 켜도 꺼도 아무 일이 없는 장식이었다 — 한 가지를 정하는
+        # 자리가 둘이면 그중 하나는 반드시 거짓말이 된다.
+        fields = ['is_hidden', 'title', 'content', 'attachment', 'image']  # 폼 필드에는 삭제필드 미포함
         labels = {
             'title': '제목',
             'content': '내용',
@@ -95,9 +96,8 @@ class BoardForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        # 관리자가 아닌 경우 is_notice, attachment, image 필드 제거
+        # 관리자가 아닌 경우 attachment, image 필드 제거
         if not self.user or not self.user.is_staff:
-            self.fields.pop('is_notice', None)
             self.fields.pop('attachment', None)
             self.fields.pop('image', None)  # 이미지 필드도 관리자만
         # 삭제 체크박스는 수정폼에서만 노출
@@ -107,7 +107,6 @@ class BoardForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        is_notice = cleaned_data.get('is_notice')
         title = cleaned_data.get('title')
         content = cleaned_data.get('content')
         
@@ -117,9 +116,8 @@ class BoardForm(forms.ModelForm):
         if not content or not content.strip():
             raise forms.ValidationError('내용을 입력해주세요.')
         
-        # 공지사항 등록/수정 시 관리자 검증
-        if is_notice and (not self.user or not self.user.is_staff):
-            raise forms.ValidationError('공지사항은 관리자만 작성할 수 있습니다.')
+        # 공지사항 권한은 «구분» 을 읽는 form_valid 가 본다 — 그것이 실제로
+        # is_notice 를 정하는 자리다.
         # 이미지 첨부도 관리자만 허용
         if not self.user or not self.user.is_staff:
             if 'image' in self.cleaned_data and self.cleaned_data['image']:
@@ -131,9 +129,28 @@ class BoardListView(UIModeMixin, ListView):
     template_name = 'board/list.html'
     context_object_name = 'boards'
     
+    # 화면이 내놓는 선택지(_list_pagination 의 per_page_options)와 같은 값.
+    # 여기 없는 수는 기본값으로 돌린다.
+    PER_PAGE_CHOICES = (10, 20, 50)
+    PER_PAGE_DEFAULT = 10
+
     def get_paginate_by(self, queryset):
-        """페이지당 게시글 수 동적 설정"""
-        return self.request.GET.get('per_page', 10)
+        """
+        페이지당 게시글 수.
+
+        예전에는 주소의 값을 **검증 없이 그대로** Paginator 에 넘겼다.
+        주소창에 무엇이든 넣을 수 있으므로
+          · `?per_page=abc`   → ValueError (500)
+          · `?per_page=0`     → ZeroDivisionError (500)
+          · `?per_page=99999` → 한 쪽에 전부 — 목록이 통째로 느려진다
+        화면이 고르게 해 둔 값만 받는다.
+        """
+        raw = self.request.GET.get('per_page', self.PER_PAGE_DEFAULT)
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return self.PER_PAGE_DEFAULT
+        return value if value in self.PER_PAGE_CHOICES else self.PER_PAGE_DEFAULT
 
     def get(self, request, *args, **kwargs):
         """게시판 방문 시 세션에 시간 기록"""
@@ -219,7 +236,10 @@ class BoardListView(UIModeMixin, ListView):
         context['search_query'] = self.request.GET.get('q', '')
         context['current_filter'] = self.request.GET.get('filter', 'all')
         context['current_sort'] = self.request.GET.get('sort', 'recent')
-        context['per_page'] = self.request.GET.get('per_page', '10')
+        # 화면의 고르개가 **실제로 쓰인 값**을 켜 놓아야 한다. 주소에 적힌
+        # 것을 그대로 넣으면 `?per_page=abc` 일 때 고르개가 아무것도 안 켜진
+        # 채로 10건이 나온다 — 무엇이 걸려 있는지 알 수 없다.
+        context['per_page'] = str(self.get_paginate_by(None))
         
         # 쿼리스트링 생성 (페이지 번호 제외)
         query_params = self.request.GET.copy()

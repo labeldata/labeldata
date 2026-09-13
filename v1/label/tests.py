@@ -18488,3 +18488,307 @@ class 의뢰서_규정_메모는_서버가_받은_뒤에_바뀐다(TestCase):
                              content_type='application/json')
         self.assertEqual(r.status_code, 400)
         self.assertTrue(r.json().get('error'))
+
+
+class 원료_등록_한도가_모든_입구에_걸린다(TestCase):
+    """
+    한도를 보던 곳은 **붙여넣기 하나뿐**이었다. 신규 등록·검색에서 복사·
+    원료 상세 신규 저장·엑셀 업로드·첨가물 일괄 복사는 아무리 넣어도
+    통과했다. 우회로가 넷이면 한도가 아니다.
+
+    한도를 건 목적은 나중에 유료로 돌릴 자리를 만드는 것이다(quota.py).
+    """
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        self.user = User.objects.create_user(username='quo', password='x')
+        self.client.force_login(self.user)
+        # 한도를 2로 낮춰 시험한다 — 2000건을 만들 수는 없다
+        self._p = patch('v1.common.quota.limit_for', return_value=2)
+        self._p.start()
+        self.addCleanup(self._p.stop)
+
+    def _fill(self, n):
+        from v1.label.models import MyIngredient
+
+        for i in range(n):
+            MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm=f'채움{i}', delete_YN='N')
+
+    def _count(self):
+        from v1.label.models import MyIngredient
+
+        return MyIngredient.objects.filter(user_id=self.user, delete_YN='N').count()
+
+    # ── 하나씩 만드는 길 ────────────────────────────────────────────────────
+    def test_신규_등록이_한도에서_막힌다(self):
+        self._fill(2)
+        r = self.client.post(
+            reverse('label:register_my_ingredient'),
+            data=json.dumps({'ingredient_name': '새 원료'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 429)
+        self.assertEqual(self._count(), 2)
+
+    def test_한도_안이면_들어간다(self):
+        self._fill(1)
+        r = self.client.post(
+            reverse('label:register_my_ingredient'),
+            data=json.dumps({'ingredient_name': '새 원료'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._count(), 2)
+
+    def test_원료_상세_신규_저장도_막힌다(self):
+        self._fill(2)
+        r = self.client.post(
+            reverse('label:my_ingredient_create'),
+            data={'prdlst_nm': '새 원료'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(r.status_code, 429)
+        self.assertEqual(self._count(), 2)
+
+    # ── 한꺼번에 만드는 길 ──────────────────────────────────────────────────
+    def test_첨가물_일괄_복사가_한도에서_멈춘다(self):
+        from v1.label.models import FoodAdditive
+
+        self._fill(1)
+        for i in range(3):
+            FoodAdditive.objects.create(name_kr=f'첨가물{i}')
+
+        r = self.client.post(
+            reverse('label:copy_additives_to_ingredients'),
+            data=json.dumps({'additives': [{'name_kr': f'첨가물{i}'}
+                                           for i in range(3)]}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(self._count(), 2)          # 1 + 남은 자리 1
+        self.assertEqual(body['over_quota'], 2)
+        self.assertIn('한도', body['message'])
+
+    def test_한도가_남아_있으면_다_들어간다(self):
+        from v1.label.models import FoodAdditive
+
+        for i in range(2):
+            FoodAdditive.objects.create(name_kr=f'첨가물{i}')
+        r = self.client.post(
+            reverse('label:copy_additives_to_ingredients'),
+            data=json.dumps({'additives': [{'name_kr': f'첨가물{i}'}
+                                           for i in range(2)]}),
+            content_type='application/json')
+        self.assertEqual(r.json()['over_quota'], 0)
+        self.assertEqual(self._count(), 2)
+
+    def test_한도_초과를_조용히_넘기지_않는다(self):
+        """만들지 못한 것을 말하지 않으면 사용자는 다 됐다고 믿는다."""
+        from v1.label.models import FoodAdditive
+
+        self._fill(2)
+        FoodAdditive.objects.create(name_kr='첨가물X')
+        body = self.client.post(
+            reverse('label:copy_additives_to_ingredients'),
+            data=json.dumps({'additives': [{'name_kr': '첨가물X'}]}),
+            content_type='application/json').json()
+        self.assertEqual(body['over_quota'], 1)
+        self.assertIn('한도', body['message'])
+
+    def test_모든_생성_경로가_한도를_본다(self):
+        """
+        새 입구가 생겼을 때 여기서 걸린다 — MyIngredient 를 만드는 곳은
+        전부 한도를 거쳐야 한다.
+        """
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'label/views.py').read_text(encoding='utf-8')
+        creates = [m.start() for m in re.finditer(r'MyIngredient\.objects\.create\(', text)]
+        self.assertTrue(creates)
+        for at in creates:
+            head = text[max(0, at - 3000):at]
+            self.assertTrue(
+                '_ingredient_quota_error(' in head or '_ingredient_room(' in head
+                or 'quota.check(' in head,
+                f'한도를 보지 않는 생성 경로가 있다 (offset {at})')
+
+
+class 원료_목록과_다운로드가_같은_것을_본다(TestCase):
+    """
+    다운로드가 칸별 검색과 food_category 만 다시 조립하고 **통합 검색어 `q`
+    를 통째로 무시했다.** 화면에서 "대두" 로 걸러 12건을 보고 내려받으면
+    2,000건이 담긴 파일이 왔다 — 같은 화면의 두 단추가 서로 다른 목록을
+    말한 것이다.
+
+    비고 검색은 ProductBOM 조인이라 distinct 가 없으면 같은 원료가 쓰인
+    횟수만큼 줄이 늘고 건수도 부풀려진다.
+    """
+
+    LIST = '/label/my-ingredient-list-combined/'
+    DOWN = '/label/my-ingredients/download/'
+
+    def setUp(self):
+        from v1.label.models import MyIngredient
+
+        self.user = User.objects.create_user(username='dlu', password='x')
+        self.client.force_login(self.user)
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm='대두분말', delete_YN='N')
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm='밀가루', delete_YN='N')
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm='정제소금', delete_YN='N')
+
+    def _rows(self, url):
+        import io as _io
+
+        import openpyxl
+
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        wb = openpyxl.load_workbook(_io.BytesIO(r.content))
+        return [row[0] for row in wb.active.iter_rows(min_row=2, values_only=True)]
+
+    def test_검색어를_걸면_파일도_따라_줄어든다(self):
+        seen = self.client.get(self.LIST + '?q=대두').context['page_obj'].object_list
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(self._rows(self.DOWN + '?q=대두'), ['대두분말'])
+
+    def test_검색어가_없으면_전부_담긴다(self):
+        self.assertEqual(len(self._rows(self.DOWN)), 3)
+
+    def test_칸을_지정한_검색도_따라간다(self):
+        self.assertEqual(
+            self._rows(self.DOWN + '?q=밀가루&search_field=prdlst_nm'), ['밀가루'])
+
+    def test_고른_것만_받는_길은_그대로다(self):
+        from v1.label.models import MyIngredient
+
+        one = MyIngredient.objects.get(prdlst_nm='정제소금')
+        self.assertEqual(
+            self._rows(self.DOWN + f'?ids={one.my_ingredient_id}'), ['정제소금'])
+
+
+class 비고로_검색하면_같은_원료가_여러_줄로_나오지_않는다(TestCase):
+    """
+    비고는 원료가 아니라 **그 원료를 쓴 자리**(ProductBOM.notes)에 붙는다.
+    조인이 걸리면 한 원료가 쓰인 횟수만큼 줄이 늘고, 건수도 그만큼 부풀려진다
+    ("3건이라는데 같은 원료가 세 줄").
+    """
+
+    def setUp(self):
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyIngredient, MyLabel
+
+        self.user = User.objects.create_user(username='dedu', password='x')
+        self.client.force_login(self.user)
+        ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='대두분말', delete_YN='N')
+        label = MyLabel.objects.create(
+            user_id=self.user, prdlst_nm='제품', delete_YN='N')
+        for i in range(3):
+            ProductBOM.objects.create(
+                parent_label=label, source_ingredient=ing,
+                ingredient_name='대두분말', notes='거래처: 대상')
+
+    def test_한_줄로_나온다(self):
+        r = self.client.get('/label/my-ingredient-list-combined/?q=대상&search_field=notes')
+        rows = list(r.context['page_obj'].object_list)
+        self.assertEqual(len(rows), 1)
+
+    def test_건수도_부풀려지지_않는다(self):
+        r = self.client.get('/label/my-ingredient-list-combined/?q=대상&search_field=notes')
+        self.assertEqual(r.context['total_count'], 1)
+
+
+class 저장한_뒤_왼쪽_목록이_따라온다(TestCase):
+    """
+    V2 에서 `updateIngredientListAndSelect` 가 **한 번도 돈 적이 없다.**
+    `#ingredientTable` 은 V1 목록에만 있는 id 인데 `if (tbody)` 가 조용히
+    삼켰다 — 저장했다는 말은 뜨는데 왼쪽 목록은 그대로였다.
+
+    그리고 새로 만든 뒤 숨은 id 칸을 안 채워서, 한 번 더 [저장] 을 누르면
+    "동일한 이름의 원료가 이미 존재합니다" 가 뜨고 확인하면 진짜 사본이
+    하나 더 생겼다.
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'static/js/label/my_ingredient_detail_partial.js'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_V1_표가_없으면_V2_길로_간다(self):
+        js = self._js()
+        i = js.index('function updateIngredientListAndSelect(')
+        block = js[i:i + 900]
+        self.assertIn('tbodyV1', block)
+        self.assertIn("searchParams.set('open'", block)
+
+    def test_저장_직후_숨은_id_를_채운다(self):
+        js = self._js()
+        i = js.index('function doSaveMyIngredient(')
+        block = js[i:i + 2500]
+        self.assertIn("getElementById('my_ingredient_id')", block)
+        self.assertIn('idField.value = data.ingredient_id', block)
+
+    def test_신규_여부는_응답이_말한다(self):
+        """숨은 칸을 채운 뒤에는 그 칸으로 신규 여부를 물을 수 없다."""
+        js = self._js()
+        self.assertIn('var wasNew = !!(data.ingredient_id && data.created);', js)
+
+    def test_서버가_created_를_준다(self):
+        from v1.label.models import MyIngredient
+
+        user = User.objects.create_user(username='crt', password='x')
+        self.client.force_login(user)
+        r = self.client.post(
+            reverse('label:my_ingredient_create'),
+            data={'prdlst_nm': '새 원료'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body['success'])
+        self.assertTrue(body['created'])
+
+        ing = MyIngredient.objects.get(prdlst_nm='새 원료')
+        r2 = self.client.post(
+            reverse('label:my_ingredient_detail', args=[ing.my_ingredient_id]),
+            data={'prdlst_nm': '새 원료'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertFalse(r2.json()['created'])
+
+
+class 비고_칸은_정렬할_수_있는_척하지_않는다(TestCase):
+    """
+    비고에서 갈라 낸 칸에도 다른 칸과 똑같은 정렬 링크를 그렸다. 누르면
+    resolve 가 화이트리스트에서 못 찾아 **기본 정렬로 되돌려 버린다** —
+    사용자에게는 "눌렀더니 정렬이 풀렸다" 로 보인다.
+    """
+
+    def test_비고_칸은_sortable_이_아니다(self):
+        from v1.label.services import list_sort
+
+        cols = list_sort.note_columns(['ERP 원재료'])
+        self.assertEqual(len(cols), 1)
+        self.assertFalse(cols[0]['sortable'])
+
+    def test_보통_칸은_그대로_정렬된다(self):
+        from v1.label.services import list_sort
+
+        cols = list_sort.columns(list_sort.MY_INGREDIENT_ALL_COLUMNS, 'prdlst_nm', 'asc')
+        self.assertTrue(all(c['sortable'] for c in cols))
+
+    def test_화면이_그_구분을_본다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tpl = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_list_combined.html'
+               ).read_text(encoding='utf-8')
+        i = tpl.index('{% for col in list_columns %}')
+        self.assertIn('{% if col.sortable %}', tpl[i:i + 400])

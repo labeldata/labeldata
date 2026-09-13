@@ -51,7 +51,8 @@ def columns(specs, active_field, active_order):
     out = []
     for spec in specs:
         col = dict(spec)
-        if spec.get('field'):
+        col.setdefault('sortable', True)
+        if spec.get('field') and col['sortable']:
             active = spec['field'] == active_field
             col['active'] = active
             col['next_order'] = 'desc' if (active and active_order == 'asc') else 'asc'
@@ -177,9 +178,21 @@ NOTE_COLUMN_PREFIX = 'note:'
 
 
 def note_columns(names) -> list:
-    """비고 항목 이름들을 목록 칸 규격으로."""
+    """
+    비고 항목 이름들을 목록 칸 규격으로.
+
+    **정렬은 안 된다**(sortable=False). 이 값은 표에 자리가 없어
+    ProductBOM.notes 문자열 안에 «이름: 값» 으로 묻혀 있는 것이라, SQL 로
+    그 조각만 정렬할 수가 없다.
+
+    예전에는 이 칸에도 다른 칸과 똑같은 정렬 링크를 그렸다. 누르면 resolve 가
+    화이트리스트(MY_INGREDIENT_ALL_COLUMNS)에서 못 찾아 **기본 정렬로
+    되돌려 버린다** — 사용자에게는 "눌렀더니 정렬이 풀렸다" 로 보인다.
+    할 수 없는 일은 누를 수 있게 두지 않는다.
+    """
     return [{'field': NOTE_COLUMN_PREFIX + name, 'label': name,
-             'weight': 10, 'align': 'left', 'note_name': name}
+             'weight': 10, 'align': 'left', 'note_name': name,
+             'sortable': False}
             for name in names or ()]
 
 
