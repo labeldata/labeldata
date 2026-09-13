@@ -11302,3 +11302,43 @@ class 영양정보_표가_옆_표와_같은_활자를_쓴다(TestCase):
         block = self.html[head:tail]
         self.assertIn('nutritionBlock.contains(el)) return;', block)
         self.assertIn('nutritionBlock.style.fontSize', block)
+
+
+class 문서함에_못_들어간_제출을_알린다(TestCase):
+    """
+    협력사가 낸 파일을 요청자의 제품 문서함으로 옮기는 자리가 둘 있다
+    (제출할 때 · 나중에 제품을 이어 붙일 때). 둘 다 **문서 종류 이름으로**
+    찾는데, 한 글자만 달라도 못 찾는다("시험성적서" vs "시험 성적서").
+
+    그때 한쪽은 로그만 남기고 `success: true` 로 끝냈고, 다른 쪽은
+    `except Exception: pass` 로 통째로 삼켰다. 협력사는 냈다고 알고 돌아가고
+    요청자 문서함에는 그 파일이 없다 — **둘 다 모른 채 기한이 지난다.**
+    """
+
+    def setUp(self):
+        import inspect
+        from v1.products import views
+        self.submit = inspect.getsource(views.doc_request_submit)
+        self.link = inspect.getsource(views.api_update_doc_request_label)
+
+    def test_제출_응답이_못_넣은_것을_담는다(self):
+        self.assertIn("payload['not_filed'] = not_filed", self.submit)
+        self.assertIn("payload['notice']", self.submit)
+
+    def test_제출에서_세_갈래_모두_기록된다(self):
+        # 종류를 못 찾은 것 · 파일이 없는 것 · 옮기다 실패한 것
+        self.assertEqual(self.submit.count('not_filed.append('), 3)
+
+    def test_제품_연결이_삼키지_않는다(self):
+        self.assertNotIn('except Exception:\n                    pass', self.link)
+        self.assertIn('logger.exception(', self.link)
+        self.assertIn("payload['skipped'] = skipped", self.link)
+
+    def test_제품_연결도_못_찾은_종류를_남긴다(self):
+        self.assertIn('logger.warning(', self.link)
+        self.assertEqual(self.link.count('skipped.append('), 2)
+
+    def test_성공을_말할_때도_수를_함께_말한다(self):
+        # 성공/실패가 섞이면 성공만 말하지 않는다.
+        self.assertIn("'imported_count': imported_count", self.link)
+        self.assertIn('if skipped:', self.link)

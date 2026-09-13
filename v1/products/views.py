@@ -6092,6 +6092,13 @@ def doc_request_submit(request, req_id):
         # 요청자의 제품(linked_label)에 제출된 파일을 ProductDocument로 자동 등록.
         # **이번에 낸 것만** 돈다. 예전에는 그 요청의 활성 제출 전체를 돌아,
         # 두 번째 제출 때 첫 번째 파일이 요청자 문서함에 한 번 더 들어갔다.
+        # **문서함에 못 들어간 것은 낸 사람에게 말한다.**
+        #
+        # 예전에는 로그만 남기고 `success: true` 로 끝냈다. 협력사는 파일을
+        # 냈다고 알고 돌아가고, 요청한 쪽 문서함에는 그 파일이 없다 — 둘 다
+        # 문제를 모른 채 기한이 지난다. 종류 이름이 한 글자만 달라도 그렇게
+        # 된다("시험성적서" vs "시험 성적서").
+        not_filed = []
         if dr.linked_label:
             from django.core.files.base import File as DjangoFile
             for sub in new_subs:
@@ -6101,8 +6108,10 @@ def doc_request_submit(request, req_id):
                     logger.warning('자료 요청 제출: 문서 종류 "%s" 를 못 찾아 '
                                    '제품 문서함 등록을 건너뜀 (submission=%s)',
                                    sub.document_type, sub.pk)
+                    not_filed.append(sub.original_filename or sub.document_type)
                     continue
                 if not sub.file:
+                    not_filed.append(sub.original_filename or sub.document_type)
                     continue
                 try:
                     # 방금 저장된 파일을 스토리지에서 다시 읽는다. 업로드
@@ -6122,9 +6131,16 @@ def doc_request_submit(request, req_id):
                     # 제출 자체는 유지하되 **조용히 넘어가지는 않는다.**
                     logger.exception('자료 요청 제출 파일을 제품 문서함에 '
                                      '옮기지 못했습니다 (submission=%s)', sub.pk)
+                    not_filed.append(sub.original_filename or sub.document_type)
 
-    return JsonResponse({'success': True, 'submitted': saved,
-                         'rejected': rejected})
+    payload = {'success': True, 'submitted': saved, 'rejected': rejected}
+    if not_filed:
+        payload['not_filed'] = not_filed
+        payload['notice'] = (
+            '파일은 접수되었지만 %d건은 요청자의 문서함에 자동 등록되지 '
+            '않았습니다(%s). 요청한 분이 문서 종류를 확인해야 합니다.'
+            % (len(not_filed), ', '.join(not_filed[:3])))
+    return JsonResponse(payload)
 
 
 @login_required
@@ -6291,6 +6307,7 @@ def api_update_doc_request_label(request, req_id):
 
     # 새로 제품이 연결된 경우, 이미 제출된 문서를 ProductDocument로 소급 등록
     imported_count = 0
+    skipped = []
     if label:
         from .models import DocumentSubmission, DocumentType, ProductDocument
         from django.core.files.base import File as DjangoFile
@@ -6323,27 +6340,45 @@ def api_update_doc_request_label(request, req_id):
                     type_name__iexact=sub.document_type, active_yn=True
                 ).first()
 
-            if dtype:
-                try:
-                    sub.file.seek(0)
-                    ProductDocument.objects.create(
-                        label=label,
-                        document_type=dtype,
-                        file=DjangoFile(sub.file, name=sub.original_filename),
-                        original_filename=sub.original_filename,
-                        file_size=sub.file_size or 0,
-                        uploaded_by=dr.requester,
-                    )
-                    imported_count += 1
-                except Exception:
-                    pass
+            if not dtype:
+                # 종류 이름이 한 글자만 달라도 여기로 온다("시험성적서" vs
+                # "시험 성적서"). 조용히 넘어가면 제품을 이어 붙였는데 문서함이
+                # 비어 있는 화면이 남는다.
+                logger.warning('제품 연결: 문서 종류 "%s" 를 못 찾아 등록을 '
+                               '건너뜀 (submission=%s)', sub.document_type, sub.pk)
+                skipped.append(sub.original_filename or sub.document_type)
+                continue
 
-    return JsonResponse({
+            try:
+                sub.file.seek(0)
+                ProductDocument.objects.create(
+                    label=label,
+                    document_type=dtype,
+                    file=DjangoFile(sub.file, name=sub.original_filename),
+                    original_filename=sub.original_filename,
+                    file_size=sub.file_size or 0,
+                    uploaded_by=dr.requester,
+                )
+                imported_count += 1
+            except Exception:
+                # `except Exception: pass` 였다. 몇 건이 왜 안 들어왔는지
+                # 아무 데도 남지 않아, 화면은 "0건 등록" 만 말했다.
+                logger.exception('제품 연결: 제출 파일을 문서함에 옮기지 '
+                                 '못했습니다 (submission=%s)', sub.pk)
+                skipped.append(sub.original_filename or sub.document_type)
+
+    payload = {
         'success': True,
         'linked_label_id': dr.linked_label_id,
         'linked_label_name': dr.linked_label.my_label_name if dr.linked_label else None,
         'imported_count': imported_count,
-    })
+    }
+    if skipped:
+        payload['skipped'] = skipped
+        payload['notice'] = (
+            '%d건은 문서함에 등록하지 못했습니다(%s). 문서 종류를 확인해 '
+            '주세요.' % (len(skipped), ', '.join(skipped[:3])))
+    return JsonResponse(payload)
 
 
 @login_required
