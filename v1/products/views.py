@@ -4970,12 +4970,24 @@ def document_update(request, document_id):
                 document.issue_date = None
         
         # 만료일 변경
+        #
+        # **비우는 것과 안 정한 것은 다르다.** `ProductDocument.save()` 는
+        # 만료일이 비어 있으면 문서 종류의 기본 유효기간을 도로 채운다
+        # (성적서 180일·원산지증명 365일·HACCP 1095일 …). 그 자동 채움을
+        # 끄는 표시가 `metadata['expiry_unlimited']` 인데 **업로드 경로만**
+        # 그것을 세웠다. 그래서 편집 패널에서 [무기한] 을 고르고 저장하면
+        # "저장했습니다" 가 뜨고 새로고침되는데 만료일이 그대로 남았다 —
+        # 몇 번을 해도 같다.
         if 'expiry_date' in data:
+            meta = document.metadata if isinstance(document.metadata, dict) else {}
             if data['expiry_date']:
                 from datetime import datetime
                 document.expiry_date = datetime.strptime(data['expiry_date'], '%Y-%m-%d').date()
+                meta.pop('expiry_unlimited', None)
             else:
                 document.expiry_date = None
+                meta['expiry_unlimited'] = True
+            document.metadata = meta
         
         # 설명 변경
         if 'description' in data:

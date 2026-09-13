@@ -9858,3 +9858,69 @@ class 자료_요청_제출이_협력사_경로와_같은_문을_지난다(TestCa
                        .filter(label=self.label)
                        .values_list('original_filename', flat=True))
         self.assertEqual(names, ['first.pdf', 'second.pdf'])
+
+
+class 무기한을_고르면_만료일이_되살아나지_않는다(TestCase):
+    """
+    `ProductDocument.save()` 는 만료일이 비어 있으면 문서 종류의 기본
+    유효기간을 **도로 채운다**(성적서 180일·원산지증명 365일·HACCP 1095일 …).
+    그 자동 채움을 끄는 표시가 `metadata['expiry_unlimited']` 인데
+    **업로드 경로만** 그것을 세웠다.
+
+    편집 패널의 [무기한] → [저장] 은 `expiry_date: null` 을 보내고 뷰는
+    `expiry_date = None` 후 `save()` 한다 → 그 자리에서 기본값이 다시 붙는다.
+    화면에는 "저장했습니다" 가 뜨고 새로고침되는데 만료일은 그대로다.
+    몇 번을 해도 같고, 왜 안 되는지 알 방법이 없다.
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='unlim', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='무기한', delete_YN='N')
+        self.dtype = DocumentType.objects.create(
+            type_name='자가품질검사성적서', type_code='SPEC', active_yn=True,
+            display_order=1, default_validity_days=180)
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=self.dtype,
+            file=SimpleUploadedFile('a.pdf', b'%PDF-1.4', 'application/pdf'),
+            original_filename='a.pdf', file_size=8, uploaded_by=self.user)
+
+    def _update(self, payload):
+        return self.client.post(
+            reverse('products:document_update', args=[self.doc.pk]),
+            data=json.dumps(payload), content_type='application/json')
+
+    def test_처음에는_기본_유효기간이_붙는다(self):
+        """자동 채움 자체는 옳은 동작이다 — 그것까지 끄면 안 된다."""
+        self.doc.refresh_from_db()
+        self.assertIsNotNone(self.doc.expiry_date)
+
+    def test_무기한으로_저장하면_비어_있다(self):
+        r = self._update({'expiry_date': None})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.doc.refresh_from_db()
+        self.assertIsNone(self.doc.expiry_date)
+
+    def test_다시_저장해도_되살아나지_않는다(self):
+        self._update({'expiry_date': None})
+        self._update({'description': '메모만 고친다'})
+        self.doc.refresh_from_db()
+        self.assertIsNone(self.doc.expiry_date)
+
+    def test_날짜를_다시_넣으면_그_날짜가_된다(self):
+        self._update({'expiry_date': None})
+        self._update({'expiry_date': '2027-01-31'})
+        self.doc.refresh_from_db()
+        self.assertEqual(str(self.doc.expiry_date), '2027-01-31')
+
+    def test_날짜를_다시_넣으면_무기한_표시가_지워진다(self):
+        """남아 있으면 그 뒤에 날짜를 비웠을 때 자동 채움이 또 안 돈다."""
+        self._update({'expiry_date': None})
+        self._update({'expiry_date': '2027-01-31'})
+        self.doc.refresh_from_db()
+        self.assertNotIn('expiry_unlimited', self.doc.metadata or {})
