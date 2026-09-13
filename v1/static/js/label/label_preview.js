@@ -2696,6 +2696,14 @@ document.addEventListener('DOMContentLoaded', function () {
         return nutritionText(type, raw);
     }
 
+    /* 열량은 "5kcal 미만" 처럼 **단위가 이미 붙은 문자열**로 올 수 있다.
+     * 그 뒤에 'kcal' 을 또 붙이면 `5kcal 미만kcal` 이 인쇄된다. */
+    function kcalText(type, baseAmount, servings, val) {
+        const shown = getKcalValue(type, baseAmount, servings, val);
+        const text = String(shown);
+        return text.indexOf('kcal') !== -1 ? text : comma(shown) + 'kcal';
+    }
+
     // 계산기의 열량 전용 계산 함수 (완전 동일)
     function getKcalValue(type, baseAmount, servings, val) {
         if (isNaN(val) || isNaN(baseAmount)) return 0;
@@ -2756,7 +2764,7 @@ document.addEventListener('DOMContentLoaded', function () {
          * 계산기는 이미 같은 규칙으로 고쳤다(generateBasicDisplayV3 주석).
          */
         let headerAmount = `총 내용량 ${comma(totalWeight)}${servingUnit}`;
-        let headerKcal = comma(getKcalValue('total', servingSize, servingsPerPackage, data.calorie)) + 'kcal';
+        let headerKcal = kcalText('total', servingSize, servingsPerPackage, data.calorie);
 
         /*
          * 표의 열 머리는 **기준을 밝히는 말**이라 "당" 이 빠지면 안 된다.
@@ -2807,7 +2815,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     + `(${comma(servingSize)}${servingUnit} X ${comma(servingsPerPackage)})`;
             }
             headerKcal = `${perUnitLabel}(${comma(servingSize)}${servingUnit})당 `
-                + comma(getKcalValue('unit', servingSize, servingsPerPackage, data.calorie)) + 'kcal';
+                + kcalText('unit', servingSize, servingsPerPackage, data.calorie);
         }
 
         // 계산기와 동일한 미리보기 박스 구조

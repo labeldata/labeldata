@@ -19448,7 +19448,11 @@ class 영양정보_머리는_언제나_총_내용량이다(SimpleTestCase):
     def test_머리의_열량은_총_내용량_전체의_열량이다(self):
         body = _update_nutrition_display_body()
         self.assertNotIn('getKcalValue(displayUnit', body)
-        self.assertIn("getKcalValue('total'", body)
+        # 단위를 붙이는 일은 kcalText 가 한다(열량이 "5kcal 미만" 처럼
+        # 이미 단위를 달고 오는 경우가 있어서다). 지키는 것은 그대로 —
+        # **머리는 'total' 로 계산한다.**
+        self.assertNotIn("kcalText(displayUnit", body)
+        self.assertIn("kcalText('total'", body)
 
     def test_열_머리는_그대로_고른_기준을_밝힌다(self):
         """본문 열의 머리(tabMapShort)까지 총량으로 바꾸면 반대로 틀린다."""
@@ -19602,3 +19606,40 @@ class 표_배치는_라벨마다_따로_남는다(SimpleTestCase):
         js = _preview_js()
         self.assertIn('function fieldLayoutStorageKey()', js)
         self.assertNotIn("'labelFieldOrder'", js)
+
+
+class 열량_단위를_두_번_붙이지_않는다(SimpleTestCase):
+    """
+    열량은 표시기준상 5kcal 미만이면 **"5kcal 미만"** 이라고 적는다 —
+    단위가 이미 붙은 문자열이다. 그런데 미리보기는 그 뒤에 `+ 'kcal'` 을
+    또 붙여 표 머리에 **`5kcal 미만kcal`** 이 찍혔다.
+
+    저열량 제품에서만 나오므로 눈에 잘 안 띄지만, 그때는 인쇄물에 그대로
+    남는다.
+    """
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return _strip_comments(
+            (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js')
+            .read_text(encoding='utf-8'))
+
+    def test_단위를_붙이는_곳이_한_곳이다(self):
+        js = self._js()
+        self.assertIn('function kcalText(', js)
+        # 옛 꼴 — 값 뒤에 kcal 을 그냥 잇던 자리
+        self.assertNotIn("getKcalValue('total', servingSize, servingsPerPackage, data.calorie)) + 'kcal'", js)
+        self.assertNotIn("getKcalValue('unit', servingSize, servingsPerPackage, data.calorie)) + 'kcal'", js)
+
+    def test_이미_붙어_있으면_또_붙이지_않는다(self):
+        js = self._js()
+        i = js.index('function kcalText(')
+        block = js[i:i + 400]
+        self.assertIn("indexOf('kcal')", block)
+
+    def test_머리와_병행표시_모두_그것을_쓴다(self):
+        js = self._js()
+        self.assertGreaterEqual(js.count('kcalText('), 3)  # 정의 1 + 사용 2 이상
