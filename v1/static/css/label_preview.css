@@ -826,8 +826,23 @@ tbody.layout-horizontal tr td {
     overflow-wrap: anywhere;
     white-space: normal;
     vertical-align: middle;
-    box-sizing: border-box;
-    max-width: 0;
+    /* ── `box-sizing: border-box` 와 `max-width: 0` 이 여기 있었다 ──────
+     *
+     * 화면에서 잰 값이 답을 줬다. 열은 제 너비를 그대로 가지는데
+     * (95 / 205 / 95 / 205, 합계 601 = 표 폭) 그 안의 th·td 가 **전부
+     * 21px** 였다. 21px 은 `padding: 6px 10px` 의 좌우 20px 에 테두리를
+     * 더한 값 — 글자가 들어갈 자리가 0 이라는 뜻이고, 화면에는 한 글자씩
+     * 세로로 흘렀다.
+     *
+     * `max-width: 0` 자체는 죄가 없다. 위의 `.preview-table td` 도 같은
+     * 선언을 갖고 있고 1단 배치는 멀쩡하다. **둘의 차이는
+     * `box-sizing: border-box` 하나였다** — 그것이 붙으면 max-width 가
+     * 테두리 상자를 재게 되어 안쪽 여백조차 담을 수 없는 값이 되고,
+     * 칸이 여백 너비로 눌린다.
+     *
+     * 열은 멀쩡한데 칸만 눌린 것이라, 폭을 **계산하는** 쪽을 아무리
+     * 고쳐도 화면이 바뀌지 않았다. 1단이 쓰는 조건과 같게 둔다.
+     * ──────────────────────────────────────────────────────────────── */
 }
 
 tbody.layout-horizontal tr th {

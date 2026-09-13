@@ -11105,3 +11105,54 @@ class 표의_네_열을_다_적어_둔다(TestCase):
         one = self.css.index('.preview-table col.pv-col-value')
         two = self.css.index('.preview-table.pv-2col col.pv-col-value')
         self.assertLess(one, two, '앞에 오면 1단 규칙이 2단을 덮는다')
+
+
+class 이단_칸이_여백_너비로_눌리던_것(TestCase):
+    """
+    화면에서 잰 값이 답을 줬다. 열은 제 너비를 그대로 가지는데
+    (95 / 205 / 95 / 205, 합계 601 = 표 폭) 그 안의 th·td 가 **전부 21px**
+    이었다 — `padding: 6px 10px` 의 좌우 20px 에 테두리를 더한 값. 글자가
+    들어갈 자리가 0 이라 화면에는 한 글자씩 세로로 흘렀다.
+
+    `max-width: 0` 자체는 죄가 없다. 1단이 쓰는 `.preview-table td` 도 같은
+    선언을 갖고 있고 멀쩡하다. 둘의 차이는 **`box-sizing: border-box`**
+    하나였다 — 그것이 붙으면 max-width 가 테두리 상자를 재게 되어 안쪽
+    여백조차 담을 수 없는 값이 된다.
+
+    열은 멀쩡한데 칸만 눌린 것이라, 폭을 **계산하는** 쪽을 세 번 고치는
+    동안 화면이 한 번도 바뀌지 않았다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        css = (Path(settings.BASE_DIR) / 'static/css/label_preview.css'
+               ).read_text(encoding='utf-8')
+        head = css.index('tbody.layout-horizontal tr th,')
+        # **주석을 먼저 걷어낸다.** 무엇을 왜 뺐는지 적어 두면 그 설명 안의
+        # 낱말이 검사에 걸린다 — 이 저장소에서 세 번 겪었다.
+        self.rule = self._strip(css[head:css.index('}', head)])
+        self.css = self._strip(css)
+
+    @staticmethod
+    def _strip(text):
+        import re
+        return re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+
+    def test_2단_칸에_border_box_를_주지_않는다(self):
+        self.assertNotIn('box-sizing: border-box', self.rule)
+
+    def test_2단_칸에_max_width_0_을_주지_않는다(self):
+        import re
+        self.assertIsNone(re.search(r'^\s*max-width:\s*0', self.rule, re.M))
+
+    def test_긴_토막은_여전히_끊는다(self):
+        # max-width 를 걷어내도 표 밖으로 흐르지 않게 하는 것은 이 한 줄이다.
+        self.assertIn('overflow-wrap: anywhere', self.rule)
+
+    def test_1단_칸은_건드리지_않았다(self):
+        # 멀쩡히 돌던 쪽이다. 여기를 함께 고치면 무엇이 고친 것인지 알 수 없다.
+        head = self.css.index('.preview-table td {')
+        one = self.css[head:self.css.index('}', head)]
+        self.assertIn('max-width: 0', one)
+        self.assertNotIn('box-sizing', one)
