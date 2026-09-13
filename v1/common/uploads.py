@@ -21,6 +21,19 @@ MAX_UPLOAD_MB = getattr(settings, 'MAX_UPLOAD_MB', 30)
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 
+# 받아도 되는 확장자.
+#
+# 화면의 `accept=` 는 파일 선택창의 필터일 뿐 강제가 아니다 — 요청을 직접
+# 만들면 무엇이든 온다. 특히 `.html`·`.svg` 는 같은 오리진에서 inline 으로
+# 렌더되므로(media_access 의 static_serve 는 Content-Disposition 을 붙이지
+# 않는다) 그 파일을 여는 사람 — 대개 요청자 — 의 브라우저에서 돈다.
+ALLOWED_UPLOAD_EXTS = (
+    '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp',
+    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.hwp', '.hwpx', '.txt', '.csv', '.zip',
+)
+
+
 def _mb(size):
     return size / 1024.0 / 1024.0
 
@@ -58,6 +71,14 @@ def check(user, uploaded, kind='파일'):
     """
     if uploaded is None:
         return '%s가 없습니다.' % kind
+
+    import os
+
+    ext = os.path.splitext(getattr(uploaded, 'name', '') or '')[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTS:
+        return ('%s 확장자(%s)는 올릴 수 없습니다. '
+                '올릴 수 있는 것: %s'
+                % (kind, ext or '없음', ', '.join(ALLOWED_UPLOAD_EXTS)))
 
     size = getattr(uploaded, 'size', 0) or 0
     if size > MAX_UPLOAD_BYTES:

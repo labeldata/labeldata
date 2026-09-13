@@ -13,7 +13,9 @@ from . import bulk_email_store
 from django.utils.crypto import get_random_string
 from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
@@ -487,32 +489,101 @@ def password_reset_request(request):
             messages.error(request, "가입된 이메일이 없습니다.")
     return render(request, 'user_management/password_reset_request.html')
 
+# 재설정 링크가 살아 있는 시간. 이메일 인증(위 verify_email)과 같은 1시간.
+PASSWORD_RESET_TTL_SECONDS = 3600
+
+
+def _password_reset_target(uid, token):
+    """
+    이 링크로 비밀번호를 바꿔도 되는 사용자. 아니면 (None, 사유).
+
+    ── 여기서 계정이 탈취됐다 ──────────────────────────────────────────────
+
+    예전 판정은 `if profile.password_reset_token != token:` 한 줄이었다.
+    `password_reset_token` 의 기본값이 **빈 문자열**이라는 것이 문제였다 —
+    시그널이 계정을 만들 때 `''` 로 넣고(models.py), 재설정에 **성공한 뒤에도**
+    `''` 로 되돌린다. 그래서 "요청한 적 없는 모든 계정" 과 "이미 바꾼 모든
+    계정" 의 저장값이 `''` 다.
+
+    거기에 `?uid=1&token=` 을 보내면 `GET.get('token')` 이 `''` 를 돌려주므로
+    `'' != ''` 가 거짓이 되어 그 문이 열렸다. 메일을 받을 필요도, 그 계정을
+    알 필요도 없다 — uid 를 1부터 훑으면 된다.
+
+    같은 파일의 **이메일 인증에는 이 구멍이 없다.** 거기는
+    `email_verification_token == token and token` 으로 빈 토큰을 걸러 낸다.
+    재설정에만 그 `and token` 이 빠져 있었다.
+
+    ── 만료도 안 봤다 ──────────────────────────────────────────────────────
+
+    `password_reset_sent_at` 은 저장만 하고 **아무도 읽지 않았다**(호출 0회).
+    반년 전 메일함에 남은 링크가 지금도 열렸다. 메일 계정이 나중에 털리면
+    그 시점 이후로도 계정이 열린다.
+
+    보낸 시각이 비어 있으면 **열지 않는다.** 모르는 것을 '안 만료' 로 보면
+    만료 검사를 통째로 건너뛰는 뒷문이 된다.
+    """
+    if not token:
+        return None, '잘못된 비밀번호 재설정 링크입니다.'
+    try:
+        user = User.objects.get(id=int(uid))
+    except (User.DoesNotExist, TypeError, ValueError):
+        return None, '잘못된 비밀번호 재설정 링크입니다.'
+
+    profile = getattr(user, 'profile', None)
+    if profile is None or profile.password_reset_token != token:
+        return None, '잘못된 비밀번호 재설정 링크입니다.'
+
+    sent_at = profile.password_reset_sent_at
+    if not sent_at:
+        return None, '이 링크는 더 이상 쓸 수 없습니다. 재설정을 다시 요청해 주세요.'
+    if (timezone.now() - sent_at).total_seconds() > PASSWORD_RESET_TTL_SECONDS:
+        return None, '재설정 링크가 만료되었습니다. (유효시간: 1시간)'
+
+    return user, ''
+
+
 def password_reset_confirm(request):
     """비밀번호 재설정 확인"""
-    uid = request.GET.get('uid')
-    token = request.GET.get('token')
-    try:
-        user = User.objects.get(id=uid)
-        profile = user.profile
-        if profile.password_reset_token != token:
-            messages.error(request, "잘못된 비밀번호 재설정 링크입니다.")
-            return render(request, 'user_management/password_reset_confirm.html')
-        if request.method == 'POST':
-            password1 = request.POST.get('password1')
-            password2 = request.POST.get('password2')
-            if password1 != password2:
-                messages.error(request, "비밀번호가 일치하지 않습니다.")
+    user, why = _password_reset_target(request.GET.get('uid'),
+                                       request.GET.get('token'))
+    if user is None:
+        messages.error(request, why)
+        # link_valid=False 면 화면이 폼을 그리지 않는다. 예전에는 죽은
+        # 링크에도 입력칸을 그려, 사용자가 새 비밀번호를 두 번 치고 누른
+        # 뒤에야 같은 오류를 다시 봤다 — 게다가 다시 받을 길이 없었다.
+        return render(request, 'user_management/password_reset_confirm.html',
+                      {'link_valid': False})
+
+    if request.method == 'POST':
+        password1 = request.POST.get('password1') or ''
+        password2 = request.POST.get('password2')
+        if password1 != password2:
+            messages.error(request, "비밀번호가 일치하지 않습니다.")
+        else:
+            # 화면이 "8자 이상, 숫자 및 특수문자" 라고 약속한다. 그 약속을
+            # 서버가 지킨다 — settings.AUTH_PASSWORD_VALIDATORS 를 태운다.
+            try:
+                validate_password(password1, user=user)
+            except DjangoValidationError as exc:
+                for msg in exc.messages:
+                    messages.error(request, msg)
             else:
-                user.set_password(password1)
-                user.save()
-                profile.password_reset_token = ''
-                profile.save()
-                messages.success(request, "비밀번호가 성공적으로 변경되었습니다. 로그인하세요.")
-                return redirect('user_management:login')
-    except Exception:
-        logger.exception("비밀번호 재설정 오류")
-        messages.error(request, "비밀번호 재설정 정보를 확인할 수 없습니다.")
-    return render(request, 'user_management/password_reset_confirm.html')
+                try:
+                    user.set_password(password1)
+                    user.save()
+                    profile = user.profile
+                    profile.password_reset_token = ''
+                    profile.password_reset_sent_at = None
+                    profile.save()
+                except Exception:
+                    logger.exception("비밀번호 재설정 저장 실패 user=%s", user.pk)
+                    messages.error(request, "비밀번호를 바꾸지 못했습니다. 잠시 후 다시 시도해 주세요.")
+                else:
+                    messages.success(request, "비밀번호가 성공적으로 변경되었습니다. 로그인하세요.")
+                    return redirect('user_management:login')
+
+    return render(request, 'user_management/password_reset_confirm.html',
+                  {'link_valid': True})
 
 def signup_done_view(request):
     """회원가입 완료 페이지 (테스트용)"""

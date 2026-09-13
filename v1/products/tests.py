@@ -11,6 +11,7 @@ import json
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from v1.label.models import MyLabel
 from v1.products.models import (
@@ -9348,3 +9349,195 @@ class BOM_적용이_죽은_줄에_매달리지_않는다(TestCase):
         self._apply()
         self.assertEqual(self._apply().json()['created'], 0)
         self.assertEqual(self._live(), {'정제수', '설탕'})
+from v1.label.models import MyLabel
+
+
+class 협력사가_붙인_파일이_사라지지_않는다(TestCase):
+    """
+    범용 업로드칸은 `multiple` 이라 한 번에 여러 개를 고를 수 있다. 그런데
+    서버가 `request.FILES.items()` 로 돌았다 — `MultiValueDict.items()` 는
+    키마다 **마지막 값 하나만** 돌려준다. 세 개를 붙이면 하나만 저장되고
+    나머지 둘은 조용히 사라진다.
+
+    화면은 더 나쁘게 굴었다. `showFileInfo` 가 고른 파일 **전부**를 초록
+    체크와 함께 그려 주고, 제출하면 "서류 제출이 완료되었습니다!" 라고
+    말한다. 협력사도 요청자도 두 개가 없어진 것을 알 수 없다.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from v1.products.models import DocumentRequest, DocumentType
+
+        # Vision AI 는 백그라운드 스레드로 도는데 시험 DB(sqlite)를 잠근다
+        p = patch('v1.products.services.vision_service.process_document_vision_async',
+                  lambda *a, **k: None)
+        p.start()
+        self.addCleanup(p.stop)
+
+        self.owner = User.objects.create_user(username='vown', password='x')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='협력', delete_YN='N')
+        DocumentType.objects.create(type_name='성적서', type_code='SPEC',
+                                    active_yn=True, display_order=1)
+        self.dr = DocumentRequest.objects.create(
+            requester=self.owner, linked_label=self.label,
+            recipient_email='v@example.com', recipient_name='협력사',
+            due_date=timezone.now().date() + timedelta(days=7),
+            status=DocumentRequest.STATUS_PENDING)
+
+    def _url(self):
+        return reverse('vendor:upload_submit', args=[self.dr.upload_token])
+
+    def _file(self, name):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(name, b'%PDF-1.4 body', 'application/pdf')
+
+    def test_한_칸에_여러_개를_붙이면_다_저장된다(self):
+        from v1.products.models import DocumentSubmission
+
+        r = self.client.post(self._url(), {
+            'vendor_name': '협력사',
+            'file_0': [self._file('a.pdf'), self._file('b.pdf'), self._file('c.pdf')],
+        })
+        self.assertIn(r.status_code, (200, 302))
+        names = set(DocumentSubmission.objects
+                    .filter(request=self.dr)
+                    .values_list('original_filename', flat=True))
+        self.assertEqual(names, {'a.pdf', 'b.pdf', 'c.pdf'})
+
+    def test_한_개만_붙여도_그대로_저장된다(self):
+        from v1.products.models import DocumentSubmission
+
+        self.client.post(self._url(), {
+            'vendor_name': '협력사', 'file_0': self._file('only.pdf')})
+        self.assertEqual(
+            DocumentSubmission.objects.filter(request=self.dr).count(), 1)
+
+
+class 협력사_업로드가_화면이_약속한_한도를_지킨다(TestCase):
+    """
+    화면은 "PDF, JPG, PNG, DOCX (최대 20MB)" 라고 적어 두었는데 **서버에는
+    크기 검사도 확장자 검사도 없었다.** 저장소 표준(common/uploads.py)의
+    30MB 상한도, 요청자의 저장 할당량 검사도 부르지 않았다.
+
+    로그인도 안 한 협력사가 요청자의 요금제 한도를 얼마든지 넘길 수 있었고,
+    `.html`·`.svg` 도 그대로 받았다 — 그 파일을 여는 사람은 바로 요청자다.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from v1.products.models import DocumentRequest, DocumentType
+
+        p = patch('v1.products.services.vision_service.process_document_vision_async',
+                  lambda *a, **k: None)
+        p.start()
+        self.addCleanup(p.stop)
+
+        self.owner = User.objects.create_user(username='vq', password='x')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='한도', delete_YN='N')
+        DocumentType.objects.create(type_name='성적서', type_code='SPEC',
+                                    active_yn=True, display_order=1)
+        self.dr = DocumentRequest.objects.create(
+            requester=self.owner, linked_label=self.label,
+            recipient_email='v@example.com',
+            due_date=timezone.now().date() + timedelta(days=7),
+            status=DocumentRequest.STATUS_PENDING)
+
+    def _post(self, name, size=64, content_type='application/pdf'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return self.client.post(
+            reverse('vendor:upload_submit', args=[self.dr.upload_token]),
+            {'vendor_name': '협력사',
+             'file_0': SimpleUploadedFile(name, b'x' * size, content_type)})
+
+    def _saved(self):
+        from v1.products.models import DocumentSubmission
+
+        return DocumentSubmission.objects.filter(request=self.dr).count()
+
+    def test_너무_큰_파일은_막는다(self):
+        from v1.common.uploads import MAX_UPLOAD_MB
+
+        self._post('big.pdf', size=(MAX_UPLOAD_MB * 1024 * 1024) + 1)
+        self.assertEqual(self._saved(), 0)
+
+    def test_허용하지_않는_확장자는_막는다(self):
+        for name in ('x.html', 'x.svg', 'x.exe'):
+            self._post(name)
+        self.assertEqual(self._saved(), 0)
+
+    def test_허용한_확장자는_받는다(self):
+        self._post('ok.pdf')
+        self.assertEqual(self._saved(), 1)
+
+    def test_막았으면_왜_막았는지_말한다(self):
+        r = self._post('x.exe')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('확장자', r.content.decode())
+
+
+class 다른_계정으로_로그인_단추가_실제로_로그아웃한다(TestCase):
+    """
+    초대 착지점의 「다른 계정으로 로그인」이 `<a href>` 였다. GET 이므로
+    `logout_view` 의 POST 분기를 타지 않고 **로그아웃 없이** 대시보드로
+    떨어진다. 엉뚱한 계정으로 로그인한 채, 로그아웃됐다는 말도 없이.
+
+    `wrong_account` 분기가 존재하는 이유가 바로 이 상황을 풀어 주려는
+    것인데, 유일한 해결 단추가 아무 일도 안 했다.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+
+        from v1.products.models import ProductShare
+
+        self.owner = User.objects.create_user(username='iown', password='x')
+        self.invited = 'invited@example.com'
+        self.wrong = User.objects.create_user(
+            username='wrong@example.com', email='wrong@example.com', password='x')
+        self.label = MyLabel.objects.create(
+            user_id=self.owner, my_label_name='초대', delete_YN='N')
+        self.share = ProductShare.objects.create(
+            label=self.label, created_by=self.owner,
+            recipient_email=self.invited, active_yn=True,
+            share_mode='PRIVATE',
+            share_end_date=timezone.now() + timedelta(days=7))
+
+    def _landing(self):
+        return self.client.get(
+            reverse('products:share_invite_landing',
+                    args=[self.share.public_token]))
+
+    def test_엉뚱한_계정이면_그렇다고_말한다(self):
+        self.client.force_login(self.wrong)
+        r = self._landing()
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.context['wrong_account'])
+
+    def test_그_단추가_POST_폼이다(self):
+        """<a href> 는 GET 이라 logout_view 의 POST 분기를 안 탄다."""
+        self.client.force_login(self.wrong)
+        html = self._landing().content.decode()
+        i = html.index('다른 계정으로 로그인')
+        block = html[max(0, i - 600):i + 100]
+        self.assertIn('<form', block)
+        self.assertIn('method="post"', block)
+        self.assertIn('csrfmiddlewaretoken', block)
+
+    def test_눌렀을_때_정말_로그아웃된다(self):
+        self.client.force_login(self.wrong)
+        self.client.post(reverse('user_management:logout'))
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_GET_으로는_로그아웃되지_않는다(self):
+        """CSRF 보호를 GET 으로 우회하지 못하게 — 그 성질은 그대로 둔다."""
+        self.client.force_login(self.wrong)
+        self.client.get(reverse('user_management:logout'))
+        self.assertIn('_auth_user_id', self.client.session)

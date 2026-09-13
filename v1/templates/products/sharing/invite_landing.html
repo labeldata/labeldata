@@ -63,7 +63,17 @@
         <strong>{{ invited_email }}</strong> 로 로그인해야 이 제품이 보입니다.
       </div>
       <div class="invite-actions">
-        <a class="btn v2-btn" href="{% url 'user_management:logout' %}">다른 계정으로 로그인</a>
+        {% comment %}
+          <a href> 였다. GET 이라 logout_view 의 POST 분기를 안 타고,
+          로그아웃 없이 대시보드로 떨어졌다 — 엉뚱한 계정으로 로그인한 채,
+          로그아웃됐다는 말도 없이. wrong_account 분기가 존재하는 이유가
+          바로 이 상황을 풀어 주려는 것인데 유일한 해결 단추가 아무 일도
+          안 했다. 저장소의 다른 로그아웃 두 곳은 모두 POST 폼이다.
+        {% endcomment %}
+        <form method="post" action="{% url 'user_management:logout' %}" style="display:inline;">
+          {% csrf_token %}
+          <button type="submit" class="btn v2-btn">다른 계정으로 로그인</button>
+        </form>
         <a class="btn v2-btn-sm v2-link-btn" href="{% url 'products:inbox' %}">내 공동작업 보기</a>
       </div>
     {% else %}

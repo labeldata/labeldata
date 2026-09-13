@@ -11,6 +11,28 @@ from django.shortcuts import render, redirect
 from django.http import Http404
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+
+from v1.common import uploads
+
+def _vendor_form_context(dr, token, error=''):
+    """
+    협력사 제출 폼을 다시 그릴 때 쓰는 컨텍스트. **한 곳에서 만든다.**
+
+    오류 재렌더가 두 벌이면 한쪽만 고쳐졌을 때 그 경로에서만 화면이 빈다.
+    """
+    return {
+        'dr': dr,
+        'token': token,
+        'requested_docs': dr.requested_documents or [],
+        'requester_name': dr.requester.get_full_name() or dr.requester.username,
+        'product_name': (
+            dr.linked_label.my_label_name if dr.linked_label else dr.target_product_name
+        ),
+        'error': error,
+    }
+
+
+from v1.common import uploads
  
 logger = logging.getLogger(__name__)
  
@@ -116,8 +138,36 @@ def vendor_submit_view(request, token):
     vendor_email = request.POST.get('vendor_email', '').strip() or dr.recipient_email
     notes = request.POST.get('notes', '').strip()
  
-    # 업로드된 파일 처리
-    for key, uploaded_file in request.FILES.items():
+    # 업로드된 파일을 **하나도 빠뜨리지 않고** 편다.
+    #
+    # 예전에는 `request.FILES.items()` 로 돌았다. MultiValueDict.items() 는
+    # 키마다 **마지막 값 하나만** 돌려준다 — 범용 칸(`file_0`)은 multiple 이라
+    # 여러 개가 오는데, 셋을 붙이면 하나만 저장되고 둘이 조용히 사라졌다.
+    # 화면은 고른 파일 전부를 초록 체크와 함께 그려 주고 "제출 완료" 라고
+    # 말했으므로 협력사도 요청자도 없어진 것을 알 수 없었다.
+    incoming = [(k, f) for k, files in request.FILES.lists() for f in files]
+
+    # 화면은 "PDF, JPG, PNG, DOCX (최대 20MB)" 라고 약속하는데 서버에는
+    # 크기·확장자·할당량 검사가 **하나도 없었다.** 로그인도 안 한 협력사가
+    # 요청자의 저장 한도를 얼마든지 넘길 수 있었고 .html·.svg 도 그대로
+    # 받았다 — 그 파일을 여는 사람은 바로 요청자다.
+    # 저장소 표준 한 곳(common/uploads.check)을 그대로 쓴다.
+    rejected = []
+    accepted = []
+    for key, uploaded_file in incoming:
+        problem = uploads.check(dr.requester, uploaded_file, kind='서류')
+        if problem:
+            rejected.append('%s — %s' % (uploaded_file.name, problem))
+        else:
+            accepted.append((key, uploaded_file))
+
+    if not accepted:
+        why = (' / '.join(rejected) if rejected
+               else '파일을 하나 이상 첨부해주세요.')
+        return render(request, 'vendor/upload_form.html',
+                      _vendor_form_context(dr, token, error=why))
+
+    for key, uploaded_file in accepted:
         # key 형식: "file_<type_id>" 또는 "file_0" 등
         type_id = None
         if key.startswith('file_'):
@@ -179,25 +229,20 @@ def vendor_submit_view(request, token):
             # Vision AI 비동기 처리 트리거
             process_document_vision_async(product_doc.document_id)
  
-    if not submitted_files and not request.FILES:
-        # 파일 없이 제출 → 폼으로 돌아감
-        dr_data = {
-            'dr': dr,
-            'token': token,
-            'requested_docs': dr.requested_documents or [],
-            'requester_name': dr.requester.get_full_name() or dr.requester.username,
-            'product_name': (
-                dr.linked_label.my_label_name if dr.linked_label else dr.target_product_name
-            ),
-            'error': '파일을 하나 이상 첨부해주세요.',
-        }
-        return render(request, 'vendor/upload_form.html', dr_data)
- 
     #  '수락' 이 아니라 '제출 완료' 다. 예전에는 둘 다 ACCEPTED 라, 하겠다고만
     #  하고 안 낸 건과 실제로 낸 건이 목록에서 구분되지 않았다.
     dr.status = DocumentRequest.STATUS_SUBMITTED
     dr.save(update_fields=['status', 'updated_datetime'])
- 
+
+    if rejected:
+        # 일부는 받고 일부는 못 받았다. 조용히 넘기면 협력사는 다 낸 줄 알고
+        # 창을 닫는다.
+        return render(request, 'vendor/upload_form.html',
+                      _vendor_form_context(
+                          dr, token,
+                          error='%d건을 받았습니다. 다음은 받지 못했습니다 — %s'
+                                % (len(accepted), ' / '.join(rejected))))
+
     return redirect('vendor:upload_complete')
  
  
