@@ -126,6 +126,16 @@ class AppVersion(models.Model):
 
 
 class AnalyticsEvent(models.Model):
+    """
+    **지금은 쓰이지 않는다.** 이 표에 행을 만드는 코드가 저장소 어디에도
+    없다 — 앱에 `logEvent()` 가 있었으나 부르는 곳이 0이었고 그것이 치던
+    `/devices/<id>/events/` 라우트도 서버에 없었다(앱 쪽은 걷어냈다).
+
+    지우지 않고 두는 까닭은 마이그레이션 그래프가 갈라져 있어서다
+    (v1/config/settings_test.py 머리말). 지표를 다시 하기로 하면 **무엇을
+    왜 모을지 정한 뒤** 여기서부터 살린다.
+    """
+
     EVENT_CHOICES = [
         ('click_v2_banner', 'V2 배너 클릭'),
         ('add_alert_rule', '알림 키워드 추가'),

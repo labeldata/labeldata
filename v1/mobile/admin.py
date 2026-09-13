@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AppDevice, AlertRule, PushNotificationLog, Bookmark, AppVersion, AnalyticsEvent
+from .models import AppDevice, AlertRule, PushNotificationLog, Bookmark, AppVersion
 
 
 @admin.register(AppDevice)
@@ -32,7 +32,12 @@ class AppVersionAdmin(admin.ModelAdmin):
     list_display = ('platform', 'latest_version', 'min_version', 'updated_at')
 
 
-@admin.register(AnalyticsEvent)
-class AnalyticsEventAdmin(admin.ModelAdmin):
-    list_display = ('device', 'event_name', 'created_at')
-    list_filter = ('event_name',)
+# AnalyticsEvent 는 admin 에 걸지 않는다 — **행을 만드는 코드가 없다.**
+#
+# 앱에도 서버에도 이 표에 쓰는 곳이 0이었다(앱의 logEvent 는 부르는 곳이
+# 없었고 그것이 치던 라우트도 없었다. 앱 쪽은 걷어냈다). 메뉴만 있으면
+# "지표가 쌓이고 있다" 고 믿게 되는데 영원히 비어 있다.
+#
+# 표 자체는 남긴다 — 지우려면 마이그레이션이 필요한데 이 저장소의
+# 마이그레이션 그래프는 갈라져 있다(settings_test 머리말). 지표를 다시
+# 하기로 하면 그때 여기부터 살리면 된다.
