@@ -9541,3 +9541,99 @@ class 다른_계정으로_로그인_단추가_실제로_로그아웃한다(TestC
         self.client.force_login(self.wrong)
         self.client.get(reverse('user_management:logout'))
         self.assertIn('_auth_user_id', self.client.session)
+
+
+class 배합표가_화면_좌표와_데이터_좌표를_섞지_않는다(TestCase):
+    """
+    Handsontable 에서 `getSourceDataAtRow` 는 **물리(데이터) 좌표**를 받고,
+    `setDataAtRowProp`·`getCell`·`afterChange`·`afterSelectionEnd` 는 전부
+    **화면 좌표**를 준다. 이 표는 `manualRowMove` 가 켜져 있어 그 둘이 갈라진다.
+
+    예전에는 같은 정수를 양쪽에 그대로 넣었다. 특히 `setRowProp` 이 나빴다 —
+    표에 칸이 있는 값은 **옳은 줄**로, `_meta`(bom_id·source_type·source_id)는
+    **다른 줄**로 갔다. 저장은 행 객체의 `_meta.bom_id` 를 그대로 보내므로,
+    잘못 붙은 번호로 **엉뚱한 DB 행을 덮고**, 서버는 그 행의 source_ingredient
+    로 내 원료 마스터를 역동기화하고, 같은 원료를 쓰는 **다른 제품의 BOM
+    까지** 함께 고친다.
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_데이터를_직접_읽는_곳이_한_곳뿐이다(self):
+        js = self._js()
+        # 변환을 거치지 않은 raw 접근이 남아 있으면 다시 갈라진다
+        self.assertEqual(js.count('getSourceDataAtRow('), 1)
+        self.assertIn('function rowObjectAt(', js)
+
+    def test_그_한_곳이_좌표를_바꾼다(self):
+        js = self._js()
+        i = js.index('function rowObjectAt(')
+        block = js[i:i + 500]
+        self.assertIn('toPhysicalRow', block)
+
+    def test_자기를_다시_부르지_않는다(self):
+        """치환하다 무한 재귀를 만들기 쉬운 자리다."""
+        js = self._js()
+        i = js.index('function rowObjectAt(')
+        block = js[i:js.index('const gridColumnProps')]
+        self.assertNotIn('return rowObjectAt(', block)
+
+    def test_화면에_보이는_순서로_저장한다(self):
+        js = self._js()
+        i = js.index('async function saveData()')
+        block = js[i:i + 1200]
+        self.assertIn('rowObjectAt(index)', block)
+        self.assertNotIn('sourceData[index]', block)
+
+
+class 표에서_친_값이_저장_때_되돌아가지_않는다(TestCase):
+    """
+    알레르기·GMO·품목보고번호·요약구분은 **표에도 칸이 있고 패널에도 숨은
+    칸이 있다.** 그런데 표를 직접 고쳐도 패널은 갱신되지 않았다.
+
+    그 뒤 줄을 옮기거나 [저장하기] 를 누르면 `syncContextPanelToRow()` 가
+    **패널의 옛 값을 표에 도로 쓴다** — 방금 친 값이 사라진다. saveData 의
+    첫 줄이 바로 그 함수라 **저장 경로에서도 그대로 소실됐다.**
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_표를_고치면_패널이_따라온다(self):
+        js = self._js()
+        i = js.index('afterChange: function(changes, source)')
+        block = js[i:i + 1600]
+        self.assertIn('PANEL_MIRRORED[prop]', block)
+        self.assertIn('currentRowIndex', block)
+
+    def test_두_자리를_가진_값이_명부에_있다(self):
+        js = self._js()
+        i = js.index('const PANEL_MIRRORED')
+        block = js[i:i + 400]
+        for prop in ('allergens', 'gmo', 'report_no', 'summary_type'):
+            self.assertIn(prop, block)
+
+    def test_그_넷은_표에도_칸이_있다(self):
+        """표에 칸이 없으면 애초에 덮어쓸 일이 없다 — 명부가 맞는지 본다."""
+        js = self._js()
+        i = js.index('const gridColumnProps')
+        grid = js[i:i + 400]
+        for prop in ('allergens', 'gmo', 'report_no'):
+            self.assertIn(prop, grid)

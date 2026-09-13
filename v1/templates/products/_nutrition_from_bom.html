@@ -31,7 +31,12 @@
     if (!el) { if (warn) showSnackbar(text, 'warning'); return; }
     el.textContent = text;
     el.classList.toggle('is-warn', !!warn);
-    el.style.display = text ? '' : 'none';
+    /* `''` 는 인라인 값을 **지우는** 것이라 CSS 의 `display:none` 이 다시
+       이긴다(.cfg-note·.calc-note 둘 다 none 이다). 그래서 "배합에 원료가
+       없습니다"·"나트륨이 막힙니다"·성공 문구·오류 문구가 **하나도 안
+       보였다** — 이 조각의 안내가 통째로 죽어 있었다.
+       같은 화면의 warnMissingServingSize 는 'block'/'none' 을 명시한다. */
+    el.style.display = text ? 'block' : 'none';
   }
 
   function names(fields) {
@@ -83,7 +88,14 @@
           }
         });
 
-        setGridNutritionData(filled);          // 계산값 칸만 채운다
+        /* **덮어쓰지 말고 채워 넣는다.**
+           예전에는 `setGridNutritionData(filled)` 였다. 그 함수는 표를
+           통째로 다시 그리므로, LABEL 에 없는 **식이섬유·칼슘·철·비타민 등
+           16개가 전부 빈칸이 되고** 사용자가 고른 단위도 기본값으로
+           되돌아갔다. 배합이 모르는 성분(values[f] === null)도 마찬가지로
+           사용자가 손으로 넣은 값이 지워졌다.
+           배합이 아는 것만 바꾸고 나머지는 그대로 둔다. */
+        mergeGridNutritionData(filled);
         if (typeof refreshApplied === 'function') refreshApplied();
         if (typeof calculateAndPreview === 'function') calculateAndPreview();
 

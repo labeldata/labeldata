@@ -893,7 +893,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                     syncContextPanelToRow();
                 }
                 
-                const rowData = this.getSourceDataAtRow(row);
+                const rowData = rowObjectAt(row);
                 currentRowIndex = row;
                 /* 목록에서 골라야 하는 칸을 눌렀을 때만 그 줄 아래에 편다.
                    모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다. */
@@ -909,6 +909,24 @@ body.in-iframe .bom-page-header { display: none !important; }
                     const value = change[3];
                     if (prop === 'ingredient_name') {
                         applyIngredientSelection(row, value);
+                    }
+                    /* ═══ 표에서 친 값을 오른쪽 패널에도 옮긴다 ═══════════
+                     *
+                     * 알레르기·GMO·품목보고번호·요약구분은 **표에도 칸이 있고
+                     * 패널에도 숨은 칸이 있다.** 그런데 표를 직접 고쳐도 패널은
+                     * 갱신되지 않았다.
+                     *
+                     * 그 뒤 줄을 옮기거나 [저장하기] 를 누르면
+                     * `syncContextPanelToRow()` 가 **패널의 옛 값을 표에 도로
+                     * 쓴다** — 방금 친 값이 사라진다. saveData 의 첫 줄이
+                     * 바로 그 함수라, **저장 경로에서도 그대로 소실됐다.**
+                     *
+                     * 값 하나에 자리가 둘이면 둘이 같은 말을 하게 만들어야
+                     * 한다. 표를 고치면 패널이 따라온다.
+                     * ═══════════════════════════════════════════════════ */
+                    if (row === currentRowIndex && PANEL_MIRRORED[prop]) {
+                        const el = document.getElementById(PANEL_MIRRORED[prop]);
+                        if (el) el.value = value == null ? '' : value;
                     }
                     /* 비고에 알레르기·GMO 를 적어 오는 사람이 있다 */
                     if (prop === 'notes' && source !== 'remark-split') {
@@ -1088,6 +1106,40 @@ body.in-iframe .bom-page-header { display: none !important; }
     /* 표에 칸이 있는 것. 여기 없는 것은 rowMetadata 로만 남는다.
        알레르기·GMO·품목보고번호에 칸이 생겼는데 이 목록을 안 고쳐서,
        칩을 눌러도 표의 칸은 비어 있었다. */
+    /* ═══ 화면 좌표와 데이터 좌표를 섞지 않는다 ═════════════════════════
+     *
+     * Handsontable 에서 `getSourceDataAtRow` 는 **물리(데이터) 좌표**를 받고,
+     * `setDataAtRowProp`·`getCell`·`afterChange`·`afterSelectionEnd` 는 전부
+     * **화면 좌표**를 준다. 이 표는 `manualRowMove` 가 켜져 있어(줄을 끌어
+     * 옮길 수 있다) 그 둘이 갈라진다.
+     *
+     * 예전에는 같은 정수를 양쪽에 그대로 넣었다. 특히 `setRowProp` 이
+     * 나빴다 — 표에 칸이 있는 값은 **옳은 줄**로, `_meta`(bom_id·source_type
+     * ·source_id)는 **다른 줄**로 갔다. 저장은 행 객체의 `_meta.bom_id` 를
+     * 그대로 보내므로, 잘못 붙은 번호로 **엉뚱한 DB 행을 덮고**, 서버는 그
+     * 행의 source_ingredient 로 내 원료 마스터를 역동기화하고, 같은 원료를
+     * 쓰는 **다른 제품의 BOM 까지** 함께 고친다.
+     *
+     * 이 파일이 다루는 좌표는 전부 화면 좌표다. 데이터에 닿을 때만 여기서
+     * 한 번 바꾼다.
+     * ═══════════════════════════════════════════════════════════════════ */
+    function rowObjectAt(visualRow) {
+        const i = Number(visualRow);
+        if (!Number.isInteger(i) || i < 0) return null;
+        const phys = (hot && hot.toPhysicalRow) ? hot.toPhysicalRow(i) : i;
+        if (phys === null || phys === undefined) return null;
+        return hot.getSourceDataAtRow(phys);
+    }
+
+    /* 표와 패널이 **같은 값을 두 자리에** 들고 있는 것들.
+       한쪽을 고치면 다른 쪽도 따라와야 한다 — afterChange 참고. */
+    const PANEL_MIRRORED = {
+        allergens:    'field-allergens',
+        gmo:          'field-gmo',
+        report_no:    'field-report-no',
+        summary_type: 'field-summary-type',
+    };
+
     const gridColumnProps = new Set([
         'ingredient_name',
         'raw_material_name',
@@ -1110,7 +1162,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             return;
         }
         // 표에 칸이 없는 것은 그 **행 객체**에 붙인다 (행 번호는 영구 키가 아니다)
-        const row = hot.getSourceDataAtRow(safeRowIndex);
+        const row = rowObjectAt(safeRowIndex);
         if (!row) return;
         if (!row._meta) row._meta = {};
         row._meta[prop] = value;
@@ -1239,7 +1291,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (!rawMaterialName) {
             setRowProp(rowIndex, 'raw_material_name', value);
         }
-        updateContextPanel(hot.getSourceDataAtRow(rowIndex), rowIndex, true);
+        updateContextPanel(rowObjectAt(rowIndex), rowIndex, true);
         // 자동완성 선택 후 요약 패널 갱신 (setRowProps는 source='syncPanel'로 afterChange 건너뜀)
         setTimeout(generateBomSummary, 50);
     }
@@ -1396,7 +1448,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             setRowProps(rowIndex, updatedData, 'palette');
             
             // rowData에 updatedData를 병합하여 context panel 업데이트
-            const rowData = hot.getSourceDataAtRow(rowIndex);
+            const rowData = rowObjectAt(rowIndex);
             const mergedData = Object.assign({}, rowData, updatedData);
             
             // context panel에 병합된 데이터 전달
@@ -1428,7 +1480,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             allergens: item.allergens || item.allergen || '',
             raw_material_name: item.raw_material_name || item.name || '',
             food_type: item.food_type || '',
-            summary_type: ((hot.getSourceDataAtRow(targetRow) || {})._meta || {}).summary_type || '식품유형',
+            summary_type: ((rowObjectAt(targetRow) || {})._meta || {}).summary_type || '식품유형',
             gmo: item.gmo || '',
             gmo_yn: !!item.gmo || !!item.gmo_yn,
             report_no: item.report_no || '',
@@ -1440,7 +1492,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
 
         hot.selectCell(targetRow, 0);
-        updateContextPanel(hot.getSourceDataAtRow(targetRow), targetRow, true);
+        updateContextPanel(rowObjectAt(targetRow), targetRow, true);
         scheduleDraftSave();
         // 팔레트 드롭 후 요약 갱신 (source='palette'로 afterChange 건너뜀)
         setTimeout(generateBomSummary, 50);
@@ -1752,38 +1804,73 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
 
         const url = LOAD_LABEL_URL_TEMPLATE.replace('/0/', `/${labelId}/`);
-        const res = await fetch(url);
-        const result = await res.json();
+        let result;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(String(res.status));
+            result = await res.json();
+        } catch (e) {
+            /* 예전에는 try/catch 도 else 도 없었다. 서버가 404(남의 라벨)를
+               주면 res.json() 이 던지고, 확인 창까지 눌러 놓고 **모달이
+               그대로 열린 채 아무 일도 일어나지 않았다.** */
+            showSnackbar('라벨 정보를 불러오지 못했습니다.', 'error');
+            return;
+        }
 
-        if (result.success) {
-            const currentData = hot.getSourceData().filter(row => row.ingredient_name);
-            const newData = result.data.map(item => ({
+        if (!result || !result.success) {
+            showSnackbar((result && result.error) || '라벨 정보를 불러오지 못했습니다.', 'error');
+            return;
+        }
+
+        const currentData = hot.getSourceData().filter(row => row.ingredient_name);
+        const newData = result.data.map(item => {
+            /* ═══ 표에 칸이 없는 값은 `_meta` 에 붙인다 ═══════════════════
+             *
+             * 이 함수만 그 규약에서 빠져 있었다. origin·sub_ingredients·
+             * origin_detail·source_type 등을 **행 객체 최상위**에 얹었는데,
+             * 저장(saveData)은 그것들을 `row._meta` 에서만 읽는다.
+             * `_meta` 가 없으니 전부 `{}` 로 떨어져 — 서버가 실어 보낸
+             * **원산지가 저장 때 빈 값으로 날아갔다.**
+             * 같은 일을 하는 addItemToGrid·applyIngredientSelection 은
+             * setRowProps 를 거쳐 규약을 지킨다.
+             * ═══════════════════════════════════════════════════════════ */
+            const row = {
+                // 표에 칸이 있는 것 (gridColumnProps)
                 ingredient_name: item.ingredient_name,
-                type: '직접입력',
-                mixing_ratio: item.mixing_ratio || null,
-                origin: item.origin || '',
-                notes: item.notes || '',
-                source_type: 'manual',
                 raw_material_name: item.raw_material_name || item.ingredient_name || '',
+                food_type: item.food_type || '',
+                mixing_ratio: item.mixing_ratio || null,
+                manufacturer: item.manufacturer || '',
+                allergens: item.allergens || item.allergen || '',
+                gmo: item.gmo || '',
+                report_no: item.report_no || '',
+                notes: item.notes || '',
+                type: '직접입력',
+            };
+            row._meta = {
+                bom_id: null,                       // 새 줄이다
+                source_type: 'manual',
+                source_id: null,
+                source_label_id: item.source_label_id || null,
+                origin: item.origin || '',
+                origin_detail: item.origin_detail || '',
                 sub_ingredients: item.sub_ingredients || '',
                 allergen: item.allergens || item.allergen || '',
                 allergens: item.allergens || item.allergen || '',
-                origin_detail: item.origin_detail || '',
-                food_type: item.food_type || '',
+                gmo: item.gmo || '',
                 additive_yn: !!item.additive_yn,
                 additive_role: item.additive_role || '',
                 gmo_yn: !!item.gmo_yn,
-                report_no: item.report_no || '',
-                manufacturer: item.manufacturer || '',
-                source_label_id: item.source_label_id || null
-            }));
-            hot.loadData([...currentData, ...newData]);
-            hot.render();
-            calculateTotal();
+                summary_type: item.summary_type || '식품유형',
+            };
+            return row;
+        });
+        hot.loadData([...currentData, ...newData]);
+        hot.render();
+        calculateTotal();
 
-            bootstrap.Modal.getInstance(document.getElementById('loadLabelModal')).hide();
-            showSnackbar('라벨 정보를 불러왔습니다. 배합비를 입력해주세요.', 'success');
-        }
+        bootstrap.Modal.getInstance(document.getElementById('loadLabelModal')).hide();
+        showSnackbar(`라벨에서 ${newData.length}종을 불러왔습니다. 배합비를 입력해주세요.`, 'success');
     }
 
     function calculateTotal() {
@@ -1855,7 +1942,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         panel.style.top = (cellBox.bottom - cardBox.top) + 'px';
         const name = document.getElementById('bom-rowdetail-name');
         if (name) {
-            const row = hot.getSourceDataAtRow(rowIndex) || {};
+            const row = rowObjectAt(rowIndex) || {};
             name.textContent = (row.ingredient_name || '').trim()
                 || ((rowIndex + 1) + '번째 줄');
         }
@@ -2274,7 +2361,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (!CAN_EDIT || !hot) return;
         const found = splitRemark(text);
         if (!found) return;
-        const row = hot.getSourceDataAtRow(rowIndex) || {};
+        const row = rowObjectAt(rowIndex) || {};
         /* 이미 칸에 있는 것은 그대로 두고 없는 것만 보탠다 */
         const add = function (prop, names) {
             if (!names.length) return;
@@ -2289,7 +2376,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             add('gmo', found.gmo);
             hot.setDataAtRowProp(rowIndex, 'notes', found.rest, 'remark-split');
             if (currentRowIndex === rowIndex) {
-                updateContextPanel(hot.getSourceDataAtRow(rowIndex), rowIndex, false);
+                updateContextPanel(rowObjectAt(rowIndex), rowIndex, false);
             }
         }, 0);
     }
@@ -2312,7 +2399,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             const row = Number(btn.dataset.row);
             if (!hot || isNaN(row)) return;
             hot.selectCell(row, 0);
-            updateContextPanel(hot.getSourceDataAtRow(row), row, true);
+            updateContextPanel(rowObjectAt(row), row, true);
         });
     }
 
@@ -2533,12 +2620,15 @@ body.in-iframe .bom-page-header { display: none !important; }
             syncContextPanelToRow();
             
             const items = [];
-            const sourceData = hot.getSourceData();
             const rowCount = hot.countRows();
 
-            // getSourceData()로 전체 배열을 가져와서 인덱스로 접근
+            /* **화면에 보이는 순서대로** 담는다.
+               예전에는 `getSourceData()` 를 인덱스로 훑었는데, 그것은 옮기기
+               전의 데이터 순서다. `manualRowMove` 로 끌어서 맞춘 순서가
+               저장되지 않아, 새로고침하면 원래대로 돌아갔다.
+               rowObjectAt 이 화면 좌표를 데이터 좌표로 바꿔 준다. */
             for (let index = 0; index < rowCount; index++) {
-                const row = sourceData[index];
+                const row = rowObjectAt(index);
                 const metadata = (row && row._meta) || {};
                 
                 if (row && row.ingredient_name && row.ingredient_name.toString().trim() !== '') {

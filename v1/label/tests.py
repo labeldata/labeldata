@@ -10345,8 +10345,30 @@ class 화면에_그린_표와_저장이_같아야_한다(TestCase):
         self.assertIn('appliedValues()', block)
 
     def test_안_쓰기로_하면_물린_적이_없는_것이다(self):
-        self.assertIn("nutrition_tolerance: useApplied() ? appliedTolerance : ''",
-                      self.editor)
+        """
+        저장하는 값은 `toleranceForSave()` 가 정한다. 켰으면 오차율을,
+        껐으면 **음수**를 남긴다 — 껐다는 사실 자체를 저장해야 다시 열 때
+        화면이 HTML 기본값(15% · 켬)으로 되살아나지 않는다.
+        """
+        self.assertIn('nutrition_tolerance: toleranceForSave()', self.editor)
+
+        head = self.editor.index('function toleranceForSave')
+        block = self.editor[head:head + 700]
+        self.assertIn('if (useApplied()) return rate', block)
+        self.assertIn("return rate ? '-' + rate : '-0';", block)
+
+    def test_껐던_것은_다시_열어도_꺼져_있다(self):
+        """
+        예전에는 끄면 `''` 를 보냈다. 다시 열면 오차 칸도 체크박스도 HTML
+        기본값으로 되살아나 적용값이 +15% 부풀었다 — 표는 355 를 보여 주는데
+        DB 에는 309 가 있었고, 거기서 한 번 더 저장하면 DB 도 355 가 됐다.
+        """
+        head = self.editor.index('function applyStoredTolerance')
+        block = self.editor[head:head + 700]
+        self.assertIn("text.startsWith('-')", block)
+        self.assertIn('useBox.checked = !off', block)
+        # 복원이 그 함수 하나를 거친다
+        self.assertIn('applyStoredTolerance(data.nutrition_tolerance)', self.editor)
 
 
 class 설정을_성격별로_묶는다(TestCase):

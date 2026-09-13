@@ -543,6 +543,27 @@ function setGridNutritionData(nutritionData) {
     hot.loadData(data);
 }
 
+/**
+ * 표를 통째로 다시 그리지 않고 **준 것만** 바꾼다.
+ *
+ * `setGridNutritionData` 는 ALL_NUTRIENTS 25개를 새로 만든다. 배합에서
+ * 계산은 9개만 알므로, 그 함수를 쓰면 나머지 16개(식이섬유·칼슘·철·
+ * 비타민 …)가 빈칸이 되고 사용자가 고른 단위도 기본값으로 되돌아간다.
+ * 사용자가 손으로 넣은 값을 지우는 것은 계산이 할 일이 아니다.
+ */
+function mergeGridNutritionData(nutritionData) {
+    if (!hot) return;
+    const changes = [];
+    ALL_NUTRIENTS.forEach((nutrient, index) => {
+        const value = nutritionData[nutrient.field];
+        if (value === undefined || value === null) return;   // 모르는 것은 그대로
+        const at = hot.toVisualRow(index);
+        if (at === null || at < 0) return;
+        changes.push([at, 1, value]);
+    });
+    if (changes.length) hot.setDataAtCell(changes, 'fromBom');
+}
+
 // 미리보기 스타일 설정
 function setPreviewStyle(style) {
     currentPreviewStyle = style;
@@ -707,11 +728,7 @@ async function loadData() {
             const el = document.getElementById(id);
             if (el && data[id]) el.value = data[id];
         });
-        appliedTolerance = String(data.nutrition_tolerance || '');
-        if (appliedTolerance) {
-            const box = document.getElementById('nutrition_tolerance');
-            if (box) box.value = appliedTolerance;
-        }
+        applyStoredTolerance(data.nutrition_tolerance);
         try { bindCalcSource(); } catch (e) {}
         document.getElementById('serving_size_unit').value = data.serving_size_unit || 'g';
         document.getElementById('units_per_package').value = data.units_per_package || '1';
@@ -791,7 +808,15 @@ async function saveData() {
             nutrition_source: document.getElementById('nutrition_source').value || '',
             nutrition_source_note: (document.getElementById('nutrition_source_note').value || '').trim(),
             // 안 쓰기로 했으면 물린 적이 없는 것이다
-            nutrition_tolerance: useApplied() ? appliedTolerance : '',
+            /* **끈 것도 남긴다.**
+               예전에는 끄면 `''` 를 보냈다. 그러면 다시 열 때 오차 칸이
+               HTML 기본값 15 로, 체크박스도 HTML 기본값 checked 로 되살아나
+               적용값이 +15% 부푼다 — 표와 미리보기가 355 를 보여 주는데
+               DB 에는 309 가 들어 있다. 거기서 한 번 더 저장하면 DB 도
+               355 가 된다. 사용자가 명시적으로 끈 선택이 조용히 뒤집혔다.
+               칸이 CharField(10) 이라 **음수로 '끔'을 담는다** — 마이그레이션
+               없이, 고른 오차율까지 함께 기억한다. */
+            nutrition_tolerance: toleranceForSave(),
             /* 계산값도 남긴다. 저장 칸에는 적용값이 들어가므로, 이것을 안
                남기면 다시 열었을 때 내가 넣은 값이 사라진다. */
             nutrition_calc_values: JSON.stringify(gridValues()),
@@ -905,6 +930,36 @@ function toleranceSetting() {
 function useApplied() {
     const box = document.getElementById('use_tolerance');
     return !box || box.checked;
+}
+
+/**
+ * 저장할 오차 문자열. **끈 것도 값으로 남긴다.**
+ *
+ * `''` 로 보내면 다시 열 때 화면이 HTML 기본값(15% · 켬)으로 되살아나
+ * 사용자가 끈 선택이 뒤집힌다. 음수로 담으면 "껐다" 와 "그때 고른 오차율"
+ * 을 한 칸에 함께 남길 수 있다 — CharField(10) 이라 마이그레이션이 없다.
+ */
+function toleranceForSave() {
+    const raw = parseFloat(
+        String((document.getElementById('nutrition_tolerance') || {}).value || '')
+            .replace(/,/g, ''));
+    const rate = raw > 0 ? raw : 0;
+    if (useApplied()) return rate ? String(rate) : '';
+    return rate ? '-' + rate : '-0';
+}
+
+/** 저장해 둔 오차 문자열을 화면에 되돌린다. 음수면 '끔' 이다. */
+function applyStoredTolerance(stored) {
+    const text = String(stored == null ? '' : stored).trim();
+    const off = text.startsWith('-');
+    const rate = Math.abs(parseFloat(text.replace(/,/g, ''))) || 0;
+
+    appliedTolerance = rate ? String(rate) : '';
+    const box = document.getElementById('nutrition_tolerance');
+    if (box && rate) box.value = String(rate);
+
+    const useBox = document.getElementById('use_tolerance');
+    if (useBox) useBox.checked = !off;
 }
 
 /**
