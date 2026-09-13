@@ -88,6 +88,58 @@ def create_guest() -> User:
     return user
 
 
+# 이 브라우저가 이미 받은 게스트를 가리키는 쿠키.
+#
+# **한도가 방문마다 리셋되던 것을 막는다.** 흐름 한도(규정 검증 10/일,
+# 표시사항 사진 읽기 30/일 …)는 부를 때마다 실제로 돈이 나가는 자리인데,
+# 그 한도는 계정에 붙는다. 그런데 「둘러보기」를 누를 때마다 새 계정이
+# 생겼으므로, 로그아웃하고 다시 누르면 한도가 그 자리에서 새것이 됐다.
+# 막는 것은 로그인 자리의 IP당 20/분 하나뿐이었다.
+#
+# 세션에 담을 수 없다 — `login()` 이 사용자가 바뀔 때 세션을 비운다.
+# 그래서 서명 쿠키에 담는다. 값은 게스트의 pk 뿐이고 서명이 붙으므로
+# 남의 게스트를 가리키게 고칠 수 없다.
+GUEST_COOKIE = 'guest_ref'
+GUEST_COOKIE_SALT = 'v1.common.guest'
+
+
+def guest_from_cookie(request):
+    """
+    이 브라우저가 이미 쓰던 게스트. 없거나 낡았으면 None.
+
+    같은 사람이 다시 누른 것과 다른 사람이 처음 누른 것은 다르다 — 앞의
+    것에까지 새 계정을 내주면 한도가 뜻을 잃는다. 격리는 그대로다:
+    쿠키가 없는 방문자는 여전히 제 계정을 새로 받는다.
+    """
+    raw = None
+    try:
+        raw = request.get_signed_cookie(GUEST_COOKIE, default=None,
+                                        salt=GUEST_COOKIE_SALT)
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        user = User.objects.get(pk=int(raw))
+    except (User.DoesNotExist, TypeError, ValueError):
+        return None
+    if not is_guest(user) or not user.is_active:
+        return None
+    # 치울 때가 지난 계정은 곧 지워진다 — 새로 내주는 편이 낫다
+    cutoff = timezone.now() - timezone.timedelta(hours=GUEST_TTL_HOURS)
+    if user.date_joined < cutoff:
+        return None
+    return user
+
+
+def remember_guest(response, user):
+    """다음에 눌렀을 때 같은 자리로 돌아오게 표시를 남긴다."""
+    response.set_signed_cookie(
+        GUEST_COOKIE, str(user.pk), salt=GUEST_COOKIE_SALT,
+        max_age=GUEST_TTL_HOURS * 3600, httponly=True, samesite='Lax')
+    return response
+
+
 def stale_guests(hours: int = GUEST_TTL_HOURS):
     """치울 때가 된 게스트. 옛 공용 계정은 건드리지 않는다."""
     cutoff = timezone.now() - timezone.timedelta(hours=hours)

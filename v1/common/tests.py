@@ -1074,3 +1074,108 @@ class 판독_정답지_사진은_아무나_받을_수_없다(TestCase):
         from v1.common.media_access import ACCESS_RULES, _check_ocr_truth
 
         self.assertIs(dict(ACCESS_RULES)['ocr_truth/'], _check_ocr_truth)
+
+
+class 둘러보기를_다시_눌러도_한도가_새것이_되지_않는다(TestCase):
+    """
+    흐름 한도(규정 검증 10/일, 표시사항 사진 읽기 30/일 …)는 **부를 때마다
+    실제로 돈이 나가는 자리**인데 그 한도는 계정에 붙는다. 그런데
+    「둘러보기」는 누를 때마다 새 계정을 만들었다 — 로그아웃하고 다시
+    누르기만 하면 한도가 그 자리에서 새것이 됐다. 막는 것은 로그인 자리의
+    IP당 20/분 하나뿐이라, 분당 새 계정 20개 × 30회가 가능했다.
+
+    세션에는 담을 수 없다(`login()` 이 세션을 비운다). 서명 쿠키로 같은
+    브라우저를 알아본다. **격리는 그대로다** — 처음 온 방문자는 여전히 제
+    계정을 새로 받는다.
+    """
+
+    def _visit(self, client=None):
+        return (client or self.client).post(
+            reverse('user_management:login'), {'guest_login': '1'})
+
+    def _logout(self):
+        """
+        진짜 로그아웃과 같게 — **세션만** 끊는다.
+
+        테스트 클라이언트의 `logout()` 은 쿠키 전체를 비우는데, 브라우저는
+        그러지 않는다. 그것으로 재현하면 이 시험이 늘 통과한다.
+        """
+        self.client.post(reverse('user_management:logout'))
+
+    def _current(self):
+        from django.contrib.auth.models import User
+
+        uid = self.client.session.get('_auth_user_id')
+        return User.objects.get(pk=uid) if uid else None
+
+    def test_처음_누르면_게스트를_받는다(self):
+        from v1.common.guest import is_guest
+
+        self._visit()
+        user = self._current()
+        self.assertIsNotNone(user)
+        self.assertTrue(is_guest(user))
+
+    def test_다시_눌러도_같은_게스트다(self):
+        self._visit()
+        first = self._current().pk
+        self._logout()
+        self._visit()
+        self.assertEqual(self._current().pk, first)
+
+    def test_쓴_만큼이_그대로_남는다(self):
+        from v1.common import quota
+
+        self._visit()
+        user = self._current()
+        quota.charge(user, 'ocr_label', 3)
+        self._logout()
+        self._visit()
+        self.assertEqual(quota.used(self._current(), 'ocr_label'), 3)
+
+    def test_다른_브라우저는_다른_게스트를_받는다(self):
+        from django.test import Client
+
+        self._visit()
+        first = self._current().pk
+        other = Client()
+        self._visit(other)
+        self.assertNotEqual(other.session.get('_auth_user_id'), str(first))
+
+    def test_쿠키가_가리키는_계정이_사라졌으면_새로_만든다(self):
+        from django.contrib.auth.models import User
+
+        self._visit()
+        first = self._current()
+        User.objects.filter(pk=first.pk).delete()
+        self._logout()
+        self._visit()
+        self.assertIsNotNone(self._current())
+        self.assertNotEqual(self._current().pk, first.pk)
+
+    def test_남의_계정을_가리키게_고칠_수_없다(self):
+        """쿠키에 서명이 없으면 그냥 아무 계정 번호나 적으면 된다."""
+        from django.contrib.auth.models import User
+
+        victim = User.objects.create_user(username='victim', password='x')
+        self.client.cookies['guest_ref'] = str(victim.pk)
+        self._visit()
+        user = self._current()
+        self.assertIsNotNone(user)
+        self.assertNotEqual(user.pk, victim.pk)
+
+    def test_회원_계정은_쿠키로_되살아나지_않는다(self):
+        """게스트가 아닌 계정이면 무시한다 — 승격된 계정이 여기로 오면 안 된다."""
+        from django.contrib.auth.models import User
+
+        from v1.common.guest import GUEST_COOKIE, GUEST_COOKIE_SALT
+
+        member = User.objects.create_user(username='member@x.com', password='x')
+        signer_client = self.client
+        signer_client.cookies[GUEST_COOKIE] = ''
+        # 서명된 값을 직접 만든다
+        from django.core import signing
+        signed = signing.get_cookie_signer(salt=GUEST_COOKIE_SALT).sign(str(member.pk))
+        signer_client.cookies[GUEST_COOKIE] = signed
+        self._visit()
+        self.assertNotEqual(self._current().pk, member.pk)

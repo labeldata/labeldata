@@ -2,7 +2,7 @@
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
 from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
 
-from v1.common.guest import create_guest, is_guest
+from v1.common.guest import create_guest, guest_from_cookie, is_guest, remember_guest
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -371,10 +371,15 @@ def login_view(request):
         # 저마다 제 계정이면 이미 있는 소유권 규칙이 그대로 일한다 — 게스트를
         # 위해 따로 거르는 코드를 심을 필요가 없다.
         if request.POST.get('guest_login') == '1':
-            guest = create_guest()
+            # 이 브라우저가 이미 받은 게스트가 있으면 **그 자리로 돌아간다.**
+            # 없을 때만 새로 만든다. 방문마다 새 계정을 내주면 돈이 나가는
+            # 흐름 한도(규정 검증·사진 읽기)가 그때마다 리셋된다 — 로그아웃
+            # 하고 다시 누르기만 하면 됐다. 격리는 그대로다: 처음 온
+            # 방문자는 여전히 제 계정을 새로 받는다.
+            guest = guest_from_cookie(request) or create_guest()
             login(request, guest,
                   backend='django.contrib.auth.backends.ModelBackend')
-            return redirect('main:home')
+            return remember_guest(redirect('main:home'), guest)
 
         email = request.POST.get('username', '').strip()
         password = request.POST.get('password')
