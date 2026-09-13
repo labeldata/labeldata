@@ -10840,3 +10840,53 @@ class 영양성분_저장하면_단계_표시가_따라온다(TestCase):
         from v1.products.views import _build_workflow_steps
         src = inspect.getsource(_build_workflow_steps)
         self.assertIn("'tab-nutrition': bool((label.calories", src)
+
+
+class 스낵바가_뜬_적이_없었다(TestCase):
+    """
+    `showSnackbar()` 는 `.snack-show` 를 붙이고 정상 종료하는데 화면에는
+    아무것도 안 나왔다. 숨김 상태(`opacity:0` · 화면 밖 transform)가
+    base_v2.html 의 **인라인 style** 에 있었기 때문이다 — 인라인 선언은
+    `!important` 없는 스타일시트 규칙을 언제나 이긴다.
+
+    같은 자리의 `#v2Saved` 는 인라인 스타일이 없어 잘 떴다. 그래서 "저장은
+    보이는데 오류·안내만 안 보이는" 모습이 되어, 실패한 동작이 조용히 끝난
+    것처럼 보였다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR)
+        self.html = (base / 'templates/base_v2.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def _element(self, html, marker):
+        head = html.index(marker)
+        return html[head:html.index('>', head) + 1]
+
+    def test_요소에_인라인_스타일이_없다(self):
+        tag = self._element(self.html, '<div id="v2Snackbar"')
+        self.assertNotIn('style=', tag, '인라인 style 은 .snack-show 를 이긴다')
+
+    def test_메시지_칸과_닫기_단추도_마찬가지다(self):
+        head = self.html.index('<div id="v2Snackbar"')
+        tail = self.html.index('</div>', head)
+        self.assertNotIn('style=', self.html[head:tail])
+
+    def test_모습은_전역_CSS_가_가진다(self):
+        # 숨김 상태와 보임 상태가 **같은 파일**에 있어야 한다. 갈라 두면
+        # 한쪽만 읽는 화면에서 다시 안 보이게 된다.
+        self.assertRegex(self.css, r'#v2Snackbar\s*\{')
+        self.assertIn('#v2Snackbar.snack-show', self.css)
+        self.assertIn('opacity: 0;', self.css)
+
+    def test_그_CSS_를_모든_V2_화면이_읽는다(self):
+        self.assertIn("css/products_common.css", self.html)
+
+    def test_숨김을_이길_수_있다(self):
+        # 기본 규칙과 .snack-show 가 같은 파일이면 뒤에 오는 쪽이 이긴다.
+        # 순서가 뒤집히면 다시 안 보인다.
+        self.assertLess(self.css.index('#v2Snackbar {'),
+                        self.css.index('#v2Snackbar.snack-show'),
+                        '.snack-show 가 기본 규칙보다 앞서면 덮이지 않는다')

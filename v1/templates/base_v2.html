@@ -216,19 +216,18 @@
     {% bootstrap_javascript %}
     {% block extra_js %}{% endblock %}
 
-    <!-- ── 전역 Snackbar (구글 Material 스타일) ── -->
-    <div id="v2Snackbar" style="
-      position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%) translateY(calc(100% + 2rem));
-      background:#323232; color:#fff; padding:.75rem 1.25rem; border-radius:4px;
-      font-size:.875rem; line-height:1.4; font-family:'Roboto','Noto Sans KR',sans-serif;
-      box-shadow:0 3px 8px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.2);
-      display:flex; align-items:center; gap:1rem;
-      max-width:min(480px,calc(100vw - 2rem)); z-index:10000;
-      transition:transform .25s cubic-bezier(.4,0,.2,1),opacity .25s;
-      opacity:0; pointer-events:none;" aria-live="polite">
-      <span id="v2SnackbarMsg" style="flex:1;"></span>
-      <button onclick="hideSnackbar()" style="background:none;border:none;color:#90caf9;
-        font-size:.8rem;font-weight:600;cursor:pointer;padding:0;flex-shrink:0;letter-spacing:.05em;">닫기</button>
+    {% comment %}
+      전역 Snackbar — **인라인 style 을 두지 않는다.**
+
+      숨김 상태(opacity:0 · 화면 밖 transform)가 여기 인라인으로 있으면
+      products_common.css 의 `.snack-show` 가 그것을 못 이긴다. 인라인
+      선언은 `!important` 없는 스타일시트 규칙보다 언제나 우선한다.
+      그래서 showSnackbar() 가 멀쩡히 돌아도 **아무것도 보이지 않았다.**
+      모습은 전부 products_common.css 가 가진다(base_v2 가 항상 읽는다).
+    {% endcomment %}
+    <div id="v2Snackbar" aria-live="polite">
+      <span id="v2SnackbarMsg"></span>
+      <button onclick="hideSnackbar()">닫기</button>
     </div>
     {% comment %}
       도움말 — 오른쪽 아래 동그란 단추. 엔진이 여기 있어야 **어느 화면에서나**
