@@ -928,14 +928,26 @@ tbody.layout-vertical tr td {
     white-space: nowrap;
 }
 
-/* ==================== 영양정보 표 ==================== */
-/*
- * 표 아래에 붙는 별도 블록. 표를 만드는 코드는 인라인 스타일로 거의 다
- * 그리므로, 여기서는 그 코드가 클래스에만 맡긴 것(머리의 검은 띠, 라벨
- * 너비에 맞추기)만 채운다.
+/* ==================== 영양정보 표 ====================
+ *
+ * **바로 위 한글표시사항 표와 한 장에 인쇄된다.** 그래서 활자와 선은 그쪽
+ * (.preview-table)과 같은 말을 써야 한다. 예전에는 표를 만드는 코드가
+ * 인라인 스타일로 거의 다 그렸는데, 그 값들이 라벨 설정을 모르는 고정값
+ * 이었다 — 폭 320px, 글자 10pt, 머리 글자 2rem. 사용자가 라벨을 17cm
+ * 8pt 로 잡아도 이 표만 저 혼자 다른 크기였고, 선도 #ddd 1px 인데 옆
+ * 표는 토큰 색 1px 테두리라 종류가 달라 보였다.
+ *
+ * 이제 모양은 전부 여기 있다. 크기는 이 블록의 pt 를 기준으로 한 em 이라
+ * 「글자 크기」 설정을 그대로 따라간다.
+ *
+ * 다만 **표시기준이 정한 선은 지킨다** — 머리 아래 굵은 선은 영양성분
+ * 표시 서식의 요구라 한글표시사항 표와 같게 만들지 않는다.
  */
 .nutrition-preview {
     margin-top: 10px;
+    /* 글꼴·자간·글자 크기는 updatePreviewStyles 가 라벨 설정에서 넣는다.
+       아래 자식들은 전부 em 이라 그 값을 따라 커지고 작아진다. */
+    line-height: 1.4;
 }
 
 .nutrition-preview .nutrition-preview-box {
@@ -943,31 +955,81 @@ tbody.layout-vertical tr td {
     color: #fff;
     padding: 6px 10px;
     border-radius: 6px 6px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .nutrition-preview .nutrition-preview-title {
     font-weight: 700;
     line-height: 1;
+    font-size: 1.9em;
+}
+
+.nutrition-preview .nutrition-preview-head-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 0;
+}
+
+.nutrition-preview .nutrition-preview-total-small {
+    font-size: .8em;
+    font-weight: 500;
+    color: #fff;
+}
+
+.nutrition-preview .nutrition-preview-kcal {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
 }
 
 /* 표 폭은 라벨 폭을 따른다 — 320px 로 못박으면 좁은 라벨에서 삐져나간다 */
 .nutrition-preview .nutrition-preview-table {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    background: #fff;
+    color: #222;
     border-collapse: collapse;
+    border-radius: 0 0 6px 6px;
 }
 
-.nutrition-preview .nutrition-preview-table td,
-.nutrition-preview .nutrition-preview-table th {
+/* 칸 안쪽 여백은 옆 표와 같은 값을 쓴다(.preview-table 은 6px 10px).
+   가로 여백을 0 으로 두면 글자가 테두리에 붙어 두 표가 달라 보였다. */
+.nutrition-preview .nutrition-preview-table th,
+.nutrition-preview .nutrition-preview-table td {
     border: 0;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-light);
+    padding: 6px 10px;
+    vertical-align: middle;
+    line-height: 1.4;
 }
+
+/* 표시기준이 정한 굵은 선 — 머리와 본문을 가른다 */
+.nutrition-preview .nutrition-preview-small {
+    font-weight: 500;
+    font-size: .8em;
+    background: #fff;
+    color: #222;
+    text-align: left;
+    border-bottom: 2px solid #000;
+}
+
+.nutrition-preview .nutrition-preview-right { text-align: right; }
+
+.nutrition-preview .nutrition-preview-name    { font-weight: 700; text-align: left; }
+.nutrition-preview .nutrition-preview-indent  { padding-left: 2.4em; }
+.nutrition-preview .nutrition-preview-value   { font-weight: 400; text-align: left; }
+.nutrition-preview .nutrition-preview-percent { font-weight: 700; text-align: right; }
 
 .nutrition-preview .nutrition-preview-footer-inside {
-    border-bottom: 0 !important;
+    border-bottom: 0;
     padding-top: 6px;
-    font-size: 7.5pt;
+    font-size: .75em;
     line-height: 1.4;
     color: #444;
 }

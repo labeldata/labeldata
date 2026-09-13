@@ -897,15 +897,28 @@
                    "왼쪽 값 칸" 까지 90px 로 눌러 버린다. */
             });
             
+            /*
+             * 영양정보 표는 **블록 하나에만** 값을 준다.
+             *
+             * 그 안은 전부 em 이라 블록의 pt 를 따라 커지고 작아진다. 칸마다
+             * pt 를 박으면 머리의 작은 글씨(.8em)와 아래 안내 문구(.75em)까지
+             * 본문 크기가 되어 표시 서식이 무너진다. 예전에는 안내 문구
+             * 하나만 예외로 빼 두었는데, 머리 글씨는 그대로 눌리고 있었다.
+             */
+            const nutritionBlock = previewContent.querySelector('.nutrition-preview');
             const elementsToStyle = previewContent.querySelectorAll('th, td, .header-text, .footer-text');
             elementsToStyle.forEach(el => {
-                // 영양정보 표 아래의 안내 문구는 본문 활자가 아니다
-                if (el.classList.contains('nutrition-preview-footer-inside')) return;
+                if (nutritionBlock && nutritionBlock.contains(el)) return;
                 el.style.fontSize = `${fontSizePt}pt`;
                 el.style.fontFamily = fontFamily;
                 el.style.letterSpacing = `${letterSpacingPercent / 100}em`;
                 el.style.lineHeight = lineHeight;
             });
+            if (nutritionBlock) {
+                nutritionBlock.style.fontSize = `${fontSizePt}pt`;
+                nutritionBlock.style.fontFamily = fontFamily;
+                nutritionBlock.style.letterSpacing = `${letterSpacingPercent / 100}em`;
+            }
             
             /* 항목명 칸의 너비.
                예전에는 90px 하드코딩이었다("가로 12cm 일 때 7글자"). 그런데

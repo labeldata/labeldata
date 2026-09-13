@@ -2844,43 +2844,54 @@ document.addEventListener('DOMContentLoaded', function () {
                 + kcalText('unit', servingSize, servingsPerPackage, data.calorie);
         }
 
-        // 계산기와 동일한 미리보기 박스 구조
+        /*
+         * 머리 글자 크기는 **rem 이 아니라 em** 이다.
+         *
+         * rem 은 문서 뿌리(16px)를 기준으로 한다. 그런데 이 표는 라벨 위에
+         * 인쇄되고, 라벨의 글자 크기는 사용자가 pt 로 정한다. rem 으로 두면
+         * 8pt 라벨에서도 "영양정보" 만 32px 로 남아, 바로 위 한글표시사항
+         * 표와 견주면 저 혼자 큰 글씨였다. em 은 이 블록의 pt 를 따른다.
+         *
+         * 모양은 CSS(.nutrition-preview-*)가 갖는다 — 여기 인라인으로 두면
+         * 스타일시트가 그것을 이길 수 없다(스낵바에서 겪었다).
+         */
         const previewBox = `
-            <div class="nutrition-preview-box" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between;">
-                <div class="nutrition-preview-title" style="margin-bottom:0;font-size:2rem;">영양정보</div>
-                <div style="display:flex;flex-direction:column;align-items:flex-end;">
-                    <span class="nutrition-preview-total-small" style="font-size:0.95rem;font-weight:500;color:#fff;">${headerAmount}</span>
-                    <span class="nutrition-preview-kcal" style="font-size:1.15rem;font-weight:700;color:#fff;line-height:1;">${headerKcal}</span>
+            <div class="nutrition-preview-box">
+                <div class="nutrition-preview-title">영양정보</div>
+                <div class="nutrition-preview-head-right">
+                    <span class="nutrition-preview-total-small">${headerAmount}</span>
+                    <span class="nutrition-preview-kcal">${headerKcal}</span>
                 </div>
             </div>
         `;
 
-        // 계산기와 동일한 테이블 스타일 변수들
-        const tableStyle = 'background:#fff;color:#222;border-radius:0 0 6px 6px;width:320px;margin:0 auto 16px auto;font-size:10pt;line-height:1.5;';
-        const thSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2px solid #000;text-align:left;"';
-        const thRightSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2px solid #000;text-align:right;"';
-        const tdLabelClass = 'style="font-weight:700;text-align:left;padding:6px 0 6px 0;"';
-        const tdLabelIndentClass = 'style="font-weight:700;text-align:left;padding:6px 0 6px 24px;"';
-        const tdValueClass = 'style="font-weight:400;text-align:left;padding:6px 0 6px 0;"';
-        const tdPercentClass = 'style="font-weight:700;text-align:right;padding:6px 0 6px 0;"';
+        /* 모양은 전부 CSS 로 옮겼다(label_preview.css 의 영양정보 표).
+           폭 320px 과 글자 10pt 를 여기서 못박고 있었는데, 라벨 폭도 글자
+           크기도 사용자가 정하는 값이라 바로 위 한글표시사항 표와 어긋났다. */
+        const thSmall = 'nutrition-preview-small';
+        const thRightSmall = 'nutrition-preview-small nutrition-preview-right';
+        const tdLabelClass = 'nutrition-preview-name';
+        const tdLabelIndentClass = 'nutrition-preview-name nutrition-preview-indent';
+        const tdValueClass = 'nutrition-preview-value';
+        const tdPercentClass = 'nutrition-preview-percent';
 
         const tableHeader = isParallel ? `
             <thead>
                 <tr>
-                    <th ${thSmall} colspan="2">
+                    <th class="${thSmall}" colspan="2">
                         <div style="display:flex;justify-content:space-between;gap:8px;">
                             <span>${subHeaderLeft}</span>
                             <span>1일 영양성분 기준치에 대한 비율</span>
                         </div>
                     </th>
-                    <th ${thRightSmall} colspan="2">${subHeaderRight}</th>
+                    <th class="${thRightSmall}" colspan="2">${subHeaderRight}</th>
                 </tr>
             </thead>
         ` : `
             <thead>
                 <tr>
-                    <th ${thSmall}>${tabMapShort[displayUnit]}</th>
-                    <th ${thRightSmall}>1일 영양성분 기준치에 대한 비율</th>
+                    <th class="${thSmall}">${tabMapShort[displayUnit]}</th>
+                    <th class="${thRightSmall}">1일 영양성분 기준치에 대한 비율</th>
                 </tr>
             </thead>
         `;
@@ -2912,25 +2923,27 @@ document.addEventListener('DOMContentLoaded', function () {
             if (item.label === '열량') return; // 열량은 별도 표시
 
             const indent = indentItems.includes(item.label);
+            /* 들여쓰기는 이름 칸의 class 하나가 말한다. 예전에는 여기서
+               `class="${indentClass}"` 를 **한 번 더** 붙여, 한 태그에 class
+               속성이 둘이 되었다(뒤엣것은 무시된다). */
             const tdClass = indent ? tdLabelIndentClass : tdLabelClass;
-            const indentClass = indent ? ' nutrient-label-indent' : '';
 
             if (isParallel) {
                 const left = nutrientCell(item, leftMultiplier);
                 const right = nutrientCell(item, rightMultiplier);
                 rows += `<tr>
-                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${left.text}</span></td>
-                <td ${tdPercentClass}>${left.percentHtml}</td>
-                <td ${tdValueClass}>${right.text}</td>
-                <td ${tdPercentClass}>${right.percentHtml}</td>
+                <td class="${tdClass}"><strong>${item.label}</strong> <span class="${tdValueClass}">${left.text}</span></td>
+                <td class="${tdPercentClass}">${left.percentHtml}</td>
+                <td class="${tdValueClass}">${right.text}</td>
+                <td class="${tdPercentClass}">${right.percentHtml}</td>
             </tr>`;
                 return;
             }
 
             const cell = nutrientCell(item, basicMultiplier);
             rows += `<tr>
-                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${cell.text}</span></td>
-                <td ${tdPercentClass}>${cell.percentHtml}</td>
+                <td class="${tdClass}"><strong>${item.label}</strong> <span class="${tdValueClass}">${cell.text}</span></td>
+                <td class="${tdPercentClass}">${cell.percentHtml}</td>
             </tr>`;
         });
 
@@ -2945,7 +2958,7 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
 
         const tableHtml = `
-            <table class="nutrition-preview-table table" style="${tableStyle}">
+            <table class="nutrition-preview-table">
                 ${tableHeader}
                 <tbody>${rows}</tbody>
             </table>

@@ -11226,3 +11226,79 @@ class 줄_묶음을_block_으로_만들지_않는다(TestCase):
         self.assertNotIn("style.display = 'block'", body)
         # 표를 다시 그리는 일은 그대로 남아 있어야 한다
         self.assertIn('renderTableWithCurrentData();', body)
+
+
+class 영양정보_표가_옆_표와_같은_활자를_쓴다(TestCase):
+    """
+    영양정보 표는 한글표시사항 표 **바로 아래에 한 장으로 인쇄된다.** 그런데
+    표를 만드는 코드가 인라인 스타일로 고정값을 박고 있었다 — 폭 320px,
+    글자 10pt, 머리 글자 2rem. 라벨을 17cm 8pt 로 잡아도 이 표만 저 혼자
+    다른 크기였고, 선도 #ddd 1px 인데 옆 표는 토큰 색 1px 테두리였다.
+
+    인라인 스타일은 스타일시트가 이길 수 없다(스낵바에서 이미 겪었다).
+    모양은 CSS 한 곳에 두고, 크기는 블록의 pt 를 기준으로 한 em 으로 둔다.
+
+    다만 **표시기준이 정한 굵은 선은 지킨다** — 머리 아래 2px 검은 선은
+    영양성분 표시 서식의 요구라 옆 표와 같게 만들지 않는다.
+    """
+
+    @staticmethod
+    def _no_comments(src):
+        import re
+        src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+        return re.sub(r'(?m)//.*$', '', src)
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR)
+        js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        js = self._no_comments(js)
+        head = js.index('nutrition-preview-box')
+        self.render = js[head:js.index('nutritionPreview.innerHTML', head)]
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+
+    def test_폭과_글자_크기를_코드에_박지_않는다(self):
+        self.assertNotIn('320px', self.render)
+        self.assertNotIn('font-size:10pt', self.render)
+
+    def test_머리_글자는_rem_이_아니라_em_이다(self):
+        # rem 은 문서 뿌리(16px) 기준이라 라벨의 pt 설정을 따라가지 않는다.
+        self.assertNotIn('rem', self.render)
+
+    def test_한_태그에_class_를_두_번_붙이지_않는다(self):
+        import re
+        for row in re.findall(r'<td[^>]*>', self.render):
+            self.assertLessEqual(row.count('class='), 1, row)
+        for row in re.findall(r'<th[^>]*>', self.render):
+            self.assertLessEqual(row.count('class='), 1, row)
+
+    def test_코드가_내는_class_를_CSS_가_전부_안다(self):
+        for name in ('nutrition-preview-box', 'nutrition-preview-title',
+                     'nutrition-preview-head-right', 'nutrition-preview-total-small',
+                     'nutrition-preview-kcal', 'nutrition-preview-small',
+                     'nutrition-preview-right', 'nutrition-preview-name',
+                     'nutrition-preview-indent', 'nutrition-preview-value',
+                     'nutrition-preview-percent', 'nutrition-preview-footer-inside'):
+            self.assertIn(name, self.render, name + ' 를 코드가 안 냅니다')
+            self.assertIn('.' + name, self.css, name + ' 에 CSS 가 없습니다')
+
+    def test_칸_여백과_선이_옆_표와_같다(self):
+        head = self.css.index('.nutrition-preview .nutrition-preview-table th,')
+        rule = self.css[head:self.css.index('}', head)]
+        self.assertIn('padding: 6px 10px;', rule)          # .preview-table 과 같은 값
+        self.assertIn('border-bottom: 1px solid var(--border-light);', rule)
+
+    def test_서식이_정한_굵은_선은_남긴다(self):
+        head = self.css.index('.nutrition-preview .nutrition-preview-small')
+        rule = self.css[head:self.css.index('}', head)]
+        self.assertIn('border-bottom: 2px solid #000;', rule)
+
+    def test_블록_하나에만_pt_를_준다(self):
+        # 칸마다 pt 를 박으면 머리의 .8em 과 안내 문구의 .75em 이 본문 크기가 된다.
+        head = self.html.index("querySelector('.nutrition-preview')")
+        tail = self.html.index('recycling-text-line', head)
+        block = self.html[head:tail]
+        self.assertIn('nutritionBlock.contains(el)) return;', block)
+        self.assertIn('nutritionBlock.style.fontSize', block)
