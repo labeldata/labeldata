@@ -424,7 +424,14 @@
   var form = document.getElementById('ingredientForm');
   if (!form) return;
 
-  var dirty = false;
+  /* 이 조각은 V2 에서 **원료를 고를 때마다 다시 실려 온다** (오른쪽 패널을
+     AJAX 로 갈아 끼운다). 그러니 여기서 만든 것은 하나도 남기지 말아야
+     한다 — 예전에는 실릴 때마다 beforeunload 리스너가 하나씩 쌓였고, 각
+     리스너는 **자기가 실릴 때의 dirty** 를 붙들고 있었다. A 를 고치다
+     B 로 옮기면 A 의 리스너가 계속 "안 저장됐다" 고 붙잡아, 그 뒤로는 어느
+     화면을 나가려 해도 경고가 떴다.
+     상태는 window 에 하나만 두고, 리스너도 한 번만 건다. */
+  window.__ingredientDirty = false;
 
   /* 단추 속을 다시 그리는 자리가 있어(저장중·저장완료) 처음 잡아 둔 node 는
      곧 떨어져 나간다. 쓸 때마다 다시 찾는다. */
@@ -432,12 +439,13 @@
     var btn = document.getElementById('ingSaveBtn');
     var label = document.getElementById('ingSaveLabel');
     if (!btn || !label) return;
+    var dirty = !!window.__ingredientDirty;
     btn.classList.toggle('is-dirty', dirty);
     label.textContent = dirty ? '저장 안 됨 — 누르세요' : '저장';
   }
 
   window.setIngredientDirty = function (on) {
-    dirty = !!on;
+    window.__ingredientDirty = !!on;
     paint();
   };
 
@@ -446,11 +454,16 @@
   form.addEventListener('input', function () { window.setIngredientDirty(true); });
   form.addEventListener('change', function () { window.setIngredientDirty(true); });
 
-  /* 안 남은 채로 나가려 하면 붙잡는다 */
-  window.addEventListener('beforeunload', function (ev) {
-    if (!dirty) return;
-    ev.preventDefault();
-    ev.returnValue = '';
-  });
+  /* 안 남은 채로 나가려 하면 붙잡는다. **한 번만 건다** — 위 주석 참고. */
+  if (!window.__ingredientLeaveGuard) {
+    window.__ingredientLeaveGuard = true;
+    window.addEventListener('beforeunload', function (ev) {
+      if (!window.__ingredientDirty) return;
+      ev.preventDefault();
+      ev.returnValue = '';
+    });
+  }
+
+  paint();
 })();
 </script>

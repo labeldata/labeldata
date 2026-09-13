@@ -75,6 +75,22 @@ from .services.label_naming import next_temp_label_name
 # 사용자 활동 로깅 헬퍼 함수
 # ============================================
 
+def _server_error(request=None, where=''):
+    """
+    서버에서 예상 못 한 예외가 났을 때 **사용자에게 보내는 답**.
+
+    예전에는 서른 곳 가까이가 `{'error': str(e)}` 로 예외 원문을 그대로
+    내려보냈다. 화면은 그것을 스낵바에 그대로 띄운다 —
+    "No ProductDocument matches the given query." 나 SQL 조각이 사용자에게
+    갔다. 알아볼 수 없을 뿐 아니라 표·칸 이름이 그대로 새어 나간다.
+
+    원인은 로그에 남긴다(부르는 쪽이 logger.exception 을 함께 부른다).
+    """
+    return JsonResponse({
+        'success': False,
+        'error': '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+    }, status=500)
+
 def log_user_activity(request, category, action, target_id=None):
     """
     사용자 활동을 기록하는 헬퍼 함수
@@ -651,9 +667,10 @@ def create_new_label(request):
     except Exception as e:
         # 예외 발생 시 에러 메시지 반환
         if request.method == 'POST':
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+            logger.exception('[처리 실패]')
+            return _server_error()
         else:
-            messages.error(request, f'표시사항 생성 실패: {str(e)}')
+            messages.error(request, '표시사항을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
             return redirect('label:my_label_list')
 
 @login_required
@@ -787,7 +804,8 @@ def save_to_my_label(request, prdlst_report_no):
             "label_name": new_label.my_label_name
         })
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 
@@ -1200,7 +1218,8 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             "ingredient_name": new_ingredient.prdlst_nm
         })
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 
@@ -1277,7 +1296,8 @@ def check_my_ingredient(request):
             exists = MyIngredient.objects.filter(user_id=request.user, prdlst_nm=prdlst_nm, delete_YN='N').exists()
         return JsonResponse({'exists': exists})
     except Exception as e:
-        return JsonResponse({'exists': False, 'error': str(e)}, status=500)
+        logger.exception('[중복 확인 실패]')
+        return JsonResponse({'exists': False, 'error': '확인하지 못했습니다.'}, status=500)
     
 @login_required
 def my_ingredient_list(request):
@@ -1817,7 +1837,8 @@ def save_ingredients_to_label(request, label_id):
         # 그러면 데코레이터를 붙인 의미가 없다 — 맨 앞의 전량 삭제만 남는다.
         # 되돌리라고 명시한다.
         transaction.set_rollback(True)
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 @csrf_exempt
@@ -1860,7 +1881,8 @@ def delete_my_ingredient(request, ingredient_id):
             ingredient.save()
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     else:
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
@@ -1892,7 +1914,8 @@ def bulk_delete_my_ingredients(request):
                 continue
         return JsonResponse({'success': True, 'deleted_count': deleted_count})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 def bulk_copy_my_ingredients(request):
@@ -1923,7 +1946,8 @@ def bulk_copy_my_ingredients(request):
                 continue
         return JsonResponse({'success': True, 'copied_count': copied_count})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 @csrf_exempt
@@ -1987,7 +2011,8 @@ def search_ingredient_add_row(request):
         else:
             return JsonResponse({'success': False, 'error': '검색 결과가 없습니다.'})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 @csrf_exempt
@@ -2039,7 +2064,8 @@ def quick_register_ingredient(request):
                         else '같은 원료가 이미 등록돼 있어 그 원료를 사용합니다.'),
         })
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 @csrf_exempt
@@ -2099,7 +2125,8 @@ def verify_ingredients(request):
                 results.append({})
         return JsonResponse({"success": True, "results": results})
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 def food_items_count(request):
@@ -2154,7 +2181,8 @@ def register_my_ingredient(request):
         return JsonResponse({'success': True})
     # 중복된 except 블록을 하나로 합쳐서 올바르게 오류를 처리합니다.
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
     
 
 
@@ -2326,7 +2354,8 @@ def bulk_copy_labels(request):
             
             return JsonResponse({"success": True})
         except Exception as e:
-            return JsonResponse({"success": False, "error": str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     return JsonResponse({"success": False, "error": "Invalid request method"})
 
 @login_required
@@ -2353,7 +2382,8 @@ def bulk_delete_labels(request):
             MyLabel.objects.filter(my_label_id__in=ids, user_id=request.user).delete()
             return JsonResponse({"success": True})
         except Exception as e:
-            return JsonResponse({"success": False, "error": str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     return JsonResponse({"success": False, "error": "Invalid request method"})
     
 
@@ -2411,7 +2441,8 @@ def save_nutrition(request):
         
         return JsonResponse({'success': True})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 def food_types_by_group(request):
@@ -2471,11 +2502,9 @@ def food_types_by_group(request):
             'food_types': food_types_data
         })
         
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+    except Exception:
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 @login_required
@@ -2784,7 +2813,8 @@ def preview_popup(request):
     except MyLabel.DoesNotExist:
         return JsonResponse({'success': False, 'error': '라벨을 찾을 수 없습니다.'})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 @login_required
@@ -2896,7 +2926,8 @@ def label_tab_json(request):
         }, json_dumps_params={'ensure_ascii': False})
 
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 @login_required
@@ -3400,7 +3431,8 @@ def upload_label_pdf(request):
 
     except Exception as e:
         traceback.print_exc()
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 @login_required
@@ -3423,7 +3455,8 @@ def log_validation(request):
             
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     
     return JsonResponse({'success': False, 'error': 'POST required'})
 
@@ -3441,7 +3474,8 @@ def log_mode_switch(request):
             
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     
     return JsonResponse({'success': False, 'error': 'POST required'})
 
@@ -3461,7 +3495,8 @@ def log_quick_text(request):
             
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     
     return JsonResponse({'success': False, 'error': 'POST required'})
 
@@ -3479,7 +3514,8 @@ def log_custom_field(request):
             
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     
     return JsonResponse({'success': False, 'error': 'POST required'})
 
@@ -3502,7 +3538,8 @@ def log_pdf_save(request):
             
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     
     return JsonResponse({'success': False, 'error': 'POST required'})
 
@@ -3517,7 +3554,8 @@ def log_allergy_auto_detect(request):
             
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     
     return JsonResponse({'success': False, 'error': 'POST required'})
 
@@ -3542,7 +3580,8 @@ def log_preview_action(request):
             
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            logger.exception('[처리 실패]')
+            return _server_error()
     
     return JsonResponse({'success': False, 'error': 'POST required'})
 
@@ -3593,7 +3632,8 @@ def linked_ingredient_count(request, label_id):
         count = LabelIngredientRelation.objects.filter(label_id=label_id).count()
         return JsonResponse({'count': count})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 def _script_json(obj):
     """
@@ -4103,7 +4143,8 @@ def my_ingredient_calculate_page(request):
             return JsonResponse({'success': False, 'error': '해당 원료를 찾을 수 없습니다.'})
             
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 def my_ingredient_pagination_info(request):
@@ -4151,7 +4192,8 @@ def my_ingredient_pagination_info(request):
         })
         
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 @login_required
@@ -4234,7 +4276,8 @@ def get_additive_regulation(request):
             return JsonResponse({'success': True, 'has_regulation': False})
 
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 @csrf_exempt
@@ -4333,7 +4376,8 @@ def export_labels_excel(request):
         wb.save(response)
         return response
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        logger.exception('[처리 실패]')
+        return _server_error()
        
 @login_required
 def download_my_ingredients_excel(request):
@@ -4552,7 +4596,8 @@ def upload_my_ingredients_excel(request):
         })
 
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'파일 처리 중 심각한 오류가 발생했습니다: {str(e)}'})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 @login_required
 def get_recent_usage_api(request):
@@ -4600,16 +4645,16 @@ def get_recent_usage_api(request):
             'message': f'{field_name}에 대한 {len(recent_items)}개 최근 사용 항목을 찾았습니다.'
         }, json_dumps_params={'ensure_ascii': False})
         
-    except ValueError as e:
+    except ValueError:
+        # 값이 무엇이었는지는 로그로. 사용자에게 파이썬 예외 문구를 보내지 않는다
+        logger.exception('[잘못된 파라미터]')
         return JsonResponse({
             'success': False,
-            'error': f'잘못된 파라미터: {str(e)}'
+            'error': '요청 값이 올바르지 않습니다.',
         }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'최근 사용 항목 조회 중 오류: {str(e)}'
-        }, status=500)
+    except Exception:
+        logger.exception('[최근 사용 항목 조회 실패]')
+        return _server_error()
 
 @login_required
 @require_GET
@@ -4732,11 +4777,9 @@ def auto_fill_api(request):
             'message': f'{input_field}에 대한 {len(suggestions)}개 추천을 제공합니다.'
         }, json_dumps_params={'ensure_ascii': False})
         
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'자동 채우기 API 오류: {str(e)}'
-        }, status=500)
+    except Exception:
+        logger.exception('[자동 채우기 실패]')
+        return _server_error()
 
 @login_required  
 @require_GET
@@ -4801,11 +4844,9 @@ def phrases_api(request):
             'message': f'{category} 카테고리의 {len(phrases)}개 문구를 제공합니다.'
         }, json_dumps_params={'ensure_ascii': False})
         
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'문구 API 오류: {str(e)}'
-        }, status=500)
+    except Exception:
+        logger.exception('[문구 API 실패]')
+        return _server_error()
 
 
 # 제품 조회 - 국내 제품
@@ -5111,7 +5152,8 @@ def copy_additives_to_ingredients(request):
         })
         
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 @login_required
@@ -5184,7 +5226,8 @@ def request_additive_correction(request):
         })
         
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception('[처리 실패]')
+        return _server_error()
 
 
 # 공개 데모가 부르므로 로그인을 걸 수 없다. 대신 속도로 끊는다 —
@@ -5417,7 +5460,11 @@ def ingredient_row(item, columns, notes=None):
             text = full = '%s.%s.%s' % (str(raw)[2:4], str(raw)[4:6], str(raw)[6:8])
         else:
             text = full = str(raw)
-        cells.append({'text': text, 'title': full, 'align': column['align']})
+        # field 를 함께 실어 보낸다. 화면 스크립트가 "이름 칸" 같은 자리를
+        # **번호가 아니라 이름으로** 찾을 수 있어야 한다 — 이 목록은 사용자가
+        # 칸을 고르므로 번호가 사람마다 다르다.
+        cells.append({'text': text, 'title': full, 'align': column['align'],
+                      'field': column['field']})
     return {'id': item.my_ingredient_id, 'cells': cells}
 
 

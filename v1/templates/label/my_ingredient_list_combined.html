@@ -753,7 +753,8 @@
                                 <input type="checkbox" class="ingredient-checkbox" data-id="{{ row.id }}">
                             </td>
                             {% for cell in row.cells %}
-                            <td style="text-align: {{ cell.align }};" title="{{ cell.title }}"><div class="cell-clip">{{ cell.text }}</div></td>
+                            {# data-field 로 자리를 찾는다 — 아래 BOM 뱃지 주석 참고 #}
+                            <td data-field="{{ cell.field }}" style="text-align: {{ cell.align }};" title="{{ cell.title }}"><div class="cell-clip">{{ cell.text }}</div></td>
                             {% endfor %}
                         </tr>
                         {% empty %}
@@ -944,11 +945,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    /* 손대 놓고 안 저장한 것이 있으면 묻는다.
+       예전에는 옆 원료를 누르면 오른쪽 패널이 그냥 갈아 끼워져 적어 둔 것이
+       조용히 사라졌다. beforeunload 는 **페이지를 떠날 때만** 도는데, 이건
+       같은 페이지 안에서 일어나는 일이라 그 그물에 안 걸린다. */
+    function mayLeaveDetail() {
+        if (!window.__ingredientDirty) return true;
+        var ok = window.confirm('저장하지 않은 내용이 있습니다.'
+                                + String.fromCharCode(10)
+                                + '다른 원료로 옮기면 적어 두신 것이 사라집니다. 계속할까요?');
+        if (ok && typeof window.setIngredientDirty === 'function') {
+            window.setIngredientDirty(false);
+        }
+        return ok;
+    }
+
     // 원료 행 클릭 → 우측 패널 로드 (체크박스 열 클릭은 무시)
     ingredientRows.forEach(row => {
         row.addEventListener('click', function(e) {
             // 체크박스 첫번째 td 클릭 시 무시
             if (e.target.closest('td:first-child') || e.target.classList.contains('ingredient-checkbox')) return;
+            if (!mayLeaveDetail()) return;
 
             ingredientRows.forEach(r => r.classList.remove('selected'));
             this.classList.add('selected');
@@ -1126,6 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 신규 원료 - 우측 패널에 AJAX로 등록 폼 로드
     if (newBtn) {
         newBtn.addEventListener('click', () => {
+            if (!mayLeaveDetail()) return;
             ingredientRows.forEach(r => r.classList.remove('selected'));
             fetch('/label/my-ingredient-detail/', {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -1214,7 +1232,13 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.ingredient-row').forEach(row => {
                 const rowId = String(row.dataset.id);
                 if (ids.includes(rowId)) {
-                    const nameCell = row.querySelectorAll('td')[3];
+                    /* 번호로 찾으면 안 된다. 이 목록은 **사용자가 칸을
+                       고른다** — td[3] 은 사람마다 다른 칸이고, 칸을 몇 개
+                       끄면 아예 없을 수도 있다. 그러면 뱃지가 엉뚱한 칸에
+                       붙거나 통째로 안 뜬다.
+                       원재료명 칸은 끌 수 없는 칸이라(list_sort 의 min) 언제나
+                       있다 — 이름으로 찾는다. */
+                    const nameCell = row.querySelector('td[data-field="prdlst_nm"]');
                     if (nameCell && !nameCell.querySelector('.bom-sync-badge')) {
                         const badge = document.createElement('span');
                         badge.className = 'bom-sync-badge';

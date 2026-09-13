@@ -18792,3 +18792,140 @@ class 비고_칸은_정렬할_수_있는_척하지_않는다(TestCase):
                ).read_text(encoding='utf-8')
         i = tpl.index('{% for col in list_columns %}')
         self.assertIn('{% if col.sortable %}', tpl[i:i + 400])
+
+
+class 예외_원문이_사용자에게_가지_않는다(TestCase):
+    """
+    `{'error': str(e)}` 로 예외 원문을 그대로 내려보내던 곳이 서른 군데
+    가까이 있었다. 화면은 그것을 스낵바에 그대로 띄운다 —
+    "No ProductDocument matches the given query." 나 SQL 조각이 사용자에게
+    갔다. 알아볼 수 없을 뿐 아니라 표·칸 이름이 그대로 샌다.
+    """
+
+    def test_label_views_에_남은_유출이_없다(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'label/views.py').read_text(encoding='utf-8')
+        # 주석·독스트링의 언급은 뺀다
+        code = re.sub(r'"""[\s\S]*?"""', '', text)
+        code = re.sub(r'^\s*#.*$', '', code, flags=re.M)
+
+        leaks = [ln.strip() for ln in code.split('\n')
+                 if 'str(e)' in ln and ('JsonResponse' in ln or "'error'" in ln
+                                        or '"error"' in ln or 'messages.error' in ln)]
+        self.assertEqual(leaks, [])
+
+    def test_공용_답이_사람이_읽을_말을_준다(self):
+        from v1.label.views import _server_error
+
+        body = json.loads(_server_error().content)
+        self.assertFalse(body['success'])
+        self.assertIn('오류', body['error'])
+
+    def test_실제로_터졌을_때_원문이_안_보인다(self):
+        from unittest.mock import patch
+
+        user = User.objects.create_user(username='leaku', password='x')
+        self.client.force_login(user)
+        with patch('v1.label.views.MyIngredient.objects.filter',
+                   side_effect=RuntimeError('SELECT secret FROM users')):
+            r = self.client.post(
+                reverse('label:check_my_ingredient'),
+                data=json.dumps({'prdlst_nm': '무엇'}),
+                content_type='application/json')
+        blob = r.content.decode()
+        self.assertNotIn('secret', blob)
+        self.assertNotIn('RuntimeError', blob)
+
+
+class BOM_뱃지가_고른_칸에_따라_엉뚱한_자리에_붙지_않는다(TestCase):
+    """
+    원료 목록은 **사용자가 칸을 고른다**. 그런데 뱃지를 `td[3]` 에 붙였다 —
+    칸을 몇 개 끄면 그 번호는 다른 칸이거나 아예 없다. 뱃지가 엉뚱한 칸에
+    붙거나 통째로 안 뜬다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyIngredient
+
+        self.user = User.objects.create_user(username='bdg', password='x')
+        self.client.force_login(self.user)
+        MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='대두분말', delete_YN='N')
+
+    def test_칸마다_이름표가_붙는다(self):
+        html = self.client.get(
+            '/label/my-ingredient-list-combined/').content.decode()
+        self.assertIn('data-field="prdlst_nm"', html)
+
+    def test_화면이_번호가_아니라_이름으로_찾는다(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_list_combined.html'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        # CSS 에도 같은 이름이 있다 — 뱃지를 **만드는** 자리를 본다
+        i = text.index("badge.className = 'bom-sync-badge'")
+        block = text[max(0, i - 900):i + 200]
+        self.assertIn("td[data-field=\"prdlst_nm\"]", block)
+        self.assertNotIn("querySelectorAll('td')[3]", block)
+
+    def test_칸을_꺼도_이름_칸은_남는다(self):
+        """원재료명은 끌 수 없는 칸이라 언제나 있다 — 그래서 찾을 수 있다."""
+        from v1.label.services import list_sort
+
+        self.assertIn('prdlst_nm', list_sort.MY_INGREDIENT_REQUIRED_FIELDS)
+
+
+class 편집_중_다른_원료로_옮기면_묻는다(TestCase):
+    """
+    · 손대 놓고 옆 원료를 누르면 오른쪽 패널이 그냥 갈아 끼워져 적어 둔 것이
+      조용히 사라졌다. beforeunload 는 **페이지를 떠날 때만** 도는데, 이건
+      같은 페이지 안에서 일어나는 일이라 그 그물에 안 걸린다.
+    · 그 패널은 원료를 고를 때마다 다시 실려 오는데 실릴 때마다
+      beforeunload 리스너가 하나씩 쌓였고, 각 리스너는 자기가 실릴 때의
+      dirty 를 붙들고 있었다 — 한 번 손대면 그 뒤로 어느 화면을 나가려 해도
+      경고가 떴다.
+    """
+
+    def _files(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        def clean(rel):
+            t = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+            t = re.sub(r'/\*[\s\S]*?\*/', '', t)
+            return re.sub(r'^\s*//.*$', '', t, flags=re.M)
+
+        return (clean('templates/label/my_ingredient_list_combined.html'),
+                clean('templates/label/_ingredient_nutrition.html'))
+
+    def test_옮기기_전에_묻는다(self):
+        lst, _ = self._files()
+        self.assertIn('function mayLeaveDetail(', lst)
+        i = lst.index('function mayLeaveDetail(')
+        self.assertIn('window.__ingredientDirty', lst[i:i + 600])
+        self.assertIn('window.confirm(', lst[i:i + 600])
+
+    def test_행_클릭과_신규_단추가_그_문을_지난다(self):
+        lst, _ = self._files()
+        self.assertEqual(lst.count('if (!mayLeaveDetail()) return;'), 2)
+
+    def test_이탈_경고를_한_번만_건다(self):
+        _, nut = self._files()
+        self.assertIn('window.__ingredientLeaveGuard', nut)
+        self.assertEqual(nut.count("addEventListener('beforeunload'"), 1)
+
+    def test_상태를_window_에_하나만_둔다(self):
+        _, nut = self._files()
+        # 각 로드마다 살아나는 지역 dirty 를 붙들고 있으면 안 된다
+        self.assertNotIn('var dirty = false;', nut)
+        self.assertIn('window.__ingredientDirty', nut)
