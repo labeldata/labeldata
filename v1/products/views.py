@@ -4486,10 +4486,18 @@ def bulk_download_version(request, label_id):
 
 @login_required
 def document_detail(request, document_id):
-    """문서 상세"""
+    """
+    문서 상세.
+
+    **이미 지운 문서는 열지 않는다.** 삭제는 soft delete(active_yn=False)라
+    행이 남는데 여기서 그 조건을 안 봐서, 지운 문서의 주소를 그대로 열 수
+    있었다 — 목록에는 없는 문서가 상세로는 멀쩡히 보이고 [다운로드] 도
+    눌렸다.
+    """
     document = get_object_or_404(
         ProductDocument.objects.select_related('label', 'document_type', 'uploaded_by'),
         document_id=document_id,
+        active_yn=True,
     )
     if not user_can_download_label_files(request.user, document.label, document):
         raise Http404("문서를 찾을 수 없습니다.")
@@ -6476,14 +6484,23 @@ def document_ai_review_save(request, document_id):
  
     try:
         payload = _json.loads(request.body)
-    except (_json.JSONDecodeError, Exception):
-        return JsonResponse({'error': '잘못된 요청입니다.'}, status=400)
- 
+    except (TypeError, ValueError):
+        # `except (JSONDecodeError, Exception)` 이었다 — 두 번째가 모든 것을
+        # 삼키므로 여기 오지 않을 예외까지 "잘못된 요청" 으로 바뀌었다.
+        return JsonResponse({'success': False,
+                             'error': '요청을 읽지 못했습니다. 새로고침한 뒤 다시 저장해 주세요.'},
+                            status=400)
+
+    extracted = payload.get('extracted_data')
+    if not isinstance(extracted, dict):
+        return JsonResponse({'success': False,
+                             'error': '저장할 내용이 없습니다.'}, status=400)
+
     meta = dict(doc.metadata) if doc.metadata else {}
-    meta['extracted_data'] = payload.get('extracted_data', meta.get('extracted_data', {}))
+    meta['extracted_data'] = extracted
     doc.metadata = meta
     doc.save(update_fields=['metadata'])
-    return JsonResponse({'success': True})
+    return JsonResponse({'success': True, 'saved': len(extracted)})
  
  
 def register_ingredient_bom(user, label, fields):

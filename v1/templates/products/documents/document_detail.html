@@ -31,26 +31,27 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <h4 class="mb-3">
-                        <i class="fas fa-file-{{ document.file_extension|default:'alt' }} me-2"></i>
+                        {% comment %}확장자로 아이콘 이름을 만들던 자리. Bootstrap Icons 에는 bi-file-pdf 처럼 정해진 이름뿐이라 확장자를 그대로 붙일 수 없다 — 한 가지로 둔다.{% endcomment %}
+                        <i class="bi bi-file-earmark-text me-2"></i>
                         {{ document.original_filename }}
                     </h4>
                     <p class="mb-2">
-                        <i class="fas fa-cube me-2"></i>
+                        <i class="bi bi-box-seam me-2"></i>
                         {{ document.label.my_label_name|default:document.label.prdlst_nm }}
                     </p>
                     <p class="mb-0">
-                        <i class="fas fa-tag me-2"></i>
+                        <i class="bi bi-tag me-2"></i>
                         <span class="badge bg-info">{{ document.document_type.type_name }}</span>
                     </p>
                 </div>
                 <div>
                     {% if document.is_expired %}
                         <span class="badge bg-danger fs-6">
-                            <i class="fas fa-exclamation-triangle me-1"></i>만료됨
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>만료됨
                         </span>
                     {% elif document.expiry_date and document.days_until_expiry <= 30 %}
                         <span class="badge bg-warning text-dark fs-6">
-                            <i class="fas fa-clock me-1"></i>{{ document.days_until_expiry }}일 남음
+                            <i class="bi bi-clock me-1"></i>{{ document.days_until_expiry }}일 남음
                         </span>
                     {% endif %}
                 </div>
@@ -63,7 +64,7 @@
         <div class="col-md-8">
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>문서 정보</h5>
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>문서 정보</h5>
                 </div>
                 <div class="card-body">
                     <dl class="row">
@@ -92,15 +93,15 @@
                                 {{ document.expiry_date }}
                                 {% if document.is_expired %}
                                     <span class="badge bg-danger ms-2">
-                                        <i class="fas fa-exclamation-triangle me-1"></i>만료됨
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>만료됨
                                     </span>
                                 {% elif document.days_until_expiry <= 30 %}
                                     <span class="badge bg-warning text-dark ms-2">
-                                        <i class="fas fa-clock me-1"></i>{{ document.days_until_expiry }}일 남음
+                                        <i class="bi bi-clock me-1"></i>{{ document.days_until_expiry }}일 남음
                                     </span>
                                 {% else %}
                                     <span class="badge bg-success ms-2">
-                                        <i class="fas fa-check me-1"></i>유효
+                                        <i class="bi bi-check-lg me-1"></i>유효
                                     </span>
                                 {% endif %}
                             </dd>
@@ -124,7 +125,7 @@
             {% if document.description %}
                 <div class="card shadow-sm mb-4">
                     <div class="card-header bg-white">
-                        <h5 class="mb-0"><i class="fas fa-comment-alt me-2"></i>설명</h5>
+                        <h5 class="mb-0"><i class="bi bi-chat-left-text me-2"></i>설명</h5>
                     </div>
                     <div class="card-body">
                         {{ document.description|linebreaksbr }}
@@ -137,25 +138,31 @@
         <div class="col-md-4">
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="fas fa-tasks me-2"></i>작업</h5>
+                    <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>작업</h5>
                 </div>
                 <div class="list-group list-group-flush">
                     <a href="{% url 'products:document_download' document.document_id %}" 
                        class="list-group-item list-group-item-action">
-                        <i class="fas fa-download me-2"></i>다운로드
+                        <i class="bi bi-download me-2"></i>다운로드
                     </a>
                     <a href="{% url 'products:product_detail_new' document.label.my_label_id %}#tab-docs" 
                        class="list-group-item list-group-item-action">
-                        <i class="fas fa-arrow-left me-2"></i>문서 목록으로
+                        <i class="bi bi-arrow-left me-2"></i>문서 목록으로
                     </a>
                     <div class="list-group-item">
-                        <form method="post" action="{% url 'products:document_delete_api' document.document_id %}" 
-                              onsubmit="return confirm('이 문서를 삭제하시겠습니까?')">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-danger w-100">
-                                <i class="fas fa-trash me-2"></i>문서 삭제
-                            </button>
-                        </form>
+                        {% comment %}
+                          평범한 <form> 으로 **JSON API** 에 보내고 있었다.
+                          브라우저는 응답을 그대로 그리므로, 지우고 나면
+                          {"success": true, …} 만 적힌 흰 화면에 남았다 —
+                          돌아갈 링크도 없다. 여기서 보내고, 끝나면 문서함으로
+                          데려간다.
+                        {% endcomment %}
+                        {% csrf_token %}
+                        <button type="button" id="docDeleteBtn" class="btn btn-danger w-100"
+                                data-url="{% url 'products:document_delete_api' document.document_id %}"
+                                data-back="{% url 'products:product_detail_new' document.label.my_label_id %}#tab-docs">
+                            <i class="bi bi-trash me-2"></i>문서 삭제
+                        </button>
                     </div>
                 </div>
             </div>
@@ -163,18 +170,18 @@
             <!-- 연결된 제품 정보 -->
             <div class="card shadow-sm">
                 <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="fas fa-link me-2"></i>연결된 제품</h5>
+                    <h5 class="mb-0"><i class="bi bi-link-45deg me-2"></i>연결된 제품</h5>
                 </div>
                 <div class="card-body">
                     <h6>{{ document.label.my_label_name|default:document.label.prdlst_nm }}</h6>
                     <div class="d-grid gap-2">
                         <a href="{% url 'products:product_detail_new' document.label.my_label_id %}" 
                            class="btn v2-btn-sm btn-outline-primary">
-                            <i class="fas fa-cube me-2"></i>제품 보기
+                            <i class="bi bi-box-seam me-2"></i>제품 보기
                         </a>
                         <a href="{% url 'products:product_detail_new' document.label.my_label_id %}#tab-docs" 
                            class="btn v2-btn-sm btn-outline-secondary">
-                            <i class="fas fa-folder-open me-2"></i>문서 탭으로
+                            <i class="bi bi-folder2-open me-2"></i>문서 탭으로
                         </a>
                     </div>
                 </div>
@@ -182,4 +189,40 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+  var btn = document.getElementById('docDeleteBtn');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    if (!confirm('이 문서를 삭제하시겠습니까?')) return;
+    var token = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+    btn.disabled = true;
+    fetch(btn.dataset.url, {
+      method: 'POST',
+      headers: {'X-CSRFToken': token, 'X-Requested-With': 'XMLHttpRequest'},
+    })
+    .then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (d) { return {ok: r.ok, data: d}; });
+    })
+    .then(function (res) {
+      if (res.ok && res.data.success) {
+        if (typeof showSnackbar === 'function') showSnackbar('문서를 삭제했습니다.', 'success');
+        window.location.href = btn.dataset.back;
+        return;
+      }
+      btn.disabled = false;
+      var msg = res.data.error || '삭제하지 못했습니다.';
+      /* base_v2 가 showSnackbar 를 늘 띄워 두므로 alert 폴백을 두지 않는다 —
+         OneWayToTellTheUserTests 가 그것을 지킨다. */
+      if (typeof showSnackbar === 'function') showSnackbar(msg, 'error');
+    })
+    .catch(function () {
+      btn.disabled = false;
+      if (typeof showSnackbar === 'function') showSnackbar('서버에 연결할 수 없습니다.', 'error');
+    });
+  });
+})();
+</script>
 {% endblock %}

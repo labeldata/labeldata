@@ -4600,63 +4600,6 @@ def upload_my_ingredients_excel(request):
         return _server_error()
 
 @login_required
-def get_recent_usage_api(request):
-    """
-    최근 사용한 항목 API - 사용자의 최근 라벨에서 해당 필드값 추출
-    """
-    try:
-        field_name = request.GET.get('field')
-        limit = int(request.GET.get('limit', 5))
-        
-        if not field_name:
-            return JsonResponse({
-                'success': False,
-                'error': 'field 파라미터가 필요합니다.'
-            }, status=400)
-        
-        # 현재 사용자의 최근 라벨에서 해당 필드값 추출
-        recent_labels = MyLabel.objects.filter(
-            user_id=request.user
-        ).order_by('-update_datetime')[:50]  # 최근 50개 라벨
-        
-        recent_items = []
-        seen_contents = set()  # 중복 제거용
-        
-        for label in recent_labels:
-            field_value = getattr(label, field_name, None)
-            if field_value and field_value.strip() and field_value not in seen_contents:
-                recent_items.append({
-                    'content': field_value.strip(),
-                    'field': field_name,
-                    'last_used': label.update_datetime.isoformat() if label.update_datetime else None,
-                    'label_name': label.my_label_name or '무제'
-                })
-                seen_contents.add(field_value)
-                
-                # limit 도달하면 중단
-                if len(recent_items) >= limit:
-                    break
-        
-        return JsonResponse({
-            'success': True,
-            'field_name': field_name,
-            'recent_items': recent_items,
-            'total_count': len(recent_items),
-            'message': f'{field_name}에 대한 {len(recent_items)}개 최근 사용 항목을 찾았습니다.'
-        }, json_dumps_params={'ensure_ascii': False})
-        
-    except ValueError:
-        # 값이 무엇이었는지는 로그로. 사용자에게 파이썬 예외 문구를 보내지 않는다
-        logger.exception('[잘못된 파라미터]')
-        return JsonResponse({
-            'success': False,
-            'error': '요청 값이 올바르지 않습니다.',
-        }, status=400)
-    except Exception:
-        logger.exception('[최근 사용 항목 조회 실패]')
-        return _server_error()
-
-@login_required
 @require_GET
 def auto_fill_api(request):
     """

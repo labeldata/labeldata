@@ -210,8 +210,17 @@
   };
 
   function csrf() {
+    /* 이 조각은 bom_detail 안에 include 되는데 그 화면에는 <form> 이 없어
+       `[name=csrfmiddlewaretoken]` 이 안 잡힐 수 있다. 그러면 POST 가
+       403 으로 막히고, 요약은 조용히 옛 값을 보여 준다.
+       같은 화면이 이미 CSRF_TOKEN 을 들고 있으므로 그것을 먼저 본다. */
+    if (typeof CSRF_TOKEN !== 'undefined' && CSRF_TOKEN) return CSRF_TOKEN;
     var el = document.querySelector('[name=csrfmiddlewaretoken]');
-    return el ? el.value : '';
+    if (el && el.value) return el.value;
+    var hit = document.cookie.split('; ').find(function (r) {
+      return r.indexOf('csrftoken=') === 0;
+    });
+    return hit ? hit.split('=')[1] : '';
   }
 
   /* 지금 표에 있는 배합비를 함께 보낸다.
@@ -224,8 +233,18 @@
     if (typeof hot === 'undefined' || !hot || !hot.getSourceData) return null;
     var out = [];
     hot.getSourceData().forEach(function (row) {
-      if (!row || !row.bom_id) return;      // 저장 전 새 줄은 서버가 모른다
-      out.push({bom_id: row.bom_id, usage_ratio: row.usage_ratio});
+      if (!row) return;
+      /* 값이 있는 자리에서 꺼낸다.
+         `row.bom_id` 와 `row.usage_ratio` 는 **행 객체에 없다.** bom_id 는
+         `row._meta.bom_id` 에 있고(행을 옮기거나 지워도 따라가도록 객체에
+         달아 둔다 — bom_detail 의 그 주석 참고), 배합비 칸의 이름은
+         `mixing_ratio` 다. 그래서 이 목록은 늘 비어 있었고, 서버는 저장된
+         옛 배합으로 계산했다 — 표를 아무리 고쳐도 요약이 그대로였다. */
+      var id = (row._meta && row._meta.bom_id) || row.bom_id;
+      if (!id) return;                      // 저장 전 새 줄은 서버가 모른다
+      var ratio = (row.mixing_ratio !== undefined && row.mixing_ratio !== null)
+                  ? row.mixing_ratio : row.usage_ratio;
+      out.push({bom_id: id, usage_ratio: ratio});
     });
     return out;
   }

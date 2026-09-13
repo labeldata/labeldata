@@ -437,24 +437,41 @@ function applyToBOM(docId) {
 
 document.getElementById('aiReviewForm')?.addEventListener('submit', function(e) {
     e.preventDefault();
-    
-    const formData = new FormData(this);
+
+    /* **서버가 읽는 꼴로 보낸다.**
+       예전에는 FormData(multipart)를 그대로 보냈는데 뷰는
+       `json.loads(request.body)` 를 한다 — 언제나 400 이었다. 저장이 100%
+       실패하는데 화면은 `data.message` 를 읽고(뷰는 error 로 준다) "저장
+       실패: 오류" 한 줄만 띄웠다. 무엇이 잘못됐는지 알 길이 없었다. */
+    const form = this;
     const docId = {{ doc.document_id }};
-    
+    const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    const extracted = {};
+    form.querySelectorAll('input[name]').forEach(function (el) {
+        if (el.name === 'csrfmiddlewaretoken') return;
+        extracted[el.name] = el.value;
+    });
+
     fetch(`/products/documents/${docId}/ai-review/save/`, {
         method: 'POST',
-        body: formData,
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+        body: JSON.stringify({extracted_data: extracted}),
     })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
+    .then(function (r) {
+        return r.json().catch(function () { return {}; })
+            .then(function (d) { return {ok: r.ok, data: d}; });
+    })
+    .then(function (res) {
+        if (res.ok && res.data.success) {
             if (window.showSaved) showSaved('저장했습니다'); else showSnackbar('저장되었습니다', 'success');
             location.reload();
-        } else {
-            showSnackbar('저장 실패: ' + (data.message || '오류'), 'error');
+            return;
         }
+        showSnackbar('저장 실패: '
+                     + (res.data.error || res.data.message || '알 수 없는 오류'), 'error');
     })
-    .catch(err => showSnackbar('요청 실패: ' + err, 'error'));
+    .catch(function () { showSnackbar('서버에 연결할 수 없습니다.', 'error'); });
 });
 </script>
 {% endblock %}

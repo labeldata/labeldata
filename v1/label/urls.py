@@ -109,7 +109,6 @@ urlpatterns = [
     path('my-ingredients/upload/', views.upload_my_ingredients_excel, name='upload_my_ingredients_excel'),
     
     # 저장된 문구 API 패턴
-    path('api/recent-usage/', views.get_recent_usage_api, name='recent_usage_api'),
     path('api/auto-fill/', views.auto_fill_api, name='auto_fill_api'),
     path('api/phrases/', views.phrases_api, name='phrases_api'),
     # 문구함에 담기·빼기. 쓰던 자리에서 바로 담을 수 있어야 한다

@@ -640,6 +640,11 @@ function calculateAndPreview() {
     
     // 강조표시 판정 항상 업데이트
     updateEmphasisColumn();
+    /* 고열량·저영양 판정도 값이 바뀔 때마다 다시 한다.
+       예전에는 화면을 열고 400ms 뒤에 **딱 한 번** 불렀다. 그 뒤로는 값을
+       아무리 고쳐도 그때의 판정이 그대로 남아, 사용자는 지금 값에 대한
+       답이라고 읽는다. 결과를 보여 주는 자리가 옛 값을 말하면 안 된다. */
+    try { refreshHiengPanel(); } catch (e) { /* 판정이 표를 막지 않는다 */ }
     
     if (Object.keys(nutritionInputs).length === 0) {
         document.getElementById('resultDisplay').innerHTML = '<div class="empty-result">영양성분을 입력해주세요.</div>';
@@ -681,9 +686,13 @@ async function loadData() {
         updateStatus(`📡 응답 받음: ${response.status}`);
         
         if (!response.ok) {
-            const errorText = await response.text();
-            updateStatus(`❌ API 오류 (${response.status}): ${errorText.substring(0, 50)}`);
-            throw new Error(`API 응답 오류 (${response.status}): ${errorText}`);
+            /* 응답 본문을 error.message 에 담으면 그대로 스낵바에 뜬다 —
+               서버가 HTML 오류 페이지를 주면 그 태그가 통째로 화면에 흘렀다.
+               본문은 콘솔로, 사람에게는 상태만. (저장 쪽은 이미 그렇게 한다) */
+            const errorText = await response.text().catch(() => '');
+            console.error('[NutritionEditor] loadData API 오류:', response.status, errorText);
+            updateStatus(`❌ API 오류 (${response.status})`);
+            throw new Error(`영양성분을 불러오지 못했습니다 (${response.status})`);
         }
         
         const data = await response.json();
@@ -1101,6 +1110,15 @@ document.addEventListener('DOMContentLoaded', function() {
             el.addEventListener('input', () => { calculateAndPreview(); warnMissingServingSize(); });
             el.addEventListener('change', () => { calculateAndPreview(); warnMissingServingSize(); });
         }
+    });
+
+    /* 판정의 두 기준 — 1회 섭취참고량과 식품 구분. 이 둘이 바뀌면 답도
+       바뀌는데, 여기 리스너가 없어 화면은 옛 판정을 그대로 들고 있었다. */
+    ['serving_reference', 'hieng_kind'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', refreshHiengPanel);
+        el.addEventListener('change', refreshHiengPanel);
     });
 
     try { bindCalcSource(); } catch (error) { /* 계산 도우미가 없어도 표는 쓴다 */ }

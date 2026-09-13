@@ -15535,8 +15535,9 @@ class 저장했다는_말은_눈에_닿는_자리에서_한다(TestCase):
 
     def test_저장에_alert_을_쓰지_않는다(self):
         import io
-        for path in ('v1/templates/products/document_ai_review.html',
-                     'v1/templates/products/document_ai_review_v2.html'):
+        # document_ai_review.html 두 벌은 어느 뷰도 렌더하지 않는 죽은
+        # 템플릿이라 걷어냈다 — 뷰는 _v2 만 그린다
+        for path in ('v1/templates/products/document_ai_review_v2.html',):
             text = io.open(path, encoding='utf-8').read()
             for line in text.split(chr(10)):
                 if 'alert(' in line and '저장되었습니다' in line:

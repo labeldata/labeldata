@@ -6622,7 +6622,6 @@ class OneWayToTellTheUserTests(TestCase):
         'templates/includes/navbar_v1.html',
         'templates/label/food_additive_search_v1.html',
         'templates/label/label_preview.html',
-        'templates/products/document_ai_review.html',
     }
 
     def test_스낵바가_안_닿는_화면이_늘지_않았다(self):
@@ -9030,3 +9029,256 @@ class 문서_타입_화면이_말한_일을_할_수_있다(TestCase):
                      'products:document_type_update'):
             with self.assertRaises(NoReverseMatch):
                 reverse(name, args=[1])
+
+
+class AI_문서_검토_저장이_실제로_된다(TestCase):
+    """
+    화면은 `FormData`(multipart)를 보내는데 뷰는 `json.loads(request.body)`
+    를 한다 — **저장이 100% 실패**했다. 게다가 뷰는 error 키로 주는데 화면은
+    `data.message` 를 읽어 "저장 실패: 오류" 한 줄만 떴다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='aiu', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='AI', delete_YN='N')
+        dt = DocumentType.objects.create(type_name='성적서', type_code='SPEC')
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dt, active_yn=True,
+            metadata={'ai_status': 'DONE', 'extracted_data': {'a': '1'}})
+
+    def _url(self):
+        return reverse('products:document_ai_review_save',
+                       args=[self.doc.document_id])
+
+    def test_json_으로_보내면_저장된다(self):
+        from v1.products.models import ProductDocument
+
+        r = self.client.post(
+            self._url(),
+            data=json.dumps({'extracted_data': {'a': '2', 'b': '3'}}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['success'])
+        doc = ProductDocument.objects.get(pk=self.doc.pk)
+        self.assertEqual(doc.metadata['extracted_data'], {'a': '2', 'b': '3'})
+
+    def test_화면이_json_으로_보낸다(self):
+        """FormData 로 되돌아가면 다시 100% 실패한다."""
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/document_ai_review_v2.html'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        i = text.index("getElementById('aiReviewForm')")
+        block = text[i:i + 1800]
+        self.assertIn("'Content-Type': 'application/json'", block)
+        self.assertIn('extracted_data', block)
+        self.assertNotIn('new FormData(', block)
+
+    def test_거절_이유를_화면이_읽는_키로_준다(self):
+        r = self.client.post(self._url(), data='not json',
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(r.json().get('error'))
+
+    def test_보낼_것이_없으면_거절한다(self):
+        r = self.client.post(self._url(), data=json.dumps({}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_남의_문서는_못_고친다(self):
+        other = User.objects.create_user(username='aio', password='x')
+        self.client.force_login(other)
+        r = self.client.post(self._url(),
+                             data=json.dumps({'extracted_data': {'a': 'x'}}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 404)
+
+    def test_렌더되지_않는_템플릿을_걷어냈다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        for rel in ('templates/products/document_ai_review.html',
+                    'templates/products/documents/document_ai_review.html'):
+            self.assertFalse((Path(dj.BASE_DIR) / rel).exists(), rel)
+
+
+class 문서_상세가_막다른_길이_아니다(TestCase):
+    """
+    · [문서 삭제] 가 평범한 <form> 으로 **JSON API** 에 보냈다. 브라우저는
+      응답을 그대로 그리므로, 지우고 나면 {"success": true} 만 적힌 흰
+      화면에 남았다 — 돌아갈 링크도 없다.
+    · 삭제는 soft delete 인데 상세 뷰가 active_yn 을 안 봐서, 지운 문서의
+      주소를 그대로 열 수 있었다. 목록에 없는 문서가 상세로는 멀쩡히 보이고
+      [다운로드] 도 눌렸다.
+    · 아이콘이 Font Awesome 인데 base_v2 는 Bootstrap Icons 만 싣는다 —
+      빈 네모만 보인다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='ddu', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='문서', delete_YN='N')
+        dt = DocumentType.objects.create(type_name='성적서', type_code='SPEC')
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dt, active_yn=True,
+            original_filename='a.pdf')
+
+    def test_지운_문서는_안_열린다(self):
+        url = reverse('products:document_detail', args=[self.doc.document_id])
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+        self.doc.active_yn = False
+        self.doc.save(update_fields=['active_yn'])
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_삭제가_JSON_화면으로_가지_않는다(self):
+        html = self.client.get(
+            reverse('products:document_detail',
+                    args=[self.doc.document_id])).content.decode()
+        self.assertIn('id="docDeleteBtn"', html)
+        # <form> 이 API 로 곧장 보내던 자리가 남아 있으면 안 된다
+        self.assertNotIn('document_delete_api', html.split('docDeleteBtn')[0])
+
+    def test_아이콘이_bootstrap_icons_다(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        for rel in ('templates/products/documents/document_detail.html',
+                    'templates/products/documents/expired_documents.html',
+                    'templates/products/documents/expiring_documents.html'):
+            text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+            self.assertEqual(re.findall(r'fa[srlb]* fa-[a-z0-9-]*', text), [], rel)
+
+
+class 배합_저장이_실패해도_임시저장은_살아_있다(TestCase):
+    """
+    · `draftSaveDisabled` 를 저장 시작에 켜기만 하고 되돌리는 곳이 없었다 —
+      한 번 실패하면 그 뒤로 무엇을 고쳐도 임시저장이 안 돌아, 새로고침·
+      탭 닫기에 그대로 날아갔다. 저장이 실패한 뒤야말로 임시저장이 가장
+      필요한 때다.
+    · 저장 성공 뒤 loadBOMData() 를 안 불렀다. 서버는 저장할 때마다 옛 행을
+      active_yn=False 로 눕히고 새로 만드는데, 화면은 죽은 bom_id 를 계속
+      들고 다음 저장에 그대로 보냈다.
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_실패하면_임시저장을_되살린다(self):
+        js = self._js()
+        i = js.index('async function saveData()')
+        block = js[i:i + 6000]
+        self.assertIn('finally {', block)
+        self.assertIn('draftSaveDisabled = saved;', block)
+
+    def test_저장_뒤_서버에서_다시_읽는다(self):
+        js = self._js()
+        i = js.index('async function saveData()')
+        block = js[i:i + 6000]
+        self.assertIn('await loadBOMData();', block)
+
+
+class 배합_영양_요약이_지금_표를_본다(TestCase):
+    """
+    요약이 표의 배합비를 함께 보내려 했는데, 값을 **없는 자리에서** 꺼냈다 —
+    bom_id 는 `row._meta.bom_id` 에 있고 배합비 칸 이름은 `mixing_ratio` 다.
+    그래서 목록이 늘 비었고 서버는 저장된 옛 배합으로 계산했다. 표를 아무리
+    고쳐도 요약이 그대로였다.
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/_bom_nutrition_summary.html'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_meta_에서_bom_id_를_꺼낸다(self):
+        js = self._js()
+        i = js.index('function currentItems(')
+        block = js[i:i + 1000]
+        self.assertIn('row._meta && row._meta.bom_id', block)
+        self.assertIn('row.mixing_ratio', block)
+
+    def test_csrf_를_못_찾아_막히지_않는다(self):
+        js = self._js()
+        i = js.index('function csrf(')
+        block = js[i:i + 600]
+        self.assertIn('CSRF_TOKEN', block)
+        self.assertIn('csrftoken=', block)
+
+
+class 영양성분_편집기가_지금_값으로_판정한다(TestCase):
+    """
+    · 고열량·저영양 판정을 화면 열고 400ms 뒤 **딱 한 번** 불렀다. 그 뒤로는
+      값을 아무리 고쳐도 그때의 판정이 그대로 남는다 — 결과를 보여 주는
+      자리가 옛 값을 말하면 안 된다.
+    · 불러오기가 실패하면 응답 **본문**을 error.message 에 담아 스낵바에
+      띄웠다. 서버가 HTML 오류 페이지를 주면 그 태그가 통째로 흘렀다.
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/nutrition_editor.html'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_값이_바뀌면_다시_판정한다(self):
+        js = self._js()
+        i = js.index('function calculateAndPreview()')
+        self.assertIn('refreshHiengPanel()', js[i:i + 1200])
+
+    def test_판정_기준이_바뀌어도_다시_한다(self):
+        js = self._js()
+        self.assertIn("['serving_reference', 'hieng_kind'].forEach", js)
+
+    def test_응답_본문을_스낵바로_흘리지_않는다(self):
+        js = self._js()
+        i = js.index('const errorText = await response.text()')
+        block = js[i:i + 500]
+        self.assertIn('console.error(', block)
+        self.assertNotIn('${errorText}', block)
+
+
+class 최근_사용_API_를_걷어냈다(TestCase):
+    """
+    `/label/api/recent-usage/` 는 호출자가 0이었다 — 화면은 localStorage
+    (phrase_autocomplete.js)를 쓴다. 고쳐도 아무 화면이 안 바뀐다.
+    """
+
+    def test_주소가_없다(self):
+        from django.urls import NoReverseMatch
+
+        with self.assertRaises(NoReverseMatch):
+            reverse('label:recent_usage_api')
