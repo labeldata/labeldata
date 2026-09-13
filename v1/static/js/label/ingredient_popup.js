@@ -581,6 +581,7 @@ function updateRowNumbers() {
         }
         // 강조 초기화
         row.classList.remove('ingredient-row', 'selected');
+        delete row.dataset.originTarget;      // 판정을 다시 하기 전에 지운다
         row.style.backgroundColor = '';
         row.style.borderLeft = '';
         row.style.color = '';
@@ -633,6 +634,8 @@ function markRowAsOriginTarget(row, rank) {
     const originCell = row.querySelector('.origin-cell');
 
     if (!displayNameInput || !originCell) return;
+
+    row.dataset.originTarget = '1';        // 저장이 이 표시를 읽는다
 
     const displayNameText = displayNameInput.value.trim();
     const foundCountries = findCountriesInText(displayNameText);
@@ -706,8 +709,20 @@ function saveIngredients() {
         const foodCategoryInput = row.querySelector('.food-category-input');
         const foodCategory = foodCategoryInput?.dataset.foodCategory || '';
         const displayNameRaw = row.querySelector('.display-name-input')?.value.trim() || ingredientName;
-        const foodType = row.querySelector('.food-type-select')?.value.trim() ||
-                         row.querySelector('.form-control[readonly].modal-readonly-field:not(.ingredient-name-input):not(.display-name-input)')?.value.trim() || '';
+        /* ═══ 식품유형 칸을 이름으로 찾는다 ═══════════════════════════
+         *
+         * `.food-type-select` 를 붙이는 곳은 `createFoodTypeSelect()` 하나인데
+         * **그 함수는 호출 0회**다 — 행 마크업에 그 클래스가 없다. 그래서 늘
+         * 아래 대체 셀렉터가 쓰였는데, `querySelector` 는 문서 순서 첫 match 를
+         * 준다. 조건에 맞는 첫 요소는 td5 의 **`.food-category-input`**
+         * (식품구분)이고 진짜 식품유형은 td6 이다.
+         *
+         * 결과로 `food_type: "가공식품"` 이 서버로 갔다. 원료를 새로 만드는
+         * 경로에서 `prdlst_dcnm="가공식품"` 으로 박히고, 그 값이
+         * get_or_create 의 키에 들어가므로 **중복 원료까지 쌓였다.**
+         * 같은 파일의 다른 두 곳(js:136, 193)은 제대로 .food-type-input 을 본다.
+         * ═══════════════════════════════════════════════════════════════ */
+        const foodType = row.querySelector('.food-type-input')?.value.trim() || '';
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
         const allergenInput = row.querySelector('.allergen-input')?.value.trim() || '';
         const gmoInput = row.querySelector('.gmo-input')?.value.trim() || '';
@@ -731,6 +746,15 @@ function saveIngredients() {
             allergen: allergenInput,
             gmo: gmoInput,
             origin: row.querySelector('.origin-cell')?.textContent.trim() || "",
+            /* 서버가 원산지 표시대상을 판정하려고 읽던 것은 `notes` 였는데
+               화면은 그 키를 **보낸 적이 없다.** 그래서 `origin_targets` 가
+               늘 빈 배열이 되어 `label.country_of_origin` 이 이 경로로는
+               한 번도 갱신되지 않았다 — 표의 "원산지 표시 검증" 열이 계산해
+               낸 결과가 저장에 0% 반영됐다.
+               문자열에서 낱말을 찾는 대신 판정 결과를 그대로 보낸다. */
+            origin_target: !!row.dataset.originTarget,
+            prdlst_report_no: row.querySelector('.report-no-input')?.value.trim() || "",
+            manufacturer: row.querySelector('.manufacturer-input')?.value.trim() || "",
             my_ingredient_id: ingredientName !== '정제수' ? row.querySelector('.my-ingredient-id')?.value.trim() || "" : "",
             summary_type: summaryType,
             summary_type_flag: summaryTypeFlag,
@@ -934,6 +958,11 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         <input type="hidden" class="allergen-input" value="${escapeHtml(ingredient.allergen || ingredient.allergens || '')}">
         <input type="hidden" class="gmo-input" value="${escapeHtml(ingredient.gmo || '')}">
         <input type="hidden" class="my-ingredient-id" value="${escapeHtml(ingredient.my_ingredient_id || '')}">
+        <!-- 저장할 때 서버가 읽는 값인데 마크업에 남지 않아 매번 빈 값으로
+             갔다. 원료를 새로 만드는 경로에서 품목보고번호·제조사가 통째로
+             비었다(selectIngredient 는 이미 갖고 있다). -->
+        <input type="hidden" class="report-no-input" value="${escapeHtml(ingredient.prdlst_report_no || '')}">
+        <input type="hidden" class="manufacturer-input" value="${escapeHtml(ingredient.manufacturer || ingredient.bssh_nm || '')}">
     `;
     document.getElementById('ingredient-body').appendChild(row);
 

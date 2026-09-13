@@ -6518,7 +6518,8 @@ def register_ingredient_bom(user, label, fields):
     """
     from v1.bom.models import ProductBOM
     from v1.label.services.ingredient_matching import (
-        get_or_create_my_ingredient, load_pool, match_my_ingredient,
+        IngredientQuotaExceeded, get_or_create_my_ingredient, load_pool,
+        match_my_ingredient,
     )
 
     name = (fields.get('ingredient_name') or '').strip()
@@ -6527,6 +6528,8 @@ def register_ingredient_bom(user, label, fields):
     matched = ingredient is not None
 
     if not matched:
+        # 한도에 걸리면 여기서 IngredientQuotaExceeded 가 올라간다.
+        # 부르는 쪽이 몇 종을 못 넣었는지 사용자에게 말해야 한다.
         ingredient, _created = get_or_create_my_ingredient(
             user,
             prdlst_nm=name,
@@ -6609,9 +6612,12 @@ def ingredient_to_bom(request, label_id):
             'error': '원료명이 없습니다.',
         }, status=400)
 
-    with transaction.atomic():
-        bom, created, matched, score, candidates = register_ingredient_bom(
-            request.user, label, fields)
+    try:
+        with transaction.atomic():
+            bom, created, matched, score, candidates = register_ingredient_bom(
+                request.user, label, fields)
+    except IngredientQuotaExceeded as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=429)
 
     log_activity(request, 'product', 'ingredient_to_bom', label.my_label_id)
     return JsonResponse({
@@ -7343,7 +7349,8 @@ def rawmtrl_to_bom_apply(request, label_id):
     from v1.bom.models import ProductBOM
     from v1.bom.services import sync_relations_from_bom
     from v1.label.services.ingredient_matching import (
-        get_or_create_my_ingredient, load_pool, match_my_ingredient, normalize_name,
+        IngredientQuotaExceeded, get_or_create_my_ingredient, load_pool,
+        match_my_ingredient, normalize_name,
     )
 
     label = _resolve_editable_label(request, label_id)
@@ -7360,7 +7367,7 @@ def rawmtrl_to_bom_apply(request, label_id):
 
     replace = bool(payload.get('replace'))
     pool = load_pool(request.user)
-    created = matched = 0
+    created = matched = over = 0
 
     with transaction.atomic():
         if replace:
@@ -7388,15 +7395,21 @@ def rawmtrl_to_bom_apply(request, label_id):
             if ingredient:
                 matched += 1
             else:
-                ingredient, _new = get_or_create_my_ingredient(
-                    request.user,
-                    prdlst_nm=name,
-                    prdlst_report_no='',
-                    prdlst_dcnm='',
-                    ingredient_display_name=name,
-                    rawmtrl_nm=subs,
-                    delete_YN='N',
-                )
+                try:
+                    ingredient, _new = get_or_create_my_ingredient(
+                        request.user,
+                        prdlst_nm=name,
+                        prdlst_report_no='',
+                        prdlst_dcnm='',
+                        ingredient_display_name=name,
+                        rawmtrl_nm=subs,
+                        delete_YN='N',
+                    )
+                except IngredientQuotaExceeded:
+                    # 한도에 걸린 줄은 건너뛰고 나머지는 넣는다 — 아래에서
+                    # 몇 건이 빠졌는지 함께 말한다
+                    over += 1
+                    continue
                 pool.setdefault(normalize_name(name), []).append(ingredient)
 
             bom = ProductBOM.objects.filter(
@@ -7429,14 +7442,20 @@ def rawmtrl_to_bom_apply(request, label_id):
         linked, skipped = sync_relations_from_bom(label)
 
     log_activity(request, 'product', 'rawmtrl_to_bom', label.my_label_id)
-    return JsonResponse({
+    payload = {
         'success': True,
         'created': created,
         'matched_existing': matched,
         'linked_to_label': linked,
         'skipped_no_ingredient': skipped,
+        'over_quota': over,
         'total': len(rows),
-    })
+    }
+    if over:
+        # 조용히 빠뜨리면 사용자는 다 들어간 줄 안다
+        payload['message'] = ('%d종을 넣었습니다. %d종은 원료 등록 한도에 걸려 '
+                              '넣지 못했습니다.' % (created + matched, over))
+    return JsonResponse(payload)
 
 
 @login_required
@@ -7498,18 +7517,21 @@ def document_ingredient_photo_to_bom(request, document_id):
 
     label = doc.label
 
-    with transaction.atomic():
-        # 등록 규칙은 품목보고번호 경로와 같다 - register_ingredient_bom 한 곳에 있다.
-        bom, created, matched, score, candidates = register_ingredient_bom(
-            request.user, label, fields)
+    try:
+        with transaction.atomic():
+            # 등록 규칙은 품목보고번호 경로와 같다 - register_ingredient_bom 한 곳에 있다.
+            bom, created, matched, score, candidates = register_ingredient_bom(
+                request.user, label, fields)
 
-        # 문서에 "무엇으로 등록했는지" 를 남긴다. 같은 사진을 두 번 읽지 않게 하고,
-        # 나중에 이 BOM 행이 어디서 왔는지 되짚을 수 있다.
-        meta = dict(doc.metadata or {})
-        meta['ingredient_bom_id'] = bom.bom_id
-        meta['ingredient_fields'] = fields
-        doc.metadata = meta
-        doc.save(update_fields=['metadata'])
+            # 문서에 "무엇으로 등록했는지" 를 남긴다. 같은 사진을 두 번 읽지 않게 하고,
+            # 나중에 이 BOM 행이 어디서 왔는지 되짚을 수 있다.
+            meta = dict(doc.metadata or {})
+            meta['ingredient_bom_id'] = bom.bom_id
+            meta['ingredient_fields'] = fields
+            doc.metadata = meta
+            doc.save(update_fields=['metadata'])
+    except IngredientQuotaExceeded as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=429)
 
     log_activity(request, 'document', 'ingredient_photo_to_bom', document_id)
     return JsonResponse({

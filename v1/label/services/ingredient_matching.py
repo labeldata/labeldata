@@ -106,6 +106,10 @@ def attributed_allergens(material_text, allergens):
     return ', '.join(dict.fromkeys(hits))
 
 
+class IngredientQuotaExceeded(Exception):
+    """원료를 새로 만들어야 하는데 등록 한도에 닿았다."""
+
+
 def get_or_create_my_ingredient(user, *, prdlst_nm, prdlst_report_no, prdlst_dcnm,
                                 **defaults):
     """
@@ -122,16 +126,33 @@ def get_or_create_my_ingredient(user, *, prdlst_nm, prdlst_report_no, prdlst_dcn
     MyIngredient 는 여러 라벨이 함께 쓰는 레코드라, 한 라벨에서 저장했다고 다른
     라벨이 보던 값이 바뀌면 안 된다. 원료 자체를 고칠 곳은 "내 원료 상세" 다.
 
+    **등록 한도는 여기서 본다.** 원료를 만드는 길이 다섯인데(라벨 저장 두 곳,
+    빠른 등록, 사진 판독 BOM, 배합 적용) 그 다섯이 전부 이 함수를 지난다.
+    각 뷰에 검사를 흩어 놓으면 한 곳이 빠지고, 실제로 빠져 있었다.
+    이미 있는 원료를 쓰는 경우에는 만드는 것이 아니므로 한도를 보지 않는다.
+
     Returns: (ingredient, created)
+    Raises: IngredientQuotaExceeded — 새로 만들어야 하는데 한도에 닿았을 때
     """
-    return MyIngredient.objects.get_or_create(
+    lookup = dict(
         user_id=user,
         prdlst_nm=prdlst_nm or '',
         prdlst_report_no=prdlst_report_no or '',
         prdlst_dcnm=prdlst_dcnm or '',
         delete_YN='N',
-        defaults=defaults,
     )
+    found = MyIngredient.objects.filter(**lookup).first()
+    if found is not None:
+        return found, False
+
+    from v1.common import quota
+
+    allowed, info = quota.check(user, 'ingredient', amount=1)
+    if not allowed:
+        raise IngredientQuotaExceeded(info.get('message')
+                                      or '원료 등록 한도에 닿았습니다.')
+
+    return MyIngredient.objects.get_or_create(**lookup, defaults=defaults)
 
 
 def match_my_ingredient(user, name, *, threshold=MATCH_THRESHOLD, pool=None):

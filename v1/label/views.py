@@ -66,7 +66,9 @@ from .services.design_request import (
     save_notes as design_save_notes,
 )
 from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
-from .services.ingredient_matching import get_or_create_my_ingredient
+from .services.ingredient_matching import (
+    IngredientQuotaExceeded, get_or_create_my_ingredient,
+)
 from .services.ingredient_display import build_display_text, build_reference_text
 from .services.label_naming import next_temp_label_name
 
@@ -1795,11 +1797,21 @@ def save_ingredients_to_label(request, label_id):
             # 관계 저장
             relation.save()
         
-        # 원재료명 업데이트 (참고사항에 "원산지 표시대상" 포함된 항목만)
+        # 원산지 표시대상 원재료를 모은다.
+        #
+        # 예전에는 `notes` 안에서 "원산지 표시대상" 이라는 낱말을 찾았는데
+        # **화면은 그 키를 보낸 적이 없다.** 그래서 이 목록이 늘 비었고
+        # `label.country_of_origin` 이 이 경로로는 한 번도 갱신되지 않았다 —
+        # 표의 '원산지 표시 검증' 열이 계산해 낸 결과가 저장에 0% 반영됐다.
+        #
+        # 이제 화면이 판정 결과(`origin_target`)를 그대로 보낸다. 문자열에서
+        # 낱말을 찾는 옛 길은 다른 호출자를 위해 남겨 둔다.
         origin_targets = []
         for ingredient_data in ingredients_data:
             notes = ingredient_data.get('notes', '')
-            if notes and '원산지 표시대상' in notes:
+            is_target = bool(ingredient_data.get('origin_target')) or (
+                notes and '원산지 표시대상' in notes)
+            if is_target:
                 display_name = ingredient_data.get('display_name') or ingredient_data.get('ingredient_name')
                 if display_name:
                     origin_targets.append(display_name)
@@ -1832,7 +1844,13 @@ def save_ingredients_to_label(request, label_id):
         
         # 메시지 제거 - JSON 응답만 반환
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
-    except Exception as e:
+    except IngredientQuotaExceeded as exc:
+        # 한도에 걸리면 **아무것도 남기지 않는다.** 이 함수는 맨 처음에 기존
+        # 연결을 전량 삭제하므로, 절반만 넣고 끝나면 원재료가 통째로 사라진
+        # 채로 남는다. 되돌리고 왜 안 됐는지 그대로 말한다.
+        transaction.set_rollback(True)
+        return JsonResponse({'success': False, 'error': str(exc)}, status=429)
+    except Exception:
         # 여기서 예외를 삼키므로 atomic 블록은 "정상 종료"로 보고 커밋해 버린다.
         # 그러면 데코레이터를 붙인 의미가 없다 — 맨 앞의 전량 삭제만 남는다.
         # 되돌리라고 명시한다.
@@ -2058,18 +2076,21 @@ def quick_register_ingredient(request):
             display_name = ingredient_name
         
         # 같은 원료가 이미 있으면 그것을 쓴다 (_get_or_create_my_ingredient 참고)
-        new_ingredient, created = _get_or_create_my_ingredient(
-            request.user,
-            prdlst_nm=ingredient_name,
-            prdlst_report_no=report_no,
-            prdlst_dcnm=food_type,
-            food_category=food_category,
-            bssh_nm=manufacturer,
-            ingredient_display_name=display_name,
-            summary_type_flag='Y',  # 기본값: 식품유형 요약
-            allergens=allergens,
-            gmo=gmo,
-        )
+        try:
+            new_ingredient, created = _get_or_create_my_ingredient(
+                request.user,
+                prdlst_nm=ingredient_name,
+                prdlst_report_no=report_no,
+                prdlst_dcnm=food_type,
+                food_category=food_category,
+                bssh_nm=manufacturer,
+                ingredient_display_name=display_name,
+                summary_type_flag='Y',  # 기본값: 식품유형 요약
+                allergens=allergens,
+                gmo=gmo,
+            )
+        except IngredientQuotaExceeded as exc:
+            return JsonResponse({'success': False, 'error': str(exc)}, status=429)
 
         return JsonResponse({
             'success': True,

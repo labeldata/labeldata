@@ -18971,3 +18971,140 @@ class 편집_중_다른_원료로_옮기면_묻는다(TestCase):
         # 각 로드마다 살아나는 지역 dirty 를 붙들고 있으면 안 된다
         self.assertNotIn('var dirty = false;', nut)
         self.assertIn('window.__ingredientDirty', nut)
+
+
+class 원료_등록_한도가_만드는_길_전부에_걸린다(TestCase):
+    """
+    원료를 새로 만드는 길이 다섯인데(라벨 저장 두 곳, 빠른 등록, 사진 판독
+    BOM, 배합 적용) 그 다섯이 한도를 안 봤다. 각 뷰에 검사를 흩어 놓으면
+    한 곳이 빠지고, 실제로 빠져 있었다.
+
+    다섯이 전부 `get_or_create_my_ingredient` 를 지나므로 **거기서 본다.**
+    """
+
+    def setUp(self):
+        from unittest.mock import patch
+
+        self.user = User.objects.create_user(username='qh', password='x')
+        self.client.force_login(self.user)
+        p = patch('v1.common.quota.limit_for', return_value=1)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _count(self):
+        from v1.label.models import MyIngredient
+
+        return MyIngredient.objects.filter(user_id=self.user, delete_YN='N').count()
+
+    def test_이미_있는_원료를_쓰는_것은_막지_않는다(self):
+        """만드는 것이 아니라 쓰는 것이다 — 한도와 무관하다."""
+        from v1.label.models import MyIngredient
+        from v1.label.services.ingredient_matching import get_or_create_my_ingredient
+
+        MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='이미있음', prdlst_report_no='',
+            prdlst_dcnm='', delete_YN='N')
+        self.assertEqual(self._count(), 1)          # 한도가 1이다
+
+        ing, created = get_or_create_my_ingredient(
+            self.user, prdlst_nm='이미있음', prdlst_report_no='', prdlst_dcnm='')
+        self.assertFalse(created)
+        self.assertEqual(self._count(), 1)
+
+    def test_한도를_넘겨_만들려_하면_막는다(self):
+        from v1.label.models import MyIngredient
+        from v1.label.services.ingredient_matching import (
+            IngredientQuotaExceeded, get_or_create_my_ingredient,
+        )
+
+        MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='첫째', prdlst_report_no='',
+            prdlst_dcnm='', delete_YN='N')
+        with self.assertRaises(IngredientQuotaExceeded):
+            get_or_create_my_ingredient(
+                self.user, prdlst_nm='둘째', prdlst_report_no='', prdlst_dcnm='')
+        self.assertEqual(self._count(), 1)
+
+    def test_빠른_등록이_429_를_준다(self):
+        from v1.label.models import MyIngredient
+
+        MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='채움', prdlst_report_no='',
+            prdlst_dcnm='', delete_YN='N')
+        r = self.client.post(
+            reverse('label:quick_register_ingredient'),
+            data=json.dumps({'ingredient_name': '새것',
+                             'food_category': 'processed',
+                             'food_type': '과자'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 429)
+        self.assertEqual(self._count(), 1)
+
+    def test_한도_안이면_빠른_등록이_된다(self):
+        r = self.client.post(
+            reverse('label:quick_register_ingredient'),
+            data=json.dumps({'ingredient_name': '새것',
+                             'food_category': 'processed',
+                             'food_type': '과자'}),
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['success'])
+
+
+class 원재료_팝업이_보내는_값이_서버가_읽는_값과_같다(TestCase):
+    """
+    · **식품유형 자리에 식품구분이 갔다.** `.food-type-select` 를 붙이는
+      함수는 호출 0회고, 대체 셀렉터가 문서 순서 첫 match 인 td5
+      `.food-category-input`(식품구분)을 집었다. 진짜 식품유형은 td6 이다.
+      그 값이 `prdlst_dcnm` 으로 박히고 get_or_create 의 키에 들어가므로
+      **중복 원료까지 쌓였다.**
+    · **원산지가 한 번도 저장되지 않았다.** 서버는 `notes` 에서 낱말을
+      찾는데 화면은 그 키를 보낸 적이 없다.
+    · 품목보고번호·제조사가 마크업에 남지 않아 늘 빈 값으로 갔다.
+    """
+
+    def _js(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'static/js/label/ingredient_popup.js'
+                ).read_text(encoding='utf-8')
+        text = re.sub(r'/\*[\s\S]*?\*/', '', text)
+        return re.sub(r'^\s*//.*$', '', text, flags=re.M)
+
+    def test_식품유형을_이름으로_찾는다(self):
+        js = self._js()
+        i = js.index('const foodType = ')
+        block = js[i:i + 300]
+        self.assertIn(".food-type-input", block)
+        self.assertNotIn('food-type-select', block)
+        self.assertNotIn('food-category-input', block)
+
+    def test_원산지_판정을_그대로_보낸다(self):
+        js = self._js()
+        i = js.index('const ingredient = {')
+        block = js[i:i + 1200]
+        self.assertIn('origin_target:', block)
+        self.assertIn('prdlst_report_no:', block)
+        self.assertIn('manufacturer:', block)
+
+    def test_판정한_줄에_표시를_남긴다(self):
+        js = self._js()
+        self.assertIn("row.dataset.originTarget = '1'", js)
+        self.assertIn('delete row.dataset.originTarget', js)
+
+    def test_행에_품목보고번호와_제조사가_남는다(self):
+        js = self._js()
+        self.assertIn('report-no-input', js)
+        self.assertIn('manufacturer-input', js)
+
+    def test_서버가_그_판정을_읽는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'label/views.py').read_text(encoding='utf-8')
+        i = text.index('origin_targets = []')
+        self.assertIn("ingredient_data.get('origin_target')", text[i:i + 900])
