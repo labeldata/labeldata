@@ -1,6 +1,7 @@
 ﻿# ==================== BOM Views (V2) ====================
 
 from django.shortcuts import render, get_object_or_404
+from decimal import InvalidOperation
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.db.models import Q
@@ -713,9 +714,23 @@ def bom_save_api(request, label_id):
             'synced_ingredient_ids': synced_ingredient_ids,
         })
 
-    except Exception as e:
+    except (InvalidOperation, ValueError, TypeError):
+        # 배합비에 숫자가 아닌 글자가 섞여 온 경우가 대부분이다. 예전에는
+        # 아래 갈래로 떨어져 `[<class 'decimal.InvalidOperation'>]` 이 그대로
+        # 화면에 떴다 — 사용자가 고칠 데를 찾을 수 없는 말이다.
+        logger.exception('[BOM 저장] 값을 읽지 못했습니다')
+        return JsonResponse({
+            'success': False,
+            'error': '배합비에 숫자가 아닌 값이 있습니다. 확인 후 다시 저장해 주세요.',
+        }, status=400)
+    except Exception:
+        # **예외 원문을 화면에 내보내지 않는다.** 파일 경로·테이블 이름·쿼리가
+        # 그대로 나가고, 사용자에게는 아무 도움이 안 된다. 원문은 로그로.
         logger.exception('[BOM 저장] 예외 발생')
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        return JsonResponse({
+            'success': False,
+            'error': '저장하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        }, status=400)
 
 
 @login_required

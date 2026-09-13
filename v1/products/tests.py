@@ -9170,7 +9170,8 @@ class 배합_저장이_실패해도_임시저장은_살아_있다(TestCase):
     · `draftSaveDisabled` 를 저장 시작에 켜기만 하고 되돌리는 곳이 없었다 —
       한 번 실패하면 그 뒤로 무엇을 고쳐도 임시저장이 안 돌아, 새로고침·
       탭 닫기에 그대로 날아갔다. 저장이 실패한 뒤야말로 임시저장이 가장
-      필요한 때다.
+      필요한 때다. (그 뒤 `= saved` 로 고쳤는데 이번에는 **성공한 쪽**이
+      영영 안 돌았다. 저장이 도는 동안만 끈다.)
     · 저장 성공 뒤 loadBOMData() 를 안 불렀다. 서버는 저장할 때마다 옛 행을
       active_yn=False 로 눕히고 새로 만드는데, 화면은 죽은 bom_id 를 계속
       들고 다음 저장에 그대로 보냈다.
@@ -9187,12 +9188,19 @@ class 배합_저장이_실패해도_임시저장은_살아_있다(TestCase):
         text = re.sub(r'/\*[\s\S]*?\*/', '', text)
         return re.sub(r'^\s*//.*$', '', text, flags=re.M)
 
-    def test_실패하면_임시저장을_되살린다(self):
+    def test_끝나면_임시저장을_되살린다(self):
+        """
+        예전에는 `draftSaveDisabled = saved` 였다. 실패한 경우는 되살아났지만
+        **성공하면 그 화면이 닫힐 때까지 영영 안 돌았다** — 저장을 한 번 하고
+        나서 고친 것은 브라우저가 죽으면 통째로 사라졌다. 성공 직후에는
+        clearDraft() 로 이미 비웠으니 되살려도 옛 초안이 살아나지 않는다.
+        """
         js = self._js()
         i = js.index('async function saveData()')
-        block = js[i:i + 6000]
+        block = js[i:i + 8000]
         self.assertIn('finally {', block)
-        self.assertIn('draftSaveDisabled = saved;', block)
+        self.assertIn('draftSaveDisabled = false;', block)
+        self.assertNotIn('draftSaveDisabled = saved;', block)
 
     def test_저장_뒤_서버에서_다시_읽는다(self):
         js = self._js()
@@ -11342,3 +11350,108 @@ class 문서함에_못_들어간_제출을_알린다(TestCase):
         # 성공/실패가 섞이면 성공만 말하지 않는다.
         self.assertIn("'imported_count': imported_count", self.link)
         self.assertIn('if skipped:', self.link)
+
+
+class 감춘_칸에_쓰면_표가_통째로_굳던_것(TestCase):
+    """
+    BOM 탭에서 세 가지가 한꺼번에 나빴다 — 저장하면 오류, 배합비 말고는
+    고쳐도 원래 값으로 돌아감, 한 번 누르면 마우스가 눌린 것처럼 선택이
+    번짐. **원인은 하나였다.**
+
+    `gridColumnProps` 는 아홉 개를 손으로 적어 둔 목록인데, 그중 일곱은
+    사용자가 감출 수 있다(원료명·배합비만 못 감춘다 — 그래서 배합비만
+    멀쩡했다). 감춘 칸에 `setDataAtRowProp` 를 부르면 Handsontable 은 그
+    이름을 열 번호로 못 바꿔 이름 문자열을 그대로 넘기고,
+    `getCellMeta(row, 'allergens')` 가 던진다.
+
+        Assertion failed: Expecting an unsigned number.
+
+    그 던짐이 값을 쓰기 **전에** 나므로 칸은 옛 값으로 다시 그려진다(원복).
+    저장은 첫 줄이 syncContextPanelToRow 라 거기서 죽는다(오류). 그리고
+    같은 던짐이 afterSelectionEnd 안에서 나면 Handsontable 의
+    `Selection.finish()` 가 `inProgress = false` 에 닿지 못해 선택이 끝나지
+    않은 채 굳는다(마우스가 눌린 것처럼).
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        self.html = (Path(settings.BASE_DIR) / 'templates/products/bom_detail.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_칸이_있을_때만_표에_쓴다(self):
+        head = self.html.index('function setRowProp(rowIndex, prop, value')
+        body = self.html[head:self.html.index('function setRowProps', head)]
+        self.assertIn('if (hasGridColumn(prop)) {', body)
+        self.assertIn('hot.setDataAtRowProp(', body)
+
+    def test_칸이_없으면_행_객체에_바로_쓴다(self):
+        # _meta 로 보내면 저장 payload 가 row.allergens 를 먼저 보므로
+        # 감춰 둔 칸의 **옛 값**이 이긴다.
+        head = self.html.index('function setRowProp(rowIndex, prop, value')
+        body = self.html[head:self.html.index('function setRowProps', head)]
+        self.assertIn('shown[prop] = value;', body)
+
+    def test_칸_유무는_표에게_묻는다(self):
+        head = self.html.index('function hasGridColumn(prop)')
+        body = self.html[head:self.html.index('}', self.html.index('return', head))]
+        self.assertIn('hot.propToCol(prop)', body)
+        self.assertIn('col >= 0', body)
+
+    def test_선택_콜백이_던져도_표가_안_굳는다(self):
+        head = self.html.index('afterSelectionEnd: function(row, col)')
+        body = self.html[head:self.html.index('afterChange:', head)]
+        self.assertIn('try {', body)
+        self.assertIn('} catch (err) {', body)
+
+    def test_열_머리를_눌러도_음수로_굳지_않는다(self):
+        head = self.html.index('afterSelectionEnd: function(row, col)')
+        body = self.html[head:self.html.index('afterChange:', head)]
+        self.assertIn('if (!Number.isInteger(row) || row < 0) {', body)
+        self.assertIn('currentRowIndex = null;', body)
+
+    def test_줄을_지우거나_옮기면_가리키던_줄을_놓는다(self):
+        for hook in ('afterRemoveRow: function()', 'afterRowMove: function()'):
+            head = self.html.index(hook)
+            body = self.html[head:self.html.index('}', self.html.index('scheduleDraftSave', head))]
+            self.assertIn('currentRowIndex = null;', body, hook)
+
+    def test_한_번_저장해도_임시저장이_계속_돈다(self):
+        # 예전에는 성공하면 true 로 두고 다시 켜지 않아, 그 뒤에 고친 것은
+        # 브라우저가 죽으면 통째로 사라졌다.
+        head = self.html.index('} finally {')
+        body = self.html[head:self.html.index('}', self.html.index('draftSaveDisabled', head))]
+        self.assertIn('draftSaveDisabled = false;', body)
+        self.assertNotIn('draftSaveDisabled = saved;', self.html)
+
+
+class 배합비에_숫자가_아닌_값(TestCase):
+    """
+    배합비 칸은 `type: 'numeric'` 이지만 `allowInvalid` 를 끄지 않아, 숫자로
+    못 읽는 글자("44.5%", "약 3")도 자료에 남는다 — 엑셀에서 붙여넣으면
+    흔하다. 그것이 서버로 가면 DecimalField 가 InvalidOperation 을 내고,
+    화면에는 `저장 실패: [<class 'decimal.InvalidOperation'>]` 이 떴다.
+    어느 줄이 문제인지 아무 말도 없이.
+    """
+
+    def setUp(self):
+        import inspect
+        from pathlib import Path
+        from django.conf import settings
+        from v1.bom import views
+        self.html = (Path(settings.BASE_DIR) / 'templates/products/bom_detail.html'
+                     ).read_text(encoding='utf-8')
+        self.view = inspect.getsource(views.bom_save_api)
+
+    def test_보내기_전에_어느_줄인지_말한다(self):
+        self.assertIn('배합비를 숫자로 고쳐 주세요', self.html)
+        self.assertIn('Number.isFinite(Number(raw))', self.html)
+        self.assertIn("badRatio.push((i + 1) + '번째 줄", self.html)
+
+    def test_서버가_예외_원문을_내보내지_않는다(self):
+        self.assertNotIn("'error': str(e)", self.view)
+        self.assertIn('배합비에 숫자가 아닌 값이 있습니다', self.view)
+        self.assertIn('저장하지 못했습니다', self.view)
+
+    def test_원문은_로그로_남긴다(self):
+        self.assertEqual(self.view.count('logger.exception('), 2)
