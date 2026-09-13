@@ -45,6 +45,11 @@
     pane.classList.add('show', 'active');
     trigger.classList.add('active');
     trigger.setAttribute('aria-selected', 'true');
+
+    /* 첫 그림을 문서함으로 만들려고 걸어 둔 임시 class 를 뗀다
+       (product_detail.html 의 pv-open-docs). Bootstrap 의 active/show 가
+       방금 제자리를 찾았으니 더 붙들고 있으면 탭을 옮겨도 안 바뀐다. */
+    document.documentElement.classList.remove('pv-open-docs');
 })();
 </script>
 

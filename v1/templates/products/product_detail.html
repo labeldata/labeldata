@@ -245,6 +245,30 @@
 
     <div class="workspace-body">
         <main class="workspace-content">
+            {% comment %}
+              **첫 그림에서부터 문서함이어야 한다.**
+
+              업로드·삭제는 location.reload() 로 끝나고, 돌아올 탭은
+              sessionStorage 에 적어 둔다. 그 값을 읽어 탭을 되돌리는 코드는
+              문서함 칸 안에 있는데 — 그 칸은 기본정보 칸 **뒤**에 있다.
+              브라우저는 거기 닿기 전에 이미 기본정보를 한 번 그린다.
+              그래서 업로드할 때마다 기본정보가 스쳐 지나갔다.
+
+              class 를 먼저 걸어 두면 기본정보는 애초에 그려지지 않는다.
+              그 class 의 규칙은 products_detail.css 에 있다 — 이 저장소는
+              마크업 뒤에 오는 style 블록을 시험으로 막는다(그래야 스타일
+              없이 한 번 그리는 일이 없다).
+              Bootstrap 의 active/show 는 문서함 칸의 스크립트가 뒤에서
+              바로잡고, 그때 이 class 를 뗀다.
+            {% endcomment %}
+            <script>
+                (function () {
+                    try {
+                        if (sessionStorage.getItem('returnToTab') !== 'docs') return;
+                    } catch (e) { return; }   // 사생활 보호 모드
+                    document.documentElement.classList.add('pv-open-docs');
+                })();
+            </script>
             <div class="tab-content">
                 <div class="tab-pane fade show active" id="tab-info">
                     <!-- Flexbox flex-nowrap 구조 (목차가 절대 아래로 안 떨어지게) -->

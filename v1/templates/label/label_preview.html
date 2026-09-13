@@ -1934,7 +1934,12 @@
             const isReadonly = new URLSearchParams(window.location.search).get('readonly') === 'true';
             
             if (!isReadonly) {
-                const inputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput', 'fontFamilySelect'];
+                /* `labelColWidthInput`(항목명 칸 mm)이 여기 빠져 있었다.
+                   그 값을 읽는 곳은 updatePreviewStyles 한 곳뿐인데 그것을
+                   다시 부르는 사람이 없어서, **칸을 몇 mm 로 바꾸든 화면이
+                   그대로였다.** 있으나 마나 한 설정이었다. */
+                const inputs = ['widthInput', 'labelColWidthInput', 'fontSizeInput',
+                                'letterSpacingInput', 'lineHeightInput', 'fontFamilySelect'];
                 inputs.forEach(id => {
                     const element = document.getElementById(id);
                     if (element) {

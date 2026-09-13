@@ -2651,15 +2651,31 @@ document.addEventListener('DOMContentLoaded', function () {
      * `0`(옳게는 "5mg 미만"), 당류 3.7g 은 `3.7`(옳게는 `4`), 나트륨 경계는
      * 140(옳게는 120)이었다. 화면에서 확인한 표와 인쇄되는 표가 달랐다.
      */
-    const NUTRIENT_KEY_BY_LABEL = {
-        '열량': 'calories', '나트륨': 'natriums', '탄수화물': 'carbohydrates',
-        '당류': 'sugars', '지방': 'fats', '트랜스지방': 'trans_fats',
-        '포화지방': 'saturated_fats', '콜레스테롤': 'cholesterols',
-        '단백질': 'proteins', '식이섬유': 'dietary_fiber',
-    };
+    /*
+     * **`const` 로 두지 않는다.**
+     *
+     * 이 표를 쓰는 nutritionText 는 함수 선언이라 통째로 끌어올려지는데,
+     * `const` 는 이름만 올라가고 값은 이 줄에 닿아야 생긴다(TDZ). 그런데
+     * 이 화면은 initNutritionData() 를 훨씬 위(1694줄)에서 부르고, 그것이
+     * updateNutritionDisplay → kcalText → nutritionText 로 내려온다.
+     *
+     *     ReferenceError: Cannot access 'NUTRIENT_KEY_BY_LABEL'
+     *                     before initialization
+     *
+     * 줄 순서를 고쳐도 되지만, 그러면 다음 사람이 블록을 옮기는 순간 같은
+     * 일이 다시 난다. 함수 선언은 순서를 타지 않으므로 아예 함수로 둔다.
+     */
+    function nutrientKeyFor(label) {
+        return {
+            '열량': 'calories', '나트륨': 'natriums', '탄수화물': 'carbohydrates',
+            '당류': 'sugars', '지방': 'fats', '트랜스지방': 'trans_fats',
+            '포화지방': 'saturated_fats', '콜레스테롤': 'cholesterols',
+            '단백질': 'proteins', '식이섬유': 'dietary_fiber',
+        }[label] || '';
+    }
 
     function nutritionText(label, value) {
-        const key = NUTRIENT_KEY_BY_LABEL[label] || '';
+        const key = nutrientKeyFor(label);
         if (typeof window.processNutritionValue === 'function') {
             return window.processNutritionValue(key, value);
         }

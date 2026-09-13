@@ -10890,3 +10890,115 @@ class 스낵바가_뜬_적이_없었다(TestCase):
         self.assertLess(self.css.index('#v2Snackbar {'),
                         self.css.index('#v2Snackbar.snack-show'),
                         '.snack-show 가 기본 규칙보다 앞서면 덮이지 않는다')
+
+
+class 미리보기_영양성분_이름표(TestCase):
+    """
+    `const NUTRIENT_KEY_BY_LABEL` 을 nutritionText 바로 위에 두었는데, 이
+    화면은 initNutritionData() 를 그보다 **1,000줄 위에서** 부른다. 함수
+    선언은 통째로 끌어올려지지만 `const` 는 이름만 올라가고 값은 그 줄에
+    닿아야 생긴다(TDZ).
+
+        ReferenceError: Cannot access 'NUTRIENT_KEY_BY_LABEL'
+                        before initialization
+          at nutritionText → getKcalValue → kcalText
+          → updateNutritionDisplay → initNutritionData
+
+    영양성분 표가 통째로 안 그려졌다. 줄 순서로 고치면 다음에 블록을 옮길
+    때 같은 일이 난다 — 순서를 타지 않는 함수 선언으로 둔다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        self.js = (Path(settings.BASE_DIR) / 'static/js/label/label_preview.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_이름표를_함수로_가진다(self):
+        self.assertIn('function nutrientKeyFor(label)', self.js)
+
+    def test_TDZ_를_타는_바인딩으로_두지_않는다(self):
+        import re
+        self.assertIsNone(
+            re.search(r'(?<![A-Za-z0-9_$])(?:const|let)\s+NUTRIENT_KEY_BY_LABEL',
+                      self.js),
+            'const/let 로 두면 initNutritionData 가 그 줄에 닿기 전에 부른다')
+
+    def test_부르는_쪽이_그_함수를_쓴다(self):
+        head = self.js.index('function nutritionText(label, value)')
+        tail = self.js.index('}', self.js.index('return String', head))
+        self.assertIn('nutrentKeyFor'.replace('nutrent', 'nutrient'),
+                      self.js[head:tail])
+
+
+class 항목명_칸_설정이_먹는다(TestCase):
+    """
+    「항목명 칸 (mm, 최소)」 를 바꿔도 화면이 그대로였다. 그 값을 읽는 곳은
+    updatePreviewStyles 한 곳뿐인데, 그 입력이 재계산 목록에 빠져 있어
+    **아무도 다시 부르지 않았다.**
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        self.html = (Path(settings.BASE_DIR) / 'templates/label/label_preview.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_재계산_목록에_들어_있다(self):
+        head = self.html.index("const inputs = [")
+        tail = self.html.index('];', head)
+        self.assertIn("'labelColWidthInput'", self.html[head:tail])
+
+    def test_그_목록이_updatePreviewStyles_를_다시_부른다(self):
+        head = self.html.index("const inputs = [")
+        tail = self.html.index('resetSettingsBtn', head)
+        self.assertIn('debounce(updatePreviewStyles', self.html[head:tail])
+
+    def test_값을_읽는_곳은_한_곳뿐이다(self):
+        # 두 곳이 되면 한쪽만 고쳐지는 날이 온다.
+        self.assertEqual(self.html.count("getElementById('labelColWidthInput')"), 1)
+
+
+class 업로드하고_돌아올_때_기본정보가_스치지_않는다(TestCase):
+    """
+    업로드·삭제는 `location.reload()` 로 끝나고 돌아올 탭은 sessionStorage 에
+    적어 둔다. 그 값을 읽어 탭을 되돌리는 코드는 **문서함 칸 안**에 있는데,
+    그 칸은 기본정보 칸보다 뒤에 있다 — 브라우저는 거기 닿기 전에 기본정보를
+    이미 한 번 그린다. 그래서 올릴 때마다 기본정보가 스쳐 지나갔다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR) / 'templates/products'
+        self.detail = (base / 'product_detail.html').read_text(encoding='utf-8')
+        self.docs = (base / '_tab_documents.html').read_text(encoding='utf-8')
+
+    def test_첫_칸보다_먼저_class_를_건다(self):
+        mark = self.detail.index("classList.add('pv-open-docs')")
+        self.assertLess(mark, self.detail.index('id="tab-info"'),
+                        '기본정보 칸보다 뒤에서 걸면 이미 한 번 그려진 뒤다')
+
+    def test_그_class_가_기본정보를_감춘다(self):
+        # 규칙은 head 에서 불리는 CSS 에 있어야 한다 — 이 저장소는 마크업
+        # 뒤에 오는 <style> 을 따로 막는다(StylesComeBeforeMarkupTests).
+        from pathlib import Path
+        from django.conf import settings
+        css = (Path(settings.BASE_DIR) / 'static/css/products_detail.css'
+               ).read_text(encoding='utf-8')
+        self.assertIn('html.pv-open-docs #tab-info { display: none !important; }', css)
+        self.assertIn('html.pv-open-docs #tab-docs { display: block !important; }', css)
+        self.assertNotIn('<style', self.detail)
+
+    def test_돌아올_탭이_문서함일_때만_건다(self):
+        head = self.detail.index("classList.add('pv-open-docs')")
+        block = self.detail[head - 400:head]
+        self.assertIn("sessionStorage.getItem('returnToTab') !== 'docs'", block)
+        self.assertIn('catch', block)   # 사생활 보호 모드에서 던진다
+
+    def test_문서함_스크립트가_그_class_를_뗀다(self):
+        # 안 떼면 탭을 옮겨도 문서함이 계속 보인다.
+        self.assertIn("classList.remove('pv-open-docs')", self.docs)
+        self.assertLess(self.docs.index("pane.classList.add('show', 'active')"),
+                        self.docs.index("classList.remove('pv-open-docs')"),
+                        'Bootstrap 상태를 바로잡기 전에 떼면 다시 스친다')

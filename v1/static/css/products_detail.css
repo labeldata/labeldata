@@ -1097,3 +1097,13 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
     box-shadow: 0 0 0 2px var(--v2-blue, #1a73e8) !important;
     transition: box-shadow 0.2s ease;
   }
+
+/* ==================== 업로드하고 돌아올 때 ====================
+   업로드·삭제는 location.reload() 로 끝나고, 돌아올 탭은 sessionStorage 에
+   적어 둔다. 그 값을 읽어 탭을 되돌리는 코드는 문서함 칸 안에 있는데 그 칸은
+   기본정보 칸보다 뒤라, 브라우저는 거기 닿기 전에 기본정보를 한 번 그린다.
+
+   product_detail.html 이 첫 칸보다 먼저 이 class 를 걸고, 문서함 칸의
+   스크립트가 Bootstrap 의 active/show 를 바로잡은 뒤 뗀다. */
+html.pv-open-docs #tab-info { display: none !important; }
+html.pv-open-docs #tab-docs { display: block !important; }
