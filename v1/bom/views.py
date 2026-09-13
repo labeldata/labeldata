@@ -494,6 +494,51 @@ def note_split_api(request):
 
 @login_required
 @require_POST
+def note_split_api_join(request):
+    """
+    가른 항목을 비고 한 줄로 도로 합친다. `note_split_api` 의 반대다.
+
+    비고에서 세운 칸은 읽기 전용이었다. 화면에는 값이 보이는데 눌러도 안
+    고쳐지니, 사용자는 그것이 막힌 것인지 고장인 것인지 알 수 없었다.
+
+    **합치는 규칙도 서버에 하나뿐이어야 한다.** 가르는 쪽(note_fields.parse)
+    과 합치는 쪽(note_fields.format)이 이미 짝으로 있는데, 화면이 제 나름대로
+    이어 붙이면 열 때와 고칠 때가 달라진다 — 같은 값이 화면마다 다르게 보이는
+    셈이다.
+
+    가르지 못한 말(leftover)은 함께 받아 뒤에 붙인다. 사람이 적은 것을 우리가
+    이해 못 했다고 지울 수는 없다.
+
+    저장하지 않는다. 값은 표가 들고 있고, 저장은 사용자가 한다.
+    """
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    rows = payload.get('rows')
+    if not isinstance(rows, list):
+        return JsonResponse({'success': False, 'error': '줄 목록이 없습니다.'},
+                            status=400)
+
+    from v1.label.services import note_fields
+
+    notes = []
+    for row in rows[:500]:
+        if not isinstance(row, dict):
+            notes.append('')
+            continue
+        fields = row.get('fields')
+        fields = fields if isinstance(fields, dict) else {}
+        # 이름·값 길이는 가르는 쪽 규칙(_PAIR 의 1..20자)과 같은 상한을 쓴다
+        clean = {str(k)[:20]: str(v) for k, v in list(fields.items())[:40]}
+        notes.append(note_fields.format(clean, str(row.get('leftover') or '')))
+
+    return JsonResponse({'success': True, 'notes': notes})
+
+
+@login_required
+@require_POST
 def bom_save_api(request, label_id):
     """BOM Save API (오너 + can_edit_label 공유 사용자만 허용)"""
     label, is_owner, can_edit = _resolve_label_and_permission(request, label_id)

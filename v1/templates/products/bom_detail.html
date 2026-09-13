@@ -641,7 +641,11 @@ body.in-iframe .bom-page-header { display: none !important; }
         hot.updateSettings({
             colHeaders: SHOWN_HEADERS.concat(NOTE_COLUMNS),
             columns: SHOWN_COLUMNS.concat(NOTE_COLUMNS.map(function (name) {
-                return { data: 'note:' + name, editor: false, readOnly: true,
+                /* 예전에는 `editor: false, readOnly: true` 였다. 값은
+                   보이는데 눌러도 안 고쳐지니, 사용자는 그것이 막힌 것인지
+                   고장인 것인지 알 수 없었다. 고치면 비고로 도로 합쳐 넣는다
+                   (joinNoteColumns). */
+                return { data: 'note:' + name, editor: 'text',
                          className: 'bom-note-cell' };
             }))
         });
@@ -663,6 +667,55 @@ body.in-iframe .bom-page-header { display: none !important; }
      * **가르는 규칙은 서버에 하나뿐이다**(note_fields). 여기서 따로 가르면
      * 화면을 열 때와 붙여넣을 때가 달라진다.
      */
+    /*
+     * 비고에서 세운 칸을 고치면 **비고 자체를 다시 짓는다.**
+     *
+     * 저장되는 것은 `notes` 한 칸뿐이다(서버에도 그 칸만 있다). 세운 칸들은
+     * 그것을 보여 주는 방법일 뿐이라, 거기서 고친 값이 비고로 돌아가지
+     * 않으면 저장하는 순간 사라진다.
+     *
+     * **합치는 규칙은 서버에 있다**(note_fields.format — parse 의 짝).
+     * 여기서 이어 붙이면 열 때와 고칠 때가 달라진다. 가르는 쪽이 이미
+     * 서버에 하나뿐인 것과 같은 이유다.
+     */
+    let noteJoinTimer = null;
+    function joinNoteColumns(rowIndex) {
+        if (!hot) return;
+        clearTimeout(noteJoinTimer);
+        noteJoinTimer = setTimeout(function () {
+            const row = rowObjectAt(rowIndex);
+            if (!row) return;
+            const fields = {};
+            Object.keys(row).forEach(function (k) {
+                if (k.indexOf('note:') !== 0) return;
+                const v = row[k];
+                if (String(v == null ? '' : v).trim() === '') return;
+                fields[k.slice(5)] = v;
+            });
+            fetch('/bom/api/notes/join/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-CSRFToken': getCsrfToken() },
+                body: JSON.stringify({
+                    rows: [{ fields: fields, leftover: row._noteLeftover || '' }]
+                })
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (body) {
+                    if (!body.success) return;
+                    /* source 를 'note-join' 으로 준다. 이 글쓰기가 다시
+                       refreshNoteColumns 를 부르면 방금 고친 칸이 서버가
+                       가른 값으로 덮여, 글자를 칠 때마다 되돌아간다. */
+                    setRowProp(rowIndex, 'notes', (body.notes || [''])[0], 'note-join');
+                })
+                .catch(function (err) {
+                    console.error('[BOM] 비고를 다시 짓지 못했습니다', err);
+                    showSnackbar('비고에 반영하지 못했습니다. 비고 칸에서 직접 고쳐 주세요.',
+                                 'error');
+                });
+        }, 300);
+    }
+
     let noteSplitTimer = null;
     function refreshNoteColumns(delay) {
         if (!hot) return;
@@ -692,6 +745,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                         Object.keys(fields).forEach(function (name) {
                             row['note:' + name] = fields[name];
                         });
+                        /* 가르지 못한 말. 칸을 고쳐 비고를 다시 지을 때
+                           이것을 뒤에 붙여야 사람이 적은 것이 안 사라진다. */
+                        row._noteLeftover = (body.leftovers || [])[i] || '';
                     });
                     applyNoteColumns(body.columns || []);
                     hot.render();
@@ -1024,11 +1080,20 @@ body.in-iframe .bom-page-header { display: none !important; }
                     if (prop === 'notes' && source !== 'remark-split') {
                         spillRemark(row, value);
                     }
+                    /* 비고에서 세운 칸을 고쳤다 — 비고를 다시 짓는다 */
+                    if (typeof prop === 'string' && prop.indexOf('note:') === 0) {
+                        joinNoteColumns(row);
+                    }
                 });
                 /* 비고가 바뀌면 거기서 세운 칸도 따라 바뀌어야 한다.
                    'remark-split' 로 들어온 것도 마찬가지다 — 알레르기를
-                   덜어 내면 비고에 남는 말이 달라진다. */
-                if (changes.some(change => change[1] === 'notes')) {
+                   덜어 내면 비고에 남는 말이 달라진다.
+
+                   **'note-join' 은 뺀다.** 그것은 방금 칸에서 고친 값을 비고에
+                   옮겨 적은 것이라, 다시 가르면 서버가 가른 값이 그 칸을 덮어
+                   글자를 칠 때마다 되돌아간다. */
+                if (changes.some(change => change[1] === 'notes')
+                        && source !== 'note-join') {
                     refreshNoteColumns();
                 }
                 if (changes.some(change => change[1] === 'mixing_ratio')) {

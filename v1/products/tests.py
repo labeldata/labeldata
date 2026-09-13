@@ -11538,3 +11538,96 @@ class 고르는_곁판은_다른_칸을_누르면_닫힌다(TestCase):
     def test_고르는_칸은_알레르기와_GMO_뿐이다(self):
         # 모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다.
         self.assertIn("PICKER_PROPS = new Set(['allergens', 'gmo'])", self.html)
+
+
+class 비고에서_세운_칸을_고칠_수_있다(TestCase):
+    """
+    비고 한 칸에 몰아 적은 것을 서버가 갈라 칸으로 세운다(note_fields.parse).
+    그 칸들이 `editor: false, readOnly: true` 였다 — 값은 보이는데 눌러도 안
+    고쳐지니, 사용자는 막힌 것인지 고장인 것인지 알 수 없었다.
+
+    합치는 함수(note_fields.format)가 가르는 함수의 짝으로 이미 있었다.
+    막을 것이 아니라 되돌려 쓰면 되는 자리였다.
+    """
+
+    @staticmethod
+    def _no_comments(src):
+        import re
+        src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+        return re.sub(r'(?m)//.*$', '', src)
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        base = Path(settings.BASE_DIR)
+        self.html = self._no_comments(
+            (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8'))
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_칸이_읽기_전용이_아니다(self):
+        head = self.html.index("data: 'note:' + name")
+        rule = self.html[head:self.html.index('}', head)]
+        self.assertNotIn('readOnly: true', rule)
+        self.assertNotIn('editor: false', rule)
+        self.assertIn("editor: 'text'", rule)
+
+    def test_고치면_비고로_도로_합친다(self):
+        self.assertIn("prop.indexOf('note:') === 0", self.html)
+        self.assertIn('joinNoteColumns(row);', self.html)
+        self.assertIn("fetch('/bom/api/notes/join/'", self.html)
+
+    def test_합치는_규칙은_서버에_있다(self):
+        # 화면이 제 나름대로 이어 붙이면 열 때와 고칠 때가 달라진다.
+        head = self.html.index('function joinNoteColumns(rowIndex)')
+        body = self.html[head:self.html.index('function refreshNoteColumns', head)]
+        # note_fields.format 이 쓰는 구분자를 화면이 들고 있으면 두 벌이 된다
+        self.assertNotIn("' · '", body)
+        self.assertIn("fetch('/bom/api/notes/join/'", body)
+
+    def test_가르지_못한_말을_잃지_않는다(self):
+        self.assertIn('row._noteLeftover = (body.leftovers || [])[i]', self.html)
+        self.assertIn("leftover: row._noteLeftover || ''", self.html)
+
+    def test_되돌아가지_않게_갈래를_막는다(self):
+        # 합쳐 넣은 것을 다시 가르면 방금 고친 칸이 덮여 글자마다 되돌아간다.
+        self.assertIn("setRowProp(rowIndex, 'notes', (body.notes || [''])[0], 'note-join')",
+                      self.html)
+        head = self.html.index("changes.some(change => change[1] === 'notes')")
+        self.assertIn("source !== 'note-join'", self.html[head:head + 120])
+
+    def test_어디서_온_칸인지_알린다(self):
+        self.assertIn('td.bom-note-cell', self.css)
+
+
+class 비고_합치기_API(TestCase):
+    """`note_split_api` 의 반대. 가른 항목을 비고 한 줄로 되돌린다."""
+
+    def setUp(self):
+        import inspect
+        from v1.bom import views
+        self.src = inspect.getsource(views.note_split_api_join)
+
+    def test_서버의_format_을_쓴다(self):
+        self.assertIn('from v1.label.services import note_fields', self.src)
+        self.assertIn('note_fields.format(', self.src)
+
+    def test_가르지_못한_말을_뒤에_붙인다(self):
+        self.assertIn("row.get('leftover')", self.src)
+
+    def test_저장하지_않는다(self):
+        self.assertNotIn('.save(', self.src)
+        self.assertNotIn('objects.create', self.src)
+
+    def test_주소가_열려_있다(self):
+        from django.urls import reverse
+        self.assertEqual(reverse('bom:note_join_api'), '/bom/api/notes/join/')
+
+    def test_가르고_합치면_제자리로_돌아온다(self):
+        # 이 짝이 맞지 않으면 칸을 고칠 때마다 비고가 조금씩 달라진다.
+        from v1.label.services import note_fields
+        for text in ('거래처: 대상㈜ · 규격: 25kg 포대 · 로트: L2409',
+                     '거래처: 대상㈜ · 25kg 포대',
+                     '그냥 메모'):
+            fields, leftover = note_fields.parse(text)
+            again = note_fields.format(fields, leftover)
+            self.assertEqual(note_fields.parse(again), (fields, leftover), text)

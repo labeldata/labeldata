@@ -21,6 +21,8 @@ urlpatterns = [
     path('sheet-template/', views.bom_sheet_template, name='bom_sheet_template'),
     # 비고를 항목으로 가른다 — 붙여넣은 그 자리에서 칸이 서게
     path('api/notes/split/', views.note_split_api, name='note_split_api'),
+    # 가른 것을 도로 합친다 — 비고에서 세운 칸을 고칠 수 있게
+    path('api/notes/join/', views.note_split_api_join, name='note_join_api'),
     path('api/ingredients/<int:ingredient_id>/', views.api_ingredient_detail, name='api_ingredient_detail'),
     path('api/palette/', views.api_palette_list, name='api_palette_list'),
     path('api/label/<int:label_id>/nutrition/', views.bom_calculate_nutrition, name='bom_calculate_nutrition'),
