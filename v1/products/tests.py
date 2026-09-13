@@ -11002,3 +11002,59 @@ class 업로드하고_돌아올_때_기본정보가_스치지_않는다(TestCase
         self.assertLess(self.docs.index("pane.classList.add('show', 'active')"),
                         self.docs.index("classList.remove('pv-open-docs')"),
                         'Bootstrap 상태를 바로잡기 전에 떼면 다시 스친다')
+
+
+class 이단_배치의_열_너비(TestCase):
+    """
+    2단 배치에서 값 칸이 **한 글자 폭**으로 찌부러지고 항목명이 옆 칸을
+    덮어 찍혔다.
+
+    까닭 둘.
+
+    1. 짝의 수를 `tbody.layout-horizontal` 이 있는지로 짐작했다. 표를 다시
+       그리는 도중에 불리면 colgroup 은 이미 4열인데 계산은 1짝치라,
+       항목명 칸이 각각 표의 45% 를 가져가 둘이 90% 를 먹었다. 값 칸 둘이
+       남은 10% 를 나누면 한 글자다.
+    2. 글자 폭을 재려고 걸어 둔 `white-space: nowrap` 을 풀지 않고 나갔다.
+       칸이 글자보다 좁으면 줄바꿈 대신 옆 칸을 덮는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings
+        self.html = (Path(settings.BASE_DIR) / 'templates/label/label_preview.html'
+                     ).read_text(encoding='utf-8')
+        head = self.html.index('function updatePreviewStyles()')
+        self.body = self.html[head:self.html.index('window.updatePreviewStyles =', head)]
+
+    def test_짝의_수를_colgroup_에서_센다(self):
+        self.assertIn("querySelectorAll('.preview-table col.pv-col-label').length",
+                      self.body)
+
+    def test_class_로_짐작하지_않는다(self):
+        self.assertNotIn("querySelector('tbody.layout-horizontal') ? 2 : 1", self.body)
+
+    def test_colgroup_을_만드는_쪽과_같은_수를_센다(self):
+        # applyColumnGroup 이 짝마다 pv-col-label 을 하나씩 넣는다.
+        from pathlib import Path
+        from django.conf import settings
+        js = (Path(settings.BASE_DIR) / 'static/js/label/label_preview.js'
+              ).read_text(encoding='utf-8')
+        head = js.index('function applyColumnGroup(tbody, layoutMode)')
+        block = js[head:head + 900]
+        self.assertIn("layoutMode === 'horizontal' ? 2 : 1", block)
+        self.assertIn("label.className = 'pv-col-label'", block)
+
+    def test_재고_나서_nowrap_을_푼다(self):
+        # 나가는 길이 둘이다(폭 0 이라 다시 부르는 길, 값을 정하고 나가는 길).
+        # **둘 다** 풀어야 한다 — 하나만 보면 다른 쪽이 빠져도 통과한다.
+        self.assertEqual(self.body.count("cell.style.whiteSpace = ''"), 2)
+        applied = self.body.index("`${finalPx.toFixed(1)}px`")
+        self.assertIn("cell.style.whiteSpace = ''", self.body[applied:])
+
+    def test_일찍_돌아가는_길에서도_푼다(self):
+        # 폭이 0 이면 다음 프레임에 다시 부르는데, 그 사이 화면에는
+        # nowrap 이 걸린 채로 남는다.
+        head = self.body.index('if (!usable) {')
+        tail = self.body.index('}', self.body.index('requestAnimationFrame', head))
+        self.assertIn("cell.style.whiteSpace = ''", self.body[head:tail])

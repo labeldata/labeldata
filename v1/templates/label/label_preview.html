@@ -962,13 +962,23 @@
 
                사용자가 정한 mm(minPx)도 그 안에 가둔다. 좁은 라벨에 24 mm
                두 칸이면 그것만으로 표가 넘친다. */
-            const pairs = previewContent.querySelector('tbody.layout-horizontal') ? 2 : 1;
+            /* 짝의 수는 **실제로 그려진 colgroup** 에서 센다.
+               tbody 의 class 로 짐작하면 표를 다시 그리는 중에 불릴 때
+               둘이 어긋난다 — 4열 표에 1짝치 폭을 계산해 항목명 칸이
+               표의 90% 를 가져가고 값 칸이 한 글자로 찌부러졌다. */
+            const pairs = Math.max(
+                1, previewContent.querySelectorAll('.preview-table col.pv-col-label').length);
             const usable = previewContent.clientWidth || 0;
             /* 표가 아직 자리를 못 잡았으면(폭 0) 정하지 않는다. 0 으로 계산하면
                capPx 가 바닥값 24px 이 되어 항목명이 통째로 잘린다. 다음 프레임에
                다시 부른다 — 그때는 폭이 잡혀 있다. */
             if (!usable) {
                 previewContent.style.removeProperty('--label-col-width');
+                // 여기로 빠져도 재던 흔적은 남기지 않는다 (아래 주석 참고)
+                headCells.forEach(cell => {
+                    cell.style.whiteSpace = '';
+                    cell.style.wordBreak = '';
+                });
                 requestAnimationFrame(function () { updatePreviewStyles(); });
                 return;
             }
@@ -979,6 +989,17 @@
             const wanted = Math.max(Math.min(minPx, capPx), Math.ceil(neededPx) + 8);
             const finalPx = Math.min(capPx, wanted);
             previewContent.style.setProperty('--label-col-width', `${finalPx.toFixed(1)}px`);
+
+            /* **재는 동안 걸어 둔 nowrap 을 푼다.**
+
+               글자 폭을 재려고 항목명 칸에 `white-space: nowrap` 을 걸었는데
+               그대로 두고 나갔다. 칸이 글자보다 좁으면 줄바꿈 대신 **옆 칸을
+               덮는다** — 2단 배치에서 "식품유형" 과 "품명" 이 겹쳐 찍혔다.
+               잰 값을 쓴 다음부터는 접히는 편이 맞다. */
+            headCells.forEach(cell => {
+                cell.style.whiteSpace = '';
+                cell.style.wordBreak = '';
+            });
 
             // 복합재질 텍스트 기본 스타일 적용
             const recyclingTextElements = previewContent.querySelectorAll('.recycling-text-line');

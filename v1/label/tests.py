@@ -7329,8 +7329,9 @@ class LabelColumnFitsTests(TestCase):
         설정값 두 칸만으로 표가 넘친다.
         """
         self.assertIn('항목명 칸 (mm, 최소)', self.html)
+        # 글자 수로 자르면 주석 한 줄에도 깨진다 — 재는 대목 전체를 본다
         head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 2400]
+        block = self.html[head:self.html.index('recycling-text-line', head)]
         self.assertIn('Math.min(minPx, capPx)', block)
         self.assertIn('cell.scrollWidth', block)
 
@@ -7893,16 +7894,19 @@ class LabelColumnMeasureTests(TestCase):
         self.html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
                      ).read_text(encoding='utf-8')
 
-    def test_좁혀_두고_잰다(self):
+    def _measure_block(self):
+        """재는 대목 전체. 글자 수로 자르면 주석 한 줄에도 깨진다."""
         head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 1400]
+        return self.html[head:self.html.index('recycling-text-line', head)]
+
+    def test_좁혀_두고_잰다(self):
+        block = self._measure_block()
         self.assertIn("setProperty('--label-col-width', '1px')", block)
         self.assertNotIn("setProperty('--label-col-width', 'auto')", block)
 
     def test_표의_절반을_넘지_않는다(self):
         """항목명이 값보다 넓어지면 읽을 수가 없다 — 그때는 접히는 편이 낫다."""
-        head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 2400]
+        block = self._measure_block()
         self.assertIn('0.45', block)
         self.assertIn('Math.min(capPx', block)
 
@@ -7910,10 +7914,16 @@ class LabelColumnMeasureTests(TestCase):
         """
         하나에 45% 를 주면 둘이 90% 를 가져가고 값 칸 둘이 남은 10% 를 나눈다.
         글자가 칸을 넘쳐 **표 틀 밖으로 흘렀다** — 폭을 줄일수록 심해진다.
+
+        짝의 수는 `tbody` 의 class 로 짐작했었다. 표를 다시 그리는 도중에
+        불리면 colgroup 은 이미 4열인데 계산은 1짝치라 **실제로 그 일이
+        났다** — 값 칸이 한 글자 폭으로 찌부러졌다. 지금은 그려진 colgroup
+        에서 센다.
         """
-        head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 2400]
-        self.assertIn("tbody.layout-horizontal') ? 2 : 1", block)
+        block = self._measure_block()
+        self.assertIn(
+            "querySelectorAll('.preview-table col.pv-col-label').length", block)
+        self.assertNotIn("tbody.layout-horizontal') ? 2 : 1", block)
         self.assertIn('0.22', block)
         self.assertIn('usable / pairs', block)
 
