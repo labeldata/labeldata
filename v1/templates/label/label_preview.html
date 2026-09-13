@@ -527,6 +527,7 @@
     방문한 브라우저는 옛 파일을 계속 썼다 — 사람이 손으로 숫자를 올려야 했다.
     같은 문서의 다른 정적 자원은 전부 STATIC_BUILD_DATE 를 쓴다.
   {% endcomment %}
+    <script src="{% static 'js/label/nutrition_display.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
   <script src="{% static 'js/label/label_preview.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
   {# 디자인 의뢰서 — 미리보기 표에서 값을 가져오므로 그 뒤에 싣는다 #}
   <script src="{% static 'js/label/design_request.js' %}?v={{ STATIC_BUILD_DATE }}"></script>

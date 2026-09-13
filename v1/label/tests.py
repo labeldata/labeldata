@@ -19108,3 +19108,140 @@ class 원재료_팝업이_보내는_값이_서버가_읽는_값과_같다(TestCa
         text = (Path(dj.BASE_DIR) / 'label/views.py').read_text(encoding='utf-8')
         i = text.index('origin_targets = []')
         self.assertIn("ingredient_data.get('origin_target')", text[i:i + 900])
+
+
+class 인쇄되는_표와_화면의_표가_같은_규칙을_쓴다(SimpleTestCase):
+    """
+    「식품등의 표시기준」의 반올림·"미만" 표기는 **성분마다 다르다.** 나트륨과
+    콜레스테롤은 같은 mg 인데 경계가 다르고(120 vs 100), 트랜스지방은 0.2 미만이
+    0 이지만 0.5 미만은 "0.5g 미만" 이라 적어야 하며, 당류만 "미만" 표기가 없다.
+
+    이 규칙이 세 곳에 있었고 **셋이 서로 달랐다.**
+
+      · nutrition_calc.py 의 display_value        (서버 · 옳음)
+      · nutrition_calculator_popup.js             (계산기 · 옳음)
+      · label_preview.js 의 roundKoreanNutrition  (미리보기 · **틀림**)
+
+    미리보기 것은 성분이 아니라 단위('kcal'/'mg'/'g')로만 갈라서 성분별 규칙을
+    애초에 표현할 수 없었다. 주석은 네 곳에서 "계산기와 완전히 동일" 이라
+    말했지만 한 줄도 같지 않았다. 결과는 **화면에서 확인한 표와 실제로
+    인쇄되는 표의 숫자가 다른 것**이고, 트랜스지방 0.3g 을 `0g` 으로 찍는 것은
+    표시기준 위반이다.
+
+    JS 두 벌은 `nutrition_display.js` 하나로 모았다. 여기서 지키는 것은
+    두 가지다 — **서버 규칙이 맞는가**, 그리고 **JS 가 그 규칙과 같은
+    경계값을 들고 있는가.**
+    """
+
+    JS = 'static/js/label/nutrition_display.js'
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return _strip_comments(
+            (Path(dj.BASE_DIR) / self.JS).read_text(encoding='utf-8'))
+
+    # ── 서버 규칙 (규정 그 자체) ─────────────────────────────────────────
+
+    def test_트랜스지방_0점3은_0이_아니다(self):
+        from v1.label.services.nutrition_calc import display_value as d
+
+        self.assertEqual(d('trans_fats', 0.1), '0')
+        self.assertEqual(d('trans_fats', 0.3), '0.5g 미만')
+        self.assertEqual(d('trans_fats', 0.6), '0.6')
+
+    def test_콜레스테롤은_나트륨과_경계가_다르다(self):
+        from v1.label.services.nutrition_calc import display_value as d
+
+        self.assertEqual(d('cholesterols', 3), '5mg 미만')
+        self.assertEqual(d('cholesterols', 105), '110')   # 100 초과 → 10 단위
+        self.assertEqual(d('natriums', 105), '105')       # 120 이하 → 5 단위
+        self.assertEqual(d('natriums', 133), '130')       # 120 초과 → 10 단위
+
+    def test_열량_5미만은_0이_아니라_미만_표기다(self):
+        from v1.label.services.nutrition_calc import display_value as d
+
+        self.assertEqual(d('calories', 3), '5kcal 미만')
+
+    def test_당류만_미만_표기가_없다(self):
+        from v1.label.services.nutrition_calc import display_value as d
+
+        self.assertEqual(d('sugars', 3.7), '4')
+        self.assertEqual(d('sugars', 0.3), '0')
+        self.assertEqual(d('carbohydrates', 0.4), '1g 미만')
+
+    # ── JS 가 같은 경계를 들고 있는가 ────────────────────────────────────
+
+    def test_공유_파일이_성분_이름으로_가른다(self):
+        js = self._js()
+        for key in ('calories', 'natriums', 'cholesterols', 'sugars',
+                    'trans_fats', 'saturated_fats', 'carbohydrates'):
+            self.assertIn(key, js)
+
+    def test_공유_파일의_경계값이_서버와_같다(self):
+        js = self._js()
+        i = js.index("case 'natriums':")
+        self.assertIn('<= 120', js[i:i + 400])
+        i = js.index("case 'cholesterols':")
+        self.assertIn('< 2', js[i:i + 400])
+        self.assertIn("'5mg 미만'", js[i:i + 400])
+        self.assertIn('<= 100', js[i:i + 400])
+        i = js.index("case 'trans_fats':")
+        self.assertIn('< 0.2', js[i:i + 300])
+        self.assertIn("'0.5g 미만'", js[i:i + 300])
+
+    def test_옛_규칙이_남아_있지_않다(self):
+        """단위로만 가르던 옛 함수와 그 140 경계가 사라졌는지 본다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        prev = _strip_comments(
+            (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js')
+            .read_text(encoding='utf-8'))
+        self.assertNotIn('roundKoreanNutrition', prev)
+        self.assertNotIn('<= 140', prev)
+
+    def test_JS_구현이_한_벌뿐이다(self):
+        """세 벌이던 것이 다시 늘지 않게 한다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        defs = []
+        for path in sorted((base / 'static' / 'js').rglob('*.js')):
+            if 'function processNutritionValue' in path.read_text(
+                    encoding='utf-8', errors='replace'):
+                defs.append(path.name)
+        self.assertEqual(defs, ['nutrition_display.js'])
+
+    def test_그_파일을_쓰는_화면이_먼저_읽는다(self):
+        """
+        공유 파일이 뒤에 실리면 그 순간 두 화면이 조용히 죽는다 —
+        `processNutritionValue` 가 정의되기 전에 불린다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR) / 'templates'
+        consumers = ('js/label/nutrition_calculator_popup.js',
+                     'js/label/label_preview.js')
+        checked = 0
+        for path in sorted(base.rglob('*.html')):
+            text = path.read_text(encoding='utf-8', errors='replace')
+            for consumer in consumers:
+                if consumer not in text:
+                    continue
+                if '<script' not in text.split(consumer)[0][-200:]:
+                    continue          # 주석에서 이름만 언급한 경우
+                checked += 1
+                self.assertIn('nutrition_display.js', text,
+                              '%s 가 공유 규칙 파일을 안 읽는다' % path.name)
+                self.assertLess(text.index('nutrition_display.js'),
+                                text.index(consumer),
+                                '%s 에서 공유 파일이 뒤에 실린다' % path.name)
+        self.assertGreaterEqual(checked, 3)

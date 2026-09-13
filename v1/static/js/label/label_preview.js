@@ -2796,26 +2796,46 @@ document.addEventListener('DOMContentLoaded', function () {
         return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
 
-    // 한국 식품표시기준 반올림 규정 적용 (계산기와 동일)
-    function roundKoreanNutrition(value, type, context) {
-        if (type === 'kcal') {
-            // 5kcal 미만은 0, 5kcal 단위로 "가장 가까운" 5의 배수로 조정
-            if (value < 5) return 0;
-            return Math.round(value / 5) * 5;
-        }
-       
+    /*
+     * 인쇄되는 표의 값은 **nutrition_display.js 의 규칙**을 쓴다.
+     *
+     * 예전에는 여기에 따로 한 벌이 있었고, 그것이 성분이 아니라 단위
+     * ('kcal'/'mg'/'g')로만 갈라서 성분별 규칙을 애초에 표현할 수 없었다.
+     * 주석은 "계산기와 동일" 이라고 적혀 있었지만 한 줄도 같지 않았다 —
+     * 트랜스지방 0.3g 을 `0` 으로 인쇄했고(표시기준 위반), 콜레스테롤 3mg 도
+     * `0`(옳게는 "5mg 미만"), 당류 3.7g 은 `3.7`(옳게는 `4`), 나트륨 경계는
+     * 140(옳게는 120)이었다. 화면에서 확인한 표와 인쇄되는 표가 달랐다.
+     */
+    const NUTRIENT_KEY_BY_LABEL = {
+        '열량': 'calories', '나트륨': 'natriums', '탄수화물': 'carbohydrates',
+        '당류': 'sugars', '지방': 'fats', '트랜스지방': 'trans_fats',
+        '포화지방': 'saturated_fats', '콜레스테롤': 'cholesterols',
+        '단백질': 'proteins', '식이섬유': 'dietary_fiber',
+    };
 
-        if (type === 'mg') {
-            if (value < 5) return 0;
-            if (value <= 140) return Math.round(value / 5) * 5;
-            return Math.round(value / 10) * 10;
+    function nutritionText(label, value) {
+        const key = NUTRIENT_KEY_BY_LABEL[label] || '';
+        if (typeof window.processNutritionValue === 'function') {
+            return window.processNutritionValue(key, value);
         }
-        if (type === 'g') {
-            if (value <  0.5) return 0;
-            if (value <= 5) return Math.round(value * 10) / 10;
-            return Math.round(value);
+        // 공유 파일을 못 읽었을 때도 표가 비지는 않게 한다
+        return String(Math.round(Number(value) * 10) / 10);
+    }
+
+    /* 1일 기준치 비율. 계산기와 같은 규약이다 — "미만" 표기일 때는 표시값이
+     * 아니라 실제 값으로 계산하고, 1% 미만은 그렇게 적는다. */
+    function nutritionPercent(shown, raw, limit) {
+        if (!limit) return '';
+        let base = raw;
+        if (typeof shown === 'string' && shown.indexOf('미만') === -1) {
+            const cleaned = parseFloat(String(shown).replace(/,/g, ''));
+            if (!isNaN(cleaned)) base = cleaned;
         }
-        return value;
+        const pct = (base / limit) * 100;
+        if (isNaN(pct)) return '';
+        if (pct < 1) return '1% 미만';
+        return String(Math.round(pct));
+    }        return value;
     }    // 계산기의 영양성분 값 계산 로직 적용 (완전 동일)
     function calculateNutrientValue(type, baseAmount, servings, val100g, displayUnit) {
         if (isNaN(val100g) || isNaN(baseAmount)) return 0;
@@ -2828,7 +2848,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             raw = val100g;
         }
-        return roundKoreanNutrition(raw, type);
+        return nutritionText(type, raw);
     }
 
     // 계산기의 열량 전용 계산 함수 (완전 동일)
@@ -2839,15 +2859,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (type === 'total') {
             raw = (val * baseAmount * servings) / 100;
             context.isKcalPerServing = true;
-            return roundKoreanNutrition(raw, 'kcal', context);
+            return nutritionText('열량', raw);
         } else if (type === 'unit') {
             raw = (val * baseAmount) / 100;
             context.isKcalPerServing = true;
-            return roundKoreanNutrition(raw, 'kcal', context);
+            return nutritionText('열량', raw);
         } else {
             raw = val;
             context.isKcalPerServing = false;
-            return roundKoreanNutrition(raw, 'kcal', context);
+            return nutritionText('열량', raw);
         }
     }    // 영양성분 표시 (계산기와 완전히 동일한 로직 적용)
     function updateNutritionDisplay(data) {
@@ -2925,31 +2945,24 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!item.value && item.value !== 0) return; // 값이 없으면 표시하지 않음
             if (item.label === '열량') return; // 열량은 별도 표시
             
-            // 계산기와 동일한 반올림 타입 결정
-            const roundType = (item.label === '나트륨' || item.label === '콜레스테롤') ? 'mg' : 'g';
-            
-            // 계산기와 완전히 동일한 값 계산 로직
-            let value = 0;
+            let raw = item.value;
             if (displayUnit === 'total') {
-                let raw = (item.value * servingSize * servingsPerPackage) / 100;
-                value = roundKoreanNutrition(raw, roundType);
+                raw = (item.value * servingSize * servingsPerPackage) / 100;
             } else if (displayUnit === 'unit') {
-                let raw = (item.value * servingSize) / 100;
-                value = roundKoreanNutrition(raw, roundType);
-            } else {
-                let raw = item.value;
-                value = roundKoreanNutrition(raw, roundType);
+                raw = (item.value * servingSize) / 100;
             }
-            
-            const indent = indentItems.includes(item.label);            const percent = item.limit ? Math.round((value / item.limit) * 100) : '';            
-            
-            // 들여쓰기 적용: 당류, 트랜스지방, 포화지방은 24px 들여쓰기 (CSS 클래스 사용)
-            // 비율은 오른쪽 정렬로 표시
-            // 계산기와 동일한 포맷: 영양성분명은 bold, 값은 별도 span, 비율도 bold
+            const shown = nutritionText(item.label, raw);
+            const percent = nutritionPercent(shown, raw, item.limit);
+            // "0.5g 미만" 처럼 단위가 이미 붙은 표기에는 단위를 또 붙이지 않는다
+            const shownWithUnit = (typeof shown === 'string' && shown.indexOf('미만') !== -1)
+                ? shown : (shown + item.unit);
+
+            const indent = indentItems.includes(item.label);
             const tdClass = indent ? tdLabelIndentClass : tdLabelClass;
-            const indentClass = indent ? ' nutrient-label-indent' : '';            rows += `<tr>
-                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${comma(value)}${item.unit}</span></td>
-                <td ${tdPercentClass}>${percent !== '' ? `<strong>${percent}</strong>%` : ''}</td>
+            const indentClass = indent ? ' nutrient-label-indent' : '';
+            rows += `<tr>
+                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${shownWithUnit}</span></td>
+                <td ${tdPercentClass}>${percent === '' ? '' : (percent.indexOf('미만') !== -1 ? percent : `<strong>${percent}</strong>%`)}</td>
             </tr>`;
         });
 

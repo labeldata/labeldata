@@ -14,125 +14,12 @@ let savedTolerance = '';
 
 // ===== 유틸리티 함수들 =====
 
-// 숫자에 쉼표 추가
-function formatNumberWithCommas(num) {
-  if (typeof num === 'string') {
-    return num;
-  }
-  if (typeof num !== 'number' || isNaN(num)) {
-    return '0';
-  }
-  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-
-// 강조표시 가능 여부 검증 함수
-function checkEmphasisEligibility(key, value) {
-  if (!value || value === 0) return null;
-  
-  const emphasis = [];
-  
-  // 무 함유 기준 확인
-  if (EMPHASIS_CRITERIA.free[key] && value < EMPHASIS_CRITERIA.free[key].threshold) {
-    emphasis.push({
-      type: 'free',
-      label: EMPHASIS_CRITERIA.free[key].label,
-      threshold: EMPHASIS_CRITERIA.free[key].threshold
-    });
-  }
-  
-  // 저 함유 기준 확인
-  if (EMPHASIS_CRITERIA.low[key] && value <= EMPHASIS_CRITERIA.low[key].threshold) {
-    emphasis.push({
-      type: 'low',
-      label: EMPHASIS_CRITERIA.low[key].label,
-      threshold: EMPHASIS_CRITERIA.low[key].threshold
-    });
-  }
-  
-  // 고 함유 기준 확인
-  if (EMPHASIS_CRITERIA.high[key] && value >= EMPHASIS_CRITERIA.high[key].threshold) {
-    emphasis.push({
-      type: 'high',
-      label: EMPHASIS_CRITERIA.high[key].label,
-      threshold: EMPHASIS_CRITERIA.high[key].threshold
-    });
-  }
-  
-  return emphasis.length > 0 ? emphasis : null;
-}
-
-// 영양성분 값 처리 함수 (식품등의 표시기준 개선)
-function processNutritionValue(key, value) {
-  if (!value || value === 0) return '0';
-  
-  const roundedValue = parseFloat(value);
-  if (isNaN(roundedValue)) return '0';
-  
-  switch (key) {
-    case 'calories':
-      if (roundedValue < 5) return '5kcal 미만';
-      return formatNumberWithCommas(Math.round(roundedValue / 5) * 5); // 5kcal 단위
-    case 'natriums':
-    case 'sodium':
-      if (roundedValue < 5) return '0';
-      if (roundedValue <= 120) {
-        // 120mg 이하: 5mg 단위 반올림 (식약처 기준)
-        return formatNumberWithCommas(Math.round(roundedValue / 5) * 5);
-      } else {
-        // 120mg 초과: 10mg 단위 반올림 (식약처 기준)
-        return formatNumberWithCommas(Math.round(roundedValue / 10) * 10);
-      }
-    case 'cholesterols':
-    case 'cholesterol':
-      if (roundedValue < 2) return '0';
-      if (roundedValue < 5) return '5mg 미만';
-      if (roundedValue <= 100) {
-        // 100mg 이하: 5mg 단위 반올림 (식약처 기준)
-        return formatNumberWithCommas(Math.round(roundedValue / 5) * 5);
-      } else {
-        // 100mg 초과: 10mg 단위 반올림 (식약처 기준)
-        return formatNumberWithCommas(Math.round(roundedValue / 10) * 10);
-      }
-    case 'calcium':
-    case 'iron':
-    case 'potassium':
-    case 'magnesium':
-    case 'phosphorus':
-    case 'zinc':
-    case 'selenium':
-      return formatNumberWithCommas(Math.round(roundedValue));
-    case 'carbohydrates':
-    case 'carbohydrate':
-    case 'proteins':
-    case 'protein':
-    case 'dietary_fiber':
-      if (roundedValue < 1) return '1g 미만';
-      return formatNumberWithCommas(Math.round(roundedValue));
-    case 'sugars': // 당류는 '미만' 표시 없음
-      if (roundedValue < 0.5) return '0';
-      return formatNumberWithCommas(Math.round(roundedValue));
-    case 'fats':
-    case 'fat':
-    case 'saturated_fats':
-    case 'saturated_fat':
-      if (roundedValue < 0.5) return '0';
-      if (roundedValue <= 5) {
-        const fatResult = Math.round(roundedValue * 10) / 10;
-        return formatNumberWithCommas(fatResult);
-      }
-      return formatNumberWithCommas(Math.round(roundedValue));
-    case 'trans_fats':
-    case 'trans_fat':
-      if (roundedValue < 0.2) return '0';
-      if (roundedValue < 0.5) return '0.5g 미만';
-      const transResult = Math.round(roundedValue * 10) / 10;
-      return formatNumberWithCommas(transResult);
-    default:
-      if (roundedValue < 0.1) return '0';
-      const defaultResult = Math.round(roundedValue * 10) / 10;
-      return formatNumberWithCommas(defaultResult);
-  }
-}
+// formatNumberWithCommas / processNutritionValue 는
+// **nutrition_display.js 한 곳에만** 둔다.
+//
+// 같은 규칙이 여기와 label_preview.js 에 따로 있었고 **둘이 서로 달랐다** —
+// 계산기에서 확인한 표와 실제로 인쇄되는 표의 숫자가 갈렸다. 이 파일을
+// 읽는 화면은 nutrition_display.js 를 먼저 읽는다.
 
 // % 영양성분 기준치 계산 함수 (가이드라인 준수)
 function calculateDailyValuePercent(key, processedValue, originalValue) {
@@ -1754,7 +1641,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 
-window.processNutritionValue = processNutritionValue;
 window.calculateDailyValuePercent = calculateDailyValuePercent;
 window.displayEmphasisValidation = displayEmphasisValidation;
 // V3 함수들도 전역으로 노출
