@@ -1367,3 +1367,64 @@ class 탈퇴하면_지금_익명이_되고_기간_뒤에_사라진다(TestCase):
         withdrawal.withdraw(self.user)
         call_command('purge_withdrawn', '--apply', stdout=StringIO())
         self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+
+
+class 오류_화면이_옛_네비바를_들고_오지_않는다(TestCase):
+    """
+    404·403 템플릿이 `base.html`(V1) 을 상속하고 있었다. V2 화면을 쓰다
+    없는 주소를 열면 그 순간 **옛 네비바가 튀어나왔다.**
+
+    드물게 보는 화면이 아니다 — 이 저장소는 403 을 404 로 위장하므로
+    (`common/views.py` 의 custom_403) **권한 없는 주소를 열 때마다** 이
+    화면이 뜬다. 남의 글 수정 주소, 남의 제품 주소가 전부 여기로 온다.
+
+    아이콘도 Font Awesome(`fas fa-…`)이었는데 V2 는 Bootstrap Icons 를
+    쓴다 — base.html 밖에서는 그 글꼴이 없어 네모만 떴다.
+
+    500 은 여기서 다루지 않는다. 그쪽은 아무것도 조회하지 않는 독립 문서로
+    두는 것이 맞다(DB 가 죽었을 때 오류 화면까지 죽은 적이 있다).
+    """
+
+    def _html(self, path, login=False):
+        if login:
+            user = User.objects.create_user(username='errpage', password='x')
+            self.client.force_login(user)
+        r = self.client.get(path)
+        return r, r.content.decode('utf-8', 'replace')
+
+    def test_없는_주소는_404_이고_V2_껍데기다(self):
+        r, html = self._html('/이런-주소는-없다/')
+        self.assertEqual(r.status_code, 404)
+        self.assertIn('v2-sidebar', html)
+
+    def test_로그인해도_마찬가지다(self):
+        r, html = self._html('/이런-주소는-없다/', login=True)
+        self.assertEqual(r.status_code, 404)
+        self.assertIn('v2-sidebar', html)
+
+    def test_옛_아이콘_글꼴을_쓰지_않는다(self):
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        for name in ('404.html', '403.html'):
+            raw = (Path(dj.BASE_DIR) / 'templates' / name).read_text(encoding='utf-8')
+            self.assertIn("{% extends 'base_v2.html' %}", raw, name)
+            # **주석을 걷고 본다.** 걷어낸 까닭을 적은 주석에 걷어낸 것의
+            # 이름이 그대로 나온다 — 그것까지 세면 거짓 실패가 난다.
+            code = re.sub(r'{% comment %}[\s\S]*?{% endcomment %}', '', raw)
+            self.assertNotIn('fas fa-', code, name)
+
+    def test_돌아갈_길이_있다(self):
+        _, html = self._html('/이런-주소는-없다/')
+        self.assertIn('홈으로', html)
+
+    def test_500_은_독립_문서로_남는다(self):
+        """DB 가 죽었을 때 오류 화면까지 죽지 않게 — 그 성질을 지킨다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates' / '500.html').read_text(encoding='utf-8')
+        self.assertNotIn('{% extends', text)

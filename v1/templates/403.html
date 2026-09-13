@@ -1,57 +1,37 @@
-{% extends 'base.html' %}
-{% load static %}
+{% extends 'base_v2.html' %}
 
-{% block title %}접근이 거부되었습니다{% endblock %}
+{% comment %}
+  404.html 과 같은 까닭으로 V2 껍데기를 쓴다. 이 화면은 **일부러 403 을
+  보여 주는 자리**(common.views.permission_denied_view)에서만 쓰인다 —
+  기본 handler403 은 404 로 위장한다.
+{% endcomment %}
+
+{% block title %}접근할 수 없습니다{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
-            <div class="text-center">
-                <!-- 403 에러 아이콘 -->
-                <div class="mb-4">
-                    <i class="fas fa-ban text-danger" style="font-size: 4rem;"></i>
-                </div>
-                
-                <!-- 403 타이틀 -->
-                <h1 class="display-4 text-danger mb-3">403</h1>
-                <h2 class="mb-3">접근이 거부되었습니다</h2>
-                
-                <!-- 설명 메시지 -->
-                <p class="text-muted mb-4">
-                    이 페이지에 접근할 권한이 없습니다.<br>
-                    로그인이 필요하거나 관리자 권한이 필요할 수 있습니다.
-                </p>
-                
-                <!-- 버튼 그룹 -->
-                <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center mb-4">
-                    <button onclick="history.back()" class="btn btn-outline-secondary error-page-btn">
-                        <i class="fas fa-arrow-left me-1"></i>
-                        돌아가기
-                    </button>
-                    <a href="/" class="btn btn-primary error-page-btn">
-                        <i class="fas fa-home me-1"></i>
-                        홈으로 이동
-                    </a>
-                    {% if not user.is_authenticated %}
-                    <a href="{% url 'user_management:login' %}" class="btn btn-success error-page-btn">
-                        <i class="fas fa-sign-in-alt me-1"></i>
-                        로그인
-                    </a>
-                    {% endif %}
-                </div>
+<div class="d-flex justify-content-center py-5">
+  <div class="text-center" style="max-width: 520px;">
 
-                <!-- 추가 도움말 -->
-                <div class="mt-4 pt-3 border-top text-muted small">
-                    <p class="mb-1">
-                        <strong>접근 권한이 필요한 경우</strong>
-                    </p>
-                    <p class="mb-0">
-                        관리자에게 권한 요청을 문의해 주세요.
-                    </p>
-                </div>
-            </div>
-        </div>
+    <div class="mb-3">
+      <i class="bi bi-lock" style="font-size: 3rem; color: var(--ez-gray-400, #9aa0a6);"></i>
     </div>
+
+    <h1 class="h4 fw-bold mb-2">접근할 수 없습니다</h1>
+    <p class="text-muted mb-4" style="font-size: 14px; line-height: 1.7;">
+      이 화면을 열 권한이 없습니다.<br>
+      공유받은 자료라면 준 사람에게 권한을 확인해 주세요.
+    </p>
+
+    <div class="d-flex flex-wrap gap-2 justify-content-center">
+      <button type="button" onclick="history.back()"
+              class="btn btn-outline-secondary v2-btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>돌아가기
+      </button>
+      <a href="{% url 'main:home_dashboard' %}" class="btn btn-primary v2-btn-sm">
+        <i class="bi bi-house me-1"></i>홈으로
+      </a>
+    </div>
+
+  </div>
 </div>
 {% endblock %}
