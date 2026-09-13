@@ -144,16 +144,44 @@
             return;
         }
         if (EMPTY_EL) EMPTY_EL.style.display = 'none';
-        LIST_EL.innerHTML = items.map(n => `
-            <div class="notif-item${n.read_yn ? '' : ' is-unread'}" data-id="${n.id}"
-                 onclick="notifRead('${n.id}', '${n.url}')">
-                <div class="notif-item__dot"
-                     style="background:${statusColor(n.status_code)};opacity:${n.read_yn ? 0.3 : 1};"></div>
-                <div class="notif-item__body">
-                    <div class="notif-item__msg">${n.message}</div>
-                    <div class="notif-item__meta">${n.label_name ? n.label_name + ' · ' : ''}${n.created_at}</div>
-                </div>
-            </div>`).join('');
+
+        /* **문자열로 짓지 않는다.**
+           예전에는 innerHTML 에 템플릿 문자열을 꽂았다. 그런데 여기 들어가는
+           message·label_name 은 **다른 사용자가 친 자유 문자열**이다 —
+           반려 사유, 바꾼 사람 이름, 제품명이 그대로 온다(products/views.py
+           의 ProductNotification.objects.create). 이름에 작은따옴표 하나만
+           들어가도 onclick 이 깨졌고, `<img src=x onerror=…>` 면 스크립트가
+           돌았다. 이 조각은 **모든 V2 화면**의 topbar 에 있다.
+           노드로 지으면 값이 값으로만 남는다. */
+        LIST_EL.textContent = '';
+        items.forEach(function (n) {
+            var item = document.createElement('div');
+            item.className = 'notif-item' + (n.read_yn ? '' : ' is-unread');
+            item.dataset.id = n.id;
+            item.addEventListener('click', function () { notifRead(n.id, n.url); });
+
+            var dot = document.createElement('div');
+            dot.className = 'notif-item__dot';
+            dot.style.background = statusColor(n.status_code);
+            dot.style.opacity = n.read_yn ? 0.3 : 1;
+
+            var body = document.createElement('div');
+            body.className = 'notif-item__body';
+
+            var msg = document.createElement('div');
+            msg.className = 'notif-item__msg';
+            msg.textContent = n.message || '';
+
+            var meta = document.createElement('div');
+            meta.className = 'notif-item__meta';
+            meta.textContent = (n.label_name ? n.label_name + ' · ' : '') + (n.created_at || '');
+
+            body.appendChild(msg);
+            body.appendChild(meta);
+            item.appendChild(dot);
+            item.appendChild(body);
+            LIST_EL.appendChild(item);
+        });
     }
 
     function fetchNotifications() {
@@ -170,15 +198,23 @@
             .catch(() => {});
     }
 
+    /* 읽음 처리가 실패해도 **가려던 곳으로는 간다.**
+       예전에는 `.then` 안에서만 이동해서, 네트워크가 끊기거나 403·500 이면
+       알림을 눌러도 아무 일이 없었다 — 읽음 표시를 못 남긴 것이지 그 화면에
+       못 갈 이유는 없다. */
     window.notifRead = function (id, url) {
+        function go() { if (url) window.location.href = url; }
         fetch(MARK_URL, {
             method: 'POST',
             headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
             body: JSON.stringify({id: id})
-        }).then(() => {
-            fetchNotifications();
-            if (url) window.location.href = url;
-        });
+        }).then(function () { fetchNotifications(); go(); })
+          .catch(function () {
+              if (typeof showSnackbar === 'function') {
+                  showSnackbar('읽음 표시를 남기지 못했습니다.', 'warning');
+              }
+              go();
+          });
     };
 
     window.notifMarkAllRead = function (e) {
@@ -187,7 +223,12 @@
             method: 'POST',
             headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
             body: JSON.stringify({})
-        }).then(() => fetchNotifications());
+        }).then(function () { fetchNotifications(); })
+          .catch(function () {
+              if (typeof showSnackbar === 'function') {
+                  showSnackbar('모두 읽음 처리를 하지 못했습니다.', 'error');
+              }
+          });
     };
 
     /* 페이지 로드 + 드롭다운 열릴 때 갱신 */

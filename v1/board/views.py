@@ -1,10 +1,23 @@
+"""
+게시판.
+
+**권한 거부는 `PermissionDenied` 를 던진다.** `HttpResponseForbidden` 을
+return 하면 그 응답이 그대로 브라우저로 간다 — Django 의 handler403 은
+**예외**가 올라올 때만 돈다. 그래서 남의 글 주소로 수정·삭제를 열면
+본문 0바이트짜리 **완전히 빈 흰 화면**이 떴다. 돌아갈 링크도 사이드바도
+없었다.
+
+이 저장소는 403 을 404 로 위장하기로 정해 두었는데(common.views.custom_403),
+게시판만 그 규약 밖에 있었다.
+"""
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.http import HttpResponseForbidden, FileResponse
+from django.core.exceptions import PermissionDenied
+from django.http import FileResponse, Http404
 from django.db.models import Case, When, Value, IntegerField, Q
 from django.contrib import messages
 from django.conf import settings
@@ -256,7 +269,7 @@ class BoardDetailView(UIModeMixin, DetailView):
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.is_hidden and request.user != self.object.author and not request.user.is_staff:
-            return HttpResponseForbidden('비밀글은 작성자 또는 관리자만 볼 수 있습니다.')
+            raise PermissionDenied('비밀글은 작성자 또는 관리자만 볼 수 있습니다.')
         
         # 작성자 본인이 아닌 경우에만 조회수 증가
         if request.user != self.object.author:
@@ -334,13 +347,13 @@ class BoardUpdateView(UIModeMixin, LoginRequiredMixin, UpdateView):
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.author != request.user and not request.user.is_staff:
-            return HttpResponseForbidden()
+            raise PermissionDenied('이 글을 고치거나 지울 권한이 없습니다.')
         return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.author != request.user and not request.user.is_staff:
-            return HttpResponseForbidden()
+            raise PermissionDenied('이 글을 고치거나 지울 권한이 없습니다.')
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
@@ -406,13 +419,13 @@ class BoardDeleteView(UIModeMixin, LoginRequiredMixin, DeleteView):
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.author != request.user and not request.user.is_staff:
-            return HttpResponseForbidden()
+            raise PermissionDenied('이 글을 고치거나 지울 권한이 없습니다.')
         return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
         if self.object.author != request.user and not request.user.is_staff:
-            return HttpResponseForbidden()
+            raise PermissionDenied('이 글을 고치거나 지울 권한이 없습니다.')
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
@@ -445,7 +458,7 @@ def edit_comment(request, pk):
     
     # 관리자만 댓글 수정 가능
     if not request.user.is_staff:
-        return HttpResponseForbidden('답변은 관리자만 수정할 수 있습니다.')
+        raise PermissionDenied('답변은 관리자만 수정할 수 있습니다.')
     
     if request.method == 'POST':
         content = request.POST.get('content', '').strip()
@@ -465,7 +478,7 @@ def delete_comment(request, pk):
     
     # 관리자만 댓글 삭제 가능
     if not request.user.is_staff:
-        return HttpResponseForbidden('답변은 관리자만 삭제할 수 있습니다.')
+        raise PermissionDenied('답변은 관리자만 삭제할 수 있습니다.')
     
     board_pk = comment.board.pk
     comment.delete()
@@ -477,11 +490,11 @@ def download_file(request, pk):
     
     # 첨부파일이 없는 경우
     if not board.attachment:
-        return HttpResponseForbidden('첨부파일이 없습니다.')
+        raise Http404('첨부파일이 없습니다.')
     
     # 비밀글인 경우 권한 확인
     if board.is_hidden and request.user != board.author and not request.user.is_staff:
-        return HttpResponseForbidden('비밀글의 첨부파일은 작성자 또는 관리자만 다운로드할 수 있습니다.')
+        raise PermissionDenied('비밀글의 첨부파일은 작성자 또는 관리자만 다운로드할 수 있습니다.')
     
     try:
         # 파일 경로 가져오기
@@ -501,4 +514,4 @@ def download_file(request, pk):
         response['Content-Disposition'] = f'attachment; filename*=UTF-8\'\'{safe_name}'
         return response
     except FileNotFoundError:
-        return HttpResponseForbidden('파일을 찾을 수 없습니다.')
+        raise Http404('파일을 찾을 수 없습니다.')

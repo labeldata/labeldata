@@ -157,7 +157,32 @@ def _check_editor_image(request, path) -> bool:
 
 
 def _allow_authenticated(request, path) -> bool:
-    """로그인 사용자면 허용 (게시판 첨부·프로필 이미지 등 준공개 자원)"""
+    """로그인 사용자면 허용 (프로필 이미지 등 준공개 자원)"""
+    return request.user.is_authenticated
+
+
+def _check_board_file(request, path) -> bool:
+    """
+    게시판 첨부·이미지. **비밀글이면 작성자와 관리자만.**
+
+    게시판 뷰(board/views.py 의 download_file)는 `is_hidden` 을 검사하는데
+    미디어 쪽은 `_allow_authenticated` 였다 — 문 하나는 잠그고 다른 문은
+    열어 둔 셈이다. 게다가 화면이 스스로 그 우회로를 그려 준다:
+    board/detail.html 의 <img src="{{ object.image.url }}"> 와
+    board/form.html 의 첨부 링크가 원본 /media/ 주소를 쓴다.
+    """
+    from v1.board.models import Board
+
+    posts = Board.objects.filter(Q(attachment=path) | Q(image=path))
+    if not posts.exists():
+        return False
+    # 한 파일이 여러 글에 붙는 일은 없지만, 있어도 **모두** 열려야 열어 준다
+    for post in posts:
+        if post.is_hidden:
+            if not request.user.is_authenticated:
+                return False
+            if post.author_id != request.user.id and not request.user.is_staff:
+                return False
     return request.user.is_authenticated
 
 
@@ -168,8 +193,8 @@ ACCESS_RULES = (
     ('doc_requests/',         _check_doc_request_attachment),
     ('company_documents/',    _check_company_document),
     ('label_editor/',         _check_editor_image),
-    ('board_files/',          _allow_authenticated),
-    ('board_images/',         _allow_authenticated),
+    ('board_files/',          _check_board_file),
+    ('board_images/',         _check_board_file),
     ('profiles/',             _allow_authenticated),
     ('label_attachments/',    _allow_authenticated),
 )
