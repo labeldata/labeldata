@@ -20056,3 +20056,47 @@ class ValidationEditTargetTests(TestCase):
         # 아무 데도 안 보내면 누른 사람에게는 단추가 고장 난 것으로 보인다.
         self.assertIn('#tab-info', block)
         self.assertIn('console.warn', block)
+
+
+class VerifyTabVisibilityTests(TestCase):
+    """
+    검증 탭이 보이는가.
+
+    설정 탭 넷과 같은 회색 글씨로 두었더니 "탭이 하나 늘었나" 정도로만
+    보였다 — 이 화면에서 **가장 많이 눌러야 하는 것이 가장 안 보이는**
+    셈이었다. 검증은 설정이 아니라 일이다.
+    """
+
+    @classmethod
+    def _read(cls, rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_설정_탭과_모양이_다르다(self):
+        # 색으로만 가르면 "지금 열려 있는 탭"(역시 파란색)과 헷갈린다.
+        html = self._read('templates/label/label_preview.html')
+        self.assertIn('preview-tab preview-tab--verify', html)
+
+        css = self._read('static/css/label_preview.css')
+        at = css.index('.preview-tab--verify {')
+        block = css[at:at + 400]
+        self.assertIn('border-radius: 999px', block)   # 알약형 — 밑줄형이 아니다
+        self.assertIn('font-weight: 700', block)
+
+    def test_재검토_수가_탭에_남는다(self):
+        # 표 설정으로 옮기면 결과는 눈앞에서 사라진다. 고칠 것이 남았다는
+        # 사실까지 사라지면 안 된다.
+        html = self._read('templates/label/label_preview.html')
+        self.assertIn('id="verifyTabBadge"', html)
+
+        js = self._read('static/js/label/label_preview.js')
+        at = js.index('function renderValidationPane')
+        block = js[at:at + 2600]
+        self.assertIn('verifyTabBadge', block)
+        # 권고는 세지 않는다 — 확정을 막는 것만 숫자로 말한다.
+        self.assertIn('!c.ok && !c.advisory', block)

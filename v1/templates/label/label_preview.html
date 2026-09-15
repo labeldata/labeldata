@@ -150,8 +150,19 @@
           그때는 「표 설정」 이 첫 탭이다.
         {% endcomment %}
         {% if request.GET.in_tab %}
-        <button class="preview-tab active" data-tab="verify">
+        {% comment %}
+          **검증은 설정이 아니라 「일」 이다.** 나머지 넷과 같은 회색 글씨로
+          두었더니 "탭이 하나 늘었나" 정도로 보였다 — 이 화면에서 가장 많이
+          눌러야 하는 것인데 가장 안 보였다.
+
+          그래서 모양을 가른다. 넷은 밑줄형이고 이것만 알약형이다. 그리고
+          검증을 돌린 뒤 다른 탭으로 옮겨도 **재검토 수가 탭에 남는다** —
+          고칠 것이 남아 있다는 사실이 화면을 옮겨도 따라다녀야 한다.
+        {% endcomment %}
+        <button class="preview-tab preview-tab--verify active" data-tab="verify"
+                title="표시기준에 어긋나는 곳을 찾습니다">
           검증
+          <span class="preview-tab-badge" id="verifyTabBadge" hidden></span>
         </button>
         {% endif %}
         <button class="preview-tab{% if not request.GET.in_tab %} active{% endif %}" data-tab="table-settings">

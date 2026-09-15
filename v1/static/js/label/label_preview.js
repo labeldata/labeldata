@@ -3297,6 +3297,17 @@ function renderValidationPane(pane, result, useAi, categories, restored) {
        단추를 누른 순간이 아니라 **결과가 왔을 때** 켠다. */
     const tab = document.getElementById('ltVTab1');
     if (tab) tab.classList.add('is-done');
+
+    /* 재검토 수를 **탭 머리에** 단다. 검증을 돌린 뒤 표 설정으로 옮기면
+       결과가 눈앞에서 사라지는데, 고칠 것이 남았다는 사실까지 사라지면
+       안 된다. 권고는 세지 않는다 — 확정을 막는 것만 숫자로 말한다. */
+    const tabBadge = document.getElementById('verifyTabBadge');
+    if (tabBadge) {
+        const blocking = categories.filter(c => !c.ok && !c.advisory).length;
+        tabBadge.textContent = blocking ? String(blocking) : '';
+        tabBadge.title = blocking ? ('재검토 ' + blocking + '건') : '';
+        tabBadge.hidden = !blocking;
+    }
     const meta = document.getElementById('ltFirstMeta');
     if (meta) {
         const problems = categories.filter(c => !c.ok);
