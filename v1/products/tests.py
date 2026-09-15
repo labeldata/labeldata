@@ -11631,3 +11631,229 @@ class 비고_합치기_API(TestCase):
             fields, leftover = note_fields.parse(text)
             again = note_fields.format(fields, leftover)
             self.assertEqual(note_fields.parse(again), (fields, leftover), text)
+
+
+class DocumentExpiryAlertTests(TestCase):
+    """
+    문서 유효기간 알림 (`alert_expiring_documents`).
+
+    문서 타입마다 "30일 전에 알림" 을 적어 두는 칸이 있고 화면도 그렇게
+    보여 주는데, **보내는 쪽이 없었다.** 창을 판정하는 `needs_alert()` 는
+    호출자가 0이었다. 여기서 잠그는 것은 두 가지다.
+
+      - 말하기로 한 날에는 말한다.
+      - **그 밖의 날에는 말하지 않는다.** 창이 30일이라고 30번 보내면
+        사람은 그 메일을 읽지 않는 법을 익히고, 정작 중요한 날 못 읽는다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(
+            username='expiryalert', password='x', email='owner@example.com')
+        self.label = MyLabel.objects.create(user_id=self.user,
+                                            my_label_name='초코쿠키')
+        self.doc_type = DocumentType.objects.create(
+            type_code='TEST_QUALITY', type_name='자가품질검사성적서',
+            requires_expiry=True, expiry_alert_days=30)
+
+    def _doc(self, days_left, doc_type=None, label=None):
+        from datetime import timedelta
+
+        from v1.products.models import ProductDocument
+
+        return ProductDocument.objects.create(
+            label=label or self.label,
+            document_type=doc_type or self.doc_type,
+            file='v2/product_documents/spec.pdf',
+            original_filename='성적서.pdf',
+            expiry_date=timezone.localdate() + timedelta(days=days_left),
+        )
+
+    def _run(self, send=True):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        args = ['alert_expiring_documents']
+        if send:
+            args.append('--send')
+        call_command(*args, stdout=out)
+        return out.getvalue()
+
+    def _counts(self):
+        from django.core import mail
+
+        from v1.products.models import ProductNotification
+
+        return ProductNotification.objects.count(), len(mail.outbox)
+
+    def test_설정한_날에_알린다(self):
+        self._doc(30)
+        self._run()
+        self.assertEqual(self._counts(), (1, 1))
+
+    def test_창_안이어도_말할_날이_아니면_보내지_않는다(self):
+        # 30일 창의 20일째. `needs_alert()` 는 True 지만 오늘은 말할 날이 아니다.
+        self._doc(20)
+        self._run()
+        self.assertEqual(self._counts(), (0, 0))
+
+    def test_창_밖이면_보지도_않는다(self):
+        self._doc(45)
+        self._run()
+        self.assertEqual(self._counts(), (0, 0))
+
+    def test_같은_날_두_번_돌아도_한_번만_간다(self):
+        # 예약이 하루 두 번 걸려 있어도 사람은 한 번만 받는다.
+        self._doc(7)
+        self._run()
+        self._run()
+        self.assertEqual(self._counts(), (1, 1))
+
+    def test_문서_두_건이면_메일은_한_통이다(self):
+        from django.core import mail
+
+        self._doc(7)
+        self._doc(7, doc_type=self.doc_type)
+        self._run()
+        self.assertEqual(self._counts(), (1, 1))
+        self.assertIn('2건', mail.outbox[0].subject + mail.outbox[0].body)
+
+    def test_미리보기는_아무것도_만들지_않는다(self):
+        self._doc(30)
+        out = self._run(send=False)
+        self.assertIn('미리보기', out)
+        self.assertEqual(self._counts(), (0, 0))
+
+    def test_지운_제품은_빼고_본다(self):
+        self._doc(30)
+        MyLabel.objects.filter(pk=self.label.pk).update(delete_YN='Y')
+        self._run()
+        self.assertEqual(self._counts(), (0, 0))
+
+    def test_이미_만료된_것은_이_커맨드가_다루지_않는다(self):
+        # 만료된 문서는 대시보드의 「N건 만료됨」 칩이 맡는다. 알림은
+        # 만료 전에 하는 말이고, 지난 것을 매일 다시 말하지 않는다.
+        self._doc(-3)
+        self._run()
+        self.assertEqual(self._counts(), (0, 0))
+
+    def test_알림_설정이_짧으면_그_아래만_쓴다(self):
+        from v1.products.management.commands.alert_expiring_documents import (
+            speak_days,
+        )
+
+        self.assertEqual(speak_days(30), [0, 1, 3, 7, 30])
+        self.assertEqual(speak_days(3), [0, 1, 3])
+        self.assertEqual(speak_days(0), [0])
+
+
+class ExpiringDocumentChipTests(TestCase):
+    """
+    만료 문서로 가는 길.
+
+    만료일이 지나는 순간 그 문서는 세 화면에서 동시에 사라졌다(셋 다
+    `expiry_date__gte` 로 거른다). 볼 수 있는 화면은 `expired_documents`
+    하나인데 어디에서도 링크되지 않았다. 그리고 탐색기의 「만료 임박」 은
+    목록을 `[:5]` 로 잘라 놓고 그 길이를 숫자로 보여 주어, 홈 대시보드와
+    다른 숫자를 말했다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(username='expirychip', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user,
+                                            my_label_name='만두')
+        self.doc_type = DocumentType.objects.create(
+            type_code='CERT_ORIGIN', type_name='원산지증명서',
+            requires_expiry=True, expiry_alert_days=30)
+
+    def _doc(self, days_left):
+        from datetime import timedelta
+
+        from v1.products.models import ProductDocument
+
+        return ProductDocument.objects.create(
+            label=self.label, document_type=self.doc_type,
+            file='v2/product_documents/origin.pdf',
+            original_filename='원산지.pdf',
+            expiry_date=timezone.localdate() + timedelta(days=days_left),
+        )
+
+    def test_대시보드가_만료된_문서를_세고_입구를_준다(self):
+        self._doc(-2)
+        res = self.client.get(reverse('main:home_dashboard'))
+        self.assertEqual(res.context['expired_count'], 1)
+        self.assertContains(res, reverse('products:expired_documents'))
+
+    def test_만료_임박_칩이_문서_목록으로_간다(self):
+        # 문서를 세어 놓고 제품 목록으로 보내면 칩의 숫자와 다음 화면의
+        # 줄 수가 달라진다.
+        self._doc(10)
+        res = self.client.get(reverse('main:home_dashboard'))
+        self.assertEqual(res.context['expiring_count'], 1)
+        self.assertContains(res, reverse('products:expiring_documents'))
+
+    def test_탐색기의_만료_임박이_다섯에서_멈추지_않는다(self):
+        for i in range(6):
+            self._doc(i + 1)
+        res = self.client.get(reverse('products:product_explorer'))
+        self.assertEqual(len(res.context['expiring_documents']), 6)
+
+
+class DocumentExpiryTimezoneTests(TestCase):
+    """
+    만료 날짜와 시간대.
+
+    예약 작업은 **UTC 시각**으로 돌고 사이트는 `Asia/Seoul` 이다. 둘을
+    섞으면 자정부터 오전 9시 사이에만 틀리는, 눈으로는 거의 안 잡히는
+    어긋남이 생긴다. 앱에서 이미 한 번 겪었다(`aa2abca`).
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(username='expirytz', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='국')
+        self.doc_type = DocumentType.objects.create(
+            type_code='CERT_HACCP', type_name='HACCP인증서',
+            requires_expiry=True, expiry_alert_days=30)
+
+    def test_남은_일수는_한국_날짜로_센다(self):
+        # 한국은 9월 16일 아침 8시 30분, UTC 는 아직 9월 15일이다.
+        # UTC 로 세면 "1일 남음", 한국 날짜로 세면 "오늘까지".
+        from datetime import date, datetime, timezone as dt_timezone
+        from unittest.mock import patch
+
+        from v1.products.models import ProductDocument
+
+        doc = ProductDocument.objects.create(
+            label=self.label, document_type=self.doc_type,
+            file='v2/product_documents/haccp.pdf',
+            original_filename='haccp.pdf',
+            expiry_date=date(2026, 9, 16),
+        )
+        fixed = datetime(2026, 9, 15, 23, 30, tzinfo=dt_timezone.utc)
+        with patch('django.utils.timezone.now', return_value=fixed):
+            self.assertEqual(doc.days_until_expiry(), 0)
+
+    def test_오늘_보냈나를_DB_시간대_변환에_기대지_않는다(self):
+        # `created_at__date=today` 로 물으면 MySQL 에 시간대 표가 없을 때
+        # CONVERT_TZ 가 NULL 을 돌려주고, 중복 방지가 조용히 풀린다.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from django.utils import timezone as dj_tz
+
+        from v1.products.management.commands.alert_expiring_documents import (
+            sent_today,
+        )
+
+        with CaptureQueriesContext(connection) as captured:
+            sent_today(self.label.pk, self.user, dj_tz.localdate())
+        sql = ' '.join(q['sql'] for q in captured.captured_queries)
+        self.assertNotIn('CONVERT_TZ', sql)
+        self.assertNotIn('datetime_cast_date', sql)

@@ -1,0 +1,23 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+<p style="font-size:18px;font-weight:700;color:#1e293b;margin:0 0 6px;line-height:1.45;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">문서 {{ documents|length }}건의 유효기간이 끝나갑니다</p>
+<p style="font-size:14px;color:#64748b;margin:0 0 24px;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ product_name }} 의 문서입니다. 갱신본을 올려 두면 이 안내는 멈춥니다.</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin:0 0 24px;border-collapse:collapse;">
+  <tr><td style="padding:18px 20px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:14px;">
+      {% for doc in documents %}
+      <tr>
+        <td style="padding:4px 0;vertical-align:top;color:#64748b;width:150px;font-weight:500;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ doc.type_name }}</td>
+        <td style="padding:4px 0;vertical-align:top;{% if doc.days_left == 0 %}color:#b91c1c;{% else %}color:#1e293b;{% endif %}font-weight:600;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ doc.expiry_date|date:"Y년 m월 d일" }} — {{ doc.when }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </td></tr>
+</table>
+
+<div style="text-align:center;margin:0 0 30px;">
+  <a href="{{ detail_url }}" style="display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;padding:13px 32px;border-radius:6px;font-size:15px;font-weight:700;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">문서함 열기</a>
+</div>
+<p style="font-size:13px;color:#64748b;margin:0 0 8px;line-height:1.6;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">며칠 전에 알릴지는 문서 타입마다 「알림 설정」 에서 정합니다. 만료가 가까워질수록 다시 알려 드리고, 그 사이에는 보내지 않습니다.</p>
+{% endblock %}

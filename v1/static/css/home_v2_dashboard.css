@@ -489,6 +489,15 @@ a.hero-app-badge:hover {
 }
 .dash-alert-chip:hover { background: #f4c7c3; color: var(--ez-danger, #c5221f); text-decoration: none; }
 
+/* 만료된 것은 임박한 것보다 나쁘다. 칩 둘이 나란히 서므로 **색으로만
+   가르지 않는다** — 아이콘과 글자가 이미 다르고, 여기서 채움을 더한다. */
+.dash-alert-chip--expired {
+    background: var(--ez-danger, #c5221f);
+    border-color: var(--ez-danger, #c5221f);
+    color: #ffffff;
+}
+.dash-alert-chip--expired:hover { background: #a01b16; border-color: #a01b16; color: #ffffff; }
+
 .dash-notif-chip {
     display: inline-flex;
     align-items: center;

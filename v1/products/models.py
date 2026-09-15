@@ -480,10 +480,17 @@ class ProductDocument(models.Model):
         return self.expiry_date < timezone.now().date()
     
     def days_until_expiry(self):
-        """만료까지 남은 일수"""
+        """
+        만료까지 남은 일수.
+
+        `timezone.now().date()` 는 **UTC 날짜**다(USE_TZ=True). 한국은 아홉
+        시간 앞서 있으므로 자정부터 오전 9시 사이에는 UTC 가 아직 어제여서,
+        화면이 남은 날을 하루 더 많게 말했다. 예약 작업도 UTC 시각으로 돌아
+        그 시간대에 걸린다. 날짜는 한 곳에서 읽는다 — `localdate()`.
+        """
         if not self.expiry_date:
             return None
-        delta = self.expiry_date - timezone.now().date()
+        delta = self.expiry_date - timezone.localdate()
         return delta.days
     
     def days_since_expiry(self):

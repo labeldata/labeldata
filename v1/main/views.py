@@ -341,6 +341,7 @@ def home_dashboard(request):
             'recent_labels': [],
             'unread_notif_count': 0,
             'expiring_count': 0,
+            'expired_count': 0,
             'mobile_app_name': MOBILE_APP_NAME,
             'mobile_app_play_url': MOBILE_APP_PLAY_URL,
         }
@@ -427,6 +428,23 @@ def home_dashboard(request):
     except Exception:
         expiring_count = 0
 
+    # ── 이미 만료된 문서 (칩으로만 닿는다) ──────────────────────────
+    #
+    # 만료일이 지나는 순간 이 문서는 **세 화면에서 동시에 사라진다** —
+    # 위의 만료 임박 수, 탐색기 카드, 만료 임박 목록. 셋 다 `expiry_date__gte`
+    # 로 거른다. 그래서 만료된 문서를 볼 길이 `expired_documents` 하나인데
+    # 그 화면은 어디에서도 링크되지 않았다. 이 칩이 그 유일한 입구다.
+    expired_count = 0
+    try:
+        expired_count = ProductDocument.objects.filter(
+            label__user_id=user,
+            active_yn=True,
+            expiry_date__isnull=False,
+            expiry_date__lt=now.date(),
+        ).count()
+    except Exception:
+        expired_count = 0
+
     context = {
         'is_guest': False,
         'my_count': my_count,
@@ -439,6 +457,7 @@ def home_dashboard(request):
         'recent_labels': recent_labels,
         'unread_notif_count': unread_notif_count,
         'expiring_count': expiring_count,
+        'expired_count': expired_count,
         'mobile_app_name': MOBILE_APP_NAME,
         'mobile_app_play_url': MOBILE_APP_PLAY_URL,
     }

@@ -326,10 +326,22 @@
             <div class="dash-greeting">안녕하세요, {{ request.user.username }}님 👋</div>
             <div class="dash-hero-meta">
                 <span class="dash-sub">오늘도 간편한 표시사항 연구소와 함께 제품 라벨 관리를 시작해보세요.</span>
+                {% comment %}
+                  이 칩은 **문서 수**를 세어 놓고 **제품 목록**으로 보냈다.
+                  숫자와 도착지가 어긋나 있었다 — 문서 8건이 제품 3개에
+                  걸려 있으면 "8건" 을 누른 사람이 3줄을 본다. 문서를 세었으면
+                  문서 목록으로 보낸다.
+                {% endcomment %}
                 {% if expiring_count > 0 %}
-                <a href="{% url 'products:product_explorer' %}?filter=MINE&amp;expiring=1" class="dash-alert-chip">
+                <a href="{% url 'products:expiring_documents' %}" class="dash-alert-chip">
                     <i class="bi bi-exclamation-triangle-fill"></i>
                     {{ expiring_count }}건 만료 임박 →
+                </a>
+                {% endif %}
+                {% if expired_count > 0 %}
+                <a href="{% url 'products:expired_documents' %}" class="dash-alert-chip dash-alert-chip--expired">
+                    <i class="bi bi-x-octagon-fill"></i>
+                    {{ expired_count }}건 만료됨 →
                 </a>
                 {% endif %}
                 {% if unread_notif_count > 0 %}

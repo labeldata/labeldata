@@ -503,7 +503,14 @@ def product_explorer(request, folder_id=None):
         receiver=user
     ).select_related('share__label', 'share__created_by').order_by('-received_datetime')[:5]
 
-    # 만료 예정 문서 요약 (30일 이내)
+    # 만료 예정 문서 (30일 이내)
+    #
+    # **자르지 않는다.** 화면이 이 목록을 두 군데에서 쓴다 —
+    # `product_explorer.html:57` 의 「만료 임박」 숫자(`|length`)와 `:239` 의
+    # `data-has-expiring`(누르면 거르는 표시)이다. 예전에 `[:5]` 로 잘라 두어
+    # 문서가 여덟 건이어도 카드는 5라고 말했고(홈 대시보드는 8이라고 말한다),
+    # 거르기를 눌러도 다섯 제품만 남았다. 같은 이름이 두 화면에서 다른
+    # 숫자를 말하면 둘 다 못 믿게 된다.
     today = timezone.now().date()
     alert_date = today + timedelta(days=30)
     expiring_documents = ProductDocument.objects.filter(
@@ -512,7 +519,7 @@ def product_explorer(request, folder_id=None):
         expiry_date__isnull=False,
         expiry_date__gte=today,
         expiry_date__lte=alert_date
-    ).select_related('label', 'document_type').order_by('expiry_date')[:5]
+    ).select_related('label', 'document_type').order_by('expiry_date')
     
     # 승인 대기 및 검토 필요 통계
     approval_pending_count = ProductMetadata.objects.filter(
