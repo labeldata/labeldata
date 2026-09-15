@@ -1123,6 +1123,22 @@ tbody.layout-vertical tr td {
 .vr-jump:hover > td { background: var(--ez-gray-100, #f1f3f4); }
 
 .pv-exporting .pv-summary { display: none !important; }
+
+/* ── 화면에서만 접어 두는 영양정보 표 ──────────────────────────────────
+ *
+ * `pv-exporting` 이 붙어 있는 동안에는 이 규칙이 **안 걸린다.** 그래서
+ * 인쇄 경로가 보는 DOM 은 지금과 똑같다 — PDF 는 찍기 직전 그 클래스를
+ * 붙였다가 끝나면 뗀다.
+ *
+ * **인라인 style 로 감추면 안 된다.** 워드 저장이 넣을지 말지를
+ * `box.style.display !== 'none'` 으로 정하기 때문에(`labelRowData`),
+ * 인라인으로 감추면 워드에서도 사라진다. `!important` 를 붙인 까닭은
+ * 반대로, 영양성분이 있을 때 JS 가 인라인 `display:block` 을 넣어 두기
+ * 때문이다 — 스타일시트가 그것을 이겨야 화면에서 접힌다.
+ * ─────────────────────────────────────────────────────────────────── */
+#previewContent.pv-hide-nutrition:not(.pv-exporting) #nutritionPreview {
+    display: none !important;
+}
 .pv-exporting .pv-row-issue > th,
 .pv-exporting .pv-row-issue > td { background: transparent !important; box-shadow: none !important; }
 

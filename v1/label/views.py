@@ -65,6 +65,7 @@ from .services.design_request import (
     notes_for as design_notes_for,
     save_notes as design_save_notes,
 )
+from .services.preview_prefs import hide_nutrition as preview_hide_nutrition_pref
 from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
 from .services.ingredient_matching import (
     IngredientQuotaExceeded, get_or_create_my_ingredient,
@@ -2863,6 +2864,10 @@ def preview_popup(request):
             # (settings.SHOW_AI_VALIDATION 주석 참고).
             'show_ai_validation': getattr(settings, 'SHOW_AI_VALIDATION', False),
             'is_owner': is_owner,          # 설정 저장 버튼 표시 여부 결정
+            # 화면에서 영양정보 표를 접어 두었나. **계정에 붙는다**(제품이
+            # 아니다) — 인쇄물을 바꾸지 않는 화면 취향이기 때문이다.
+            # 처음 그릴 때부터 붙여야 표가 보였다 사라지는 깜빡임이 없다.
+            'hide_nutrition': preview_hide_nutrition_pref(request.user),
             'can_upload_pdf': can_upload_pdf,  # PDF 문서함 업로드 버튼 표시 여부
             # 디자인 의뢰서 — 표시장소마다 디자이너가 지켜야 하는 것.
             # 규정 숫자는 서버 상수에서 오고, 고친 것은 계정에 남는다.
@@ -2880,6 +2885,37 @@ def preview_popup(request):
     except Exception as e:
         logger.exception('[처리 실패]')
         return _server_error()
+
+
+@login_required
+@require_POST
+def preview_hide_nutrition(request):
+    """
+    화면에서 영양정보 표를 접어 둘지를 계정에 남긴다.
+
+    **인쇄물은 바뀌지 않는다.** 접는 것은 CSS 클래스 하나이고, 내보낼 때는
+    `pv-exporting` 이 붙어 그 규칙이 안 걸린다. PDF·워드·문서함 도안에는
+    지금과 똑같이 들어간다 — 화면에서 접었다고 서류에서 빠지면 그것은
+    설정이 아니라 사고다.
+    """
+    import json
+
+    from v1.label.services.preview_prefs import save_hide_nutrition
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
+                            status=400)
+    if 'hidden' not in payload:
+        return JsonResponse({'success': False, 'error': 'hidden 이 필요합니다.'},
+                            status=400)
+
+    saved = save_hide_nutrition(request.user, payload.get('hidden'))
+    if saved is None:
+        return JsonResponse({'success': False, 'error': '프로필이 없습니다.'},
+                            status=400)
+    return JsonResponse({'success': True, 'hidden': saved})
 
 
 @login_required

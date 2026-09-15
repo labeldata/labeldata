@@ -3067,6 +3067,7 @@ document.addEventListener('DOMContentLoaded', function () {
     safeAddEventListener('downloadTextBtn', 'click', downloadLabelText);
     safeAddEventListener('downloadDocBtn', 'click', downloadLabelDoc);
     safeAddEventListener('saveSettingsBtn', 'click', savePreviewSettings);
+    safeAddEventListener('hideNutritionToggle', 'change', toggleHideNutrition);
 
     /* 탭 안에 끼워져 있으면 이 단추를 감춘다.
      *
@@ -4914,6 +4915,35 @@ function saveLabelFile(blob, extension) {
     link.click();
     link.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+/* ═══ 화면에서만 접어 두는 영양정보 표 ═══════════════════════════════════
+ *
+ * 감추는 일은 **클래스 하나**가 한다. 인라인 style 을 쓰면 안 된다 —
+ * 바로 아래 `labelRowData` 가 워드에 넣을지를 `box.style.display` 로
+ * 정하므로, 인라인으로 감추면 **워드에서도 사라진다.**
+ *
+ * 인쇄물은 손대지 않는다. PDF 는 찍기 직전 `pv-exporting` 을 붙이고,
+ * CSS 규칙이 `:not(.pv-exporting)` 이라 그동안은 안 걸린다.
+ *
+ * 저장이 실패해도 화면은 되돌리지 않는다. 방금 누른 것이 눈앞에서
+ * 도로 튀어 오르는 편이, 다음에 열었을 때 안 켜져 있는 것보다 나쁘다.
+ * ═══════════════════════════════════════════════════════════════════════ */
+function toggleHideNutrition(event) {
+    const hidden = !!event.target.checked;
+    const content = document.getElementById('previewContent');
+    if (content) content.classList.toggle('pv-hide-nutrition', hidden);
+
+    fetch('/label/preview/hide-nutrition/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: JSON.stringify({ hidden: hidden }),
+    }).catch(function () {
+        showPreviewToast('설정을 남기지 못했습니다. 이 화면에서는 적용됩니다.', 'warning');
+    });
 }
 
 function downloadLabelDoc() {

@@ -19653,3 +19653,91 @@ class 열량_단위를_두_번_붙이지_않는다(SimpleTestCase):
     def test_머리와_병행표시_모두_그것을_쓴다(self):
         js = self._js()
         self.assertGreaterEqual(js.count('kcalText('), 3)  # 정의 1 + 사용 2 이상
+
+
+class PreviewHideNutritionTests(TestCase):
+    """
+    화면에서만 영양정보 표를 접어 두기.
+
+    **인쇄물은 바뀌지 않는다.** 여기서 잠그는 것이 그것이다 — 접는 일을
+    클래스가 하고, 내보낼 때는 그 규칙이 안 걸린다. 인라인 style 로 감추면
+    워드 저장이 `box.style.display` 를 보고 영양성분을 통째로 빼 버린다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.user = User.objects.create_user(username='pvnut', password='x')
+        self.client.force_login(self.user)
+        self.url = reverse('label:preview_hide_nutrition')
+
+    def _post(self, body):
+        import json
+
+        return self.client.post(self.url, data=json.dumps(body),
+                                content_type='application/json')
+
+    def test_접어_두면_계정에_남는다(self):
+        res = self._post({'hidden': True})
+        self.assertEqual(res.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertIs(
+            self.user.profile.list_prefs['label_preview']['hide_nutrition'], True)
+
+    def test_다시_펴면_그것도_남는다(self):
+        self._post({'hidden': True})
+        self._post({'hidden': False})
+        self.user.profile.refresh_from_db()
+        self.assertIs(
+            self.user.profile.list_prefs['label_preview']['hide_nutrition'], False)
+
+    def test_같은_자리의_다른_설정을_지우지_않는다(self):
+        # list_prefs 는 화면 여럿이 나눠 쓰는 자리다. 통째로 덮으면
+        # 원료 목록의 칸 순서가 함께 날아간다.
+        profile = self.user.profile
+        profile.list_prefs = {'my_ingredient': {'columns': ['prdlst_nm']}}
+        profile.save(update_fields=['list_prefs'])
+        self._post({'hidden': True})
+        profile.refresh_from_db()
+        self.assertEqual(profile.list_prefs['my_ingredient']['columns'],
+                         ['prdlst_nm'])
+
+    def test_hidden_이_없으면_받지_않는다(self):
+        self.assertEqual(self._post({}).status_code, 400)
+
+    def test_로그인하지_않으면_남기지_못한다(self):
+        self.client.logout()
+        res = self._post({'hidden': True})
+        self.assertIn(res.status_code, (302, 403))
+
+
+class PreviewHideNutritionSourceTests(TestCase):
+    """
+    접는 방식이 바뀌면 **서류에서 영양성분이 사라진다.** 브라우저 없이
+    잡을 수 있는 두 가지를 소스에서 잠근다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_내보낼_때는_접기_규칙이_걸리지_않는다(self):
+        css = self._read('static/css/label_preview.css')
+        self.assertIn('#previewContent.pv-hide-nutrition:not(.pv-exporting)', css)
+
+    def test_접는_일은_클래스가_한다(self):
+        import re
+
+        js = self._read('static/js/label/label_preview.js')
+        start = js.index('function toggleHideNutrition')
+        body = js[start:js.index('function downloadLabelDoc')]
+        body = re.sub(r'/\*.*?\*/', '', body, flags=re.S)
+        self.assertIn('classList.toggle', body)
+        # 인라인 style 을 건드리면 워드 저장이 영양성분을 뺀다.
+        self.assertNotIn('style.display', body)

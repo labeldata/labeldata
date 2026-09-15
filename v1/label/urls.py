@@ -191,4 +191,8 @@ urlpatterns = [
     # 가공식품 식품유형별 표시 항목 규칙 (label_creation.js 가 예전부터 부르던 URL)
     path('food-type-settings/', views.food_type_settings, name='food_type_settings'),
     path('get-food-group/', views.get_food_group, name='get_food_group'),
+
+    # 미리보기를 이 사람이 어떻게 보는가 (인쇄물은 바뀌지 않는다)
+    path('preview/hide-nutrition/', views.preview_hide_nutrition,
+         name='preview_hide_nutrition'),
 ]

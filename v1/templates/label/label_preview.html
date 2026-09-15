@@ -259,6 +259,26 @@
             <input type="number" class="form-control form-control-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1">
           </div>
         </div>
+
+        {% comment %}
+          이 하나만 **계정에 붙는다**(다른 설정은 제품마다다). 인쇄물을
+          바꾸지 않는 화면 취향이고, 제품이 이백 개면 이백 번 켜야 하는
+          설정은 아무도 쓰지 않기 때문이다.
+
+          문구에 "인쇄물에는 그대로 들어간다" 를 반드시 남긴다 — 이것이
+          없으면 "영양표를 뺐다" 로 읽고 서류에서도 빠진 줄 안다.
+        {% endcomment %}
+        <div class="settings-row">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="hideNutritionToggle"
+                   {% if hide_nutrition %}checked{% endif %}>
+            <label class="form-check-label" for="hideNutritionToggle">화면에서 영양정보 표 접어 두기</label>
+          </div>
+          <div class="settings-hint">
+            <i class="fas fa-info-circle"></i>
+            화면에서만 감춥니다. <strong>PDF·워드·문서함 도안에는 그대로 들어갑니다.</strong>
+          </div>
+        </div>
       </section>
       
       <!-- 항목 순서 탭 -->
@@ -351,7 +371,7 @@
     </aside>
 
     <section class="preview-panel">
-      <div id="previewContent" class="preview-content">
+      <div id="previewContent" class="preview-content{% if hide_nutrition %} pv-hide-nutrition{% endif %}">
         <div class="preview-header-box">
           <div class="header-text">식품 등의 표시·광고에 관한 법률에 의한 한글표시사항</div>
         </div>
