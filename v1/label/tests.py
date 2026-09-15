@@ -12724,12 +12724,22 @@ class 검증은_두_기능이_아니라_한_절차다(TestCase):
         self.tab = (base / 'templates/products/_tab_label.html'
                     ).read_text(encoding='utf-8')
 
-    def test_설정_패널_맨_위에_있다(self):
+    def test_검증이_제_탭을_갖는다(self):
+        """
+        예전에는 설정 **위에** 얹혀 있었다. 한 칸을 위아래로 나눠 쓰는
+        모양이라 결과가 길면 아래 설정이 밀리거나 그 위에 겹쳐 찍혔고,
+        높이를 어떻게 잘라도 둘 중 하나는 좁아졌다. 탭이면 한 번에 하나만
+        보이고 각자 패널 전체를 쓴다.
+        """
         panel = self.html.index('<aside class="settings-panel"')
-        verify = self.html.index('class="lt-verify" id="ltVerify"')
         tabs = self.html.index('<div class="preview-tabs">')
-        self.assertLess(panel, verify)
-        self.assertLess(verify, tabs)      # 표 설정 탭보다 위
+        content = self.html.index('id="verify-content"')
+        verify = self.html.index('class="lt-verify" id="ltVerify"')
+
+        self.assertIn('data-tab="verify"', self.html)
+        self.assertLess(panel, tabs)
+        self.assertLess(tabs, content)     # 탭 줄 **아래**가 내용이다
+        self.assertLess(content, verify)   # 검증 덩어리는 그 탭 안에 있다
 
     def test_탭으로_한_단계씩_본다(self):
         self.assertIn('class="lt-vtabs" role="tablist"', self.html)
@@ -19848,29 +19858,25 @@ class ValidationResultPanelTests(TestCase):
     def test_결과가_남을_자리가_화면에_있다(self):
         self.assertIn('id="ltFirstResult"', self._read(self.HTML))
 
-    def test_결과가_길어도_설정_패널을_밀지_않는다(self):
+    def test_검증과_설정이_서로를_밀지_않는다(self):
         """
-        이 패널은 검증 아래로 표 설정·항목 순서·글자 서식이 이어지는 세로
-        한 줄이다. 결과를 그대로 쌓으면 그것들이 화면 밖으로 밀린다 —
-        처음 붙였을 때 실제로 그랬다.
+        둘을 한 칸에 위아래로 두었을 때 두 번 틀렸다 — 처음엔 결과가 길어
+        설정이 화면 밖으로 밀렸고, 높이를 자르자 이번엔 넘친 내용이 아래
+        설정 **위에 겹쳐 찍혔다**(자르기만 하고 넘침을 안 가뒀다).
 
-        막는 것은 둘이다. 검증 덩어리 전체에 높이 상한을 주고, 그 안에서
-        스크롤하는 것은 결과 본문 하나뿐이게 한다(min-height:0 사슬).
+        답은 높이 계산이 아니라 배치였다. 탭이라 한 번에 하나만 보이고,
+        길면 탭 내용이 스크롤한다. 그래서 검증 덩어리에 **높이 상한이
+        없어야 한다** — 있으면 그 상한이 다시 겹침을 만든다.
         """
         css = self._read(self.CSS)
+        verify = css[css.index('.lt-verify {'):css.index('.lt-verify {') + 560]
+        self.assertNotIn('max-height', verify)
 
-        # **자른 상자는 넘침도 함께 가둔다.** 높이만 자르면 넘친 내용이
-        # 상자 밖에 그대로 그려져 아래 설정 위에 겹쳐 찍힌다 — 실제로 그렇게
-        # 나왔다. 둘은 한 쌍이라 함께 잠근다.
-        verify = css[css.index('.lt-verify {'):css.index('.lt-verify {') + 520]
-        self.assertIn('max-height', verify)
-        self.assertIn('overflow-y', verify)
-
-        # 결과 본문의 높이는 부모 사슬이 아니라 여기서 못 박는다. flex +
-        # min-height:0 사슬은 한 고리만 어긋나도 스크롤이 안 걸린다.
-        body = css[css.index('.lt-vrbody {'):css.index('.lt-vrbody {') + 140]
-        self.assertIn('max-height', body)
-        self.assertIn('overflow-y: auto', body)
+        # 스크롤은 탭 내용이 맡는다.
+        tab = css[css.index('.preview-tab-content.active {'):
+                  css.index('.preview-tab-content.active {') + 200]
+        self.assertIn('overflow-y: auto', tab)
+        self.assertIn('min-height: 0', tab)
 
     def test_결과를_접을_수_있다(self):
         # 접어도 머리줄의 개수는 남는다 — 무엇이 나왔는지는 계속 보인다.
@@ -19962,3 +19968,91 @@ class ValidationEditJumpTests(TestCase):
         self.assertIn('window.gotoLabelField(e.data.field)', block)
         self.assertIn('showSnackbar', block)
         self.assertIn('console.warn', block)   # 어느 칸이었는지 단서를 남긴다
+
+
+class ValidationEditTargetTests(TestCase):
+    """
+    표시 항목마다 「수정하러 가기」가 갈 곳이 있는가.
+
+    「필수 입력 항목」 지적은 이 화면에서 가장 자주 나오는데, 그 단추가 늘
+    실패하고 있었다 — 「내용량(열량)」 이 표시 항목 이름이고 칸 이름은
+    내용량이라, 규칙대로 만든 id(`field-weight-calorie`)가 화면에 없었다.
+
+    한 번 고치고 끝낼 일이 아니다. 표시 항목은 모델(`chckd_*`)에서 늘어나고,
+    늘어난 항목의 칸 이름이 규칙과 다르면 같은 일이 되풀이된다. **전수로**
+    본다.
+    """
+
+    @staticmethod
+    def _templates():
+        import glob
+        import io
+        import os
+
+        from django.conf import settings
+
+        out = []
+        for path in glob.glob(os.path.join(settings.BASE_DIR, 'templates/products/**/*.html'),
+                              recursive=True):
+            with io.open(path, encoding='utf-8') as f:
+                out.append(f.read())
+        return out
+
+    @classmethod
+    def _maps(cls):
+        """화면이 쓰는 두 지도를 화면에서 그대로 읽는다."""
+        import io
+        import os
+        import re
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'templates/products/product_detail.html'),
+                     encoding='utf-8') as f:
+            html = f.read()
+
+        def literal(name):
+            at = html.index('window.' + name + ' = {')
+            block = html[at:html.index('};', at)]
+            return dict(re.findall(r"'([\w]+)'\s*:\s*'([\w-]+)'", block))
+
+        return literal('VALIDATION_ANCHOR_EXCEPTION'), literal('VALIDATION_FIELD_TAB')
+
+    def test_모든_표시_항목이_갈_곳을_갖는다(self):
+        from v1.label.models import MyLabel
+
+        exception, to_tab = self._maps()
+        html = '\n'.join(self._templates())
+
+        missing = []
+        for f in MyLabel._meta.get_fields():
+            name = getattr(f, 'name', '')
+            if not name.startswith('chckd_'):
+                continue
+            field = name[len('chckd_'):]
+            if field in to_tab:
+                continue                     # 다른 탭이 맡는다
+            anchor = exception.get(field, 'field-' + field.replace('_', '-'))
+            if ('id="%s"' % anchor) not in html:
+                missing.append('%s → %s' % (field, anchor))
+
+        self.assertEqual(missing, [], '갈 곳 없는 표시 항목: %s' % ', '.join(missing))
+
+    def test_내용량_열량은_내용량_칸으로_간다(self):
+        exception, _ = self._maps()
+        self.assertEqual(exception.get('weight_calorie'), 'field-content-weight')
+
+    def test_그래도_못_찾으면_기본_정보_탭을_연다(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'templates/products/product_detail.html'),
+                     encoding='utf-8') as f:
+            html = f.read()
+        at = html.index('window.gotoLabelField = function')
+        block = html[at:at + 2000]
+        # 아무 데도 안 보내면 누른 사람에게는 단추가 고장 난 것으로 보인다.
+        self.assertIn('#tab-info', block)
+        self.assertIn('console.warn', block)

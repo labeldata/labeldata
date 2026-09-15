@@ -1791,11 +1791,10 @@ tbody.layout-vertical tr td {
     background: var(--bg-secondary, #f8f9fa);
     border: 1px solid var(--border-light, #e5e7eb);
     border-radius: 10px;
-    /* 결과가 아래 설정들을 밀어내지 않게 — 아래 「결과」 절 참고.
-       **`overflow` 를 함께 준다.** 높이만 자르면 넘친 내용이 상자 밖에
-       그대로 그려져 아래 설정 위에 겹쳐 찍힌다(실제로 그랬다). */
-    max-height: 60%;
-    overflow-y: auto;
+    /* **높이를 자르지 않는다.** 예전에는 설정 위에 얹혀 있어 상한이
+       필요했는데, 자르면 넘친 것이 아래 설정 위에 겹쳐 찍혔고 안 자르면
+       설정이 화면 밖으로 밀렸다. 지금은 제 탭이라 패널 전체를 쓰고,
+       길면 탭 내용이 스크롤한다(.preview-tab-content.active). */
 }
 .lt-vtabs { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
 .lt-vtab {
@@ -1869,10 +1868,7 @@ tbody.layout-vertical tr td {
     margin-bottom: 7px;
 }
 .lt-vrhead::-webkit-details-marker { margin-right: 4px; }
-/* **높이를 vh 로 못 박는다.** 부모 사슬(flex + min-height:0)에 기대면
-   한 고리만 어긋나도 스크롤이 안 걸리고, 그러면 내용이 상자를 넘어 아래
-   설정 위에 겹쳐 찍힌다. 여기서 끊으면 그런 일이 없다. */
-.lt-vrbody { max-height: 30vh; overflow-y: auto; padding-right: 4px; }
+.lt-vrbody { padding-right: 4px; }
 /* 되살린 결과 — 그 사이 값이 바뀌었을 수 있다 */
 .lt-vrstale {
     margin-bottom: 7px;

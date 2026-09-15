@@ -132,7 +132,48 @@
     </div>
 
     <aside class="settings-panel"{% if request.GET.readonly %} style="display: none;"{% endif %}>
+
+      <!-- 탭 네비게이션 -->
+      <div class="preview-tabs">
+        {% comment %}
+          검증을 이 탭 줄로 들였다.
+
+          예전에는 설정 위에 얹혀 있었다 — 한 칸을 **위아래로 나눠 쓰는**
+          모양이라, 결과가 길어지면 아래 설정이 밀리거나(처음) 그 위에
+          겹쳐 찍혔다(그다음). 높이를 어떻게 잘라도 둘 중 하나는 좁아진다.
+
+          탭이면 한 번에 하나만 보이고 각자 패널 전체를 쓴다. 지금 무엇을
+          하는 중인지도 분명해진다 — 검증하는 중이거나, 모양을 고치는
+          중이거나.
+
+          창으로 따로 열었을 때는 검증이 없다(2차가 제품 화면을 쓴다).
+          그때는 「표 설정」 이 첫 탭이다.
+        {% endcomment %}
+        {% if request.GET.in_tab %}
+        <button class="preview-tab active" data-tab="verify">
+          검증
+        </button>
+        {% endif %}
+        <button class="preview-tab{% if not request.GET.in_tab %} active{% endif %}" data-tab="table-settings">
+          표 설정
+        </button>
+        <button class="preview-tab" data-tab="field-order">
+          항목 순서
+        </button>
+        <button class="preview-tab" data-tab="text-format">
+          텍스트 변환
+        </button>
+        <button class="preview-tab" data-tab="recycling-mark">
+          분리배출마크
+        </button>
+        <button class="btn btn-sm settings-reset" id="resetSettingsBtn" title="설정 초기화">
+          <i class="fas fa-undo"></i>
+        </button>
+      </div>
+      
       {% if request.GET.in_tab %}
+      <!-- 검증 탭 -->
+      <section class="preview-tab-content active" id="verify-content">
       {% comment %}
         검증 두 단계 — **한 절차, 한 자리.**
 
@@ -197,29 +238,11 @@
           </details>
         </div>
       </section>
+      </section>
       {% endif %}
 
-      <!-- 탭 네비게이션 -->
-      <div class="preview-tabs">
-        <button class="preview-tab active" data-tab="table-settings">
-          표 설정
-        </button>
-        <button class="preview-tab" data-tab="field-order">
-          항목 순서
-        </button>
-        <button class="preview-tab" data-tab="text-format">
-          텍스트 변환
-        </button>
-        <button class="preview-tab" data-tab="recycling-mark">
-          분리배출마크
-        </button>
-        <button class="btn btn-sm settings-reset" id="resetSettingsBtn" title="설정 초기화">
-          <i class="fas fa-undo"></i>
-        </button>
-      </div>
-      
       <!-- 표 설정 탭 -->
-      <section class="preview-tab-content active" id="table-settings-content">
+      <section class="preview-tab-content{% if not request.GET.in_tab %} active{% endif %}" id="table-settings-content">
         <div class="settings-hint">
           <i class="fas fa-info-circle"></i> 라벨의 가로 크기, 글꼴, 글자 크기, 자간, 줄간격을 설정합니다. 세로 크기는 자동으로 계산됩니다.
         </div>
@@ -843,17 +866,21 @@
         
         // 페이지 로드 시 저장된 탭 복원
         function restoreActiveTab() {
+            /* 있는 탭 중 첫째가 기본이다. **이름을 박아 두지 않는다** —
+               탭 안에서는 「검증」 이 맨 앞이고 창으로 열면 그 탭이 아예
+               없다. 예전에 저장해 둔 이름이 지금 없을 수도 있다(그러면
+               아무 탭도 안 열려 패널이 비어 보였다). */
+            const first = document.querySelector('.preview-tab[data-tab]');
+            let name = first ? first.dataset.tab : 'table-settings';
             try {
-                const savedTab = localStorage.getItem('preview-active-tab');
-                if (savedTab) {
-                    switchPreviewTab(savedTab);
-                } else {
-                    switchPreviewTab('table-settings'); // 기본 탭
+                const saved = localStorage.getItem('preview-active-tab');
+                if (saved && document.querySelector('.preview-tab[data-tab="' + saved + '"]')) {
+                    name = saved;
                 }
             } catch (e) {
-                console.error('탭 상태 복원 실패:', e);
-                switchPreviewTab('table-settings');
+                console.warn('탭 상태를 읽지 못했습니다:', e);
             }
+            switchPreviewTab(name);
         }
 
         function makeDraggable(element) {

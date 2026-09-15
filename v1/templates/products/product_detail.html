@@ -1667,7 +1667,13 @@ async function changeStatus(newStatus, overrideReason, acknowledged, rejectReaso
  */
 window.VALIDATION_ANCHOR_EXCEPTION = {
     'rawmtrl_nm_display': 'field-rawmtrl-nm',
-    'rawmtrl_nm': 'field-rawmtrl-nm'
+    'rawmtrl_nm': 'field-rawmtrl-nm',
+    /* 「내용량(열량)」 은 표시 항목 이름이고 칸은 내용량 하나다. 이것이
+       빠져 있어서 **필수 입력 항목의 「수정하러 가기」 가 늘 실패했다** —
+       가장 자주 나오는 지적인데 가장 안 되는 단추였다.
+       갈 곳 없는 표시 항목은 셋뿐이고 나머지 둘은 여기와 아래 지도에
+       이미 있다(원재료명(표시)·영양성분 표시). 시험으로 전수 확인한다. */
+    'weight_calorie': 'field-content-weight'
 };
 window.VALIDATION_FIELD_TAB = { 'nutrition_text': 'tab-nutrition' };
 
@@ -1687,7 +1693,21 @@ window.gotoLabelField = function (field) {
     }
 
     const el = document.getElementById(window.anchorOfField(field));
-    if (!el) return false;
+    if (!el) {
+        /* **아무 데도 안 보내는 것이 제일 나쁘다.** 누른 사람에게는 단추가
+           고장 난 것으로 보인다. 어느 칸인지 모르면 값이 있을 가능성이
+           가장 높은 기본 정보 탭을 열고, 정확히 못 찾았다고 말한다.
+           어느 항목이었는지는 콘솔에 남긴다 — 지도를 넓힐 단서다. */
+        console.warn('[검증] 칸을 찾지 못했다:', field);
+        const infoBtn = document.querySelector('[data-bs-target="#tab-info"]');
+        if (!infoBtn) return false;
+        bootstrap.Tab.getOrCreateInstance(infoBtn).show();
+        if (window.showSnackbar) {
+            window.showSnackbar('그 항목의 칸을 정확히 찾지 못해 기본 정보 탭을 열었습니다.',
+                                'info');
+        }
+        return true;
+    }
 
     // 그 칸이 있는 탭을 먼저 연다
     const pane = el.closest('.tab-pane');
