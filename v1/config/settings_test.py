@@ -6,13 +6,19 @@
 기본 설정으로는 테스트가 돌지 않는다. 두 가지 이유가 있고 둘 다 여기서 우회한다.
 
 1. 운영 DB 계정(labeldata)에 test_labeldb 생성 권한이 없다 → 메모리 SQLite 사용.
-2. 마이그레이션 그래프가 깨져 있다 → 마이그레이션을 건너뛰고 모델에서 직접
-   스키마를 만든다. (regulatory 앱의 리프가 0004_alter_inspectionresult_tkawyprno_and_more
-   와 0010_remove_false_positive_pattern 둘로 갈라져 있고, 운영 DB에는
-   user_management.0004 가 의존 대상인 products.0002_combined 보다 먼저 적용돼 있어
-   manage.py migrate 자체가 InconsistentMigrationHistory 로 실패한다.
-   스키마는 마이그레이션 밖에서 관리되고 있는 상태 — 별도로 정리해야 할 사안이고,
-   테스트는 모델 정의만 있으면 되므로 여기서는 관여하지 않는다.)
+2. 마이그레이션 중에 **MySQL 에서만 도는 SQL** 이 있다 → 마이그레이션을
+   건너뛰고 모델 정의에서 직접 스키마를 만든다. 세 곳이 인덱스 존재 여부를
+   `information_schema.statistics` 에서 읽는데(`products/0002_combined`,
+   `products/0003_server_fix`, `label/0020_remove_fooditem_idx_lcns_no_and_more`)
+   SQLite 에는 그런 표가 없어 `OperationalError: no such table` 로 죽는다.
+   테스트는 모델 정의만 있으면 되므로 여기서는 관여하지 않는다.
+
+   **여기 적혀 있던 "마이그레이션 그래프가 깨져 있다" 는 이제 사실이 아니다.**
+   `96c1b08`(2026-08-30)에서 풀렸다 — 서버의 `migrate --plan` 이 "No planned
+   migration operations." 를 냈고 미적용 0건·의존성 어긋남 0건이었다. 그
+   설명에 적혀 있던 `regulatory.0010_remove_false_positive_pattern` 은 지금
+   저장소에 없는 이름이고, `user_management.0004` 는 `products.0002_combined`
+   를 의존하지 않는다. **모델을 고칠 수 있다** — 배포 절차는 README 를 본다.
 
 그 외 설정은 전부 settings.py 를 그대로 따른다.
 """

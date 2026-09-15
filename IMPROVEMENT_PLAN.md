@@ -450,12 +450,14 @@ FP 누적이 폭증해, 다른 원료에 걸린 정상 매칭까지 등급이 �
   알림 탭에 그대로 반영되지만, 앱에서 새로 끄려면 웹으로 와야 한다.
   서버 쪽은 `GET/POST /regulatory/api/alert-mutes/` 로 이미 열려 있으므로,
   앱에 화면만 붙이면 된다 (앱 API 는 `/mobile/` 아래에 같은 모양으로 추가).
-- **마이그레이션 그래프가 갈라져 있다** — 앱 전체를 도는 `manage.py migrate` 는
-  `InconsistentMigrationHistory` 로 실패한다. 테스트도 그래서 `settings_test` 로
-  마이그레이션을 건너뛰고 돈다(`v1/config/settings_test.py` 참고).
-  이번에 넣은 `regulatory/0005_alertmute` 는 앱을 지정하면 깨끗이 돈다 —
-  본서버에서도 `manage.py migrate regulatory` 로 넣는다.
-  (CREATE TABLE 한 줄뿐이라 기존 표는 건드리지 않는다)
+- ~~**마이그레이션 그래프가 갈라져 있다**~~ — **풀렸다(2026-08-30, `96c1b08`).**
+  까닭은 `regulatory.0001_initial` 이 서버에 없는 이름(`bom.0002_rename_is_fields`)
+  을 의존한 것이었고, 그래서 그래프조차 만들지 못했다. 지금은 서버·로컬 모두
+  `migrate --plan` 이 "No planned migration operations." 를 낸다. 배포 절차에
+  `migrate` 가 들어 있다(README).
+  테스트가 여전히 마이그레이션을 건너뛰는 것은 **다른 까닭**이다 — 인덱스를
+  `information_schema` 에서 읽는 MySQL 전용 SQL 이 세 곳 있어 SQLite 에서
+  돌지 않는다(`v1/config/settings_test.py` 참고).
 
 ---
 
