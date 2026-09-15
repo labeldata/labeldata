@@ -19858,12 +19858,19 @@ class ValidationResultPanelTests(TestCase):
         스크롤하는 것은 결과 본문 하나뿐이게 한다(min-height:0 사슬).
         """
         css = self._read(self.CSS)
-        verify = css[css.index('.lt-verify {'):css.index('.lt-verify {') + 420]
-        self.assertIn('max-height', verify)
 
-        body = css[css.index('.lt-vrbody {'):css.index('.lt-vrbody {') + 120]
+        # **자른 상자는 넘침도 함께 가둔다.** 높이만 자르면 넘친 내용이
+        # 상자 밖에 그대로 그려져 아래 설정 위에 겹쳐 찍힌다 — 실제로 그렇게
+        # 나왔다. 둘은 한 쌍이라 함께 잠근다.
+        verify = css[css.index('.lt-verify {'):css.index('.lt-verify {') + 520]
+        self.assertIn('max-height', verify)
+        self.assertIn('overflow-y', verify)
+
+        # 결과 본문의 높이는 부모 사슬이 아니라 여기서 못 박는다. flex +
+        # min-height:0 사슬은 한 고리만 어긋나도 스크롤이 안 걸린다.
+        body = css[css.index('.lt-vrbody {'):css.index('.lt-vrbody {') + 140]
+        self.assertIn('max-height', body)
         self.assertIn('overflow-y: auto', body)
-        self.assertIn('min-height: 0', body)
 
     def test_결과를_접을_수_있다(self):
         # 접어도 머리줄의 개수는 남는다 — 무엇이 나왔는지는 계속 보인다.

@@ -1791,10 +1791,11 @@ tbody.layout-vertical tr td {
     background: var(--bg-secondary, #f8f9fa);
     border: 1px solid var(--border-light, #e5e7eb);
     border-radius: 10px;
-    /* 결과가 아래 설정들을 밀어내지 않게 — 아래 「결과」 절 참고 */
-    max-height: 48%;
-    display: flex;
-    flex-direction: column;
+    /* 결과가 아래 설정들을 밀어내지 않게 — 아래 「결과」 절 참고.
+       **`overflow` 를 함께 준다.** 높이만 자르면 넘친 내용이 상자 밖에
+       그대로 그려져 아래 설정 위에 겹쳐 찍힌다(실제로 그랬다). */
+    max-height: 60%;
+    overflow-y: auto;
 }
 .lt-vtabs { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
 .lt-vtab {
@@ -1856,29 +1857,24 @@ tbody.layout-vertical tr td {
  * 한다(min-height:0 사슬이 그것을 만든다). 그리고 <details> 라 접을 수
  * 있다 — 접어도 머리줄의 개수는 남는다.
  * ──────────────────────────────────────────────────────────────────── */
-.lt-vtabs, .lt-vwhat, .lt-vact { flex-shrink: 0; }
-.lt-vpane.is-on { display: flex; flex-direction: column; min-height: 0; }
-
 .lt-vresult {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
     margin-top: 10px;
     padding-top: 9px;
     border-top: 1px solid var(--border-light, #e5e7eb);
 }
 .lt-vrhead {
-    flex-shrink: 0;
     cursor: pointer;
     font-size: 13.5px;
     font-weight: 700;
     margin-bottom: 7px;
 }
 .lt-vrhead::-webkit-details-marker { margin-right: 4px; }
-.lt-vrbody { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+/* **높이를 vh 로 못 박는다.** 부모 사슬(flex + min-height:0)에 기대면
+   한 고리만 어긋나도 스크롤이 안 걸리고, 그러면 내용이 상자를 넘어 아래
+   설정 위에 겹쳐 찍힌다. 여기서 끊으면 그런 일이 없다. */
+.lt-vrbody { max-height: 30vh; overflow-y: auto; padding-right: 4px; }
 /* 되살린 결과 — 그 사이 값이 바뀌었을 수 있다 */
 .lt-vrstale {
-    flex-shrink: 0;
     margin-bottom: 7px;
     padding: 5px 8px;
     border-radius: 6px;
