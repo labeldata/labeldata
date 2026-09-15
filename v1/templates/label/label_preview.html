@@ -169,6 +169,14 @@
             </button>
             <span class="lt-vstate" id="ltFirstMeta">규정 항목을 불러오는 중…</span>
           </div>
+          {% comment %}
+            결과가 **여기 남는다.** 예전에는 모달로 떴는데, 그 모달이 바로
+            오른쪽 표를 덮었다 — 지적한 줄에 번호를 달아 놓고 그 번호를
+            가리는 꼴이라, 하나 볼 때마다 열고·읽고·닫고 표에서 찾기를
+            되풀이해야 했다. 여기 두면 왼쪽에 글, 오른쪽에 번호가 함께
+            보인다. 창으로 따로 열었을 때는 이 자리가 없어 모달을 쓴다.
+          {% endcomment %}
+          <div class="lt-vresult" id="ltFirstResult" hidden></div>
         </div>
 
         <div class="lt-vpane" id="ltPane2" role="tabpanel" aria-labelledby="ltVTab2">
@@ -2394,14 +2402,11 @@
         firstBtn.addEventListener('click', function () {
             if (typeof window.runRuleOnlyValidation !== 'function') return;
             window.runRuleOnlyValidation();
-            var tab = document.getElementById('ltVTab1');
-            if (tab) tab.classList.add('is-done');
+            /* 끝났다는 표시(탭 번호를 초록으로)와 결과 문구는 **결과가
+               왔을 때** 켠다(renderValidationPane). 여기서 켜면 서버가
+               답하기도 전에 "검사했습니다" 가 떠 있었다. */
             var meta = document.getElementById('ltFirstMeta');
-            /* "결과는 오른쪽 표에" 라고 적어 뒀는데, 결과 창이 바로 그 표
-               위를 덮고 뜬다 — 무엇을 보라는 것인지 알 수가 없었다. 실제로
-               일어나는 일을 적는다: 지적한 줄에 번호가 달리고, 창을 닫으면
-               그 번호가 보인다(markValidationOnTable). */
-            if (meta) meta.textContent = '검사했습니다 — 지적한 줄에 번호를 달았습니다';
+            if (meta) meta.textContent = '검사하는 중…';
         });
     }
 

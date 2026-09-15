@@ -8068,12 +8068,23 @@ class ValidationResultLayoutTests(TestCase):
         self.assertNotIn('<table class="table table-bordered">', block)
         self.assertNotIn('검증 항목</th>', block)
 
-    def test_일반과_ai_가_같은_창을_쓴다(self):
-        """판정 방법이 다를 뿐 사용자가 읽는 것은 같은 종류의 결과다."""
-        self.assertEqual(self.js.count('function showAiValidationModal'), 1)
-        head = self.js.index('function showAiValidationModal')
-        block = self.js[head:head + 2500]
-        self.assertIn("useAi ? 'fa-robot' : 'fa-list-check'", block)
+    def test_일반과_ai_가_같은_결과_화면을_쓴다(self):
+        """
+        판정 방법이 다를 뿐 사용자가 읽는 것은 같은 종류의 결과다.
+
+        결과가 두 자리(탭 안 패널·따로 연 창의 모달)에 그려지게 되면서,
+        제목과 본문 조립을 **한 벌**로 뽑았다. 아이콘 분기는 그 안에 있다 —
+        두 자리가 같은 함수를 쓰는지까지 여기서 잠근다.
+        """
+        self.assertEqual(self.js.count('function vrTitleHtml'), 1)
+        head = self.js.index('function vrTitleHtml')
+        self.assertIn("useAi ? 'fa-robot' : 'fa-list-check'",
+                      self.js[head:head + 600])
+        for fn in ('renderValidationPane', 'showAiValidationModal'):
+            at = self.js.index('function ' + fn)
+            block = self.js[at:at + 1200]
+            self.assertIn('vrTitleHtml(', block, '%s 가 제목을 따로 짠다' % fn)
+            self.assertIn('vrBodyHtml(', block, '%s 가 본문을 따로 짠다' % fn)
 
     def test_번호를_누르면_그_지적으로_간다(self):
         self.assertIn('function showValidationDetail', self.js)
@@ -12764,7 +12775,20 @@ class 검증은_두_기능이_아니라_한_절차다(TestCase):
         self.assertIn('win.ltCompareBusy(on)', self.tab)
 
     def test_1차를_마치면_그_탭에_표가_남는다(self):
-        self.assertIn("tab.classList.add('is-done')", self.html)
+        """
+        단추를 누른 순간이 아니라 **결과가 왔을 때** 켠다. 누르자마자 켜면
+        서버가 답하기도 전에 "끝났다" 가 떠 있다. 그래서 이 표시는 화면이
+        아니라 결과를 그리는 쪽(renderValidationPane)에 있다.
+        """
+        import io
+        import os
+
+        from django.conf import settings as dj
+
+        js = io.open(os.path.join(dj.BASE_DIR, 'static/js/label/label_preview.js'),
+                     encoding='utf-8').read()
+        at = js.index('function renderValidationPane')
+        self.assertIn("tab.classList.add('is-done')", js[at:at + 1400])
         self.assertIn('#ltVTab1.is-done .lt-vno', self.css)
 
     def test_탭_안에서만_나온다(self):
@@ -15427,9 +15451,22 @@ class 검사_결과가_어디에_생기는지_말한다(TestCase):
         self.assertEqual(shown, [])
 
     def test_실제로_일어나는_일을_적는다(self):
+        """
+        결과가 모달에서 **패널**로 내려오면서 문구도 바뀌었다. 예전에는
+        "번호를 달았습니다"(창이 그 번호를 덮고 있었다)였고, 지금은 목록과
+        번호가 함께 보이므로 그렇게 적는다. 돌아오는 동안은 "하는 중" 이다.
+        """
+        import io
+        import os
+
+        from django.conf import settings as dj
+
         h = self.tpl()
         self.assertIn('번호를 답니다', h)
-        self.assertIn('번호를 달았습니다', h)
+        self.assertIn('검사하는 중', h)
+        js = io.open(os.path.join(dj.BASE_DIR, 'static/js/label/label_preview.js'),
+                     encoding='utf-8').read()
+        self.assertIn('아래 목록과 표의 번호가 같은 지적입니다', js)
 
 
 class 요약은_내용이_있는_것만_세운다(TestCase):
@@ -19741,3 +19778,80 @@ class PreviewHideNutritionSourceTests(TestCase):
         self.assertIn('classList.toggle', body)
         # 인라인 style 을 건드리면 워드 저장이 영양성분을 뺀다.
         self.assertNotIn('style.display', body)
+
+
+class ValidationResultPanelTests(TestCase):
+    """
+    검증 결과를 어디에 그리는가.
+
+    이 검증의 결과는 **두 곳에 나뉘어 있다** — 표시사항 표에 달리는 번호
+    배지(어디인지)와 지적 목록(무엇인지). 목록을 모달로 띄우면 그 모달이
+    바로 그 표를 덮어, 둘을 한 화면에서 볼 수 없다. 지적이 열몇이면 열고·
+    읽고·닫고 표에서 찾기를 열몇 번 되풀이하게 된다.
+
+    그리고 결과를 그리는 함수가 **한 벌인지**를 함께 잠근다. 이 파일은
+    같은 이름이 두 벌이어서 죽은 쪽을 고치는 일이 실제로 있었다.
+    """
+
+    JS = 'static/js/label/label_preview.js'
+    HTML = 'templates/label/label_preview.html'
+    CSS = 'static/css/label_preview.css'
+
+    @classmethod
+    def _read(cls, rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    @staticmethod
+    def _no_comments(src):
+        import re
+
+        src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+        return re.sub(r'(?m)//.*$', '', src)
+
+    def setUp(self):
+        self.js = self._no_comments(self._read(self.JS))
+
+    def test_결과를_그리는_함수가_한_벌이다(self):
+        import re
+
+        for name in ('vrBodyHtml', 'vrTitleHtml', 'showValidationResult',
+                     'showAiValidationModal', 'renderValidationPane'):
+            found = re.findall(r'function\s+' + name + r'\s*\(', self.js)
+            self.assertEqual(len(found), 1, '%s 가 %d벌' % (name, len(found)))
+
+    def test_죽은_검증_엔진이_돌아오지_않는다(self):
+        # 전부 호출자가 0이었다. 이름이 그럴듯해서 고치러 들어갔다 아무 일도
+        # 일어나지 않는 것이 이 코드의 값이 아니라 비용이었다.
+        for gone in ('showValidationModal', 'validateRegulations', 'validateSettings',
+                     'validateBasicFields', 'validatePackagingCompliance'):
+            self.assertNotIn('function ' + gone, self.js, '%s 가 되살아났다' % gone)
+
+    def test_탭_안에서는_모달_대신_패널에_그린다(self):
+        start = self.js.index('function showValidationResult')
+        body = self.js[start:self.js.index('function vrTitleHtml')]
+        self.assertIn('ltFirstResult', body)
+        self.assertIn('renderValidationPane', body)
+
+    def test_배지를_눌러도_표를_덮지_않는다(self):
+        start = self.js.index('function showValidationDetail')
+        body = self.js[start:self.js.index('function flashValidationIssue')]
+        pane = body.index('ltFirstResult')
+        modal = body.index('showAiValidationModal')
+        self.assertLess(pane, modal, '패널이 있어도 모달을 먼저 연다')
+
+    def test_결과가_남을_자리가_화면에_있다(self):
+        self.assertIn('id="ltFirstResult"', self._read(self.HTML))
+
+    def test_결과가_길어도_설정_패널을_밀지_않는다(self):
+        # settings-panel 은 overflow:hidden 이라, 안에서 스크롤하지 않으면
+        # 아래 탭들이 통째로 잘린다.
+        css = self._read(self.CSS)
+        block = css[css.index('.lt-vrbody'):css.index('.lt-vrbody') + 160]
+        self.assertIn('max-height', block)
+        self.assertIn('overflow-y', block)

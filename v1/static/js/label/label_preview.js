@@ -1,137 +1,22 @@
 ﻿// 즉시 실행 함수로 전역 함수들 정의
 // 디버그 모드 비활성화
 
-// ===== 전역 validateSettings 함수 =====
-window.validateSettings = async function() {
-    
-    try {
-        // 로깅 API 호출
-        const urlParams = new URLSearchParams(window.location.search);
-        const labelId = urlParams.get('label_id');
-        if (labelId) {
-            try {
-                await fetch('/label/log-validation/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({ label_id: labelId })
-                });
-            } catch (logError) {
-                console.warn('로깅 실패:', logError);
-            }
-        }
-        
-        // 캐싱된 요소 사용
-        const elements = window.cachedElements || {};
-        const width = parseFloat(elements.widthInput?.value || document.getElementById('widthInput')?.value) || 0;
-        const height = parseFloat((elements.heightInput?.value || document.getElementById('heightInput')?.value || '').replace(/[^0-9.-]/g, '')) || 0;
-        const area = width * height;
-        const fontSize = parseFloat(elements.fontSizeInput?.value || document.getElementById('fontSizeInput')?.value) || 10;
-        
-        // 검증 항목들 정의
-        const validationItems = [
-            {
-                label: '표시면 면적',
-                check: () => ({
-                    ok: area >= 40,
-                    errors: area < 40 ? [`표시면 면적은 최소 40cm² 이상이어야 합니다 («식품 등의 표시기준» 제4조).`] : [],
-                    suggestions: area < 40 ? ['면적을 40cm² 이상으로 조정하세요.'] : []
-                }),
-                always: true
-            },
-            {
-                label: '글꼴 크기',
-                check: () => ({
-                    ok: fontSize >= 10,
-                    errors: fontSize < 10 ? [`글꼴 크기는 최소 10pt 이상이어야 합니다 («식품 등의 표시기준» 제6조).`] : [],
-                    suggestions: fontSize < 10 ? ['글꼴 크기를 10pt 이상으로 조정하세요.'] : []
-                }),
-                always: true
-            },
-            {
-                label: '기본 필드 검증',
-                check: () => {
-                    try {
-                        return validateBasicFields();
-                    } catch (e) {
-                        console.warn('기본 필드 검증 오류:', e);
-                        return { ok: true, errors: [], suggestions: [] };
-                    }
-                }
-            },
-            {
-                label: '성분 표시 규정',
-                check: () => {
-                    try {
-                        return validateIngredientCompliance();
-                    } catch (e) {
-                        console.warn('성분 표시 규정 검증 오류:', e);
-                        return { ok: true, errors: [], suggestions: [] };
-                    }
-                }
-            },
-            {
-                label: '문구 표시 규정',
-                check: () => {
-                    try {
-                        return validateTextCompliance();
-                    } catch (e) {
-                        console.warn('문구 표시 규정 검증 오류:', e);
-                        return { ok: true, errors: [], suggestions: [] };
-                    }
-                }
-            },
-            {
-                label: '알레르기 성분',
-                check: () => {
-                    try {
-                        return validateAllergenCompliance();
-                    } catch (e) {
-                        console.warn('알레르기 성분 검증 오류:', e);
-                        return { ok: true, errors: [], suggestions: [] };
-                    }
-                }
-            },
-            {
-                label: '포장재질 및 분리배출',
-                check: () => {
-                    try {
-                        return validatePackagingCompliance();
-                    } catch (e) {
-                        console.warn('포장재질 검증 오류:', e);
-                        return { ok: true, errors: [], suggestions: [] };
-                    }
-                },
-                always: true
-            }
-        ];
-        
-        // 모든 검증 실행
-        const validationResults = validationItems.map(item => {
-            try {
-                const result = item.check();
-                return { ...result, label: item.label };
-            } catch (error) {
-                console.error(`${item.label} 검증 오류:`, error);
-                return {
-                    ok: false,
-                    errors: [`${item.label} 검증 중 오류가 발생했습니다: ${error.message}`],
-                    suggestions: [],
-                    label: item.label
-                };
-            }
-        });
-        
-        // 결과 모달 표시
-        showValidationModal(validationResults);
-        
-    } catch (error) {
-        console.error('validateSettings 오류:', error);
-        alert('검증 중 오류가 발생했습니다: ' + error.message);
-    }
-};
+/* ── 여기 있던 클라이언트 검증 한 벌을 걷어냈다 (2026-09-16) ────────────
+ *
+ * window.validateSettings(130줄) · showValidationModal **두 벌**(77+45줄) ·
+ * window.validateRegulations(61줄)과 그것만 부르던 검사 함수 다섯(77줄).
+ * 전부 호출자가 0이었다.
+ *
+ * 규정 검증은 서버 API 로 간 지 오래다 — 살아 있는 것은 runValidation →
+ * showValidationResult 이고, 결과는 vr-card 로 그린다.
+ *
+ * 왜 지우는가. **이름이 더 그럴듯한 쪽이 죽어 있었다.** "검증 결과 표를
+ * 고쳐 달라" 를 받은 사람은 showValidationModal 을 먼저 찾는데, 고쳐도
+ * 아무 일도 일어나지 않는다. 게다가 같은 이름이 한 파일에 두 벌이라
+ * 뒤에 선언된 것이 이긴다 — 이 저장소는 이미 그 함정에 한 번 빠졌다
+ * (label_preview.html 의 같은 자리 주석 참고).
+ * ──────────────────────────────────────────────────────────────────── */
+
 
 // 알레르기 성분 검증 함수
 function checkAllergenDuplication() {
@@ -416,84 +301,6 @@ function checkAllergenDuplication() {
     return errors;
 } // checkAllergenDuplication 함수 끝
 
-// 검증 결과 모달 표시 함수
-function showValidationModal(results) {
-    
-    // 기존 모달 제거
-    const existingModal = document.getElementById('validationModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // 새 모달 생성
-    const modal = document.createElement('div');
-    modal.id = 'validationModal';
-    modal.className = 'modal fade';
-    modal.innerHTML = `
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">규정 검증 결과</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <table class="table table-bordered">
-                        <thead>
-                            <tr>
-                                <th style="width: 25%">검증 항목</th>
-                                <th style="width: 15%; white-space: nowrap;">상태</th>
-                                <th style="width: 60%">결과 및 제안</th>
-                            </tr>
-                        </thead>
-                        <tbody id="validationResultBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // 테이블 내용 채우기
-    const tbody = document.getElementById('validationResultBody');
-    let rowsHtml = '';
-    
-    for (const result of results) {
-        rowsHtml += '<tr>';
-        rowsHtml += `<td>${result.label}</td>`;
-        
-        if (result.ok) {
-            rowsHtml += '<td><span class="text-success">적합</span></td>';
-        } else {
-            rowsHtml += '<td><span class="text-danger">재검토</span></td>';
-        }
-        
-        let msg = '';
-        if (result.errors && result.errors.length > 0) {
-            // 에러 메시지에 볼드 적용
-            const boldErrors = result.errors.map(error => 
-                error.includes('<strong>') ? error : `<strong>${error}</strong>`
-            );
-            msg += boldErrors.join('<br>');
-        }
-        if (result.suggestions && result.suggestions.length > 0) {
-            if (msg) msg += '<br><br>';
-            // 제안사항에 볼드 적용
-            const boldSuggestions = result.suggestions.map(suggestion => 
-                suggestion.includes('<strong>') ? suggestion : `<strong>${suggestion}</strong>`
-            );
-            msg += '<strong style="color: #0066cc;">💡 제안:</strong><br>' + boldSuggestions.join('<br>');
-        }
-        rowsHtml += `<td>${msg}</td>`;
-        rowsHtml += '</tr>';
-    }
-    
-    tbody.innerHTML = rowsHtml;
-    
-    // 모달 표시
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
-}
 // ===== 전역 함수 정의 끝 =====
 
 (function() {
@@ -2459,55 +2266,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return { errors, suggestions };
     }    
 
-    // --- 검증 모달창 및 validateSettings ---
-    // 이전 결과 캐시
-    let cachedValidation = null;
-
-    function showValidationModal() {
-        let modal = document.getElementById('validationModal');
-        if (modal) {
-            try {
-                bootstrap.Modal.getInstance(modal)?.hide();
-            } catch (e) {}
-            setTimeout(() => {
-                if (modal.parentNode) modal.parentNode.removeChild(modal);
-            }, 0);
-            modal = null;
-        }
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'validationModal';
-            modal.className = 'modal fade';
-            modal.innerHTML = `
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">규정 검증 결과</h5>
-                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal" style="min-width:80px; margin-left:auto;">닫기</button>
-                        </div>
-                        <div class="modal-body">
-                            <table class="table table-bordered" id="validationResultTable" style="margin-bottom:0;">
-                                <thead>
-                                    <tr>
-                                        <th style="width:15%;">검증 항목</th>
-                                        <th style="width:10%;">검증 상태</th>
-                                        <th style="width:65%;">검증 결과 및 수정 제안</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="validationResultBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-        setTimeout(() => {
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-        }, 0);
-        return modal;
-    }
 
 
 
@@ -3171,10 +2929,10 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // aiValidationBtn/ruleValidationBtn 이벤트 리스너 - 규칙기반(+AI) 통합 검증 호출
-// 기존 window.validateSettings()(전부 클라이언트 JS 검증, "규정 검증" 버튼)를
-// 대체한다. 서버측 검증 API를 호출해 우회 불가능한 판정을 보여준다.
+// 판정은 서버가 한다 — 화면 JS 로는 우회할 수 있기 때문이다. 이것이
+// 대체했던 클라이언트 검증 한 벌(window.validateSettings)은 걷어냈다(파일 머리 주석).
 // 규정 검증(AI)(비용 발생, 일일 한도 있음)과 규정 검증(무료·무제한, AI 미사용)
-// 두 경로를 같은 모달 스타일로 보여주되 버튼을 분리해뒀다.
+// 두 경로가 같은 결과 화면을 쓰되 버튼만 분리해뒀다.
 document.addEventListener('DOMContentLoaded', function() {
 
     const aiValidationBtn = document.getElementById('aiValidationBtn');
@@ -3208,7 +2966,7 @@ async function runValidation(useAi, btnId, loadingText) {
         return;
     }
 
-    // 검증 로깅 (기존 validateSettings와 동일하게 서버에 기록)
+    // 검증을 돌렸다는 사실을 서버에 남긴다 (누가 언제 검증했나)
     try {
         await fetch('/label/log-validation/', {
             method: 'POST',
@@ -3243,7 +3001,7 @@ async function runValidation(useAi, btnId, loadingText) {
             throw new Error(`서버 응답 오류 (${resp.status})`);
         }
         const result = await resp.json();
-        showAiValidationModal(result, useAi);
+        showValidationResult(result, useAi);
     } catch (error) {
         console.error('검증 오류:', error);
         alert('검증 중 오류가 발생했습니다: ' + error.message);
@@ -3406,7 +3164,7 @@ let _lastValidation = null;
  * 규정 검증과 규정 검증(AI)이 같은 창을 쓴다 — 판정 방법이 다를 뿐 사용자가
  * 읽는 것은 같은 종류의 결과다.
  */
-function showAiValidationModal(result, useAi) {
+function showValidationResult(result, useAi) {
     const legacy = document.getElementById('validationModal');
     if (legacy) legacy.remove();
     const existing = document.getElementById('aiValidationModal');
@@ -3418,9 +3176,78 @@ function showAiValidationModal(result, useAi) {
     markValidationOnTable(categories);
     _lastValidation = { result: result, useAi: useAi };
 
+    const pane = document.getElementById('ltFirstResult');
+    if (pane) {
+        renderValidationPane(pane, result, useAi, categories);
+        return null;
+    }
+    return showAiValidationModal(result, useAi, categories);
+}
+
+/* 제목과 본문은 패널과 모달이 나눠 쓴다. **한 벌로 둔다** — 두 벌이면
+   어느 날 한쪽만 고쳐지고, 이 파일은 이미 그 일을 겪었다. */
+function vrTitleHtml(result, useAi, categories) {
+    const problems = categories.filter(c => !c.ok);
+    const blocking = problems.filter(c => !c.advisory);
+    return `<i class="fas ${useAi ? 'fa-robot' : 'fa-list-check'} me-2"></i>`
+        + `${useAi ? '규정 검증(AI)' : '규정 검증'}`
+        + vrCountsHtml(categories, blocking, problems);
+}
+
+function vrBodyHtml(result, useAi, categories) {
     const problems = categories.filter(c => !c.ok);
     const passed = categories.filter(c => c.ok);
-    const blocking = problems.filter(c => !c.advisory);
+    return vrUncheckedHtml(result.unchecked || [])
+        + vrProblemsHtml(problems)
+        + vrPassedHtml(passed)
+        + vrFooterHtml(result, useAi);
+}
+
+/*
+ * 결과를 1차 검증 탭 안에 남긴다.
+ *
+ * 여기 있으면 **왼쪽에 목록, 오른쪽 표에 번호**가 한 화면에 함께 보인다.
+ * 모달은 그 표를 덮어서, 지적 하나를 볼 때마다 열고·읽고·닫고·표에서
+ * 찾기를 되풀이하게 만들었다. 지적이 열몇이면 그 왕복도 열몇 번이다.
+ *
+ * 창으로 따로 열었을 때는 이 자리가 없다 — 그때는 모달이 맞다.
+ */
+function renderValidationPane(pane, result, useAi, categories) {
+    pane.innerHTML = `<div class="lt-vrhead vr-title">${vrTitleHtml(result, useAi, categories)}</div>`
+        + `<div class="lt-vrbody vr-body">${vrBodyHtml(result, useAi, categories)}</div>`;
+    pane.hidden = false;
+
+    /* 탭 머리의 번호를 초록으로 — 어디까지 왔는지가 보여야 한다.
+       단추를 누른 순간이 아니라 **결과가 왔을 때** 켠다. */
+    const tab = document.getElementById('ltVTab1');
+    if (tab) tab.classList.add('is-done');
+    const meta = document.getElementById('ltFirstMeta');
+    if (meta) {
+        const problems = categories.filter(c => !c.ok);
+        meta.textContent = problems.length
+            ? '아래 목록과 표의 번호가 같은 지적입니다'
+            : '어긋난 곳을 찾지 못했습니다';
+    }
+}
+
+/* 패널 안의 단추도 모달과 같게 움직인다. 모달은 제 것을 스스로 달지만
+   패널은 다시 그려지므로 문서에 한 번만 건다. */
+document.addEventListener('click', function (e) {
+    if (!e.target.closest || !e.target.closest('#ltFirstResult')) return;
+    const edit = e.target.closest('.vr-edit');
+    if (edit) {
+        e.preventDefault();
+        openFieldEditor(edit.dataset.edit);
+        return;
+    }
+    const jump = e.target.closest('.vr-jump');
+    if (!jump) return;
+    e.preventDefault();
+    jumpToTableRow(jump.dataset.jump);
+});
+
+function showAiValidationModal(result, useAi, categories) {
+    categories = categories || numberValidationIssues(result.categories || []);
 
     const modal = document.createElement('div');
     modal.id = 'aiValidationModal';
@@ -3429,19 +3256,10 @@ function showAiValidationModal(result, useAi) {
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title vr-title">
-                        <i class="fas ${useAi ? 'fa-robot' : 'fa-list-check'} me-2"></i>
-                        ${useAi ? '규정 검증(AI)' : '규정 검증'}
-                        ${vrCountsHtml(categories, blocking, problems)}
-                    </h5>
+                    <h5 class="modal-title vr-title">${vrTitleHtml(result, useAi, categories)}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body vr-body">
-                    ${vrUncheckedHtml(result.unchecked || [])}
-                    ${vrProblemsHtml(problems)}
-                    ${vrPassedHtml(passed)}
-                    ${vrFooterHtml(result, useAi)}
-                </div>
+                <div class="modal-body vr-body">${vrBodyHtml(result, useAi, categories)}</div>
             </div>
         </div>
     `;
@@ -3608,14 +3426,31 @@ function showValidationDetail(number) {
         }
         return;
     }
+    const pane = document.getElementById('ltFirstResult');
+    if (pane) {
+        /* 패널에는 이미 떠 있다. **아무것도 열지 않고** 그 지적으로만
+           데려간다 — 표를 덮지 않으므로 번호와 글이 같이 보인다. */
+        if (!pane.innerHTML) {
+            renderValidationPane(pane, _lastValidation.result, _lastValidation.useAi,
+                                 numberValidationIssues(_lastValidation.result.categories || []));
+        }
+        const openTab = document.getElementById('ltVTab1');
+        if (openTab && !openTab.classList.contains('is-on')) openTab.click();
+        flashValidationIssue(number, 0);
+        return;
+    }
     showAiValidationModal(_lastValidation.result, _lastValidation.useAi);
+    flashValidationIssue(number, 400);
+}
+
+function flashValidationIssue(number, delay) {
     setTimeout(function () {
         const found = document.getElementById(`vr-issue-${number}`);
         if (!found) return;
         found.scrollIntoView({ behavior: 'smooth', block: 'center' });
         found.classList.add('vr-issue-flash');
         setTimeout(function () { found.classList.remove('vr-issue-flash'); }, 1600);
-    }, 400);
+    }, delay || 0);
 }
 
 document.addEventListener('click', function (e) {
@@ -3628,7 +3463,8 @@ document.addEventListener('click', function (e) {
 // 부모창으로부터 데이터 수신 리스너
 window.addEventListener('message', function(e) {
     if (e.data.type === 'previewCheckedFields') {
-        // 전역 변수로 설정하여 validateSettings에서 사용할 수 있도록
+        /* 표시하기로 고른 항목. 미리보기·내보내기가 함께 읽는다
+           (`checkedFields.prdlst_nm` 등). 부모 화면이 정본을 갖고 있다. */
         window.checkedFields = e.data.checked;
         
         // 원재료명 정보 로깅
@@ -3739,157 +3575,7 @@ window.checkFoodTypePhrasesUnified = function checkFoodTypePhrasesUnified() {
     return { ok: errors.length === 0, errors, suggestions };
 };
 
-// ===== 통합 규정 검증 시스템 =====
-window.validateRegulations = function validateRegulations() {
-    const results = {
-        ok: true,
-        errors: [],
-        suggestions: [],
-        details: {}
-    };
-    
-    // checkedFields 검증
-    if (typeof checkedFields === 'undefined') {
-        console.warn('checkedFields가 정의되지 않음 - 규정 검증 불가');
-        return { ok: true, errors: [], suggestions: [] };
-    }
 
-    // 0. 기본 필드 검증 (내용량 단위 체크)
-    const basicValidation = validateBasicFields();
-    results.details.basic = basicValidation;
-    if (!basicValidation.ok) {
-        results.ok = false;
-        results.errors.push(...basicValidation.errors);
-        results.suggestions.push(...basicValidation.suggestions);
-    }
-
-    // 1. 성분 관련 검증 (농수산물 + 특정성분)
-    const ingredientValidation = validateIngredientCompliance();
-    results.details.ingredient = ingredientValidation;
-    if (!ingredientValidation.ok) {
-        results.ok = false;
-        results.errors.push(...ingredientValidation.errors);
-        results.suggestions.push(...ingredientValidation.suggestions);
-    }
-
-    // 2. 문구 관련 검증 (필수문구 + 금지문구)
-    const textValidation = validateTextCompliance();
-    results.details.text = textValidation;
-    if (!textValidation.ok) {
-        results.ok = false;
-        results.errors.push(...textValidation.errors);
-        results.suggestions.push(...textValidation.suggestions);
-    }
-
-    // 3. 알레르기 성분 검증
-    const allergenValidation = validateAllergenCompliance();
-    results.details.allergen = allergenValidation;
-    if (!allergenValidation.ok) {
-        results.ok = false;
-        results.errors.push(...allergenValidation.errors);
-        results.suggestions.push(...allergenValidation.suggestions);
-    }
-
-    // 4. 포장재질 및 분리배출마크 검증
-    const packagingValidation = validatePackagingCompliance();
-    results.details.packaging = packagingValidation;
-    if (!packagingValidation.ok) {
-        results.ok = false;
-        results.errors.push(...packagingValidation.errors);
-        results.suggestions.push(...packagingValidation.suggestions);
-    }
-
-    return results;
-};
-
-// ===== 개별 검증 모듈들 =====
-
-// 0. 기본 필드 검증
-function validateBasicFields() {
-    const errors = [];
-    const suggestions = [];
-    
-    // 내용량 단위 검증 (mg, g, kg, l, ml만 허용, 열량 표시도 허용)
-    const contentWeight = checkedFields['content_weight'] || '';
-    if (contentWeight && contentWeight.trim()) {
-        // 숫자와 단위가 붙어 있거나 띄어쓰기 한 칸이 있는 경우도 인식
-        const validUnits = /(\d+(?:\.\d+)?)\s?(mg|g|kg|ml|l)(?![a-zA-Z])/i;
-        if (!validUnits.test(contentWeight)) {
-            errors.push('내용량에 올바른 단위가 누락되었습니다.');
-            suggestions.push('내용량 필드에 mg, g, kg, ml, l 중 하나의 단위를 포함해주세요. (예: 500g, 1L, 250ml, 500l(500kcal))');
-        }
-    }
-    
-    return { ok: errors.length === 0, errors, suggestions };
-}
-
-// 1. 성분 관련 검증 (농수산물 성분 + 특정성분 함량)
-function validateIngredientCompliance() {
-    const errors = [];
-    const suggestions = [];
-    
-    // 농수산물 성분 함량 검증
-    const farmSeafoodResult = checkFarmSeafoodContent();
-    if (!farmSeafoodResult.ok) {
-        errors.push(...farmSeafoodResult.errors);
-        suggestions.push(...farmSeafoodResult.suggestions);
-    }
-    
-    return { ok: errors.length === 0, errors, suggestions };
-}
-
-// 2. 문구 관련 검증 (필수문구 + 금지문구)
-function validateTextCompliance() {
-    const errors = [];
-    const suggestions = [];
-    
-    // 필수 문구 검증
-    const requiredTextResult = checkRequiredPhrases();
-    if (!requiredTextResult.ok) {
-        errors.push(...requiredTextResult.errors);
-        suggestions.push(...requiredTextResult.suggestions);
-    }
-    
-    // 사용 금지 문구 검증
-    const forbiddenTextResult = checkForbiddenText();
-    if (!forbiddenTextResult.ok) {
-        errors.push(...forbiddenTextResult.errors);
-        suggestions.push(...forbiddenTextResult.suggestions);
-    }
-    
-    return { ok: errors.length === 0, errors, suggestions };
-}
-
-// 3. 알레르기 성분 검증
-function validateAllergenCompliance() {
-    const allergenErrors = checkAllergenDuplication();
-    return {
-        ok: allergenErrors.length === 0,
-        errors: allergenErrors,
-        suggestions: allergenErrors.length > 0 ? ['알레르기 성분과 주의문구를 확인해서 수정하세요.'] : []
-    };
-}
-
-// 4. 포장재질 및 분리배출마크 검증
-function validatePackagingCompliance() {
-    const errors = [];
-    const suggestions = [];
-    
-    // 분리배출마크 검증
-    try {
-        if (typeof window.checkRecyclingMarkCompliance === 'function') {
-            const recyclingResult = window.checkRecyclingMarkCompliance();
-            if (!recyclingResult.ok) {
-                errors.push(...recyclingResult.errors);
-                suggestions.push(...recyclingResult.suggestions);
-            }
-        }
-    } catch (e) {
-        console.warn('분리배출마크 검증 오류:', e);
-    }
-    
-    return { ok: errors.length === 0, errors, suggestions };
-}
 
 // ===== 세부 검증 함수들 (기존 함수들을 리팩토링) =====
 
