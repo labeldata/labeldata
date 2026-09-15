@@ -3096,6 +3096,66 @@ function numberValidationIssues(categories) {
     return categories || [];
 }
 
+/*
+ * 표를 다시 그리면 배지가 함께 지워진다 — 다시 얹는다.
+ *
+ * 표는 자주 다시 그려진다. 기본 정보 탭에서 값을 고치고 돌아오면 바깥
+ * 화면이 새 데이터를 밀어 주고, 그때 `renderTableWithLayout` 이 tbody 를
+ * 통째로 갈아 끼운다. 그러면 **왼쪽 목록은 남아 있는데 오른쪽 번호만
+ * 사라져서**, 목록의 "③" 이 표의 어디를 가리키는지 알 수 없게 된다.
+ *
+ * 값이 바뀌었으니 판정 자체는 낡았을 수 있다. 그래서 되살리되 낡았다고
+ * 말해 준다(renderValidationPane 의 안내 문구).
+ */
+/* ── 검사 결과는 화면을 떠났다 와도 남아야 한다 ────────────────────────
+ *
+ * 지적을 하나 고치러 기본 정보 탭에 다녀오면 검증 탭의 결과가 통째로
+ * 사라져 있었다. 고치러 갈 때마다 다시 돌려야 한다는 뜻이고, 그러면
+ * "고치러 가기" 를 누를수록 일이 늘어난다.
+ *
+ * 창 하나에만 남긴다(sessionStorage) — 다른 사람·다른 기기와 나눌 것이
+ * 아니고, 제품마다 다르므로 열쇠에 label_id 를 넣는다. 읽기·쓰기 모두
+ * 실패할 수 있는 자리라 try 로 감싼다(사생활 보호 창에서는 막힌다).
+ * ─────────────────────────────────────────────────────────────────── */
+const VALIDATION_CACHE_KEY = 'labelValidation';
+
+function validationCacheKey() {
+    const id = new URLSearchParams(window.location.search).get('label_id') || '';
+    return VALIDATION_CACHE_KEY + ':' + id;
+}
+
+function saveValidationCache(result, useAi) {
+    try {
+        sessionStorage.setItem(validationCacheKey(),
+                               JSON.stringify({ result: result, useAi: useAi }));
+    } catch (e) { /* 남기지 못해도 이번 화면에서는 보인다 */ }
+}
+
+function restoreValidation() {
+    const pane = document.getElementById('ltFirstResult');
+    if (!pane || _lastValidation) return;
+    let saved = null;
+    try {
+        saved = JSON.parse(sessionStorage.getItem(validationCacheKey()) || 'null');
+    } catch (e) { return; }
+    if (!saved || !saved.result) return;
+
+    const categories = numberValidationIssues(saved.result.categories || []);
+    markValidationOnTable(categories);
+    _lastValidation = { result: saved.result, useAi: saved.useAi, categories: categories };
+    renderValidationPane(pane, saved.result, saved.useAi, categories, true);
+}
+
+function reapplyValidationMarks() {
+    if (!_lastValidation) { restoreValidation(); return; }
+    if (!_lastValidation.categories) return;
+    try {
+        markValidationOnTable(_lastValidation.categories);
+    } catch (e) {
+        console.warn('검증 표시를 다시 얹지 못했습니다:', e);
+    }
+}
+
 function markValidationOnTable(categories) {
     document.querySelectorAll('#previewContent .pv-issue-badge').forEach(function (el) { el.remove(); });
     document.querySelectorAll('[data-field-row]').forEach(function (row) {
@@ -3174,7 +3234,9 @@ function showValidationResult(result, useAi) {
     // 를 잇는 일이 사람 몫이 된다 — 열일곱 줄을 눈으로 훑으며 대조해야 했다.
     const categories = numberValidationIssues(result.categories || []);
     markValidationOnTable(categories);
-    _lastValidation = { result: result, useAi: useAi };
+    _lastValidation = { result: result, useAi: useAi, categories: categories };
+
+    saveValidationCache(result, useAi);
 
     const pane = document.getElementById('ltFirstResult');
     if (pane) {
@@ -3212,10 +3274,24 @@ function vrBodyHtml(result, useAi, categories) {
  *
  * 창으로 따로 열었을 때는 이 자리가 없다 — 그때는 모달이 맞다.
  */
-function renderValidationPane(pane, result, useAi, categories) {
-    pane.innerHTML = `<div class="lt-vrhead vr-title">${vrTitleHtml(result, useAi, categories)}</div>`
+function renderValidationPane(pane, result, useAi, categories, restored) {
+    /* <details> 다 — **접을 수 있어야 한다.** 이 패널에는 아래로 표 설정·
+       항목 순서·글자 서식이 이어지는데, 결과가 길면 그것들이 화면 밖으로
+       밀린다. 접기는 브라우저가 해 주므로 JS 를 더 두지 않는다. 접어도
+       머리줄에 개수가 남아 무엇이 나왔는지는 계속 보인다. */
+    pane.innerHTML = `<summary class="lt-vrhead vr-title">${vrTitleHtml(result, useAi, categories)}</summary>`
         + `<div class="lt-vrbody vr-body">${vrBodyHtml(result, useAi, categories)}</div>`;
     pane.hidden = false;
+    pane.open = true;
+
+    /* 되살린 결과는 **그 사이에 값이 바뀌었을 수 있다.** 검사한 그대로라고
+       말하면, 고치고 돌아온 사람이 "고쳤는데 그대로네" 로 읽는다. */
+    if (restored) {
+        const note = document.createElement('div');
+        note.className = 'lt-vrstale';
+        note.textContent = '앞서 돌린 결과입니다. 값을 고쳤다면 다시 검증해 주세요.';
+        pane.insertBefore(note, pane.querySelector('.lt-vrbody'));
+    }
 
     /* 탭 머리의 번호를 초록으로 — 어디까지 왔는지가 보여야 한다.
        단추를 누른 순간이 아니라 **결과가 왔을 때** 켠다. */
@@ -4906,6 +4982,9 @@ window.renderTableWithLayout = function(data, layoutMode) {
     if (typeof window.updatePreviewStyles === 'function') {
         window.updatePreviewStyles();
     }
+
+    /* tbody 를 통째로 갈아 끼웠으므로 검증 번호도 함께 지워졌다. */
+    reapplyValidationMarks();
 };
 
 /*

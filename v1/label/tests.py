@@ -19849,9 +19849,109 @@ class ValidationResultPanelTests(TestCase):
         self.assertIn('id="ltFirstResult"', self._read(self.HTML))
 
     def test_결과가_길어도_설정_패널을_밀지_않는다(self):
-        # settings-panel 은 overflow:hidden 이라, 안에서 스크롤하지 않으면
-        # 아래 탭들이 통째로 잘린다.
+        """
+        이 패널은 검증 아래로 표 설정·항목 순서·글자 서식이 이어지는 세로
+        한 줄이다. 결과를 그대로 쌓으면 그것들이 화면 밖으로 밀린다 —
+        처음 붙였을 때 실제로 그랬다.
+
+        막는 것은 둘이다. 검증 덩어리 전체에 높이 상한을 주고, 그 안에서
+        스크롤하는 것은 결과 본문 하나뿐이게 한다(min-height:0 사슬).
+        """
         css = self._read(self.CSS)
-        block = css[css.index('.lt-vrbody'):css.index('.lt-vrbody') + 160]
-        self.assertIn('max-height', block)
-        self.assertIn('overflow-y', block)
+        verify = css[css.index('.lt-verify {'):css.index('.lt-verify {') + 420]
+        self.assertIn('max-height', verify)
+
+        body = css[css.index('.lt-vrbody {'):css.index('.lt-vrbody {') + 120]
+        self.assertIn('overflow-y: auto', body)
+        self.assertIn('min-height: 0', body)
+
+    def test_결과를_접을_수_있다(self):
+        # 접어도 머리줄의 개수는 남는다 — 무엇이 나왔는지는 계속 보인다.
+        self.assertIn('<details class="lt-vresult" id="ltFirstResult"',
+                      self._read(self.HTML))
+        at = self.js.index('function renderValidationPane')
+        self.assertIn('<summary', self.js[at:at + 1200])
+
+
+class ValidationResultSurvivesTests(TestCase):
+    """
+    검사 결과는 화면을 떠났다 와도 남아야 한다.
+
+    지적을 고치러 기본 정보 탭에 다녀오면 결과가 통째로 사라졌다. 「수정하러
+    가기」를 누를수록 일이 느는 셈이었다. 사라지는 길이 둘이다 —
+
+      1. 표를 다시 그리면 tbody 가 통째로 갈리며 **번호 배지가 지워진다.**
+         왼쪽 목록의 "③" 이 어디를 가리키는지 알 수 없게 된다.
+      2. 미리보기가 다시 뜨면 JS 변수에 있던 결과가 없어진다.
+    """
+
+    @classmethod
+    def _read(cls, rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def setUp(self):
+        import re
+
+        js = self._read('static/js/label/label_preview.js')
+        self.js = re.sub(r'(?m)//.*$', '', re.sub(r'/\*.*?\*/', '', js, flags=re.S))
+
+    def test_표를_다시_그리면_번호를_다시_얹는다(self):
+        at = self.js.index('window.renderTableWithLayout = function')
+        # 이 함수는 마흔 줄 남짓이다. 다음 'function' 으로 끊으면 본문 안의
+        # typeof 검사에 먼저 걸려 범위가 터무니없이 짧아진다.
+        self.assertIn('reapplyValidationMarks()', self.js[at:at + 3000])
+
+    def test_결과를_제품별로_갈무리한다(self):
+        # 열쇠에 label_id 가 없으면 옆 제품의 지적이 이 제품에 뜬다.
+        at = self.js.index('function validationCacheKey')
+        self.assertIn('label_id', self.js[at:at + 300])
+        self.assertIn('sessionStorage.setItem', self.js)
+        self.assertIn('sessionStorage.getItem', self.js)
+
+    def test_되살린_결과는_낡았다고_말한다(self):
+        # 고치고 돌아온 사람이 옛 지적을 지금 판정으로 읽으면 안 된다.
+        at = self.js.index('function renderValidationPane')
+        block = self.js[at:at + 2000]
+        self.assertIn('restored', block)
+        self.assertIn('lt-vrstale', block)
+        self.assertIn('.lt-vrstale', self._read('static/css/label_preview.css'))
+
+    def test_갈무리를_못_해도_화면은_뜬다(self):
+        # 사생활 보호 창에서는 sessionStorage 가 던진다.
+        for fn in ('function saveValidationCache', 'function restoreValidation'):
+            at = self.js.index(fn)
+            self.assertIn('try {', self.js[at:at + 500], '%s 가 감싸지 않았다' % fn)
+
+
+class ValidationEditJumpTests(TestCase):
+    """
+    「수정하러 가기」가 조용히 실패하던 것.
+
+    `gotoLabelField` 는 그 칸을 못 찾으면 false 를 돌려주는데 받는 쪽이
+    그것을 버렸다. 사용자에게는 눌러도 **아무 일도 일어나지 않는 것**으로
+    보인다 — 단추가 고장 난 줄 안다.
+    """
+
+    def tab(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'templates/products/_tab_label.html'),
+                     encoding='utf-8') as f:
+            return f.read()
+
+    def test_못_가면_말해_준다(self):
+        html = self.tab()
+        at = html.index("e.data.type === 'focusLabelField'")
+        block = html[at:at + 1400]
+        self.assertIn('window.gotoLabelField(e.data.field)', block)
+        self.assertIn('showSnackbar', block)
+        self.assertIn('console.warn', block)   # 어느 칸이었는지 단서를 남긴다

@@ -282,8 +282,22 @@
 
                바깥 문서(product_detail)가 가진 한 벌을 부른다. 영양성분처럼
                다른 탭으로 보내야 하는 항목도 그쪽이 안다. */
-            if (typeof window.gotoLabelField === 'function') {
-                window.gotoLabelField(e.data.field);
+            /* **못 갔으면 못 갔다고 말한다.**
+
+               `gotoLabelField` 는 그 칸을 못 찾으면 false 를 돌려주는데,
+               여기서 그것을 버리고 있었다. 사용자에게는 「수정하러 가기」 를
+               눌렀는데 **아무 일도 일어나지 않는 것**으로 보인다 — 단추가
+               고장 난 줄 안다. 어느 칸이었는지는 콘솔에 남겨 다음에 규칙을
+               넓힐 단서로 쓴다. */
+            var moved = (typeof window.gotoLabelField === 'function')
+                && window.gotoLabelField(e.data.field);
+            if (!moved) {
+                console.warn('[검증] 열 수 있는 칸이 없다:', e.data.field);
+                if (window.showSnackbar) {
+                    window.showSnackbar(
+                        '이 지적은 바로 열 수 있는 칸이 없습니다. 값이 있는 탭에서 고쳐 주세요.',
+                        'warning');
+                }
             }
             return;
         }

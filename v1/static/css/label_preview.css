@@ -1791,6 +1791,10 @@ tbody.layout-vertical tr td {
     background: var(--bg-secondary, #f8f9fa);
     border: 1px solid var(--border-light, #e5e7eb);
     border-radius: 10px;
+    /* 결과가 아래 설정들을 밀어내지 않게 — 아래 「결과」 절 참고 */
+    max-height: 48%;
+    display: flex;
+    flex-direction: column;
 }
 .lt-vtabs { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
 .lt-vtab {
@@ -1841,15 +1845,47 @@ tbody.layout-vertical tr td {
     white-space: nowrap;
 }
 .lt-vact { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-/* 1차 결과가 이 탭에 남는다. 길어지면 **여기서만** 스크롤한다 —
-   설정 패널은 overflow:hidden 이라, 안 막으면 아래 탭이 밀려 잘린다. */
+/* ── 결과가 설정 항목을 밀어내지 않게 ─────────────────────────────────
+ *
+ * 이 패널은 검증 위에 표 설정·항목 순서·글자 서식이 이어지는 **세로 한 줄**
+ * 이다. 결과를 그대로 쌓으면 그것들이 화면 밖으로 밀려 나간다(처음 붙였을
+ * 때 실제로 그랬다).
+ *
+ * 그래서 두 가지를 둔다. 검증 덩어리 전체에 높이 상한을 주어 **설정이 늘
+ * 절반 넘게 남게** 하고, 그 안에서 스크롤하는 것은 결과 본문 하나뿐이게
+ * 한다(min-height:0 사슬이 그것을 만든다). 그리고 <details> 라 접을 수
+ * 있다 — 접어도 머리줄의 개수는 남는다.
+ * ──────────────────────────────────────────────────────────────────── */
+.lt-vtabs, .lt-vwhat, .lt-vact { flex-shrink: 0; }
+.lt-vpane.is-on { display: flex; flex-direction: column; min-height: 0; }
+
 .lt-vresult {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     margin-top: 10px;
     padding-top: 9px;
     border-top: 1px solid var(--border-light, #e5e7eb);
 }
-.lt-vrhead { font-size: 13.5px; font-weight: 700; margin-bottom: 7px; }
-.lt-vrbody { max-height: 42vh; overflow-y: auto; padding-right: 4px; }
+.lt-vrhead {
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-bottom: 7px;
+}
+.lt-vrhead::-webkit-details-marker { margin-right: 4px; }
+.lt-vrbody { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+/* 되살린 결과 — 그 사이 값이 바뀌었을 수 있다 */
+.lt-vrstale {
+    flex-shrink: 0;
+    margin-bottom: 7px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: #fff8e1;
+    color: #8a6100;
+    font-size: 11.5px;
+}
 .lt-vbtn { font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 8px; }
 .lt-vstate { font-size: 11.5px; color: var(--ez-gray-700, #5f6368); }
 .lt-vmore { margin-top: 7px; font-size: 11.5px; }
