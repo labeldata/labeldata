@@ -11857,3 +11857,86 @@ class DocumentExpiryTimezoneTests(TestCase):
         sql = ' '.join(q['sql'] for q in captured.captured_queries)
         self.assertNotIn('CONVERT_TZ', sql)
         self.assertNotIn('datetime_cast_date', sql)
+
+
+class BomIngredientSelectionTests(TestCase):
+    """
+    원료를 고르면 딸린 값이 따라온다 — **의도된 동작**(2026-09-15 확정).
+
+    자동완성에서 원료를 고르면 여섯 칸이 원료 마스터 값으로 덮인다. 손으로
+    고쳐 둔 값이 있어도 덮는다. "이 줄은 그 원료다" 라고 말하는 일이므로
+    원료의 값이 이기는 것이 맞다는 판단이다.
+
+    시험으로 잠그는 까닭은, 이 동작이 **결함처럼 보이기 때문**이다. 값이
+    사라지는 것을 본 사람이 "덮어쓰기 버그" 로 읽고 조용히 빼면, 원료를
+    골라도 아무것도 안 따라오는 표가 된다.
+    """
+
+    SOURCE = 'templates/products/bom_detail.html'
+
+    @staticmethod
+    def _no_comments(src):
+        import re
+        src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+        return re.sub(r'(?m)//.*$', '', src)
+
+    def setUp(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, self.SOURCE),
+                     encoding='utf-8') as f:
+            src = self._no_comments(f.read())
+        start = src.index('function applyIngredientSelection')
+        self.body = src[start:start + 3000]
+
+    def test_원료를_고르면_여섯_칸이_따라온다(self):
+        for prop in ('raw_material_name', 'food_type', 'manufacturer',
+                     'allergens', 'gmo', 'report_no'):
+            self.assertIn(prop, self.body,
+                          '%s 가 applyIngredientSelection 에서 빠졌다' % prop)
+
+    def test_패널로_옮기는_경로를_끊지_않는다(self):
+        # setRowProps 에 source 를 주면 afterChange 가 건너뛰고, 표에서 바뀐
+        # 값이 오른쪽 패널에 반영되지 않는다. 그 뒤 저장하면 패널의 옛 값이
+        # 표를 도로 덮는다.
+        self.assertNotIn("'syncPanel'", self.body)
+        self.assertNotIn("'palette'", self.body)
+
+
+class DailyRemindersTests(TestCase):
+    """
+    하루치 알림을 한 줄로 묶은 것(`daily_reminders`).
+
+    예약 자리가 꽉 차서 묶었다. 묶은 것의 값은 **하나가 죽어도 나머지가
+    나가는 것**에 있다 — 그러지 않으면 자리를 아낀 대신 알림 전체를 한
+    지점에 걸어 둔 셈이 된다.
+    """
+
+    def _run(self, **kw):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out, err = StringIO(), StringIO()
+        call_command('daily_reminders', stdout=out, stderr=err, **kw)
+        return out.getvalue(), err.getvalue()
+
+    def test_둘을_한_번에_돌린다(self):
+        out, _ = self._run()
+        self.assertIn('alert_expiring_documents', out)
+        self.assertIn('remind_doc_requests', out)
+
+    def test_하나가_죽어도_나머지는_돈다(self):
+        from unittest.mock import patch
+
+        from v1.products.management.commands import daily_reminders
+
+        broken = [('이런_커맨드는_없다', '일부러 깨뜨린 것'),
+                  ('alert_expiring_documents', '문서 유효기간 만료 알림')]
+        with patch.object(daily_reminders, 'REMINDERS', broken):
+            out, err = self._run()
+        self.assertIn('오늘 말할 제품', out)   # 뒤에 선 것이 돌았다
+        self.assertIn('실패', err)
