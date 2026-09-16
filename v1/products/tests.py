@@ -12231,3 +12231,61 @@ class CompareScreensShareOneModuleTests(TestCase):
         self.assertIn('window.photoViewerElement(file', js)
         # 놓아 주지 않으면 창을 열 때마다 objectURL 이 남는다.
         self.assertIn('photoViewerRelease', js)
+
+
+class NutritionTabUsesDocumentSpecTests(TestCase):
+    """
+    영양성분 탭에서 성적서를 부른다.
+
+    그 종이는 **이미 문서함에 있다.** 그런데 값을 넣는 자리는 영양성분 탭이고
+    판독은 문서함 화면에만 있었다 — 성적서를 열어 놓고 아홉 칸을 손으로 옮겨
+    적고 있었다는 뜻이다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def setUp(self):
+        self.editor = self._read('templates/products/nutrition_editor.html')
+        self.docs = self._read('templates/products/_tab_documents.html')
+
+    def test_공인기관_성적서를_골랐을_때만_나온다(self):
+        # 「배합에서 계산」 과 짝이다. 두 단추가 같이 있으면 어느 값이 표에
+        # 들어간 것인지 사람이 헷갈린다.
+        self.assertIn('id="fromSpecItem"', self.editor)
+        at = self.editor.index('function paint()')
+        block = self.editor[at:at + 700]
+        self.assertIn("source.value === 'lab'", block)
+        self.assertIn("theory", block)
+
+    def test_판독을_베끼지_않고_바깥_문을_두드린다(self):
+        """
+        같은 것이 두 벌이 되면 어느 날 한쪽만 고쳐진다 — 이 저장소가 검증
+        모달에서 이미 겪었다. 미리보기의 2차 검증이 `ltStartCompare` 를
+        부르는 것과 같은 꼴로, 문 하나만 둔다.
+        """
+        self.assertIn('outer.pickSpecNutritionDoc()', self.editor)
+        # 판독·환산 코드가 이쪽에 복사되지 않았다
+        self.assertNotIn('spec-nutrition/', self.editor)
+        self.assertNotIn('basis_amount', self.editor)
+
+    def test_문서함_쪽이_그_문을_연다(self):
+        self.assertIn('window.pickSpecNutritionDoc = function', self.docs)
+        at = self.docs.index('window.pickSpecNutritionDoc = function')
+        block = self.docs[at:at + 2600]
+        self.assertIn('looksLikeSpecSheet', block)     # 이름으로 고른다
+        self.assertIn('window.readSpecNutrition(', block)   # 판독은 한 벌
+
+    def test_고를_것이_하나면_묻지_않는다(self):
+        # 묻는 창은 고를 것이 둘 이상일 때만 뜻이 있다.
+        at = self.docs.index('window.pickSpecNutritionDoc = function')
+        block = self.docs[at:at + 2600]
+        self.assertIn('docs.length === 1', block)
+        self.assertIn('if (!docs.length)', block)      # 없으면 문서함으로 보낸다
