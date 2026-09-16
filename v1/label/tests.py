@@ -20330,3 +20330,37 @@ class SpecNutritionTableLayoutTests(TestCase):
 
         got = parse_values('열량(kcal/100g)\n기준없음\n비고\n참고\n574.38\n')
         self.assertNotIn('calories', got)
+
+
+class 넓으면_접지_않는다(TestCase):
+    """
+    7:3 은 **좁은 화면의 값**이다. 넓어져도 그 비율 그대로라 ① 은 1회
+    섭취참고량이 둘째 줄로 떨어지고 ② 는 단추가 셋째 줄로 떨어졌다 —
+    자리는 남는데 접혀 있는 꼴이다.
+    """
+
+    def css(self):
+        import io
+        return io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
+
+    def test_창_크기가_아니라_받은_너비로_판단한다(self):
+        """
+        이 화면은 iframe 안이고 오른쪽 미리보기가 폭을 가져간다. 창 크기로
+        재면 "넓은 창 + 좁은 설정칸" 을 넓다고 잘못 본다.
+        """
+        css = self.css()
+        self.assertIn('.config-section { container-type: inline-size; }', css)
+        self.assertIn('@container (min-width: 1000px)', css)
+
+    def test_좁을_때_값은_그대로다(self):
+        # 받쳐 주지 않는 브라우저에서는 이 규칙만 무시되고 7:3 이 살아야 한다.
+        css = self.css()
+        self.assertIn('.cfg-group--spec   { flex: 7 1 340px; }', css)
+        self.assertIn('.cfg-group--source { flex: 3 1 170px; }', css)
+
+    def test_넓으면_제품_규격이_한_줄이다(self):
+        css = self.css()
+        at = css.index('@container (min-width: 1000px)')
+        block = css[at:at + 400]
+        self.assertIn('.cfg-group--spec .cfg-row { flex-wrap: nowrap; }', block)
+        self.assertIn('.cfg-group--source { flex: 4 1 380px; }', block)

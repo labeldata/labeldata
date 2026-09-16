@@ -12115,7 +12115,8 @@ class SpecNutritionScreenTests(TestCase):
 
     def test_기준량을_못_읽어도_창은_연다(self):
         # 여기서 끝내면 읽어 둔 값까지 함께 버려진다.
-        at = self.html.index('window.readSpecNutrition')
+        # 정의 자리를 잡는다 — 이름만 찾으면 부르는 쪽이 먼저 걸린다
+        at = self.html.index('window.readSpecNutrition = async function')
         block = self.html[at:at + 3000]
         self.assertIn('showSpecNutrition(docId, body)', block)
         self.assertIn('id="specBasisAmount"', self.html)
@@ -12289,3 +12290,54 @@ class NutritionTabUsesDocumentSpecTests(TestCase):
         block = self.docs[at:at + 2600]
         self.assertIn('docs.length === 1', block)
         self.assertIn('if (!docs.length)', block)      # 없으면 문서함으로 보낸다
+
+
+class AttachSpecFromNutritionTabTests(TestCase):
+    """
+    성적서를 **올리는 것부터** 영양성분 탭에서 된다.
+
+    예전에는 읽기만 있었다. 문서함에 성적서가 없으면 "먼저 올려 주세요" 를
+    보고 문서함 탭으로 가서 올리고 다시 돌아와야 했다 — 값을 넣으러 온
+    사람에게 왕복을 시키는 셈이다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_첨부_단추가_있다(self):
+        editor = self._read('templates/products/nutrition_editor.html')
+        self.assertIn('id="fromSpecAttachBtn"', editor)
+        self.assertIn('outer.attachSpecNutritionDoc()', editor)
+
+    def test_올리는_창은_문서함_것을_그대로_쓴다(self):
+        # 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+        docs = self._read('templates/products/_tab_documents.html')
+        at = docs.index('window.attachSpecNutritionDoc = function')
+        block = docs[at:at + 2200]
+        self.assertIn('openUploadModal(null, null, null)', block)
+        self.assertIn('document-type-select', block)   # 종류만 미리 골라 둔다
+
+    def test_올린_뒤_그_문서를_바로_읽는다(self):
+        # 방금 올린 것을 다시 고르게 할 까닭이 없다.
+        upload = self._read('static/js/smart_upload.js')
+        self.assertIn("sessionStorage.getItem('specReadAfterUpload')", upload)
+        self.assertIn("sessionStorage.setItem('specReadDocId'", upload)
+
+        docs = self._read('templates/products/_tab_documents.html')
+        self.assertIn("sessionStorage.getItem('specReadDocId')", docs)
+        self.assertIn('window.readSpecNutrition(Number(pending))', docs)
+
+    def test_창을_그냥_닫으면_표시를_거둔다(self):
+        # 남겨 두면 다음에 아무 문서나 올렸을 때 엉뚱하게 판독 창이 뜬다.
+        docs = self._read('templates/products/_tab_documents.html')
+        at = docs.index('window.attachSpecNutritionDoc = function')
+        block = docs[at:at + 2200]
+        self.assertIn("removeItem('specReadAfterUpload')", block)
+        self.assertIn("hidden.bs.modal", block)

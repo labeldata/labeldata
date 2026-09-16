@@ -108,6 +108,26 @@ body {
 .cfg-group--spec   { flex: 7 1 340px; }
 .cfg-group--source { flex: 3 1 170px; }
 
+/* ── 넓으면 ① 은 한 줄, ② 는 두 줄 ───────────────────────────────────
+ *
+ * 위의 7:3 은 **좁은 화면의 값**이다. 넓어져도 그 비율 그대로라 ① 은 1회
+ * 섭취참고량이 둘째 줄로 떨어지고, ② 는 단추가 셋째 줄로 떨어졌다 — 자리는
+ * 남는데 접혀 있는 꼴이다.
+ *
+ * 화면 너비가 아니라 **이 묶음이 실제로 받은 너비**로 판단한다. 이 화면은
+ * iframe 안이고 오른쪽 미리보기가 폭을 가져가므로, 창 크기로 재면 맞지
+ * 않는다. 받쳐 주지 않는 브라우저에서는 이 규칙만 무시되고 위의 7:3 이
+ * 그대로 산다.
+ * ─────────────────────────────────────────────────────────────────── */
+.config-section { container-type: inline-size; }
+
+@container (min-width: 1000px) {
+    .cfg-group--spec   { flex: 6 1 560px; }
+    .cfg-group--source { flex: 4 1 380px; }
+    /* 셋이 한 줄에 선다. 이 너비에서는 접힐 까닭이 없다 */
+    .cfg-group--spec .cfg-row { flex-wrap: nowrap; }
+}
+
 .cfg-legend {
     display: flex;
     align-items: center;

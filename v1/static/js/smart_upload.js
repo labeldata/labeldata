@@ -421,6 +421,17 @@ async function handleSmartUpload() {
             // 성공 메시지 + 문서함 탭 복원 후 새로고침
             showSnackbar(data.message || '문서가 성공적으로 등록되었습니다.', 'success');
             sessionStorage.setItem('returnToTab', 'docs');
+
+            /* 영양성분 탭에서 "성적서 첨부" 로 들어온 길이면, 새로고침 뒤에
+               **방금 올린 그 문서를 읽는다.** 올린 사람은 값을 넣으러 온
+               것이지 파일을 쌓으러 온 것이 아니다. */
+            try {
+                if (sessionStorage.getItem('specReadAfterUpload') && data.document_id) {
+                    sessionStorage.removeItem('specReadAfterUpload');
+                    sessionStorage.setItem('specReadDocId', String(data.document_id));
+                }
+            } catch (e) { /* 못 남겨도 업로드는 끝났다 */ }
+
             window.location.reload();
         } else {
             const error = await response.json();

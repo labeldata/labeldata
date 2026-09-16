@@ -115,10 +115,30 @@
                       판독은 그대로 문서함 것을 쓴다(두 벌로 두지 않는다).
                     {% endcomment %}
                     <span class="cfg-item" id="fromSpecItem" style="display:none;">
+                        {% comment %}
+                          **올리는 것부터 여기서 된다.**
+
+                          예전에는 읽기만 있었다. 그런데 성적서가 아직 문서함에
+                          없으면 "먼저 올려 주세요" 를 보고 문서함 탭으로 가서
+                          올리고 다시 돌아와야 했다 — 값을 넣으러 온 사람에게
+                          왕복을 시키는 셈이다.
+
+                          올린 뒤에는 **그 문서를 바로 읽는다.** 방금 올린
+                          것을 다시 고르게 할 까닭이 없다.
+
+                          글자를 짧게 둔 것은 이 묶음을 두 줄에 담기 위해서다
+                          — 무엇을 하는 단추인지는 옆의 「이 값은: 공인기관
+                          성적서」 가 이미 말하고 있다.
+                        {% endcomment %}
+                        <button type="button" class="btn btn-outline-primary btn-sm"
+                                id="fromSpecAttachBtn"
+                                title="영양성분 성적서를 문서함에 올리고 곧바로 읽습니다">
+                            <i class="bi bi-paperclip"></i> 성적서 첨부
+                        </button>
                         <button type="button" class="btn btn-outline-primary btn-sm"
                                 id="fromSpecBtn"
                                 title="문서함에 올려 둔 영양성분 성적서를 읽어 이 표에 넣습니다">
-                            <i class="bi bi-clipboard-data"></i> 성적서에서 불러오기
+                            <i class="bi bi-clipboard-data"></i> 불러오기
                         </button>
                     </span>
                     <span class="cfg-item" id="fromBomItem" style="display:none;">
@@ -1128,6 +1148,21 @@ function bindCalcSource() {
                 return;
             }
             outer.pickSpecNutritionDoc();
+        });
+    }
+
+    const fromSpecAttachBtn = document.getElementById('fromSpecAttachBtn');
+    if (fromSpecAttachBtn) {
+        fromSpecAttachBtn.addEventListener('click', function () {
+            const outer = window.parent;
+            if (!outer || outer === window
+                    || typeof outer.attachSpecNutritionDoc !== 'function') {
+                if (typeof showSnackbar === 'function') {
+                    showSnackbar('제품 화면에서 열어야 문서를 올릴 수 있습니다.', 'warning');
+                }
+                return;
+            }
+            outer.attachSpecNutritionDoc();
         });
     }
 
