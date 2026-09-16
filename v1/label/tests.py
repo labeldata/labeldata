@@ -20350,7 +20350,9 @@ class 넓으면_접지_않는다(TestCase):
         """
         css = self.css()
         self.assertIn('.config-section { container-type: inline-size; }', css)
-        self.assertIn('@container (min-width: 1000px)', css)
+        # 기준을 1000px 로 뒀다가 **아무 데도 안 걸렸다.** 이 설정칸이 실제로
+        # 받는 폭은 800px 안팎이다 — 오른쪽 미리보기가 절반을 가져간다.
+        self.assertIn('@container (min-width: 760px)', css)
 
     def test_좁을_때_값은_그대로다(self):
         # 받쳐 주지 않는 브라우저에서는 이 규칙만 무시되고 7:3 이 살아야 한다.
@@ -20360,7 +20362,25 @@ class 넓으면_접지_않는다(TestCase):
 
     def test_넓으면_제품_규격이_한_줄이다(self):
         css = self.css()
-        at = css.index('@container (min-width: 1000px)')
-        block = css[at:at + 400]
-        self.assertIn('.cfg-group--spec .cfg-row { flex-wrap: nowrap; }', block)
-        self.assertIn('.cfg-group--source { flex: 4 1 380px; }', block)
+        at = css.index('@container (min-width: 760px)')
+        block = css[at:at + 700]
+        self.assertIn('.cfg-group--spec .cfg-row  { flex-wrap: nowrap; }', block)
+        self.assertIn('.cfg-group--source { flex: 4 1 285px; }', block)
+
+    def test_모자라면_접지_말고_줄어든다(self):
+        """
+        접히면 줄이 하나 늘고 그만큼 아래 표가 밀린다. 입력칸이 몇 px
+        좁아지는 것은 티가 안 난다. 넘쳐 흐르지 않게 최소 폭을 준다.
+        """
+        css = self.css()
+        at = css.index('@container (min-width: 760px)')
+        block = css[at:at + 700]
+        self.assertIn('.cfg-group--spec .cfg-item { flex: 0 1 auto; min-width: 0; }', block)
+        self.assertIn('min-width: 44px', block)
+
+    def test_칸이_내용에_맞게_좁다(self):
+        # "133" · "1" · "30" 이 들어가는 칸에 열 자리를 잡아 두고 그 때문에
+        # 줄이 접히면 손해가 크다.
+        css = self.css()
+        self.assertIn('.cfg-num { width: 64px; text-align: right; }', css)
+        self.assertIn('.cfg-unit { width: 54px; }', css)

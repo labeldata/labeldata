@@ -121,11 +121,19 @@ body {
  * ─────────────────────────────────────────────────────────────────── */
 .config-section { container-type: inline-size; }
 
-@container (min-width: 1000px) {
-    .cfg-group--spec   { flex: 6 1 560px; }
-    .cfg-group--source { flex: 4 1 380px; }
-    /* 셋이 한 줄에 선다. 이 너비에서는 접힐 까닭이 없다 */
-    .cfg-group--spec .cfg-row { flex-wrap: nowrap; }
+/* 기준을 1000px 로 뒀다가 **아무 데도 안 걸렸다.** 이 설정칸이 실제로 받는
+   폭은 800px 안팎이다 — 오른쪽 미리보기가 절반을 가져간다. 재 보고 고친다. */
+@container (min-width: 760px) {
+    .cfg-group--spec   { flex: 6 1 470px; }
+    .cfg-group--source { flex: 4 1 285px; }
+
+    /* 셋이 한 줄에 선다.
+       모자랄 때 **접히지 않고 조금 줄어들게** 한다 — 접히면 줄이 하나 늘고
+       그만큼 아래 표가 밀리는데, 입력칸이 몇 px 좁아지는 것은 티가 안 난다.
+       넘쳐 흐르지 않도록 최소 폭을 준다. */
+    .cfg-group--spec .cfg-row  { flex-wrap: nowrap; }
+    .cfg-group--spec .cfg-item { flex: 0 1 auto; min-width: 0; }
+    .cfg-group--spec .cfg-num  { min-width: 44px; }
 }
 
 .cfg-legend {
@@ -166,9 +174,11 @@ body {
     white-space: nowrap;
     margin: 0;
 }
-.cfg-num { width: 74px; text-align: right; }
+/* 74px 이던 자리. 여기 들어가는 것은 "133" · "1" · "30" 처럼 **세 자리
+   안쪽**이다. 열 자리를 잡아 두고 그 때문에 줄이 접히면 손해가 크다. */
+.cfg-num { width: 64px; text-align: right; }
 .cfg-num-sm { width: 52px; text-align: right; }
-.cfg-unit { width: 62px; }
+.cfg-unit { width: 54px; }          /* g · ml 둘뿐이다 */
 .cfg-unit-text { font-size: 12.5px; color: #6b7280; }
 .cfg-op { color: var(--ez-gray-500, #9aa0a6); font-size: 12.5px; }
 .cfg-grow { flex: 1 1 200px; min-width: 0; }

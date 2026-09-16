@@ -76,8 +76,9 @@
                     </span>
                     <span class="cfg-sep"></span>
                     <span class="cfg-item">
+                        {# "1회" 를 떼어도 뜻이 남는다. 그 네 글자가 줄을 접히게 했다 #}
                         <label class="cfg-label" for="serving_reference"
-                               title="식품유형별로 정해진 &quot;한 번에 먹는 양&quot; — 고열량·저영양 판정의 기준">1회 섭취참고량</label>
+                               title="1회 섭취참고량 — 식품유형별로 정해진 &quot;한 번에 먹는 양&quot;. 고열량·저영양 판정의 기준입니다">섭취참고량</label>
                         <input type="text" class="form-control form-control-sm cfg-num" id="serving_reference" placeholder="예: 30">
                         <span class="cfg-unit-text" id="servingReferenceUnit">g</span>
                     </span>
@@ -90,8 +91,12 @@
                     <span class="cfg-why" title="이론치로 만든 표는 그 자체가 감사 대상입니다 — 무엇으로 어떻게 냈는지가 값과 함께 남습니다.&#10;허용오차: 규정은 실측값이 표시량의 120% 미만(열량·나트륨·당류·지방·트랜스지방·포화지방·콜레스테롤) 또는 80% 이상(탄수화물·단백질 등)이어야 한다고 정합니다. 그래서 앞 무리만 올리고, 열량은 보정한 탄단지로 다시 계산합니다.">?</span>
                 </div>
                 <div class="cfg-row">
-                    <label class="cfg-label" for="nutrition_source">이 값은</label>
-                    <select class="form-select form-select-sm" id="nutrition_source" style="width: 140px;">
+                    {% comment %}
+                      묶음 이름이 "② 값의 출처" 다. "이 값은" 은 같은 말을 두 번
+                      하는 것이고, 그 네 글자 때문에 단추가 셋째 줄로 밀렸다.
+                    {% endcomment %}
+                    <select class="form-select form-select-sm" id="nutrition_source"
+                            aria-label="값의 출처" style="width: 124px;">
                         <option value="">고르지 않음</option>
                         <option value="lab">공인기관 성적서</option>
                         <option value="theory">이론치 계산</option>
@@ -133,7 +138,7 @@
                         <button type="button" class="btn btn-outline-primary btn-sm"
                                 id="fromSpecAttachBtn"
                                 title="영양성분 성적서를 문서함에 올리고 곧바로 읽습니다">
-                            <i class="bi bi-paperclip"></i> 성적서 첨부
+                            <i class="bi bi-paperclip"></i> 첨부
                         </button>
                         <button type="button" class="btn btn-outline-primary btn-sm"
                                 id="fromSpecBtn"
