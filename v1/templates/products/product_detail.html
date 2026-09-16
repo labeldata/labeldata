@@ -1695,6 +1695,24 @@ window.anchorOfField = function (field) {
         || ('field-' + String(field).replace(/_/g, '-'));
 };
 
+/* ── 창은 탭 밖에서 뜬다 ──────────────────────────────────────────────
+ *
+ * 문서함의 창들(`_tab_documents.html` 안에 적혀 있다)은 **`#tab-docs` 안**에
+ * 산다. 그 탭이 안 보이는 동안에는 그 안의 모든 것이 `display:none` 이라,
+ * 창을 띄워도 **배경막만 깔리고 창은 안 보인다** — 회색 화면으로 멈춘 것처럼
+ * 보이는 그 증상이다.
+ *
+ * 영양성분 탭에서 성적서 판독을 부르면 정확히 그 일이 일어난다. 띄우기
+ * 직전에 `body` 로 옮긴다 — 창은 화면 전체를 덮는 것이라 어느 탭에 속할
+ * 까닭이 없다. 옮겨도 되는지는 확인했다(`#tab-docs .` 로 좁힌 스타일 없음).
+ * ─────────────────────────────────────────────────────────────────── */
+document.addEventListener('show.bs.modal', function (e) {
+    const el = e.target;
+    if (el && el.parentNode && el.parentNode !== document.body) {
+        document.body.appendChild(el);
+    }
+});
+
 /* ── 남은 회색 막을 걷는다 ────────────────────────────────────────────
  *
  * 창이 닫혔는데 배경막이 남으면 **화면이 멈춘 것처럼 보인다.** 아무것도 안

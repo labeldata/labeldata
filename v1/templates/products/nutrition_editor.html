@@ -95,12 +95,26 @@
                       묶음 이름이 "② 값의 출처" 다. "이 값은" 은 같은 말을 두 번
                       하는 것이고, 그 네 글자 때문에 단추가 셋째 줄로 밀렸다.
                     {% endcomment %}
-                    <select class="form-select form-select-sm" id="nutrition_source"
-                            aria-label="값의 출처" style="width: 124px;">
-                        <option value="">고르지 않음</option>
-                        <option value="lab">공인기관 성적서</option>
-                        <option value="theory">이론치 계산</option>
-                    </select>
+                    {% comment %}
+                      고르는 상자였다. 그런데 **고를 것이 둘뿐**이고, 고른
+                      결과에 따라 옆 단추가 바뀐다 — 상자를 열어 고르고 닫는
+                      동작이 그 사이에 한 겹 더 있었다.
+
+                      두 단추를 나란히 둔다. 무엇을 고를 수 있는지가 **열어
+                      보지 않아도** 보이고, 지금 무엇인지도 한눈에 보인다.
+                      오른쪽 미리보기의 스타일·표시기준과 같은 모양이다.
+
+                      "고르지 않음" 은 단추로 두지 않는다. 그 상태는 **둘 다
+                      안 눌린 것**이고, 누른 것을 다시 누르면 그리로 돌아간다.
+                      값은 숨은 칸이 들고 있다(저장·판정이 그 id 를 읽는다).
+                    {% endcomment %}
+                    <input type="hidden" id="nutrition_source" value="">
+                    <span class="cfg-srcbtns" role="group" aria-label="값의 출처">
+                        <button type="button" class="style-btn" data-source="lab"
+                                title="공인기관 시험성적서의 값입니다">공인기관 성적서</button>
+                        <button type="button" class="style-btn" data-source="theory"
+                                title="배합비와 원료 영양성분으로 계산한 값입니다">이론치 계산</button>
+                    </span>
                     {% comment %}
                       배합에서 계산 — '이론치 계산' 을 골랐을 때만 나온다.
                       성적서 값을 넣는 자리에 배합 계산 단추가 있으면, 어느
@@ -773,6 +787,8 @@ async function loadData() {
             const el = document.getElementById(id);
             if (el && data[id]) el.value = data[id];
         });
+        // 값만 넣으면 출처 단추가 옛 상태로 남는다
+        if (typeof window.paintNutritionSource === 'function') window.paintNutritionSource();
         applyStoredTolerance(data.nutrition_tolerance);
         try { bindCalcSource(); } catch (e) {}
         document.getElementById('serving_size_unit').value = data.serving_size_unit || 'g';
@@ -1127,7 +1143,14 @@ function bindCalcSource() {
     const noteRow = document.getElementById('sourceNoteRow');
     const fromBom = document.getElementById('fromBomItem');
     const fromSpec = document.getElementById('fromSpecItem');
+    const srcBtns = document.querySelectorAll('.cfg-srcbtns [data-source]');
     function paint() {
+        /* 숨은 칸이 정본이다. 단추는 그것을 비출 뿐 — 저장된 값을 불러올
+           때처럼 값만 바뀌는 길이 있어서, 단추가 제 상태를 따로 들면
+           둘이 어긋난다. */
+        srcBtns.forEach(function (btn) {
+            btn.classList.toggle('active', btn.dataset.source === source.value);
+        });
         const theory = source.value === 'theory';
         if (tolerance) tolerance.style.display = theory ? '' : 'none';
         /* 성적서 값을 넣는 자리에 배합 계산 단추가 있으면, 어느 값이 표에
@@ -1137,6 +1160,19 @@ function bindCalcSource() {
         if (noteRow) noteRow.style.display = source.value ? '' : 'none';
     }
     if (source) { source.addEventListener('change', paint); paint(); }
+
+    /* 누른 것을 다시 누르면 "고르지 않음" 으로 돌아간다 — 잘못 골랐을 때
+       되돌릴 길이 없으면 안 된다. */
+    srcBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            source.value = (source.value === btn.dataset.source) ? '' : btn.dataset.source;
+            source.dispatchEvent(new Event('change'));
+        });
+    });
+
+    /* 저장된 값을 불러오면 값만 바뀐다(change 가 안 난다). 그때도 단추가
+       따라오도록 밖에서 부를 수 있게 열어 둔다. */
+    window.paintNutritionSource = paint;
 
     /* 판독은 **문서함 화면이 한다.** 이리로 옮기면 같은 것이 두 벌이 되고,
        어느 날 한쪽만 고쳐진다. 문 하나만 두드린다 — 미리보기의 2차 검증이

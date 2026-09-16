@@ -193,6 +193,8 @@ body {
 .cfg-hint { font-size: 11px; color: var(--ez-gray-500, #9aa0a6); }
 /* 한 줄 안에서 묶음을 가른다 — 좁아지면 여기서 접힌다 */
 .cfg-sep { flex: 1 1 0; min-width: 8px; }
+/* 출처 단추 둘 — 하나를 고르는 것이므로 붙여 둔다 */
+.cfg-srcbtns { display: inline-flex; gap: 4px; }
 .cfg-check {
     display: inline-flex;
     align-items: center;

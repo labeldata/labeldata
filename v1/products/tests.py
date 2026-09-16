@@ -12503,3 +12503,84 @@ class ReturnToWhereYouStartedTests(TestCase):
                      encoding='utf-8') as f:
             js = f.read()
         self.assertIn("sessionStorage.setItem('returnToTab', 'docs');", js)
+
+
+class ModalsLiveOutsideTheTabTests(TestCase):
+    """
+    문서함의 창들은 `#tab-docs` **안에** 적혀 있다. 그 탭이 안 보이는 동안에는
+    그 안의 모든 것이 `display:none` 이라, 창을 띄워도 **배경막만 깔리고 창은
+    안 보인다** — 회색 화면으로 멈춘 것처럼 보인다.
+
+    영양성분 탭에서 성적서 판독을 부르면 정확히 그 일이 일어났다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_띄우기_직전에_밖으로_옮긴다(self):
+        html = self._read('templates/products/product_detail.html')
+        at = html.index("document.addEventListener('show.bs.modal'")
+        block = html[at:at + 500]
+        self.assertIn('document.body.appendChild(el)', block)
+        self.assertIn('!== document.body', block)   # 이미 밖이면 두 번 옮기지 않는다
+
+    def test_문서함_창이_탭_안에_있다는_전제(self):
+        """
+        이 전제가 깨지면(창을 밖으로 옮겨 적으면) 위 그물은 필요 없어진다 —
+        그때 같이 지워야 한다.
+        """
+        html = self._read('templates/products/product_detail.html')
+        docs_at = html.index('<div class="tab-pane" id="tab-docs">')
+        include_at = html.index("{% include 'products/_tab_documents.html' %}")
+        self.assertLess(docs_at, include_at)
+
+
+class NutritionSourceIsTwoButtonsTests(TestCase):
+    """
+    고를 것이 둘뿐인데 상자를 열어 고르고 닫는 동작이 한 겹 더 있었다.
+    무엇을 고를 수 있는지가 열어 보지 않아도 보여야 한다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def setUp(self):
+        self.html = self._read('templates/products/nutrition_editor.html')
+
+    def test_단추_둘과_숨은_칸(self):
+        self.assertIn('data-source="lab"', self.html)
+        self.assertIn('data-source="theory"', self.html)
+        # 저장·판정이 이 id 를 읽는다. 값은 숨은 칸이 들고 있어야 한다.
+        self.assertIn('<input type="hidden" id="nutrition_source"', self.html)
+        self.assertNotIn('<option value="theory">', self.html)
+
+    def test_다시_누르면_고르지_않음으로_돌아간다(self):
+        # 잘못 골랐을 때 되돌릴 길이 없으면 안 된다.
+        # `srcBtns.forEach` 는 두 번 나온다(단추를 비추는 쪽과 누르는 쪽).
+        # 이 줄은 누르는 쪽에만 있다.
+        self.assertIn(
+            "source.value = (source.value === btn.dataset.source) ? '' : btn.dataset.source;",
+            self.html)
+
+    def test_값만_바뀌어도_단추가_따라온다(self):
+        # 저장된 값을 불러오면 change 가 안 난다.
+        self.assertIn('window.paintNutritionSource = paint', self.html)
+        self.assertIn('window.paintNutritionSource()', self.html)
+
+    def test_오른쪽_미리보기와_같은_모양이다(self):
+        at = self.html.index('data-source="lab"')
+        self.assertIn('class="style-btn"', self.html[max(0, at - 200):at])
