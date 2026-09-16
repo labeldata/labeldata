@@ -18,7 +18,43 @@
 
   var STEPS = [1, 1.5, 2, 3, 4, 6];
 
+  /*
+   * PDF 인가.
+   *
+   * 성적서·품목제조보고서는 **대개 PDF 로 온다.** 사진만 걸 수 있으면 그
+   * 화면들은 원본을 옆에 놓지 못해, 종이를 다른 창에서 열어 놓고 숫자를
+   * 번갈아 보는 일을 사람이 하게 된다 — 이 뷰어가 있는 까닭 그대로다.
+   *
+   * 브라우저가 제 뷰어로 그려 주므로 우리 회전·확대는 걷어낸다. 두 벌이
+   * 겹치면 어느 쪽이 먹히는지 알 수 없다.
+   */
+  function looksPdf(url, filename) {
+    return /\.pdf($|[?#])/i.test(String(filename || '')) ||
+           /\.pdf($|[?#])/i.test(String(url || ''));
+  }
+
+  function createPdf(url, filename) {
+    var root = document.createElement('div');
+    root.className = 'photo-viewer is-pdf';
+    root.innerHTML = ''
+      + '<div class="photo-viewer-bar">'
+      + '  <span class="photo-viewer-name" title="' + (filename || '') + '">'
+      +      (filename || '첨부한 문서') + '</span>'
+      + '  <div class="photo-viewer-tools">'
+      + '    <a class="btn btn-light v2-btn-icon" target="_blank" rel="noopener"'
+      + '       href="' + url + '" title="새 창에서 열기">'
+      + '      <i class="bi bi-box-arrow-up-right"></i></a>'
+      + '  </div>'
+      + '</div>'
+      + '<div class="photo-viewer-stage">'
+      + '  <embed src="' + url + '#toolbar=1" type="application/pdf">'
+      + '</div>';
+    return root;
+  }
+
   function create(objectUrl, filename) {
+    if (looksPdf(objectUrl, filename)) return createPdf(objectUrl, filename);
+
     var state = { deg: 0, zoom: 0, x: 0, y: 0, dragging: false, sx: 0, sy: 0 };
 
     var root = document.createElement('div');
@@ -122,6 +158,34 @@
    * 없으면(품목보고번호로 불러온 경우) 사진 칸 없이 표만 그린다 - 볼 사진이
    * 없는데 빈 칸을 두면 자리만 먹는다.
    */
+  /*
+   * 뷰어 하나만. 두 칸짜리 틀이 필요 없는 자리에서 쓴다 — 업로드 창이
+   * 고른 파일을 그 자리에서 보여 줄 때처럼.
+   *
+   * 창이 닫히면 objectURL 을 놓아 준다. 그 정리를 부르는 쪽마다 다시 적게
+   * 하면 언젠가 한 곳이 빠지고, 그 창을 열 때마다 메모리가 남는다.
+   */
+  window.photoViewerElement = function (source, name) {
+    if (!source) return null;
+    var isFile = typeof source !== 'string';
+    var url = isFile ? URL.createObjectURL(source) : source;
+    var el = create(url, name || (isFile ? source.name : ''));
+    if (isFile) el.dataset.objectUrl = url;
+    return el;
+  };
+
+  /* 붙인 뒤에 부른다 — 그때라야 어느 창 안인지 알 수 있다. */
+  window.photoViewerRelease = function (el) {
+    if (!el || !el.dataset || !el.dataset.objectUrl) return;
+    var url = el.dataset.objectUrl;
+    var modal = el.closest('.modal');
+    if (!modal) return;
+    modal.addEventListener('hidden.bs.modal', function once() {
+      URL.revokeObjectURL(url);
+      modal.removeEventListener('hidden.bs.modal', once);
+    });
+  };
+
   window.photoViewerLayout = function (body, source, tableHtml, name) {
     if (!source) {
       body.innerHTML = tableHtml;

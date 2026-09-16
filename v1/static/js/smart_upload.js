@@ -289,8 +289,41 @@ function handleFileSelect(file) {
     }
     
     fileIcon.style.fontSize = '32px';
-    
+
     document.getElementById('selected-file-info').style.display = 'block';
+    showUploadPreview(file);
+}
+
+/*
+ * 고른 파일을 **그 자리에서 보여 준다.**
+ *
+ * 이름과 크기만 적어 두면 "이게 맞는 파일인가" 를 확인할 방법이 없다. 문서
+ * 종류와 유효기간을 여기서 정하는데, 정작 그 종이를 못 보고 정하는 셈이다.
+ * 파일 이름이 "scan_0007.pdf" 인 일은 흔하다.
+ *
+ * 값을 불러와 확인하는 다른 창들과 **같은 뷰어**를 쓴다(photo_viewer.js).
+ * 회전·확대가 붙고 PDF 도 그대로 열린다 — 이 창만 따로 만들면 같은 일을
+ * 하는 화면이 서로 다르게 생기고, 뷰어를 고칠 때 두 곳을 고쳐야 한다.
+ */
+function showUploadPreview(file) {
+    const host = document.querySelector('#selected-file-info .smart-preview-hint');
+    if (!host || typeof window.photoViewerElement !== 'function') return;
+
+    let slot = document.getElementById('upload-preview-slot');
+    if (!slot) {
+        slot = document.createElement('div');
+        slot.id = 'upload-preview-slot';
+        slot.className = 'upload-preview-slot mt-2';
+        host.parentNode.insertBefore(slot, host.nextSibling);
+    }
+    slot.innerHTML = '';
+
+    const viewer = window.photoViewerElement(file, file.name);
+    if (!viewer) return;
+    slot.appendChild(viewer);
+    if (typeof window.photoViewerRelease === 'function') {
+        window.photoViewerRelease(viewer);   // 창이 닫히면 놓아 준다
+    }
 }
 
 // 파일 크기 포맷

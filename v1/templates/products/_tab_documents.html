@@ -586,27 +586,6 @@ async function submitImportCompanyDoc() {
 </script>
 
 <style>
-/* ── 성적서 견주기 ────────────────────────────────────────────────────
- * 읽은 칸과 못 읽은 칸을 **눈으로 가른다.** 비어 있는 칸만으로는 "0 인가
- * 못 읽은 것인가" 를 알 수 없고, 그 둘은 뜻이 완전히 다르다.
- * ─────────────────────────────────────────────────────────────────── */
-.spec-orig { background: var(--ez-gray-50); border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-.spec-orig-view { width: 100%; height: 68vh; display: block; border: 0; object-fit: contain; }
-.spec-form-inner { font-size: 12.5px; }
-.spec-basis { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; }
-.spec-basis.is-miss { border-color: #f0b429; background: #fffbeb; }
-.spec-basis-note { margin-top: 6px; font-size: 11.5px; color: #6b7280; line-height: 1.5; }
-.spec-rows { display: flex; flex-direction: column; gap: 6px; }
-.spec-row { padding: 6px 8px; border: 1px solid #eef0f2; border-radius: 7px; }
-.spec-row.is-miss { border-color: #f0b429; background: #fffbeb; }
-.spec-name { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-weight: 600; }
-.spec-input { display: flex; align-items: center; gap: 6px; }
-.spec-unit { color: #6b7280; font-size: 11.5px; min-width: 32px; }
-.spec-raw { margin-top: 4px; font-size: 11px; color: #8a6100; }
-.spec-tag { padding: 1px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
-.spec-tag-read { background: var(--ez-success-bg); color: var(--ez-success); }
-.spec-tag-miss { background: #fef3c7; color: #8a6100; }
-.spec-foot { margin-top: 12px; font-size: 11.5px; color: #6b7280; line-height: 1.6; }
     /* 문서 탭 외부 컨테이너 */
     .doc-workspace-wrapper {
         height: 100%;
@@ -1645,28 +1624,28 @@ async function submitImportCompanyDoc() {
             const raw = rawv[r[0]];
             const read = (got != null) || (raw != null);
             const tag = read
-                ? '<span class="spec-tag spec-tag-read">읽음</span>'
-                : '<span class="spec-tag spec-tag-miss">못 읽음</span>';
+                ? '<span class="cmp-tag cmp-tag-read">읽음</span>'
+                : '<span class="cmp-tag cmp-tag-miss">못 읽음</span>';
             /* 기준량을 모르면 환산할 수 없다. 그때는 환산 전 값을 곁에 적는다
                — 칸을 비워만 두면 못 읽은 것과 구별되지 않는다. */
             const shown = (got != null) ? got : '';
             const hint = (got == null && raw != null)
-                ? '<div class="spec-raw">성적서에 적힌 값 ' + raw + ' — 기준량을 넣으면 환산합니다</div>'
+                ? '<div class="cmp-raw">성적서에 적힌 값 ' + raw + ' — 기준량을 넣으면 환산합니다</div>'
                 : '';
-            return '<div class="spec-row' + (read ? '' : ' is-miss') + '">'
-                + '<label class="spec-name">' + r[1] + tag + '</label>'
-                + '<div class="spec-input">'
+            return '<div class="cmp-row' + (read ? '' : ' is-miss') + '">'
+                + '<label class="cmp-name">' + r[1] + tag + '</label>'
+                + '<div class="cmp-input">'
                 + '<input type="number" step="any" class="form-control form-control-sm"'
                 + ' data-spec="' + r[0] + '" value="' + shown + '">'
-                + '<span class="spec-unit">' + r[2] + '</span></div>'
+                + '<span class="cmp-unit">' + r[2] + '</span></div>'
                 + hint + '</div>';
         }).join('');
 
-        return '<div class="spec-form-inner">'
-            + '<div class="spec-basis' + (known ? '' : ' is-miss') + '">'
+        return '<div class="cmp-form">'
+            + '<div class="cmp-head' + (known ? '' : ' is-miss') + '">'
             + '<label class="form-label mb-1">성적서 기준량'
-            + (known ? '<span class="spec-tag spec-tag-read">읽음</span>'
-                     : '<span class="spec-tag spec-tag-miss">못 읽음</span>') + '</label>'
+            + (known ? '<span class="cmp-tag cmp-tag-read">읽음</span>'
+                     : '<span class="cmp-tag cmp-tag-miss">못 읽음</span>') + '</label>'
             + '<div class="d-flex gap-1 align-items-center">'
             + '<input type="number" step="any" class="form-control form-control-sm" id="specBasisAmount"'
             + ' value="' + (body.basis_amount || '') + '" placeholder="예: 100" style="max-width:110px;">'
@@ -1676,13 +1655,13 @@ async function submitImportCompanyDoc() {
             + '</select>'
             + '<button type="button" class="btn btn-light border v2-btn-sm" id="specRecalcBtn">다시 셈하기</button>'
             + '</div>'
-            + '<div class="spec-basis-note">' + (known
+            + '<div class="cmp-note">' + (known
                 ? '이 기준을 <b>100' + (body.basis_unit || 'g') + ' 당</b>으로 환산했습니다.'
                 : '성적서에서 기준량을 찾지 못했습니다. <b>100으로 가정하지 않습니다</b> — '
                   + '1회 제공량 30g 성적서를 그대로 쓰면 값이 3.3배 낮아지는데 터지지 않아 아무도 모릅니다.')
             + '</div></div>'
-            + '<div class="spec-rows">' + rows + '</div>'
-            + '<div class="spec-foot">확인 후 저장하면 <b>이 제품의 영양성분</b>이 됩니다. '
+            + '<div class="cmp-rows">' + rows + '</div>'
+            + '<div class="cmp-foot">확인 후 저장하면 <b>이 제품의 영양성분</b>이 됩니다. '
             + '배합 계산을 거치지 않고 시험한 값을 그대로 씁니다.</div>'
             + '</div>';
     }
@@ -1691,18 +1670,13 @@ async function submitImportCompanyDoc() {
         const modalEl = document.getElementById('specNutritionModal');
         if (!modalEl) { showSnackbar('창을 찾을 수 없습니다.', 'error'); return; }
         const doc = body.document || {};
-        const url = doc.url || '';
-        const orig = !url
-            ? '<div class="text-muted p-3">원본을 열 수 없습니다.</div>'
-            : (doc.is_pdf
-                ? '<embed src="' + url + '#toolbar=1" type="application/pdf" class="spec-orig-view">'
-                : '<img src="' + url + '" alt="성적서" class="spec-orig-view">');
 
-        modalEl.querySelector('.modal-body').innerHTML =
-            '<div class="row g-3 spec-compare">'
-            + '<div class="col-lg-6"><div class="spec-orig">' + orig + '</div></div>'
-            + '<div class="col-lg-6 spec-form"></div></div>';
-        modalEl.querySelector('.spec-form').innerHTML = specFormHtml(body);
+        /* **다른 대조 화면과 같은 틀을 쓴다.** 원료 사진·시안 대조·OCR 확인이
+           모두 `photoViewerLayout` 으로 그린다 — 왼쪽 원본, 오른쪽 값. 여기만
+           제 틀을 따로 두면 같은 일을 하는 화면이 서로 다르게 생기고, 뷰어를
+           고칠 때마다 두 곳을 고쳐야 한다. PDF 는 그 뷰어가 받는다. */
+        window.photoViewerLayout(modalEl.querySelector('.modal-body'),
+                                 doc.url || '', specFormHtml(body), doc.name || '');
         modalEl.querySelector('.modal-title').textContent =
             '영양성분 성적서 — ' + (doc.name || '');
 

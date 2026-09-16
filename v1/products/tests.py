@@ -12090,16 +12090,28 @@ class SpecNutritionScreenTests(TestCase):
     def setUp(self):
         self.html = self._read('templates/products/_tab_documents.html')
 
-    def test_원본을_옆에_놓는다(self):
+    def test_다른_대조_화면과_같은_틀을_쓴다(self):
+        """
+        원료 사진 · 시안 대조 · OCR 확인이 모두 `photoViewerLayout` 으로
+        그린다 — 왼쪽 원본, 오른쪽 값. 여기만 제 틀을 두면 같은 일을 하는
+        화면이 서로 다르게 생기고, 뷰어를 고칠 때 두 곳을 고쳐야 한다.
+        """
         self.assertIn('id="specNutritionModal"', self.html)
-        self.assertIn('spec-orig-view', self.html)
-        # PDF 성적서가 대부분이다. 사진만 걸면 견줄 수가 없다.
-        self.assertIn("type=\"application/pdf\"", self.html)
+        at = self.html.index('function showSpecNutrition')
+        self.assertIn('window.photoViewerLayout(', self.html[at:at + 1200])
+
+        # PDF 성적서가 대부분이다. 그 뷰어가 PDF 를 받아야 견줄 수 있다.
+        viewer = self._read('static/js/products/photo_viewer.js')
+        self.assertIn('function looksPdf', viewer)
+        self.assertIn("type=\"application/pdf\"", viewer)
 
     def test_읽은_칸과_못_읽은_칸을_가른다(self):
-        self.assertIn('spec-tag-read', self.html)
-        self.assertIn('spec-tag-miss', self.html)
-        self.assertIn('.spec-row.is-miss', self.html)
+        self.assertIn('cmp-tag-read', self.html)
+        self.assertIn('cmp-tag-miss', self.html)
+        # 규칙은 공통 CSS 에 둔다 — 네 화면이 함께 쓴다.
+        css = self._read('static/css/products_common.css')
+        self.assertIn('.cmp-row.is-miss', css)
+        self.assertIn('.cmp-tag-miss', css)
 
     def test_기준량을_못_읽어도_창은_연다(self):
         # 여기서 끝내면 읽어 둔 값까지 함께 버려진다.
@@ -12157,3 +12169,65 @@ class ImportResultActionTests(TestCase):
         self.assertIn("data-use=\"product\"", block)
         self.assertIn("data-use=\"ingredient\"", block)
         self.assertIn('useLookup(btn.dataset.use, modalEl)', block)
+
+
+class CompareScreensShareOneModuleTests(TestCase):
+    """
+    값을 불러와 사람이 확인하는 화면은 **같은 틀로 그린다.**
+
+    품목보고번호 · 원료 사진 · 디자인시안 · 영양성분 성적서 — 넷이 하는 일은
+    같다(원본을 옆에 놓고 읽은 값을 확인한다). 서로 다르게 생기면 같은 일을
+    하는 화면인 줄 모르고, 뷰어를 고칠 때도 네 곳을 고쳐야 한다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_틀은_한_곳에서_그린다(self):
+        import glob
+        import os
+        import re
+
+        from django.conf import settings
+
+        # `photo-compare` 두 칸 짜리 틀을 제 손으로 짜는 화면이 있으면 안 된다.
+        base = settings.BASE_DIR
+        offenders = []
+        targets = (glob.glob(os.path.join(base, 'templates/products/*.html'))
+                   + glob.glob(os.path.join(base, 'static/js/products/*.js')))
+        for path in targets:
+            if path.endswith('photo_viewer.js'):
+                continue        # 여기가 그 한 곳이다
+            import io as _io
+            with _io.open(path, encoding='utf-8') as f:
+                src = f.read()
+            src = re.sub(r'/\*.*?\*/|\{%\s*comment\s*%\}.*?\{%\s*endcomment\s*%\}',
+                         '', src, flags=re.S)
+            if 'photo-compare' in src or 'photo-viewer-slot' in src:
+                offenders.append(os.path.basename(path))
+        self.assertEqual(offenders, [], '틀을 따로 짠 화면: %s' % offenders)
+
+    def test_뷰어를_따로도_쓸_수_있다(self):
+        # 업로드 창처럼 두 칸 틀이 필요 없는 자리도 같은 뷰어를 쓴다.
+        js = self._read('static/js/products/photo_viewer.js')
+        self.assertIn('window.photoViewerElement =', js)
+        self.assertIn('window.photoViewerRelease =', js)
+
+    def test_업로드_창이_고른_파일을_보여_준다(self):
+        """
+        이름과 크기만으로는 "이게 맞는 파일인가" 를 알 수 없다. 문서 종류와
+        유효기간을 여기서 정하는데 정작 그 종이를 못 보고 정하는 셈이다 —
+        파일 이름이 "scan_0007.pdf" 인 일은 흔하다.
+        """
+        js = self._read('static/js/smart_upload.js')
+        self.assertIn('function showUploadPreview', js)
+        self.assertIn('window.photoViewerElement(file', js)
+        # 놓아 주지 않으면 창을 열 때마다 objectURL 이 남는다.
+        self.assertIn('photoViewerRelease', js)
