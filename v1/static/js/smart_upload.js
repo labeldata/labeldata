@@ -6,7 +6,15 @@ let lastSlotContext = null;
 
 // 모달 열기
 function openUploadModal(slotId, docTypeName, docTypeId) {
-    const modal = new bootstrap.Modal(document.getElementById('smartUploadModal'));
+    /* **`new` 로 만들지 않는다.**
+     *
+     * 이 함수는 여러 자리에서 불린다(업로드 단추 · 슬롯의 + · 끌어다 놓기 ·
+     * 영양성분 탭의 성적서 첨부). 부를 때마다 새 인스턴스를 만들면 한 요소에
+     * 인스턴스가 여럿 붙고, 각자 배경막을 들고 있다가 하나만 걷힌다 —
+     * **창을 닫아도 회색 막이 남아 화면이 멈춘 것처럼 보인다.**
+     * 요소 하나에 인스턴스 하나만 둔다. */
+    const modal = bootstrap.Modal.getOrCreateInstance(
+        document.getElementById('smartUploadModal'));
     targetSlotId = slotId;
     
     // 초기화 (문서 종류 선택보다 먼저 수행)

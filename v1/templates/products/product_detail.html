@@ -1695,6 +1695,30 @@ window.anchorOfField = function (field) {
         || ('field-' + String(field).replace(/_/g, '-'));
 };
 
+/* ── 남은 회색 막을 걷는다 ────────────────────────────────────────────
+ *
+ * 창이 닫혔는데 배경막이 남으면 **화면이 멈춘 것처럼 보인다.** 아무것도 안
+ * 눌리고, 사용자는 새로고침 말고 할 수 있는 것이 없다.
+ *
+ * 그렇게 되는 길이 둘이다 — 한 요소에 인스턴스를 여럿 만들었거나(각자
+ * 배경막을 든다), 창이 닫히는 도중에 다음 창을 열었거나. 둘 다 그때그때
+ * 고치지만, 이 화면에는 창이 열 개가 넘고 새로 붙을 때마다 같은 함정이
+ * 있다. 마지막 창이 닫혔는데 막이 남아 있으면 걷는다.
+ *
+ * 닫히는 애니메이션이 끝날 틈을 주고 확인한다.
+ * ─────────────────────────────────────────────────────────────────── */
+document.addEventListener('hidden.bs.modal', function () {
+    setTimeout(function () {
+        if (document.querySelector('.modal.show')) return;   // 아직 열린 창이 있다
+        document.querySelectorAll('.modal-backdrop').forEach(function (el) {
+            el.remove();
+        });
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+    }, 250);
+});
+
 window.gotoLabelField = function (field) {
     if (!field) return false;
 

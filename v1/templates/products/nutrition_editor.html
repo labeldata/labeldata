@@ -135,19 +135,22 @@
                           — 무엇을 하는 단추인지는 옆의 「이 값은: 공인기관
                           성적서」 가 이미 말하고 있다.
                         {% endcomment %}
-                        <button type="button" class="btn btn-outline-primary btn-sm"
-                                id="fromSpecAttachBtn"
-                                title="영양성분 성적서를 문서함에 올리고 곧바로 읽습니다">
-                            <i class="bi bi-paperclip"></i> 첨부
-                        </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm"
-                                id="fromSpecBtn"
-                                title="문서함에 올려 둔 영양성분 성적서를 읽어 이 표에 넣습니다">
-                            <i class="bi bi-clipboard-data"></i> 불러오기
+                        {% comment %}
+                          **단추 하나다.** 첨부와 불러오기를 나란히 두었더니
+                          누르기 전에 고르게 하는 꼴이었다 — 문서함에 그 성적서가
+                          있는지를 사용자가 먼저 기억해 내야 한다.
+
+                          눌러서 열리는 창이 둘을 함께 보여 준다. 있으면 고르고,
+                          없으면 거기서 올린다.
+                        {% endcomment %}
+                        <button type="button" class="style-btn" id="fromSpecBtn"
+                                title="문서함의 영양성분 성적서를 읽거나, 새로 올려 읽습니다">
+                            <i class="bi bi-clipboard-data"></i> 성적서에서 가져오기
                         </button>
                     </span>
                     <span class="cfg-item" id="fromBomItem" style="display:none;">
-                        <button type="button" class="btn btn-outline-primary btn-sm"
+                        {# 오른쪽 미리보기의 스타일·표시기준 단추와 같은 모양(.style-btn) #}
+                        <button type="button" class="style-btn"
                                 id="fromBomBtn"
                                 title="배합(BOM)의 원료와 배합비로 100g 당 계산값을 냅니다">
                             <i class="bi bi-calculator"></i> 배합에서 계산
@@ -1153,21 +1156,6 @@ function bindCalcSource() {
                 return;
             }
             outer.pickSpecNutritionDoc();
-        });
-    }
-
-    const fromSpecAttachBtn = document.getElementById('fromSpecAttachBtn');
-    if (fromSpecAttachBtn) {
-        fromSpecAttachBtn.addEventListener('click', function () {
-            const outer = window.parent;
-            if (!outer || outer === window
-                    || typeof outer.attachSpecNutritionDoc !== 'function') {
-                if (typeof showSnackbar === 'function') {
-                    showSnackbar('제품 화면에서 열어야 문서를 올릴 수 있습니다.', 'warning');
-                }
-                return;
-            }
-            outer.attachSpecNutritionDoc();
         });
     }
 

@@ -2482,7 +2482,7 @@ class DropKeepsTheChosenTypeTests(TestCase):
     def test_여는_함수가_폼을_초기화한다는_사실은_그대로다(self):
         # 이 전제가 깨지면 위 우회가 필요 없어진다 - 그때 같이 지워야 한다
         head = self.js.index('function openUploadModal')
-        self.assertIn('resetUploadForm();', self.js[head:head + 400])
+        self.assertIn('resetUploadForm();', self.js[head:head + 1200])
 
 
 class TypeScaleIsOneScaleTests(TestCase):
@@ -12284,12 +12284,16 @@ class NutritionTabUsesDocumentSpecTests(TestCase):
         self.assertIn('looksLikeSpecSheet', block)     # 이름으로 고른다
         self.assertIn('window.readSpecNutrition(', block)   # 판독은 한 벌
 
-    def test_고를_것이_하나면_묻지_않는다(self):
-        # 묻는 창은 고를 것이 둘 이상일 때만 뜻이 있다.
+    def test_하나도_없어도_창은_연다(self):
+        """
+        예전에는 없으면 "먼저 올려 주세요" 만 하고 문서함 탭으로 보냈다.
+        값을 넣으러 온 사람에게 왕복을 시키는 셈이다 — 그 창에서 바로
+        올릴 수 있으면 갈 곳이 없다.
+        """
         at = self.docs.index('window.pickSpecNutritionDoc = function')
-        block = self.docs[at:at + 2600]
-        self.assertIn('docs.length === 1', block)
-        self.assertIn('if (!docs.length)', block)      # 없으면 문서함으로 보낸다
+        block = self.docs[at:at + 2800]
+        self.assertIn('영양성분 성적서가 없습니다', block)
+        self.assertIn('새 성적서 올리기', block)
 
 
 class AttachSpecFromNutritionTabTests(TestCase):
@@ -12311,10 +12315,19 @@ class AttachSpecFromNutritionTabTests(TestCase):
         with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
             return f.read()
 
-    def test_첨부_단추가_있다(self):
+    def test_올리는_길이_그_창_안에_있다(self):
+        """
+        첨부 단추를 따로 두었더니 누르기 전에 고르게 하는 꼴이었다 —
+        문서함에 그 성적서가 있는지를 사용자가 먼저 기억해 내야 한다.
+        단추는 하나고, 열린 창이 둘을 함께 보여 준다.
+        """
         editor = self._read('templates/products/nutrition_editor.html')
-        self.assertIn('id="fromSpecAttachBtn"', editor)
-        self.assertIn('outer.attachSpecNutritionDoc()', editor)
+        self.assertNotIn('fromSpecAttachBtn', editor)
+
+        docs = self._read('templates/products/_tab_documents.html')
+        self.assertIn('window.attachSpecNutritionDoc = function', docs)
+        at = docs.index('window.pickSpecNutritionDoc = function')
+        self.assertIn('attachSpecNutritionDoc()', docs[at:at + 2800])
 
     def test_올리는_창은_문서함_것을_그대로_쓴다(self):
         # 두 벌로 두면 어느 날 한쪽만 고쳐진다.
@@ -12341,3 +12354,84 @@ class AttachSpecFromNutritionTabTests(TestCase):
         block = docs[at:at + 2200]
         self.assertIn("removeItem('specReadAfterUpload')", block)
         self.assertIn("hidden.bs.modal", block)
+
+
+class ModalBackdropDoesNotLingerTests(TestCase):
+    """
+    창을 닫았는데 **회색 막이 남으면 화면이 멈춘 것처럼 보인다.** 아무것도
+    안 눌리고, 사용자는 새로고침 말고 할 수 있는 것이 없다.
+
+    그렇게 되는 길이 둘이다 — 한 요소에 인스턴스를 여럿 만들었거나(각자
+    배경막을 든다), 창이 닫히는 도중에 다음 창을 열었거나.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_업로드_창은_인스턴스를_하나만_쓴다(self):
+        # 이 함수는 네 자리에서 불린다(업로드 단추·슬롯의 +·끌어다 놓기·
+        # 영양성분 탭). 부를 때마다 new 하면 배경막이 쌓인다.
+        js = self._read('static/js/smart_upload.js')
+        at = js.index('function openUploadModal(')
+        block = js[at:at + 900]
+        self.assertIn('bootstrap.Modal.getOrCreateInstance(', block)
+        self.assertNotIn('new bootstrap.Modal(', block)
+
+    def test_닫힌_뒤에_다음_창을_연다(self):
+        # 닫히는 도중에 열면 배경막이 둘 겹치고 하나만 걷힌다.
+        docs = self._read('templates/products/_tab_documents.html')
+        at = docs.index("[data-attach]")
+        block = docs[at:at + 600]
+        self.assertIn("hidden.bs.modal", block)
+        self.assertIn('attachSpecNutritionDoc()', block)
+
+    def test_마지막_창이_닫히면_남은_막을_걷는다(self):
+        html = self._read('templates/products/product_detail.html')
+        at = html.index("document.addEventListener('hidden.bs.modal'")
+        block = html[at:at + 700]
+        self.assertIn(".modal.show", block)            # 열린 창이 있으면 손대지 않는다
+        self.assertIn('.modal-backdrop', block)
+        self.assertIn("classList.remove('modal-open')", block)
+
+
+class SpecSourceIsOneButtonTests(TestCase):
+    """
+    첨부와 불러오기를 나란히 두면 **누르기 전에 고르게 하는 꼴**이다 —
+    문서함에 그 성적서가 있는지를 사용자가 먼저 기억해 내야 한다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_단추는_하나다(self):
+        editor = self._read('templates/products/nutrition_editor.html')
+        self.assertIn('id="fromSpecBtn"', editor)
+        self.assertNotIn('fromSpecAttachBtn', editor)
+
+    def test_오른쪽_미리보기와_같은_모양이다(self):
+        editor = self._read('templates/products/nutrition_editor.html')
+        for btn_id in ('fromSpecBtn', 'fromBomBtn'):
+            at = editor.index('id="%s"' % btn_id)
+            self.assertIn('class="style-btn"', editor[max(0, at - 200):at])
+
+    def test_창이_둘을_함께_보여_준다(self):
+        docs = self._read('templates/products/_tab_documents.html')
+        at = docs.index('window.pickSpecNutritionDoc = function')
+        block = docs[at:at + 2800]
+        self.assertIn('data-attach', block)              # 새로 올리는 길
+        self.assertIn('data-pick', block)                # 있는 것을 고르는 길
+        self.assertIn('영양성분 성적서가 없습니다', block)   # 없을 때도 창은 연다
