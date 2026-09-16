@@ -8065,15 +8065,24 @@ class SpecNutritionCanBeSavedTests(TestCase):
         self.assertNotIn('openSpecNutritionPicker', self.code)
 
     def test_저장_단추가_있다(self):
-        self.assertIn('specNutSaveBtn', self.src)
+        # 패널 위 작은 상자에서 **원본을 옆에 놓는 창**으로 옮겼다.
+        self.assertIn('specSaveBtn', self.src)
         self.assertIn('/spec-nutrition/save/', self.src)
 
-    def test_덮어쓰기_전에_묻는다(self):
-        i = self.src.index('specNutSaveBtn')
-        self.assertIn('confirm(', self.src[i:i + 1500])
+    def test_사람이_확인한_값만_저장한다(self):
+        """
+        예전에는 판독한 값을 그대로 보내면서 `confirm()` 으로 한 번 물었다.
+        지금은 **읽은 값과 못 읽은 값을 갈라 보여 주고 사람이 칸을 고친 뒤**
+        저장한다 — 창 자체가 확인 절차라, 값은 화면의 칸에서 모은다.
+        빈 칸은 보내지 않는다(성적서에 없는 것을 0 으로 적으면 거짓말이다).
+        """
+        i = self.src.index("querySelector('#specSaveBtn')")
+        block = self.src[i:i + 1500]
+        self.assertIn('[data-spec]', block)
+        self.assertIn("if (raw === '') return;", block)
 
     def test_붙일_자리가_실재한다(self):
-        self.assertIn("getElementById('doc-edit-panel')", self.code)
+        self.assertIn("getElementById('specNutritionModal')", self.code)
         self.assertNotIn('documentEditPanel', self.code)
 
 
@@ -12056,3 +12065,95 @@ class BomRatioSortTests(TestCase):
         body = js[at:at + 1600]
         self.assertIn('blank', body)
         self.assertIn('concat(blank)', body)
+
+
+class SpecNutritionScreenTests(TestCase):
+    """
+    성적서 판독 화면 — **원본을 옆에 놓고, 읽은 것과 못 읽은 것을 가른다.**
+
+    예전에는 문서 패널 위 작은 상자에 값만 늘어놓았다. 종이는 다른 창에서
+    열어 놓고 숫자를 번갈아 보는 일을 사람이 했고, 못 읽은 칸은 그냥 비어
+    있어 "0 인가 못 읽은 것인가" 를 알 수 없었다. 그리고 기준량을 못 읽으면
+    **읽어 놓은 값 아홉 개까지 함께 버렸다.**
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def setUp(self):
+        self.html = self._read('templates/products/_tab_documents.html')
+
+    def test_원본을_옆에_놓는다(self):
+        self.assertIn('id="specNutritionModal"', self.html)
+        self.assertIn('spec-orig-view', self.html)
+        # PDF 성적서가 대부분이다. 사진만 걸면 견줄 수가 없다.
+        self.assertIn("type=\"application/pdf\"", self.html)
+
+    def test_읽은_칸과_못_읽은_칸을_가른다(self):
+        self.assertIn('spec-tag-read', self.html)
+        self.assertIn('spec-tag-miss', self.html)
+        self.assertIn('.spec-row.is-miss', self.html)
+
+    def test_기준량을_못_읽어도_창은_연다(self):
+        # 여기서 끝내면 읽어 둔 값까지 함께 버려진다.
+        at = self.html.index('window.readSpecNutrition')
+        block = self.html[at:at + 3000]
+        self.assertIn('showSpecNutrition(docId, body)', block)
+        self.assertIn('id="specBasisAmount"', self.html)
+        self.assertIn('id="specRecalcBtn"', self.html)
+
+    def test_다시_셈할_때_원문을_되돌려_보낸다(self):
+        # 같은 종이를 두 번 판독하면 한도가 그만큼 깎인다.
+        at = self.html.index("#specRecalcBtn'")
+        self.assertIn('text: body.text', self.html[at:at + 1200])
+
+
+class SpecNutritionQuotaTests(TestCase):
+    """기준량만 고쳐 다시 셈할 때는 판독 한도를 깎지 않는다."""
+
+    def test_원문을_받으면_한도를_깎지_않는다(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'products/views.py'),
+                     encoding='utf-8') as f:
+            src = f.read()
+        at = src.index('def document_spec_nutrition(')
+        block = src[at:at + 2600]
+        charge = block.index('check_and_charge')
+        guard = block.index('if not known_text:')
+        self.assertLess(guard, charge, '한도 차감이 조건 밖에 있다')
+
+
+class ImportResultActionTests(TestCase):
+    """
+    찾은 자리에서 바로 넣는다.
+
+    등록 단추가 **사진 칸 아래**에만 있었다. 번호로 찾은 사람 눈에는 잘 띄지
+    않아, 다 골라 놓고 아무 일도 안 일어나는 것처럼 보인다 — 코드 주석이
+    이미 그 증상을 적어 두고도 홈에서 들어온 경우에만 길을 열어 두었다.
+    """
+
+    def test_조회_결과에_등록_단추가_붙는다(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'static/js/products/import_modal.js'),
+                     encoding='utf-8') as f:
+            js = f.read()
+        at = js.index('function showFields(')
+        block = js[at:at + 2600]
+        self.assertIn("data-use=\"product\"", block)
+        self.assertIn("data-use=\"ingredient\"", block)
+        self.assertIn('useLookup(btn.dataset.use, modalEl)', block)

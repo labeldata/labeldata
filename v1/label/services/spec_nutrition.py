@@ -85,6 +85,15 @@ _BASIS = re.compile(
     r'(\d+(?:\.\d+)?)\s*(g|kg|mg|mL|ml|밀리리터|그램)\s*\)?\s*(?:당|기준|Per|per)\b',
     re.IGNORECASE)
 
+# 시험성적서는 기준량을 **항목 이름 안에** 적는다 — "열량(kcal/100g)",
+# "나트륨(mg/100g)". '당' 도 '기준' 도 없으니 위 패턴에 안 걸렸고, 글자는
+# 멀쩡히 읽고도 「기준량을 읽지 못했습니다」 로 끝났다.
+#
+# 빗금을 반드시 요구한다. 그냥 "100 g" 을 기준량으로 보면 성분 값 줄
+# ("탄수화물 50.38 g")이 잡힌다.
+_BASIS_PER_UNIT = re.compile(
+    r'/\s*(\d+(?:\.\d+)?)\s*(g|kg|mg|mL|ml)\b', re.IGNORECASE)
+
 # 한 줄에서 숫자를 찾는다. 단위가 붙어 있으면 함께 본다.
 _VALUE = re.compile(r'(-?\d+(?:[,.]\d+)?)\s*(kcal|mg|g|%)?', re.IGNORECASE)
 
@@ -118,24 +127,46 @@ def _absent_in(text):
     return False
 
 
+def _normalized(amount, unit):
+    unit = unit.lower()
+    if unit == 'kg':
+        amount, unit = amount * 1000, 'g'
+    elif unit == 'mg':
+        amount, unit = amount / 1000.0, 'g'
+    elif unit == '밀리리터':
+        unit = 'ml'
+    elif unit == '그램':
+        unit = 'g'
+    return amount, unit
+
+
 def parse_basis(text):
-    """원문에서 기준량을 찾는다. (숫자, 단위) — 못 찾으면 (None, '')."""
-    for line in str(text or '').splitlines():
+    """
+    원문에서 기준량을 찾는다. (숫자, 단위) — 못 찾으면 (None, '').
+
+    두 꼴을 본다. "100g당 · 1회 제공량(30g)당" 처럼 **말로 적은 것**을 먼저
+    보고, 없으면 "열량(kcal/100g)" 처럼 **항목 이름 안에 적은 것**을 본다.
+    시험성적서는 대개 뒤쪽이라, 글자를 멀쩡히 읽고도 기준량이 없다고 했다.
+    """
+    lines = str(text or '').splitlines()
+    for line in lines:
         m = _BASIS.search(line)
         if not m:
             continue
-        amount = float(m.group(1))
-        unit = m.group(2).lower()
-        if unit == 'kg':
-            amount, unit = amount * 1000, 'g'
-        elif unit == 'mg':
-            amount, unit = amount / 1000.0, 'g'
-        elif unit == '밀리리터':
-            unit = 'ml'
-        elif unit == '그램':
-            unit = 'g'
+        amount, unit = _normalized(float(m.group(1)), m.group(2))
         if amount > 0:
             return amount, unit
+
+    # 항목 이름 안에 적힌 것. 여러 줄에 되풀이되므로 **가장 많이 나온 것**을
+    # 고른다 — 한 줄이 잘못 읽혀도 표 전체가 흔들리지 않는다.
+    seen = {}
+    for line in lines:
+        for m in _BASIS_PER_UNIT.finditer(line):
+            amount, unit = _normalized(float(m.group(1)), m.group(2))
+            if amount > 0:
+                seen[(amount, unit)] = seen.get((amount, unit), 0) + 1
+    if seen:
+        return max(seen.items(), key=lambda kv: kv[1])[0]
     return None, ''
 
 
@@ -159,7 +190,12 @@ def parse_values(text):
     없는 값이 남의 값으로 채워지는 것이 이 파서가 낼 수 있는 가장 나쁜
     실수다. 없다고 적혀 있으면 **거기서 끝낸다.**
     """
-    lines = [ln.strip() for ln in str(text or '').splitlines() if ln.strip()]
+    # **기준량 표기를 먼저 걷어낸다.** "열량(kcal/100g) 574.38" 에서 첫
+    # 숫자는 574.38 이 아니라 **100** 이다 — 걷어내지 않으면 모든 성분이
+    # 기준량 숫자로 채워진다(시험성적서의 가장 흔한 꼴에서 그랬다).
+    # 단위는 남는다: "열량(kcal) 574.38".
+    lines = [_BASIS_PER_UNIT.sub(' ', ln).strip()
+             for ln in str(text or '').splitlines() if ln.strip()]
     out = {}
     for i, line in enumerate(lines):
         key, after = _name_at(line)
@@ -221,7 +257,7 @@ def to_per_100(values, basis_amount, basis_unit):
     return out, ''
 
 
-def read(image_fh, tag='spec_nutrition'):
+def read(image_fh, tag='spec_nutrition', basis=None, text=None):
     """
     성적서 사진 하나를 읽어 {values, basis_amount, basis_unit, error, text} 를 낸다.
 
@@ -230,26 +266,35 @@ def read(image_fh, tag='spec_nutrition'):
     """
     from v1.label.services.ocr_text import extract_text
 
-    empty = {'values': {}, 'basis_amount': None, 'basis_unit': '', 'text': ''}
-    try:
-        raw = image_fh.read()
-    except Exception as exc:
-        return dict(empty, error='파일을 읽지 못했습니다: %s' % exc)
-    if not raw:
-        return dict(empty, error='빈 파일입니다.')
+    empty = {'values': {}, 'raw_values': {}, 'basis_amount': None,
+             'basis_unit': '', 'text': ''}
 
-    try:
-        text = extract_text(raw)
-    except Exception as exc:
-        logger.exception('[%s] 원문 추출 실패', tag)
-        return dict(empty, error='글자를 읽지 못했습니다: %s' % exc)
+    # 이미 읽어 둔 원문을 주면 다시 읽지 않는다. 기준량만 사람이 알려 주고
+    # 다시 셈할 때 쓴다 — 같은 종이를 두 번 판독할 까닭이 없다(돈이 든다).
+    if text is None:
+        try:
+            raw = image_fh.read()
+        except Exception as exc:
+            return dict(empty, error='파일을 읽지 못했습니다: %s' % exc)
+        if not raw:
+            return dict(empty, error='빈 파일입니다.')
+
+        try:
+            text = extract_text(raw)
+        except Exception as exc:
+            logger.exception('[%s] 원문 추출 실패', tag)
+            return dict(empty, error='글자를 읽지 못했습니다: %s' % exc)
     if not (text or '').strip():
         return dict(empty, error='사진에서 글자를 찾지 못했습니다.')
 
-    amount, unit = parse_basis(text)
-    values, why = to_per_100(parse_values(text), amount, unit)
+    amount, unit = basis if basis else parse_basis(text)
+    raw_values = parse_values(text)
+    values, why = to_per_100(raw_values, amount, unit)
     return {
         'values': values or {},
+        # 환산 전 값. 기준량을 못 읽었을 때도 화면이 **읽긴 읽었다**는 것을
+        # 보여 줄 수 있어야 한다 — 빈 표를 내밀면 판독이 통째로 실패한 줄 안다.
+        'raw_values': raw_values or {},
         'basis_amount': amount,
         'basis_unit': unit,
         'text': text,

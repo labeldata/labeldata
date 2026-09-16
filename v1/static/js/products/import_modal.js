@@ -243,7 +243,27 @@
           ? '<div class="text-muted">' + esc(fields.bssh_nm) + '</div>' : '')
       + (fields.rawmtrl_nm
           ? '<div class="mt-1">' + esc(fields.rawmtrl_nm) + '</div>' : '')
+      /* **찾은 자리에서 바로 넣는다.**
+
+         등록 단추는 아래 사진 칸에도 있다. 그런데 번호로 찾은 사람에게는
+         그 단추가 사진 칸에 붙어 있어 잘 띄지 않는다 — 다 골라 놓고 아무
+         일도 안 일어나는 것처럼 보인다(아래 startMode 주석도 같은 말을
+         하고 있었는데, 그 길은 홈에서 들어온 경우에만 열려 있었다).
+
+         찾은 결과 바로 밑이 누를 자리다. 아래 단추는 그대로 둔다 — 사진을
+         고르다 마음을 바꾼 사람이 쓰는 길이다. */
+      + '<div class="d-flex gap-1 mt-2">'
+      + '  <button type="button" class="btn btn-primary v2-btn-sm" data-use="product">'
+      + '    <i class="bi bi-box-seam"></i> 이 제품으로 등록'
+      + '  </button>'
+      + '  <button type="button" class="btn btn-outline-primary v2-btn-sm" data-use="ingredient">'
+      + '    <i class="bi bi-droplet"></i> 원료로 등록'
+      + '  </button>'
+      + '</div>'
       + '</div>';
+    box.querySelectorAll('[data-use]').forEach(function (btn) {
+      btn.onclick = function () { useLookup(btn.dataset.use, modalEl); };
+    });
     setLookupButtons(modalEl, true);
     /* **누르지 않아도 등록한다.**
      *

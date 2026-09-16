@@ -8085,13 +8085,36 @@ def document_spec_nutrition(request, document_id):
         return JsonResponse({'success': False, 'error': '문서에 파일이 없습니다.'},
                             status=400)
 
-    allowed, room = quota.check_and_charge(request.user, 'ocr_label')
-    if not allowed:
-        return JsonResponse({'success': False, 'error': room['message']}, status=429)
+    # 기준량을 사람이 알려 주고 **다시 셈하는** 길. 화면이 앞서 받은 원문을
+    # 함께 보내면 판독을 다시 하지 않는다 — 같은 종이를 두 번 읽을 까닭이
+    # 없고, 그때마다 한도가 깎이면 기준량 한 번 고치는 값이 판독 한 번과
+    # 같아진다.
+    try:
+        again = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, UnicodeDecodeError):
+        again = {}
+    known_text = (again.get('text') or '').strip() or None
+    basis = None
+    try:
+        amount = float(again.get('basis_amount'))
+        unit = str(again.get('basis_unit') or 'g').lower()
+        if amount > 0 and unit in ('g', 'ml'):
+            basis = (amount, unit)
+    except (TypeError, ValueError):
+        basis = None
+
+    if not known_text:
+        allowed, room = quota.check_and_charge(request.user, 'ocr_label')
+        if not allowed:
+            return JsonResponse({'success': False, 'error': room['message']},
+                                status=429)
 
     try:
-        with doc.file.open('rb') as fh:
-            got = spec_nutrition.read(fh)
+        if known_text:
+            got = spec_nutrition.read(None, basis=basis, text=known_text)
+        else:
+            with doc.file.open('rb') as fh:
+                got = spec_nutrition.read(fh, basis=basis)
     except Exception as exc:
         logger.exception('성적서 영양성분 판독 실패 (document=%s)', doc.pk)
         return JsonResponse({'success': False, 'error': str(exc)}, status=500)
@@ -8105,7 +8128,17 @@ def document_spec_nutrition(request, document_id):
         # 1회 제공량 30g 성적서가 그대로 들어오면 값이 3.3배 낮아지는데
         # 터지지 않으니 아무도 모른다.
         'error': got['error'],
-        'document': {'id': doc.pk, 'name': doc.original_filename or ''},
+        # 환산 전 값과 원문을 함께 낸다. 화면이 "읽긴 읽었다" 를 보여 주고,
+        # 기준량을 받아 다시 셈할 때 원문을 되돌려 보낸다.
+        'raw_values': got.get('raw_values') or {},
+        'text': got.get('text') or '',
+        'document': {
+            'id': doc.pk,
+            'name': doc.original_filename or '',
+            # 원본을 옆에 놓고 견주려면 주소가 필요하다.
+            'url': doc.file.url if doc.file else '',
+            'is_pdf': (doc.original_filename or '').lower().endswith('.pdf'),
+        },
     })
 
 

@@ -20220,3 +20220,64 @@ class ImportModalOpensOnceTests(TestCase):
         self.assertIn("__q.delete('import')", block)
         self.assertIn("__q.delete('start')", block)
         self.assertIn('history.replaceState', block)
+
+
+class SpecNutritionBasisTests(TestCase):
+    """
+    성적서의 기준량을 찾는다.
+
+    시험성적서는 기준량을 **항목 이름 안에** 적는다 — "열량(kcal/100g)".
+    '당' 도 '기준' 도 없어서 패턴에 안 걸렸고, 글자는 멀쩡히 읽고도
+    「기준량을 읽지 못했습니다」 로 끝났다. 값 아홉 개가 함께 버려졌다.
+    """
+
+    def test_항목_이름_안의_기준량을_읽는다(self):
+        from v1.label.services.spec_nutrition import parse_basis
+
+        text = ('시험 항목 및 결과\n'
+                '열량(kcal/100g) 기준없음 574.38\n'
+                '단백질(g/100g) 기준없음 8.75\n'
+                '나트륨(mg/100g) 기준없음 290.19\n')
+        self.assertEqual(parse_basis(text), (100.0, 'g'))
+
+    def test_성분_값_줄을_기준량으로_보지_않는다(self):
+        # "탄수화물 50.38 g" 은 값이지 기준량이 아니다. 빗금을 요구하는 까닭.
+        from v1.label.services.spec_nutrition import parse_basis
+
+        self.assertEqual(parse_basis('탄수화물 50.38 g\n지방 37.54 g\n'), (None, ''))
+
+    def test_말로_적은_기준량이_먼저다(self):
+        from v1.label.services.spec_nutrition import parse_basis
+
+        text = '1회 제공량(30g)당\n열량(kcal/100g) 574.38\n'
+        self.assertEqual(parse_basis(text), (30.0, 'g'))
+
+    def test_원문을_주면_다시_판독하지_않는다(self):
+        # 기준량만 고쳐 다시 셈할 때마다 판독하면 한도가 그만큼 깎인다.
+        from unittest.mock import patch
+
+        from v1.label.services import spec_nutrition
+
+        text = '열량(kcal/100g) 574.38\n나트륨(mg/100g) 290.19\n'
+        with patch('v1.label.services.ocr_text.extract_text') as ocr:
+            got = spec_nutrition.read(None, text=text)
+        ocr.assert_not_called()
+        self.assertEqual(got['basis_amount'], 100.0)
+        self.assertAlmostEqual(got['values']['calories'], 574.38)
+
+    def test_기준량을_밖에서_주면_그것으로_셈한다(self):
+        from v1.label.services import spec_nutrition
+
+        text = '열량 574.38 kcal\n나트륨 290.19 mg\n'      # 기준량이 없는 성적서
+        got = spec_nutrition.read(None, text=text, basis=(50.0, 'g'))
+        self.assertEqual(got['basis_amount'], 50.0)
+        self.assertAlmostEqual(got['values']['calories'], 1148.76)   # 100g 당
+
+    def test_기준량을_못_읽어도_읽은_값은_함께_낸다(self):
+        # 빈 표를 내밀면 판독이 통째로 실패한 줄 안다.
+        from v1.label.services import spec_nutrition
+
+        got = spec_nutrition.read(None, text='열량 574.38 kcal\n나트륨 290.19 mg\n')
+        self.assertTrue(got['error'])
+        self.assertEqual(got['values'], {})
+        self.assertAlmostEqual(got['raw_values']['calories'], 574.38)
