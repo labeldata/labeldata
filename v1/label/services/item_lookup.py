@@ -45,7 +45,18 @@ def as_fields(item):
         'prdlst_nm': item.prdlst_nm or '',
         'prdlst_dcnm': item.prdlst_dcnm or '',
         'food_type': item.prdlst_dcnm or '',
-        'rawmtrl_nm': item.rawmtrl_nm or '',
+        # **정렬본이 있으면 그것을 쓴다.**
+        #
+        # 식약처 API 는 원재료명과 그 순서(`rawmtrl_ordno`)를 따로 준다.
+        # 수집할 때 둘을 맞춰 다시 엮어 `rawmtrl_nm_sorted` 에 넣어 둔다
+        # (`v1/common/views.py` 의 수집 참고) — 원본 `rawmtrl_nm` 은 API 가
+        # 보낸 차례 그대로라 **표시 순서가 아니다.** 여기서 원본을 넘기는
+        # 바람에 번호로 불러온 제품은 원재료명이 적은 것부터 늘어섰다.
+        # 표시기준은 많이 쓴 것부터를 요구한다.
+        #
+        # 검색·라벨 만들기 쪽은 이미 정렬본을 먼저 본다
+        # (`label/utils.py:228`, `label/views.py:3864`). 이 입구만 빠져 있었다.
+        'rawmtrl_nm': item.rawmtrl_nm_sorted or item.rawmtrl_nm or '',
         'bssh_nm': item.bssh_nm or '',
         'pog_daycnt': item.pog_daycnt or '',
         'frmlc_mtrqlt': item.frmlc_mtrqlt or '',

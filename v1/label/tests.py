@@ -20100,3 +20100,123 @@ class VerifyTabVisibilityTests(TestCase):
         self.assertIn('verifyTabBadge', block)
         # 권고는 세지 않는다 — 확정을 막는 것만 숫자로 말한다.
         self.assertIn('!c.ok && !c.advisory', block)
+
+
+class ItemLookupOrderTests(TestCase):
+    """
+    품목보고번호로 불러온 원재료명의 **순서**.
+
+    식약처 API 는 원재료명과 순서를 따로 준다. 수집할 때 둘을 맞춰 다시 엮어
+    `rawmtrl_nm_sorted` 에 넣어 두는데, 불러오기 입구만 원본(`rawmtrl_nm`)을
+    넘기고 있었다 — API 가 보낸 차례 그대로라 대개 **적은 것부터** 늘어선다.
+    표시기준은 많이 쓴 것부터를 요구한다.
+    """
+
+    def setUp(self):
+        from v1.label.models import FoodItem
+
+        self.item = FoodItem.objects.create(
+            prdlst_report_no='19980448010697',
+            prdlst_nm='땅콩 버터 크림 ',
+            rawmtrl_nm='향료, 정제소금, 밀가루, 설탕',
+            rawmtrl_nm_sorted='설탕, 밀가루, 정제소금, 향료',
+        )
+
+    def test_정렬본이_있으면_그것을_넘긴다(self):
+        from v1.label.services import item_lookup
+
+        fields = item_lookup.as_fields(self.item)
+        self.assertEqual(fields['rawmtrl_nm'], '설탕, 밀가루, 정제소금, 향료')
+
+    def test_정렬본이_없으면_원본을_넘긴다(self):
+        from v1.label.models import FoodItem
+        from v1.label.services import item_lookup
+
+        FoodItem.objects.filter(pk=self.item.pk).update(rawmtrl_nm_sorted='')
+        fields = item_lookup.as_fields(FoodItem.objects.get(pk=self.item.pk))
+        self.assertEqual(fields['rawmtrl_nm'], '향료, 정제소금, 밀가루, 설탕')
+
+
+class PdfTextExtractionTests(TestCase):
+    """
+    PDF 성적서에서 글자를 읽는다.
+
+    Vision 의 `images:annotate` 는 **사진만** 받는다. PDF 를 그대로 보내면
+    "Bad image data" 로 돌아오고, 그것이 빈 문자열이 되어 화면에는
+    「사진에서 글자를 찾지 못했습니다」 로 나온다 — 파일이 잘못된 줄 알게
+    된다. 성적서·품목제조보고서는 대개 PDF 다.
+    """
+
+    def _call(self, raw, body):
+        from unittest.mock import patch
+
+        from v1.label.services import ocr_text
+
+        class _Res:
+            status_code = 200
+            text = ''
+
+            @staticmethod
+            def json():
+                return body
+
+        seen = {}
+
+        def _post(url, headers=None, json=None, timeout=None):
+            seen['url'] = url
+            seen['json'] = json
+            return _Res()
+
+        with patch.object(ocr_text, '_api_key', return_value='KEY'), \
+                patch('requests.post', _post):
+            text = ocr_text.extract_text(raw)
+        return text, seen
+
+    def test_PDF_는_files_annotate_로_보낸다(self):
+        pages = [{'fullTextAnnotation': {'text': '열량(kcal/100g) 574.38'}},
+                 {'fullTextAnnotation': {'text': '나트륨(mg/100g) 290.19'}}]
+        text, seen = self._call(b'%PDF-1.4 ...', {'responses': [{'responses': pages}]})
+
+        self.assertIn('files:annotate', seen['url'])
+        req = seen['json']['requests'][0]
+        self.assertEqual(req['inputConfig']['mimeType'], 'application/pdf')
+        self.assertNotIn('image', req)          # 사진 자리로 보내면 거절당한다
+        # 여러 쪽이면 이어 붙인다.
+        self.assertIn('574.38', text)
+        self.assertIn('290.19', text)
+
+    def test_사진은_그대로_images_annotate_로_간다(self):
+        long_text = ('시험 항목 및 결과 열량(kcal/100g) 574.38 단백질(g/100g) 8.75 '
+                     '탄수화물(g/100g) 50.38 나트륨(mg/100g) 290.19')
+        body = {'responses': [{'fullTextAnnotation': {'text': long_text}}]}
+        text, seen = self._call(b'\xff\xd8\xff\xe0 jpeg', body)
+
+        self.assertIn('images:annotate', seen['url'])
+        self.assertIn('image', seen['json']['requests'][0])
+        self.assertIn('574.38', text)
+
+
+class ImportModalOpensOnceTests(TestCase):
+    """
+    불러오기 창은 **한 번만** 열린다.
+
+    이 화면은 문서를 올리거나 저장할 때 `location.reload()` 를 한다. 주소에
+    `import=1` 이 남아 있으면 그때마다 창이 다시 떴다 — 올린 사람 눈에는
+    "창이 계속 튀어나온다". 뒤로 가기로 돌아와도 마찬가지였다.
+    """
+
+    def test_주소에서_표시를_지운다(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR,
+                                  'templates/products/product_detail.html'),
+                     encoding='utf-8') as f:
+            html = f.read()
+        at = html.index("__q.get('import') === '1'")
+        block = html[at:at + 1800]
+        self.assertIn("__q.delete('import')", block)
+        self.assertIn("__q.delete('start')", block)
+        self.assertIn('history.replaceState', block)

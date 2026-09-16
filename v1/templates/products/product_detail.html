@@ -1225,6 +1225,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const __import = __q.get('import') === '1';
     const __start = __q.get('start') === '1';
     if (__import || __start) {
+        /* **표시를 주소에서 지운다 — 한 번만 여는 문이다.**
+           이 화면은 문서를 올리거나 저장할 때 `location.reload()` 를 한다.
+           주소에 import=1 이 남아 있으면 그때마다 불러오기 창이 다시 떴다 —
+           올린 사람 눈에는 "창이 계속 튀어나온다". 뒤로 가기로 돌아와도
+           마찬가지였다. */
+        try {
+            __q.delete('import');
+            __q.delete('start');
+            const rest = __q.toString();
+            history.replaceState(null, '',
+                window.location.pathname + (rest ? '?' + rest : '') + window.location.hash);
+        } catch (e) { /* 주소를 못 고쳐도 창은 열어야 한다 */ }
+
         let tries = 0;
         const openWhenReady = function () {
             if (typeof window.openImportModal === 'function') {

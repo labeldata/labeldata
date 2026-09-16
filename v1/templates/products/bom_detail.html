@@ -209,6 +209,24 @@ body.in-iframe .bom-page-header { display: none !important; }
                         </div>
                         {# 왜 안 바뀌는지 말해 준다 — 식품유형이 비어 있으면 둘이 같다 #}
                         <div class="bom-summary-note" id="bom-summary-note"></div>
+                        {% comment %}
+                          **표의 줄 순서는 요약을 따라오지 않는다.**
+
+                          요약은 늘 배합비 내림차순으로 만든다(표시기준이 그
+                          순서를 요구한다). 그런데 표의 줄은 넣은 순서 그대로다
+                          — 품목제조보고서에서 옮겨 적으면 대개 적은 것부터라,
+                          표와 요약이 서로 뒤집힌 순서로 보인다. 어느 쪽이 맞는
+                          것인지 사용자가 알 수 없다.
+
+                          자동으로 줄을 옮기지는 않는다. 줄 끌기가 켜져 있어
+                          사람이 일부러 맞춰 둔 순서를 말없이 흐트러뜨리면 안
+                          된다. 누를 수 있는 단추로 둔다.
+                        {% endcomment %}
+                        <button type="button" class="btn btn-light border v2-btn-sm flex-shrink-0"
+                                onclick="sortBomByRatio()"
+                                title="표의 줄을 배합비가 큰 것부터로 다시 놓습니다">
+                            <i class="bi bi-sort-numeric-down"></i>배합비 순 정렬
+                        </button>
                         <button type="button" class="btn btn-light border v2-btn-sm flex-shrink-0"
                                 onclick="copyRawmtrlToBasicInfo()">
                             <i class="bi bi-arrow-left-circle"></i>기본정보로 복사
@@ -2249,6 +2267,45 @@ body.in-iframe .bom-page-header { display: none !important; }
         _bsumActive = btn.dataset.bsum;
         if (typeof generateBomSummary === 'function') generateBomSummary();
     });
+
+    /*
+     * 표의 줄을 배합비가 큰 것부터로 다시 놓는다.
+     *
+     * 값이 없는 줄은 0 으로 보아 뒤로 보내고, 같으면 지금 순서를 지킨다
+     * (자바스크립트 sort 는 안정 정렬이다) — 요약을 만드는 규칙과 같다.
+     * 비어 있는 줄(원료명이 없는 줄)은 늘 맨 아래에 남긴다.
+     *
+     * `loadData` 로 통째로 다시 넣는다. 행 객체를 그대로 옮기므로 `_meta`
+     * (bom_id·source_type)도 따라간다 — 저장이 그 번호를 보고 DB 행을 찾기
+     * 때문에, 값만 베껴 넣으면 **엉뚱한 행을 덮어쓴다.**
+     */
+    window.sortBomByRatio = function () {
+        if (!hot) return;
+        const rows = hot.getSourceData().slice();
+        const named = rows.filter(r => r && ((r.raw_material_name || '').trim()
+                                             || (r.ingredient_name || '').trim()));
+        const blank = rows.filter(r => !(r && ((r.raw_material_name || '').trim()
+                                               || (r.ingredient_name || '').trim())));
+        const before = named.map(r => r.ingredient_name || r.raw_material_name).join('|');
+        named.sort((a, b) => (parseFloat(b.mixing_ratio) || 0) - (parseFloat(a.mixing_ratio) || 0));
+        const after = named.map(r => r.ingredient_name || r.raw_material_name).join('|');
+
+        hot.loadData(named.concat(blank));
+        generateBomSummary();
+
+        if (typeof showSnackbar === 'function') {
+            const withRatio = named.filter(r => (parseFloat(r.mixing_ratio) || 0) > 0).length;
+            if (!withRatio) {
+                showSnackbar('배합비가 적힌 줄이 없습니다. 배합비(%) 칸을 채운 뒤 눌러 주세요.',
+                             'warning');
+            } else if (before === after) {
+                showSnackbar('이미 배합비 순입니다.', 'info');
+            } else {
+                showSnackbar('배합비가 큰 것부터로 놓았습니다. [저장하기] 를 눌러야 남습니다.',
+                             'success');
+            }
+        }
+    };
 
     function generateBomSummary() {
         if (!hot) return;

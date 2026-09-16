@@ -11940,3 +11940,119 @@ class DailyRemindersTests(TestCase):
             out, err = self._run()
         self.assertIn('오늘 말할 제품', out)   # 뒤에 선 것이 돌았다
         self.assertIn('실패', err)
+
+
+class DocumentSlotLinkOnUploadTests(TestCase):
+    """
+    슬롯을 지정하지 않고 올린 문서도 필수 문서 칸에 꽂힌다.
+
+    예전에는 슬롯의 `+` 로 올렸을 때만 연결했다. 그래서 문서함에 그냥 끌어다
+    놓으면 파일명으로 「품목제조보고서」 로 분류까지 해 놓고도 **필수 문서는
+    0/5 그대로**였다 — 목록에는 보이는데 칩은 "없음" 이라고 말한다. 사용자는
+    무엇을 더 해야 하는지 알 수 없다.
+    """
+
+    def setUp(self):
+        import tempfile
+
+        from django.test import override_settings
+
+        from v1.products.models import DocumentSlot, DocumentType
+
+        self._media = tempfile.mkdtemp()
+        self._override = override_settings(MEDIA_ROOT=self._media)
+        self._override.enable()
+        self.addCleanup(self._override.disable)
+
+        self.user = User.objects.create_user(username='slotlink', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='크림빵')
+        self.doc_type = DocumentType.objects.create(
+            type_code='REPORT_MANUFACTURING', type_name='품목제조보고서',
+            detection_keywords='품목제조보고서,품목보고', required_yn=True)
+        self.slot = DocumentSlot.objects.create(label=self.label,
+                                                document_type=self.doc_type)
+
+    def _upload(self, filename, **extra):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        url = reverse('products:document_upload_api',
+                      kwargs={'label_id': self.label.my_label_id})
+        payload = {'file': SimpleUploadedFile(filename, b'%PDF-1.4 test',
+                                              content_type='application/pdf')}
+        payload.update(extra)
+        return self.client.post(url, data=payload)
+
+    def test_슬롯을_안_고르고_올려도_그_칸에_꽂힌다(self):
+        res = self._upload('2.품목제조보고서_크림빵.pdf')
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.slot.refresh_from_db()
+        self.assertIsNotNone(self.slot.current_document,
+                             '분류는 됐는데 필수 문서 칸이 비어 있다')
+        self.assertEqual(self.slot.status, self.slot.SlotStatus.VALID)
+
+    def test_없는_슬롯을_새로_만들지는_않는다(self):
+        # 슬롯은 "이 제품에 필요한 서류" 라는 뜻이고 그 목록은 사람이 정한다.
+        from v1.products.models import DocumentSlot, DocumentType
+
+        DocumentType.objects.create(type_code='CERT_HALAL', type_name='할랄인증서',
+                                    detection_keywords='할랄')
+        self._upload('할랄 인증서.pdf')
+        self.assertEqual(
+            DocumentSlot.objects.filter(label=self.label).count(), 1)
+
+    def test_숨긴_슬롯에는_꽂지_않는다(self):
+        # 숨긴 슬롯은 준수율 계산에서 빠진 칸이다. 거기 꽂으면 숨긴 뜻이 없다.
+        self.slot.hidden_yn = True
+        self.slot.save(update_fields=['hidden_yn'])
+        self._upload('2.품목제조보고서_크림빵.pdf')
+        self.slot.refresh_from_db()
+        self.assertIsNone(self.slot.current_document)
+
+
+class BomRatioSortTests(TestCase):
+    """
+    배합비 순으로 줄을 다시 놓는 단추.
+
+    요약은 늘 배합비 내림차순으로 만든다(표시기준이 그 순서를 요구한다).
+    그런데 표의 줄은 넣은 순서 그대로였다 — 품목제조보고서에서 옮겨 적으면
+    대개 적은 것부터라, 표와 요약이 서로 뒤집힌 순서로 보인다. 어느 쪽이
+    맞는지 사용자가 알 수 없다.
+
+    자동으로 옮기지는 않는다. 줄 끌기가 켜져 있어, 사람이 맞춰 둔 순서를
+    말없이 흐트러뜨리면 안 된다.
+    """
+
+    @staticmethod
+    def _js():
+        import io
+        import os
+        import re
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR,
+                                  'templates/products/bom_detail.html'),
+                     encoding='utf-8') as f:
+            src = f.read()
+        return re.sub(r'/\*.*?\*/', '', src, flags=re.S), src
+
+    def test_단추가_있고_눌러야_돈다(self):
+        js, raw = self._js()
+        self.assertIn('onclick="sortBomByRatio()"', raw)
+        self.assertIn('window.sortBomByRatio = function', js)
+
+    def test_행_객체를_그대로_옮긴다(self):
+        # 값만 베껴 넣으면 `_meta.bom_id` 가 어긋나 **엉뚱한 DB 행을 덮는다.**
+        js, _ = self._js()
+        at = js.index('window.sortBomByRatio = function')
+        body = js[at:at + 1600]
+        self.assertIn('hot.loadData(', body)
+        self.assertIn('getSourceData()', body)
+
+    def test_빈_줄은_아래에_남긴다(self):
+        js, _ = self._js()
+        at = js.index('window.sortBomByRatio = function')
+        body = js[at:at + 1600]
+        self.assertIn('blank', body)
+        self.assertIn('concat(blank)', body)

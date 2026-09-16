@@ -192,14 +192,39 @@ def extract_text(image_bytes: bytes) -> str:
 
     import requests
 
-    payload = {
-        'requests': [{
-            'image': {'content': base64.b64encode(_shrink(image_bytes)).decode('ascii')},
-            'features': [{'type': 'DOCUMENT_TEXT_DETECTION'}],
-            # 힌트를 안 주면 한글 라벨의 영문·숫자 혼재 구간에서 언어를 오판한다.
-            'imageContext': {'languageHints': ['ko', 'en']},
-        }],
-    }
+    # ── PDF 는 다른 문으로 들어간다 ───────────────────────────────────────
+    #
+    # `images:annotate` 는 **사진만** 받는다. PDF 를 그대로 보내면 Vision 이
+    # "Bad image data" 로 돌려주고, 여기서는 그것이 빈 문자열이 되어 화면에
+    # **「사진에서 글자를 찾지 못했습니다」** 로 나온다 — 파일이 잘못된 줄
+    # 알게 된다. 성적서·품목제조보고서는 대개 PDF 로 온다.
+    #
+    # PDF·TIFF 는 `files:annotate` 가 받는다. 같은 키·같은 판독기이고 겉껍질만
+    # 다르다. 여러 쪽이면 앞 다섯 쪽까지 읽어 이어 붙인다(Vision 이 인라인
+    # 요청에서 받아 주는 최대가 다섯 쪽이다).
+    is_pdf = image_bytes[:5] == b'%PDF-'
+    if is_pdf:
+        url = url.replace('/images:annotate', '/files:annotate')
+        payload = {
+            'requests': [{
+                'inputConfig': {
+                    'content': base64.b64encode(image_bytes).decode('ascii'),
+                    'mimeType': 'application/pdf',
+                },
+                'features': [{'type': 'DOCUMENT_TEXT_DETECTION'}],
+                'imageContext': {'languageHints': ['ko', 'en']},
+                'pages': [1, 2, 3, 4, 5],
+            }],
+        }
+    else:
+        payload = {
+            'requests': [{
+                'image': {'content': base64.b64encode(_shrink(image_bytes)).decode('ascii')},
+                'features': [{'type': 'DOCUMENT_TEXT_DETECTION'}],
+                # 힌트를 안 주면 한글 라벨의 영문·숫자 혼재 구간에서 언어를 오판한다.
+                'imageContext': {'languageHints': ['ko', 'en']},
+            }],
+        }
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
@@ -226,7 +251,16 @@ def extract_text(image_bytes: bytes) -> str:
         logger.error('[OCR 원문] Vision 오류: %s', body['error'])
         return ''
 
-    text = ((body.get('fullTextAnnotation') or {}).get('text') or '').strip()
+    if is_pdf:
+        # 쪽마다 답이 하나씩 들어 있다. 쪽 사이는 줄바꿈으로 잇는다.
+        pages = body.get('responses') or []
+        parts = [((p.get('fullTextAnnotation') or {}).get('text') or '') for p in pages]
+        errored = [p['error'] for p in pages if p.get('error')]
+        if errored:
+            logger.error('[OCR 원문] PDF 쪽 오류: %s', errored[:2])
+        text = chr(10).join(part for part in parts if part.strip()).strip()
+    else:
+        text = ((body.get('fullTextAnnotation') or {}).get('text') or '').strip()
     if len(text) < MIN_TEXT_CHARS:
         # 몇 글자만 흘러나왔다. 이건 원문이 아니라 조각이다.
         logger.info('[OCR 원문] 글자가 %s 자뿐이라 버린다', len(text))

@@ -4064,9 +4064,31 @@ def document_upload_api(request, label_id):
         )
         
         # 슬롯 업데이트 (current_document 설정 및 상태 업데이트)
+        #
+        # **슬롯을 지정하지 않고 올려도 그 칸에 꽂는다.** 예전에는 슬롯의 +
+        # 단추로 올렸을 때만 연결했다. 그래서 문서함에 그냥 끌어다 놓거나
+        # [업로드] 로 올리면, 파일명으로 「품목제조보고서」 로 분류까지 해
+        # 놓고도 필수 문서는 0/5 그대로였다 — 목록에는 보이는데 칩은 "없음"
+        # 이라고 말한다. 사용자는 무엇을 더 해야 하는지 알 수가 없다.
+        #
+        # **없는 슬롯을 새로 만들지는 않는다.** 슬롯은 "이 제품에 필요한
+        # 서류" 라는 뜻이고 그 목록은 사람이 정한다(필수 문서 관리).
+        if not slot:
+            from .models import DocumentSlot
+            slot = DocumentSlot.objects.filter(
+                label=label, document_type=document_type, hidden_yn=False).first()
         if slot:
             slot.current_document = document
-            slot.save()  # save()에서 update_status() 호출
+            # **상태를 여기서 직접 고친다.** 예전 주석은 "save() 에서
+            # update_status() 호출" 이라고 적혀 있었는데 `DocumentSlot` 에는
+            # save() 가 없다 — 문서를 꽂아도 DB 의 status 는 'EMPTY' 로 남았다.
+            # 문서함 화면은 그릴 때 다시 계산해서 멀쩡해 보였지만, 저장된
+            # 값을 읽는 쪽(확정 전 검증의 만료 판정)은 그 낡은 값을 봤다.
+            slot.update_status()
+            slot.save()
+            if document.slot_id != slot.slot_id:
+                document.slot = slot
+                document.save(update_fields=['slot'])
         
         # 활동 로그 생성
         from .models import ProductActivityLog
