@@ -20281,3 +20281,52 @@ class SpecNutritionBasisTests(TestCase):
         self.assertTrue(got['error'])
         self.assertEqual(got['values'], {})
         self.assertAlmostEqual(got['raw_values']['calories'], 574.38)
+
+
+class SpecNutritionTableLayoutTests(TestCase):
+    """
+    시험성적서의 표는 칸이 셋이다 — 시험 항목 · 시험 기준 · 시험 결과.
+
+    판독기가 칸마다 줄을 나누면 이름과 값 사이에 "기준없음" 이 끼어든다.
+    다음 한 줄만 보고 포기하던 파서는 여기서 값을 통째로 놓쳤다 — 기준량은
+    읽고 아홉 값이 전부 '못 읽음' 이었다.
+    """
+
+    TABLE = ('시험 항목 및 결과\n'
+             '열량(kcal/100g)\n기준없음\n574.38\n'
+             '단백질(g/100g)\n기준없음\n8.75\n'
+             '탄수화물(g/100g)\n기준없음\n50.38\n'
+             '나트륨(mg/100g)\n기준없음\n290.19\n')
+
+    def test_가운데_칸을_건너뛰고_값을_찾는다(self):
+        from v1.label.services.spec_nutrition import parse_values
+
+        got = parse_values(self.TABLE)
+        self.assertAlmostEqual(got['calories'], 574.38)
+        self.assertAlmostEqual(got['proteins'], 8.75)
+        self.assertAlmostEqual(got['natriums'], 290.19)
+
+    def test_남의_값을_가져오지_않는다(self):
+        """
+        판독기가 칸을 세로로 읽으면 이름이 한데 모이고 값이 한데 모인다.
+        그때 앞 이름이 뒤 이름의 값을 집으면 **조용히 틀린 표**가 된다 —
+        이 파서가 낼 수 있는 가장 나쁜 실수다.
+        """
+        from v1.label.services.spec_nutrition import parse_values
+
+        got = parse_values('열량(kcal/100g)\n단백질(g/100g)\n574.38\n8.75\n')
+        self.assertNotIn('calories', got)
+
+    def test_없다고_적힌_것은_없는_것으로_둔다(self):
+        from v1.label.services.spec_nutrition import parse_values
+
+        got = parse_values('트랜스지방(g/100g)\n기준없음\n불검출\n지방(g/100g)\n기준없음\n37.54\n')
+        self.assertIsNone(got['trans_fats'])
+        self.assertAlmostEqual(got['fats'], 37.54)
+
+    def test_너무_멀리까지_찾지는_않는다(self):
+        # 세 줄 너머는 다른 표거나 다른 문단이다.
+        from v1.label.services.spec_nutrition import parse_values
+
+        got = parse_values('열량(kcal/100g)\n기준없음\n비고\n참고\n574.38\n')
+        self.assertNotIn('calories', got)

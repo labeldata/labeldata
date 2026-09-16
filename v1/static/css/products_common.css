@@ -466,6 +466,22 @@
 .cmp-tag { padding: 1px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
 .cmp-tag-read { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 .cmp-tag-miss { background: #fef3c7; color: #8a6100; }
+/* 판독기가 읽은 글자 그대로. 값이 안 채워졌을 때 **무엇을 읽었는지**
+   볼 수 있어야 한다 — 그것 없이는 파일 탓인지 파서 탓인지 알 수 없다. */
+.cmp-text { margin-top: 10px; font-size: 11.5px; }
+.cmp-text > summary { cursor: pointer; color: var(--secondary-color, #1a73e8); }
+.cmp-text pre {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    max-height: 200px;
+    overflow: auto;
+    background: var(--ez-gray-50, #f8f9fa);
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: 6px;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
 .cmp-foot { margin-top: 12px; font-size: 11.5px; color: var(--ez-gray-600, #80868b); line-height: 1.6; }
 
 .photo-viewer {

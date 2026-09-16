@@ -209,15 +209,35 @@ def parse_values(text):
 
         m = _VALUE.search(tail)
         if m is None:
-            # 이름만 있는 줄. 다음 줄에 값이 있을 수 있다 — 다만 그 줄이
-            # 다른 성분 이름을 달고 있으면 남의 값이므로 건드리지 않는다.
-            if i + 1 < len(lines) and _name_at(lines[i + 1])[0] is None:
-                nxt = lines[i + 1]
+            # 이름만 있는 줄. 아래에서 값을 찾는다.
+            #
+            # **한 줄만 보면 모자란다.** 시험성적서의 표는 칸이 셋이다
+            # (시험 항목 · 시험 기준 · 시험 결과). 판독기가 칸마다 줄을
+            # 나누면 이렇게 온다 —
+            #
+            #     열량(kcal/100g)
+            #     기준없음          ← 숫자가 없는 가운데 칸
+            #     574.38
+            #
+            # 다음 한 줄만 보고 포기하면 "기준없음" 에 걸려 값을 통째로
+            # 놓친다. 실제로 그랬다 — 기준량은 읽고 값 아홉은 전부 못 읽었다.
+            #
+            # 건너뛰는 것은 **숫자가 하나도 없는 줄뿐**이다. 그리고 다른
+            # 성분 이름이 나오면 거기서 멈춘다 — 판독기가 칸을 세로로 읽어
+            # 값들이 한데 모여 있을 때 남의 값을 가져오면 안 된다.
+            for j in range(i + 1, min(i + 4, len(lines))):
+                nxt = lines[j]
+                if _name_at(nxt)[0] is not None:
+                    break                      # 남의 줄이다
                 if _absent_in(nxt):
-                    out[key] = None
-                    continue
-                m = _VALUE.search(nxt)
-            if m is None:
+                    out[key] = None            # 없다고 적혀 있다
+                    break
+                found = _VALUE.search(nxt)
+                if found is not None:
+                    m = found
+                    break
+                # 숫자도 없고 없다는 말도 아니다("기준없음") — 한 줄 더 본다
+            if key in out or m is None:
                 continue
 
         value = float(m.group(1).replace(',', ''))
