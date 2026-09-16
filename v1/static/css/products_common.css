@@ -452,17 +452,38 @@
 }
 .cmp-head.is-miss { border-color: #f0b429; background: #fffbeb; }
 .cmp-note { margin-top: 6px; font-size: 11.5px; color: var(--ez-gray-600, #80868b); line-height: 1.5; }
-.cmp-rows { display: flex; flex-direction: column; gap: 6px; }
+.cmp-rows { display: flex; flex-direction: column; gap: 4px; }
+/* ── 한 줄에 한 항목 ──────────────────────────────────────────────────
+ *
+ * 이름을 위에, 칸을 아래에 두었더니 아홉 항목이 **화면 두 개 높이**가 됐다.
+ * 원본을 옆에 놓고 견주는 창인데 오른쪽이 길어지면 왼쪽 성적서를 스크롤로
+ * 따라다녀야 한다 — 나란히 놓은 뜻이 없어진다.
+ *
+ * 이름·칸·단위를 한 줄에 둔다. 환산 전 값 같은 덧말만 아래로 접힌다
+ * (`flex: 1 1 100%`).
+ * ─────────────────────────────────────────────────────────────────── */
 .cmp-row {
-    padding: 6px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px 8px;
+    padding: 4px 8px;
     border: 1px solid var(--ez-gray-100, #f1f3f4);
     border-radius: 7px;
 }
 .cmp-row.is-miss { border-color: #f0b429; background: #fffbeb; }
-.cmp-name { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-weight: 600; }
-.cmp-input { display: flex; align-items: center; gap: 6px; }
+.cmp-name {
+    flex: 0 0 106px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 0;
+    font-weight: 600;
+}
+.cmp-input { flex: 1 1 130px; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cmp-input .form-control { min-width: 0; }
 .cmp-unit { color: var(--ez-gray-600, #80868b); font-size: 11.5px; min-width: 32px; }
-.cmp-raw { margin-top: 4px; font-size: 11px; color: #8a6100; }
+.cmp-raw { flex: 1 1 100%; margin-top: 0; font-size: 11px; color: #8a6100; }
 .cmp-tag { padding: 1px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
 .cmp-tag-read { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 .cmp-tag-miss { background: #fef3c7; color: #8a6100; }

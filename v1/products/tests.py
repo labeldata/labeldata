@@ -12435,3 +12435,71 @@ class SpecSourceIsOneButtonTests(TestCase):
         self.assertIn('data-attach', block)              # 새로 올리는 길
         self.assertIn('data-pick', block)                # 있는 것을 고르는 길
         self.assertIn('영양성분 성적서가 없습니다', block)   # 없을 때도 창은 연다
+
+
+class CompareRowsAreOneLineTests(TestCase):
+    """
+    이름을 위에, 칸을 아래에 두었더니 아홉 항목이 **화면 두 개 높이**가 됐다.
+
+    원본을 옆에 놓고 견주는 창인데 오른쪽이 길어지면 왼쪽 성적서를 스크롤로
+    따라다녀야 한다 — 나란히 놓은 뜻이 없어진다.
+    """
+
+    def css(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'static/css/products_common.css'),
+                     encoding='utf-8') as f:
+            return f.read()
+
+    def test_이름과_칸이_한_줄에_선다(self):
+        css = self.css()
+        at = css.index('.cmp-row {')
+        block = css[at:at + 260]
+        self.assertIn('display: flex', block)
+        self.assertIn('align-items: center', block)
+
+        name = css[css.index('.cmp-name {'):css.index('.cmp-name {') + 220]
+        self.assertIn('flex: 0 0 106px', name)      # 이름 칸은 폭이 정해져 있다
+        self.assertIn('margin-bottom: 0', name)     # 아래로 밀지 않는다
+
+    def test_덧말만_아래로_접힌다(self):
+        # "성적서에 적힌 값 …" 같은 줄은 길어서 옆에 붙을 수 없다.
+        css = self.css()
+        raw = css[css.index('.cmp-raw {'):css.index('.cmp-raw {') + 160]
+        self.assertIn('flex: 1 1 100%', raw)
+
+
+class ReturnToWhereYouStartedTests(TestCase):
+    """
+    영양성분 탭에서 성적서를 올렸는데 문서함 탭으로 데려다 놓으면, 값을 넣고
+    나서 영양성분 탭을 다시 찾아 들어가야 한다.
+    """
+
+    def test_영양성분_탭에서_올렸으면_그리로_돌아온다(self):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'static/js/smart_upload.js'),
+                     encoding='utf-8') as f:
+            js = f.read()
+        at = js.index("sessionStorage.getItem('specReadAfterUpload')")
+        block = js[at:at + 500]
+        self.assertIn("setItem('returnToTab', 'nutrition')", block)
+
+    def test_그_밖에는_문서함_탭_그대로다(self):
+        # 문서를 올리러 온 사람은 올린 것을 목록에서 보고 싶다.
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'static/js/smart_upload.js'),
+                     encoding='utf-8') as f:
+            js = f.read()
+        self.assertIn("sessionStorage.setItem('returnToTab', 'docs');", js)

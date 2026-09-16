@@ -432,11 +432,15 @@ async function handleSmartUpload() {
 
             /* 영양성분 탭에서 "성적서 첨부" 로 들어온 길이면, 새로고침 뒤에
                **방금 올린 그 문서를 읽는다.** 올린 사람은 값을 넣으러 온
-               것이지 파일을 쌓으러 온 것이 아니다. */
+               것이지 파일을 쌓으러 온 것이 아니다.
+
+               그리고 **왔던 자리로 되돌린다.** 문서함 탭으로 데려다 놓으면
+               값을 넣고 나서 영양성분 탭을 다시 찾아 들어가야 한다. */
             try {
                 if (sessionStorage.getItem('specReadAfterUpload') && data.document_id) {
                     sessionStorage.removeItem('specReadAfterUpload');
                     sessionStorage.setItem('specReadDocId', String(data.document_id));
+                    sessionStorage.setItem('returnToTab', 'nutrition');
                 }
             } catch (e) { /* 못 남겨도 업로드는 끝났다 */ }
 
