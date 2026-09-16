@@ -12584,3 +12584,27 @@ class NutritionSourceIsTwoButtonsTests(TestCase):
     def test_오른쪽_미리보기와_같은_모양이다(self):
         at = self.html.index('data-source="lab"')
         self.assertIn('class="style-btn"', self.html[max(0, at - 200):at])
+
+    def test_듣는_것을_한_번만_단다(self):
+        """
+        `bindCalcSource` 는 **두 자리에서 불린다** — 저장된 값을 불러온 뒤와,
+        화면을 처음 꾸릴 때. 그때마다 리스너를 달면 한 번 누른 것이 두 번
+        처리된다: 첫 번째가 'lab' 으로 켜고 두 번째가 같은 값을 보고 꺼서,
+        눌러도 **아무 일도 안 일어난 것처럼** 보인다.
+
+        고르는 상자였을 때는 브라우저가 상태를 들고 있어 티가 나지 않던
+        함정이다.
+        """
+        self.assertEqual(self.html.count('bindCalcSource();'), 2)   # 전제
+
+        guard = self.html.index("if (source.dataset.bound) return;")
+        for after in ("source.addEventListener('change', paint)",
+                      "srcGroup.addEventListener('click'",
+                      "fromSpecBtn.addEventListener('click'"):
+            self.assertLess(guard, self.html.index(after),
+                            '%s 가 빗장 앞에 있다' % after)
+
+    def test_단추마다_달지_않고_묶음에_한_번_단다(self):
+        # 단추가 늘어도 그대로 돈다.
+        self.assertIn("document.querySelector('.cfg-srcbtns')", self.html)
+        self.assertIn("e.target.closest('[data-source]')", self.html)
