@@ -5914,12 +5914,12 @@ def my_ingredient_nutrition_save(request, ingredient_id):
         except (PublicFoodNutrition.DoesNotExist, TypeError, ValueError):
             return JsonResponse({'success': False, 'error': '고른 행을 찾을 수 없습니다.'},
                                 status=404)
-        if row.basis_unit != PublicFoodNutrition.BASIS_G:
-            # 부피 기준은 비중을 모르면 중량 배합에 못 쓴다. 고르게 두면
-            # 계산에서 조용히 틀린다.
-            return JsonResponse(
-                {'success': False,
-                 'error': '부피(100mL) 기준 자료라 배합 계산에 쓸 수 없습니다.'}, status=400)
+        # **값을 실제로 확정하는 자리다.** 예전에는 여기서 기준량만 보았다 —
+        # 목록에서는 걸러지는 행이라도 pk 만 알면 저장됐고, 검산에서 어긋난 행도
+        # 열량이 빈 행도 그대로 들어왔다. 조건과 문구는 모델이 한 벌로 갖고 있다.
+        reason = row.unusable_reason()
+        if reason:
+            return JsonResponse({'success': False, 'error': reason}, status=400)
         fields['public_row'] = row
         fields.update(ncd.row_values(row, NUTRITION_INPUT_FIELDS))
 

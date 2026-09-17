@@ -21345,3 +21345,68 @@ class 읽을_수_없는_값에_조용히_눈감지_않는다(TestCase):
         hits = check({'calories': 500.0, 'carbohydrates': 24.9,
                       'proteins': 0.0, 'fats': 0.0, 'food_nm_kr': '명인꿀약과'})
         self.assertIn('C1', [c for c, _, _ in hits])
+
+
+class 열량만_있고_나머지가_0_인_표는_막힌다(TestCase):
+    """
+    식약처 영양성분DB 에는 **열량만 있고 탄단지가 전부 0 인 행**이 있다.
+    '자일라 스피아민트 캔디' 347 kcal · 탄수화물 0 — 자일리톨 캔디에 탄수화물
+    0 은 있을 수 없다.
+
+    이 행이 위험한 까닭은 값이 틀려서가 아니라 **모든 그물을 빠져나가기**
+    때문이다. 검산은 빈 칸 검사가 열량 재계산보다 앞에 있어 '어긋남' 이 아니라
+    '못 잼' 으로 앉히고, 모든 필터는 '어긋남' 만 거른다. 그렇게 라벨까지
+    들어오면 라벨 검증마저 탄단지 합이 0 이라 '확인 불가' 로 넘겼다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='zero', password='x')
+
+    def _row(self, **kw):
+        from v1.label.models import PublicFoodNutrition
+
+        base = dict(food_cd='Z1', food_nm_kr='자일라 스피아민트 캔디',
+                    item_report_no='20220460436160',
+                    basis_amount=100, basis_unit='g', calories=347,
+                    carbohydrates=0, proteins=0, fats=0,
+                    verify_status=PublicFoodNutrition.VERIFY_SKIP)
+        base.update(kw)
+        return PublicFoodNutrition.objects.create(**base)
+
+    def test_검산은_이_행을_어긋남으로_보지_않는다(self):
+        """막아야 하는 까닭의 근거 — fail 만 거르는 그물로는 안 잡힌다."""
+        from v1.label.services.mfds_nutrition import verify_row
+
+        verdict, _ = verify_row(
+            {'carbohydrates': 0, 'proteins': 0, 'fats': 0, 'calories': 347},
+            100.0, 'g')
+        self.assertIsNone(verdict)      # 어긋남(False)이 아니라 '못 잼'
+
+    def test_자동_채움이_이_행을_고르지_않는다(self):
+        from v1.label.services import product_nutrition
+
+        self._row()
+        self.assertIsNone(product_nutrition.for_report_no('20220460436160'))
+
+    def test_값이_없는_행은_막지_않는다(self):
+        """빈칸은 거짓말이 아니다. 음료 행에 열량만 있는 일이 흔하다."""
+        from v1.label.services import product_nutrition
+
+        self._row(carbohydrates=None, proteins=None, fats=None)
+        self.assertIsNotNone(product_nutrition.for_report_no('20220460436160'))
+
+    def test_저장_자리도_까닭을_말하며_막는다(self):
+        row = self._row()
+        self.assertFalse(row.usable_for_recipe)
+        self.assertIn('모두 0', row.unusable_reason())
+
+    def test_라벨까지_들어왔다면_검증이_지적한다(self):
+        """마지막 그물. '견줄 수 없었습니다' 로 넘기면 지어낸 표가 확정된다."""
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='영',
+            calories='347', carbohydrates='0', proteins='0', fats='0')
+        issues = check_calorie_matches_macros(label)
+        self.assertEqual([i['kind'] for i in issues], ['issue'])
+        self.assertIn('347', issues[0]['message'])

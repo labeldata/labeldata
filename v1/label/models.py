@@ -1015,14 +1015,72 @@ class PublicFoodNutrition(models.Model):
         return '%s (%s)' % (self.food_nm_kr, self.food_cd)
 
     @property
+    def macros_all_zero(self):
+        """
+        열량만 있고 탄수화물·단백질·지방이 모두 비었거나 0 인가.
+
+        **이 모양이 가장 위험하다.** '자일라 스피아민트 캔디' 는 347 kcal 인데
+        탄단지가 전부 0 이다(자일리톨 캔디에 탄수화물 0 은 있을 수 없다). 그런데
+        이런 행은 검산에서 **어긋남이 아니라 '못 잼' 으로 앉는다** — verify_row
+        의 빈 칸 검사가 열량 재계산보다 앞에 있어 거기까지 가지도 못하기
+        때문이다. 그래서 fail 만 거르는 모든 필터를 그대로 통과한다.
+
+        통과하면 사용자 표시사항에 **열량 347 kcal · 탄수화물 0 g · 당류 0 g ·
+        단백질 0 g · 지방 0 g** 이 그대로 박히고, 화면에는 '품목보고번호 일치'
+        라고 적혀 근거가 오히려 튼튼해 보인다. 라벨 검증마저 탄단지 합이 0 이라
+        '확인 불가' 로 넘겨 마지막 그물이 빠진다.
+        """
+        if not self.calories or self.calories <= 0:
+            return False
+        values = (self.carbohydrates, self.proteins, self.fats)
+        # **빈 칸과 0 은 다르다.** 적재가 그 둘을 구분해 넣는다 — 원본의 빈
+        # 칸은 _number() 가 None 으로 두고, 원본이 0 을 보내면 0.0 이 된다.
+        #
+        # 값이 없는 행은 막지 않는다. 그런 행은 표에 빈칸으로 남고, 빈칸은
+        # 거짓말이 아니다(음료 행에 열량만 있는 일이 흔하다). 막아야 하는 것은
+        # **0 이라고 말하는 행**이다 — 그 0 은 표에 '0 g' 으로 찍혀 사실이 된다.
+        if any(v is None for v in values):
+            return False
+        return not any(values)
+
+    @staticmethod
+    def empty_macros_q():
+        """`macros_all_zero` 를 질의로. 목록을 거를 때 쓴다."""
+        from django.db.models import Q
+
+        return Q(carbohydrates=0, proteins=0, fats=0, calories__gt=0)
+
+    def unusable_reason(self):
+        """
+        배합·자동 채움에 쓸 수 없으면 그 까닭, 쓸 수 있으면 ''.
+
+        **까닭을 여기서 함께 돌려주는 이유가 있다.** 예전에는 이 조건이 자리마다
+        손으로 다시 쓰여 있었고, 값을 실제로 확정하는 저장 자리가 그중 가장
+        헐거웠다 — 기준량만 보고 검산도 열량 유무도 안 봤다. 조건과 문구를 한
+        곳에 두면 새 조건이 생겼을 때 빠지는 자리가 없다.
+        """
+        if self.basis_unit != self.BASIS_G:
+            return '부피(100mL) 기준 자료라 배합 계산에 쓸 수 없습니다.'
+        if self.calories is None:
+            return '열량이 비어 있는 자료라 쓸 수 없습니다.'
+        if self.verify_status == self.VERIFY_FAIL:
+            return '검산에서 어긋난 자료라 쓸 수 없습니다.'
+        if self.macros_all_zero:
+            return ('열량만 있고 탄수화물·단백질·지방이 모두 0 인 자료라 '
+                    '쓸 수 없습니다.')
+        return ''
+
+    @property
     def usable_for_recipe(self):
         """
         배합 자동 채움에 쓸 수 있는 행인가.
 
         중량(g) 기준이어야 하고, 검산에서 어긋나지 않아야 한다. 'skip'(잴 수
         없음)은 막지 않는다 — 원본에 빈 칸이 많아 못 잰 것이지 틀린 것이 아니다.
+        **다만 못 잰 것 안에 틀린 것이 섞여 있다**(macros_all_zero). 그 한 모양은
+        따로 막는다.
         """
-        return self.basis_unit == self.BASIS_G and self.verify_status != self.VERIFY_FAIL
+        return not self.unusable_reason()
 
 
 class MyIngredientNutrition(models.Model):

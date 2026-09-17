@@ -1819,10 +1819,34 @@ def check_calorie_matches_macros(label) -> list[dict]:
     if fiber is not None:
         values['dietary_fiber'] = fiber
     computed = calories_from_macros(values)
-    if not computed or computed <= 0:
+    if computed is None:
         return [_unchecked(
             'calorie_macros', CAUSE_UNREADABLE,
             '탄수화물·지방·단백질로 계산한 열량이 0 이라 견줄 수 없었습니다.')]
+
+    # **계산값이 0 인 것은 '못 쟀다' 가 아니라 '어긋났다' 다.**
+    #
+    # 여기가 마지막 그물인데 정확히 이 모양에서 손을 들고 있었다. 식약처
+    # 영양성분DB 에는 열량만 있고 탄단지가 전부 0 인 행이 있고(자일리톨 캔디
+    # 347 kcal 이 그렇다), 그 행이 자동 채움으로 라벨에 복사되면 딱 이 모양이
+    # 된다. 그런데 '견줄 수 없었습니다' 로 넘기면 **값을 지어낸 표가 아무
+    # 지적 없이 확정된다.**
+    #
+    # 견줄 수 없는 것이 아니다. 탄수화물·단백질·지방이 모두 0 이면 열량도
+    # 0 이어야 한다 — 그 셋 말고 열량을 내는 것이 표에 없기 때문이다.
+    if computed <= 0:
+        return [_issue(
+            'calorie_macros',
+            '열량이 %g kcal 인데 탄수화물·지방·단백질이 모두 0 입니다 — '
+            '이 셋이 0 이면 열량도 0 이어야 합니다.' % calories,
+            '영양성분을 자동으로 불러왔다면 원본에 값이 비어 있었을 수 '
+            '있습니다. 성적서나 계산 결과로 다시 채워 주세요.',
+            comparison=[
+                _row('탄수화물', None, '%g g' % macros['carbohydrates']),
+                _row('지방', None, '%g g' % macros['fats']),
+                _row('단백질', None, '%g g' % macros['proteins']),
+                _row('열량(셋으로 계산)', '0 kcal', '%g kcal' % calories),
+            ])]
 
     # 폭은 요령이 정한 **±20 %** 다(NUTRITION_CALORIE_TOLERANCE). 30 % 였던
     # 것을 규정에 맞춘다 — 우리가 더 느슨하면 등록에서 거절될 표를 여기서

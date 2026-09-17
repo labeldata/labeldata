@@ -84,11 +84,19 @@ def normalize(report_no):
 
 
 def _usable_rows():
-    """표시에 쓸 수 있는 행만. 이 조건은 한 곳에서만 정한다."""
+    """
+    표시에 쓸 수 있는 행만. 이 조건은 한 곳에서만 정한다.
+
+    `verify_status != fail` 로는 부족하다. 탄단지가 전부 0 인 행은 검산이
+    **어긋남이 아니라 '못 잼' 으로** 앉히므로(PublicFoodNutrition.macros_all_zero
+    주석) 이 그물을 그대로 빠져나간다. 열량만 있는 표가 사용자 라벨에 그대로
+    복사되던 통로가 그것이다.
+    """
     return (PublicFoodNutrition.objects
             .filter(basis_unit__in=USABLE_BASIS)
             .exclude(calories__isnull=True)
-            .exclude(verify_status=PublicFoodNutrition.VERIFY_FAIL))
+            .exclude(verify_status=PublicFoodNutrition.VERIFY_FAIL)
+            .exclude(PublicFoodNutrition.empty_macros_q()))
 
 
 def _sort_key(row):

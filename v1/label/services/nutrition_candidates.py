@@ -307,6 +307,9 @@ def candidates(name, limit=TOP_N):
             continue
         if row.verify_status == PublicFoodNutrition.VERIFY_FAIL:
             continue
+        # 검산이 'skip' 으로 앉히는 바람에 위 그물을 빠져나가는 한 모양
+        if row.macros_all_zero:
+            continue
 
         if _negates(key, row.food_nm_kr):
             continue
