@@ -18577,7 +18577,30 @@ class 조건_패널이_고르지_않은_조건을_걸지_않는다(TestCase):
     def test_값이_없으면_빈_항목이_골라져_있다(self):
         js = self._js()
         i = js.index("if (spec.type === 'choice')")
-        self.assertIn('if (!value) blank.selected = true;', js[i:i + 900])
+        self.assertIn('if (!current) blank.selected = true;', js[i:i + 900])
+
+    def test_선택지가_하나뿐이면_미리_골라_둔다(self):
+        """
+        '영양성분 보유' 의 선택지는 '있음' 하나다. 조건을 고른 것 자체가 이미
+        그 뜻인데도 값을 한 번 더 고르게 했고, 안 고르면 조건이 조용히 빠졌다.
+        """
+        js = self._js()
+        i = js.index("if (spec.type === 'choice')")
+        block = js[i:i + 1200]
+        self.assertIn("choices.length === 1 ? choices[0] : ''", block)
+        # 고르지 않은 값은 value 가 아니라 current 로 견준다
+        self.assertIn('if (ch === current) o.selected = true;', block)
+
+    def test_하나뿐인_선택지_조건이_실제로_있다(self):
+        """
+        위 규칙이 걸리는 조건이 카탈로그에 남아 있어야 한다. 선택지가 늘면
+        규칙은 그냥 쉬므로, 사라졌는지를 여기서 알아챈다.
+        """
+        from v1.label.services.product_search import DOMESTIC_CONDITIONS
+
+        single = [s['key'] for s in DOMESTIC_CONDITIONS
+                  if s.get('type') == 'choice' and len(s.get('choices') or []) == 1]
+        self.assertIn('has_nutrition', single)
 
     def test_제출_뒤_끈_칸을_되돌린다(self):
         js = self._js()

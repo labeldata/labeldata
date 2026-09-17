@@ -197,18 +197,30 @@
             /* 빈 항목이 없어서 필드를 고르는 순간 첫 선택지가 값이 됐다.
                지우는 방법은 행 삭제뿐이었고, choice 는 빠른 조건이 아니라
                (product_search 의 fast) 그 순간 anyValue 는 참·hasFast 는
-               거짓이 되어 **검색 자체가 막혔다.** 고른 적 없는 조건 때문에. */
+               거짓이 되어 **검색 자체가 막혔다.** 고른 적 없는 조건 때문에.
+
+               다만 **선택지가 하나뿐이면 고를 것이 없다.** '영양성분 보유'
+               의 선택지는 '있음' 하나이고, 그 조건을 고른 것 자체가 이미 그
+               뜻이다. 그런 줄까지 비워 두면 사용자는 뜻이 하나뿐인 값을 한
+               번 더 고르게 되고, 안 고르면 조건이 조용히 빠진 채 검색된다 —
+               건 수가 줄지 않았는데 왜인지는 화면 어디에도 없다.
+
+               위의 사고와 다르다. 그때 문제는 선택지가 여럿인데 **고른 적
+               없는 값**이 멋대로 첫 번째로 정해진 것이었다. 하나뿐인 선택지
+               에는 고를 여지가 없으므로 멋대로랄 것이 없다. */
+            var choices = spec.choices || [];
+            var current = value || (choices.length === 1 ? choices[0] : '');
             var blank = document.createElement('option');
             blank.value = '';
             blank.textContent = '(선택 안 함)';
             el.appendChild(blank);
-            (spec.choices || []).forEach(function (ch) {
+            choices.forEach(function (ch) {
                 var o = document.createElement('option');
                 o.value = ch; o.textContent = ch;
-                if (ch === value) o.selected = true;
+                if (ch === current) o.selected = true;
                 el.appendChild(o);
             });
-            if (!value) blank.selected = true;
+            if (!current) blank.selected = true;
         } else {
             el = document.createElement('input');
             el.className = 'form-control form-control-sm pv-cond-value';
