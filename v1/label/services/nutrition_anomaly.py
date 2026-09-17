@@ -83,8 +83,15 @@ def check_internal(row):
                           '포화+트랜스가 지방보다 많다 (%.2f > %.2f)' % (part, fats)))
 
     # 기준량을 넘는 성분. 100 g 짜리 행에 지방 120 g 은 있을 수 없다.
+    #
+    # **g 기준일 때만 잰다.** 100 mL 기준 행에서는 비중이 1 보다 크면 성분
+    # 무게가 그 숫자를 넘는 것이 정상이다 — 꿀 100 mL 는 140 g 쯤 되고,
+    # 그러면 탄수화물만으로도 100 을 넘는다. 부피와 무게를 같은 자로 재면
+    # 멀쩡한 행이 무더기로 걸린다.
     basis = _get(row, 'basis_amount')
-    if basis and basis > 0:
+    unit = (row.get('basis_unit') if isinstance(row, dict)
+            else getattr(row, 'basis_unit', '')) or ''
+    if basis and basis > 0 and str(unit).lower() == 'g':
         for field in GRAM_FIELDS:
             value = _get(row, field)
             if value is not None and value > basis + SLACK_G:

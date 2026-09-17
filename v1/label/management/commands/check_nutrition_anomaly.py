@@ -34,6 +34,8 @@ class Command(BaseCommand):
                             help='앞에서 몇 행만 (0=전량)')
         parser.add_argument('--dry-run', action='store_true',
                             help='세기만 하고 저장하지 않는다')
+        parser.add_argument('--sample', type=int, default=0,
+                            help='규칙마다 몇 건을 눈으로 보여 줄지')
 
     def handle(self, *args, **opts):
         want = str(opts['rules']).upper()
@@ -49,6 +51,7 @@ class Command(BaseCommand):
         w('행 %d 개를 잰다 (규칙 %s)' % (total, want))
 
         found, by_rule, with_names, seen = [], {}, 0, 0
+        samples = {}      # 규칙마다 몇 건은 눈으로 봐야 오탐인지 안다
         for chunk in self._chunks(qs.iterator(chunk_size=CHUNK), CHUNK):
             # 원재료는 번호로 한 번에 끌어온다. 행마다 조회하면 32만 번이다.
             names = {}
@@ -69,6 +72,10 @@ class Command(BaseCommand):
                     hits += rules.check_top_ingredients(row, sorted_text)
                 for code, severity, detail in hits:
                     by_rule[code] = by_rule.get(code, 0) + 1
+                    if opts['sample'] and len(samples.setdefault(code, [])) < opts['sample']:
+                        samples[code].append(
+                            '%s | %s | %s' % (row.food_nm_kr or '',
+                                              (sorted_text or '')[:40], detail))
                     found.append(NutritionAnomaly(
                         nutrition=row,
                         report_no=row.item_report_no or '',
@@ -89,6 +96,8 @@ class Command(BaseCommand):
         w('원재료를 붙인 행 %d / %d' % (with_names, seen))
         for code in sorted(by_rule):
             w('  %-4s %d' % (code, by_rule[code]))
+            for line in samples.get(code, []):
+                w('        %s' % line)
         w(self.style.SUCCESS('이상 판정 %d 건' % len(found)))
 
         if dry:

@@ -20588,6 +20588,18 @@ class NutritionAnomalyRuleTests(TestCase):
         self.assertIn('A4', self.check(fats=120.0))
         self.assertNotIn('A4', self.check(fats=99.0))
 
+    def test_부피_기준은_그_자로_재지_않는다(self):
+        """
+        100 mL 기준 행에서는 비중이 1 보다 크면 성분 무게가 그 숫자를 넘는
+        것이 **정상**이다 — 꿀 100 mL 는 140 g 쯤 되고, 그러면 탄수화물만으로
+        100 을 넘는다. 부피와 무게를 같은 자로 재면 멀쩡한 행이 무더기로
+        걸린다(운영 322,426 행에서 A4 가 1,081 건이었다).
+        """
+        from v1.label.services import nutrition_anomaly as rules
+
+        row = {'basis_amount': 100.0, 'basis_unit': 'mL', 'carbohydrates': 120.0}
+        self.assertEqual([c for c, _s, _w in rules.check_internal(row)], [])
+
     def test_음수(self):
         self.assertIn('A5', self.check(natriums=-3.0))
 
