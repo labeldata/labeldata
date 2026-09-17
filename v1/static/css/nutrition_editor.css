@@ -92,9 +92,21 @@ body {
     flex: 0 0 auto;   /* 위에 고정 — 표가 줄어들지 이쪽이 줄어들지는 않는다 */
 }
 
+/* **이름과 내용을 한 줄에 둔다.**
+
+   위아래로 쌓으면서 묶음마다 이름이 한 줄, 칸이 한 줄 — 둘이면 네 줄이었다.
+   위가 고정이라 여기서 한 줄 늘면 아래 표가 그만큼 줄어든다.
+
+   이름은 짧고("① 제품 규격") 고정이라 왼쪽에 세우면 그만이다. 안내
+   (.cfg-note)는 필요할 때만 뜨는 것이라 제 줄을 받아야 해서 100 % 로 접는다. */
 .cfg-group {
     width: 100%;
     min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
     background: #fff;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -118,11 +130,19 @@ body {
     display: flex;
     align-items: center;
     gap: 5px;
-    margin-bottom: 5px;
+    /* 이름과 내용이 한 줄에 서므로 아래 여백이 필요 없다. 남겨 두면 이름만
+       위로 밀려 올라가 같은 줄인데 어긋나 보인다. */
+    margin-bottom: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
     font-size: 12px;
     font-weight: 600;
     color: var(--ez-gray-700, #5f6368);
 }
+/* 칸들이 남은 폭을 받는다. min-width:0 이 없으면 안쪽이 줄지 못해 넘친다. */
+.cfg-group > .cfg-row { flex: 1 1 auto; min-width: 0; }
+/* 안내는 필요할 때만 뜨고, 뜨면 제 줄을 받는다 */
+.cfg-group > .cfg-note { flex: 1 0 100%; }
 .cfg-why {
     display: inline-flex;
     align-items: center;

@@ -20370,6 +20370,98 @@ class SpecNutritionTableLayoutTests(TestCase):
         self.assertNotIn('calories', got)
 
 
+class 읽기만_한_방문은_저장하지_않는다(TestCase):
+    """
+    영양성분 편집기는 iframe 이고, 부모가 탭을 떠날 때마다 saveData() 를
+    불렀다. 그런데 saveData 는 **고쳤는지 묻지 않고** 표에 든 값을 통째로
+    쓴다. 밖에서 값을 바꾸는 길이 생긴 뒤로(ocr-extras) 그 구조가 값을
+    잡아먹었다.
+
+        1. 영양성분 탭을 한 번 연다   -> 표가 317 을 들고 있다
+        2. 사진 판독이 352.22 를 쓴다  -> DB 는 맞다
+        3. 그 탭을 들렀다 나온다      -> **317 이 352.22 를 덮는다**
+
+    iframe 을 다시 읽게 하는 것만으로는 경주가 남는다 — 판독이 끝나기 전에
+    탭을 옮기면 낡은 표가 그대로 저장된다. 고친 적이 없으면 아예 쓰지 않는다.
+    """
+
+    def editor(self):
+        import io
+        return io.open('v1/templates/products/nutrition_editor.html',
+                       encoding='utf-8').read()
+
+    def detail(self):
+        import io
+        return io.open('v1/templates/products/product_detail.html',
+                       encoding='utf-8').read()
+
+    def test_고친_적이_없으면_쓰지_않는다(self):
+        html = self.editor()
+        self.assertIn('window.saveIfEdited = function () {', html)
+        self.assertIn('if (!nutritionEdited) return', html)
+
+    def test_표를_고치면_표시한다(self):
+        """afterChange 는 loadData·internal 을 이미 걸러 준다 — 사람의 손질만 온다."""
+        html = self.editor()
+        at = html.index('afterChange: function(changes, source)')
+        self.assertIn('markNutritionEdited();', html[at:at + 500])
+
+    def test_칸을_고쳐도_표시한다(self):
+        """
+        칸마다 달지 않고 한 곳에서 받는다 — 칸이 늘 때 빠뜨리지 않는다.
+        **불러오기가 끝난 뒤에** 단다. 그 사이에 부르는 것들이 이벤트를 쏘면
+        열자마자 '고쳤다' 가 되어 빗장이 없는 것과 같아진다.
+        """
+        html = self.editor()
+        at = html.index("document.addEventListener('input', markNutritionEdited);")
+        self.assertLess(html.index('✅ 그리드 데이터 로드 완료'), at)
+        self.assertIn('nutritionEdited = false;', html[at:at + 600])
+
+    def test_부모가_그_문을_두드린다(self):
+        html = self.detail()
+        at = html.index("if (leavingId === '#tab-nutrition')")
+        block = html[at:at + 1400]
+        self.assertIn('win.saveIfEdited', block)
+        # 화면과 프레임이 따로 캐시된다 — 한쪽만 새것일 수 있다
+        self.assertIn('win.saveData', block)
+
+
+class 설정칸은_이름과_내용이_한_줄이다(TestCase):
+    """
+    위아래로 쌓으면서 묶음마다 이름이 한 줄, 칸이 한 줄이면 둘이서 네 줄이다.
+    위가 고정이라 여기서 한 줄 늘면 아래 표가 그만큼 줄어든다.
+
+    이름은 짧고("① 제품 규격") 고정이라 왼쪽에 세우면 그만이다.
+    """
+
+    def css(self):
+        import io
+        return io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
+
+    def test_묶음이_가로로_선다(self):
+        block = self.css()
+        block = block[block.index('.cfg-group {'):]
+        block = block[:block.index('}')]
+        self.assertIn('display: flex', block)
+        self.assertIn('align-items: center', block)
+
+    def test_이름은_제_폭만_쓰고_아래_여백이_없다(self):
+        """여백을 남기면 이름만 위로 밀려 같은 줄인데 어긋나 보인다."""
+        block = self.css()
+        block = block[block.index('.cfg-legend {'):]
+        block = block[:block.index('}')]
+        self.assertIn('margin-bottom: 0;', block)
+        self.assertIn('flex: 0 0 auto;', block)
+
+    def test_칸이_남은_폭을_받고_줄_수_있다(self):
+        css = self.css()
+        self.assertIn('.cfg-group > .cfg-row { flex: 1 1 auto; min-width: 0; }', css)
+
+    def test_안내는_제_줄을_받는다(self):
+        """필요할 때만 뜨는 것이라 같은 줄에 끼면 칸들이 밀린다."""
+        self.assertIn('.cfg-group > .cfg-note { flex: 1 0 100%; }', self.css())
+
+
 class 폭을_재서_고르던_길을_걷었다(TestCase):
     """
     컨테이너 질의로 **넓으면 한 줄, 좁으면 접기**를 하던 자리다. 폭을 나눠

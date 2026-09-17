@@ -500,6 +500,9 @@ function initGrid() {
             if (source === 'loadData' || source === 'internal') {
                 return;
             }
+            /* 사람이 실제로 고쳤다. 이 표시가 없으면 **읽기만 한 방문이
+               DB 를 덮는다** — 아래 markNutritionEdited 주석을 보라. */
+            markNutritionEdited();
             refreshApplied();
             calculateAndPreview();
         }
@@ -830,8 +833,24 @@ async function loadData() {
         
         // 스타일 설정 및 미리보기 계산 (데이터 로드 후 한 번만)
         setPreviewStyle(document.getElementById('nutrition_display_unit').value || 'basic');
+
+        /* 이제부터의 손질만 "고쳤다" 로 센다.
+         *
+         * **불러오기가 끝난 뒤에 단다.** loadData 는 값을 `.value =` 로 넣어서
+         * 이벤트를 쏘지 않지만, 그 사이에 부르는 것들(bindCalcSource·
+         * paintNutritionSource·applyStoredTolerance)까지 전부 그런지는 장담할
+         * 수 없다. 하나라도 쏘면 열자마자 "고쳤다" 가 되어 이 빗장이 없는 것과
+         * 같아진다. 시점을 늦추면 그 걱정이 통째로 사라진다.
+         *
+         * 칸마다 달지 않고 한 곳에서 받는다 — 칸이 늘 때 빠뜨리지 않는다. */
+        document.addEventListener('input', markNutritionEdited);
+        document.addEventListener('change', markNutritionEdited);
+        // 표의 손질은 afterChange 가 따로 표시한다(Handsontable 은 위 이벤트를
+        // 문서까지 올려 보내지 않는다).
+
+        nutritionEdited = false;   // 불러오는 동안 켜졌더라도 여기서 되돌린다
         updateStatus('✅ 초기화 완료');
-        
+
     } catch (error) {
         updateStatus(`❌ 오류: ${error.message}`);
         showSnackbar('영양성분 데이터 로드에 실패했습니다: ' + error.message, 'error');
@@ -839,6 +858,40 @@ async function loadData() {
 }
 
 // 데이터 저장
+/* ── 고친 적이 있는가 ────────────────────────────────────────────────
+ *
+ * **읽기만 한 방문이 DB 를 덮고 있었다.**
+ *
+ * 이 화면은 iframe 이고, 부모가 탭을 떠날 때마다 saveData() 를 부른다
+ * (product_detail.html 의 hide.bs.tab). 그런데 saveData 는 고쳤는지 묻지 않고
+ * 표에 든 값을 통째로 쓴다. 그래서 이런 일이 났다.
+ *
+ *   1. 영양성분 탭을 한 번 연다      -> 표가 317 을 들고 있다
+ *   2. 다른 탭으로 간다              -> saveData 가 317 을 쓴다 (같은 값, 조용함)
+ *   3. 사진 판독이 352.22 를 쓴다     -> DB 는 맞다
+ *   4. 영양성분 탭을 다시 들른다      -> 표는 아직 317 을 들고 있을 수 있다
+ *   5. 그 탭을 떠난다                -> **317 이 352.22 를 덮는다**
+ *
+ * 밖에서 값을 바꾸는 길이 생긴 뒤로(ocr-extras) 이 구조가 값을 잡아먹는다.
+ * iframe 을 다시 읽게 하는 것만으로는 경주가 남는다 — 판독이 끝나기 전에
+ * 탭을 옮기면 낡은 표가 그대로 저장된다.
+ *
+ * **고친 적이 없으면 쓰지 않는다.** 저장 단추를 직접 누른 것은 그대로 저장한다 —
+ * 사람이 "이 값으로 해 달라" 고 말한 것이라 뜻이 다르다.
+ * ─────────────────────────────────────────────────────────────────── */
+let nutritionEdited = false;
+
+function markNutritionEdited() {
+    nutritionEdited = true;
+}
+window.markNutritionEdited = markNutritionEdited;
+
+/* 부모가 탭을 떠나며 부른다. 고친 적이 없으면 아무것도 하지 않는다. */
+window.saveIfEdited = function () {
+    if (!nutritionEdited) return Promise.resolve({ skipped: true });
+    return saveData();
+};
+
 async function saveData() {
     if (!CAN_EDIT) {
         showSnackbar('영양성분 편집 권한이 없습니다. 현재 역할로는 영양성분을 수정할 수 없습니다.', 'warning');

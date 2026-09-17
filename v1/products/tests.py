@@ -5834,6 +5834,36 @@ class 떠날_때_치우는_주소는_url_태그로_만든다(TestCase):
         at = js.index('function applySelected')
         self.assertIn('window.__ocrApplied = true;', js[at:at + 1400])
 
+    def test_식품유형_셋은_넓을_때만_한_줄에_선다(self):
+        """
+        Bootstrap 의 열은 **창 크기**를 본다. 이 폼은 오른쪽 '표시 항목'
+        패널이 폭을 가져가서, 창이 1200px 여도 실제로 받는 폭은 780px 쯤이다.
+        거기서 3:3:6 으로 나누면 대분류가 195px 가 되고 "과자류, 빵류또는떡류"
+        같은 값이 옆 칸 글자와 겹쳤다.
+        """
+        from pathlib import Path
+
+        html = Path('v1/templates/products/_tab_basic_info.html').read_text(encoding='utf-8')
+        row = html[html.index('식품유형 3열'):]
+        row = row[:row.index('식품유형(표시용)이 자동 반영')]
+        self.assertNotIn('col-xl-3', row)
+        self.assertNotIn('col-xl-6', row)
+        self.assertEqual(row.count('col-md-6 col-xxl-3'), 2)
+        self.assertIn('col-12 col-xxl-6', row)
+
+    def test_넘치는_값은_겹치지_말고_잘린다(self):
+        """
+        열 너비는 고쳤지만 값의 길이는 우리가 정하는 것이 아니다. 언젠가 또
+        넘치고, 그때 겹쳐 보이는 것보다 잘리는 편이 낫다.
+        """
+        from pathlib import Path
+
+        css = Path('v1/static/css/products_common.css').read_text(encoding='utf-8')
+        self.assertIn('.select2-container .select2-selection__rendered', css)
+        self.assertIn('text-overflow: ellipsis;', css)
+        # 격자 칸이 안쪽 내용 때문에 줄지 못하면 잘라내기가 걸리기도 전에 밀린다
+        self.assertIn('min-width: 0; max-width: 100%;', css)
+
     def test_실제로_그_제품_번호가_들어간다(self):
         """렌더링해서 본다 — 문자열만 보면 빈 주소를 못 잡는다."""
         from django.contrib.auth.models import User

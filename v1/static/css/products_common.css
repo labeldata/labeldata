@@ -220,6 +220,27 @@
     padding:       7px 12px;
 }
 
+/* 긴 값이 **옆 칸으로 넘치지 않게** 한다.
+
+   식품유형 대분류가 좁아졌을 때 "과자류, 빵류또는떡류" 가 칸을 넘어 옆 칸
+   글자와 겹쳐 보였다. 열 너비는 브레이크포인트로 고쳤지만(그 칸은 이제
+   xxl 에서만 3등분한다), 값의 길이는 우리가 정하는 것이 아니라 언젠가 또
+   넘친다. 넘칠 때 잘리게 두는 편이 겹쳐 보이는 것보다 낫다 — 전체 값은
+   칸을 눌러 보면 나온다.
+
+   select2 는 제 컨테이너를 따로 그리므로 그쪽도 함께 잡는다. */
+.form-select.v2-field-input,
+.select2-container .select2-selection__rendered {
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    white-space:   nowrap;
+}
+/* 격자 칸이 안쪽 내용 때문에 줄지 못하는 것을 막는다. min-width 기본값이
+   auto 라, 이게 없으면 위의 잘라내기가 걸리기 전에 칸 자체가 밀린다. */
+.row > [class*="col-"] > .form-control.v2-field-input,
+.row > [class*="col-"] > .form-select.v2-field-input,
+.row > [class*="col-"] > .select2-container { min-width: 0; max-width: 100%; }
+
 /* 섹션 카드와 그 제목 */
 .v2-card       { border-radius: var(--ez-radius-lg, 12px); }
 .v2-card-title {

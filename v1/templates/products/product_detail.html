@@ -1209,9 +1209,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             if (leavingId === '#tab-nutrition') {
                 const iframe = document.getElementById('nutritionEditorFrame');
-                if (iframe && iframe.contentWindow && iframe.contentWindow.saveData) {
-                    try { trackPendingSave(iframe.contentWindow.saveData()); } catch(e) {}
-                }
+                const win = iframe && iframe.contentWindow;
+                /* **고친 적이 없으면 저장하지 않는다.**
+                 *
+                 * 예전에는 무조건 saveData() 를 불렀다. 그래서 들렀다 나오기만
+                 * 해도 표에 든 값이 DB 에 다시 쓰였고, 그 사이에 밖에서 바뀐
+                 * 값(사진 판독의 ocr-extras)이 **낡은 표에 덮였다** — 352.22 로
+                 * 저장해 놓고 탭을 한 번 지나면 317 로 돌아갔다.
+                 *
+                 * saveIfEdited 가 없는 낡은 iframe 이면 예전대로 간다. 화면과
+                 * 프레임이 따로 캐시되므로 한쪽만 새것일 수 있다. */
+                try {
+                    if (win && win.saveIfEdited) {
+                        trackPendingSave(win.saveIfEdited());
+                    } else if (win && win.saveData) {
+                        trackPendingSave(win.saveData());
+                    }
+                } catch(e) {}
             }
         });
     }

@@ -342,9 +342,20 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
             </div>
         </div>
 
-        <!-- 식품유형 3열: 대분류 | 소분류 | 표시용 -->
+        {% comment %}
+          식품유형 3열: 대분류 | 소분류 | 표시용
+
+          **xl(1200px) 에서 셋을 한 줄에 세우면 겹친다.** Bootstrap 의 열은
+          창 크기를 보는데, 이 폼은 오른쪽 "표시 항목" 패널이 폭을 가져가서
+          창이 1200px 여도 실제로 받는 폭은 780px 쯤이다. 거기서 3:3:6 으로
+          나누면 대분류가 195px 가 되고, "과자류, 빵류또는떡류" 같은 값이
+          칸을 넘어 옆 칸 글자와 겹쳤다.
+
+          xxl(1400px) 로 미룬다 — 그 전까지는 md 규칙(6:6:12)이 살아 둘씩
+          앉는다. 열 너비를 손으로 맞추는 것보다 한 단계 미루는 편이 낫다.
+        {% endcomment %}
         <div class="row g-2 mb-2">
-            <div class="col-md-6 col-xl-3">
+            <div class="col-md-6 col-xxl-3">
                 <label class="form-label v2-field-label">식품유형 대분류</label>
                 <select id="field-food-group" name="food_group"
                         class="form-select bg-light border-0 v2-field-input"
@@ -358,7 +369,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                     <option value="농수축산물" {% if product.food_group == "농수축산물" %}selected{% endif %}>농수축산물</option>
                 </select>
             </div>
-            <div class="col-md-6 col-xl-3">
+            <div class="col-md-6 col-xxl-3">
                 <label class="form-label v2-field-label">소분류<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>검증의 기준이 되는 값</b>표시사항 검증이 이 값으로 <strong>그 유형에만 있는 의무 표시사항</strong> 과 금지 문구를 고릅니다.<br>비어 있으면 <strong>그 검사가 통째로 빠집니다</strong> — 통과한 것이 아니라 안 본 것입니다.<em>인쇄되는 글자는 아래 “식품유형 (표시용)” 입니다.</em></span></span></label>
                 <select id="field-food-type" name="food_type"
                         class="form-select bg-light border-0 v2-field-input"
@@ -373,7 +384,7 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-12 col-xl-6">
+            <div class="col-12 col-xxl-6">
                 <label class="form-label v2-field-label">식품유형 (표시용)<span class="fhelp" tabindex="0" role="button" aria-label="설명">?<span class="fhelp-p" role="tooltip"><b>라벨에 인쇄되는 값</b>규정은 유형명 뒤에 살균 여부·섭취 방법을 괄호로 덧붙이라고 하는 자리가 있어, 인쇄되는 값에는 부기가 붙습니다 — <strong>빵류 [가열하여 섭취하는 냉동식품]</strong>.<br>검증이 <strong>소분류와 같은 말인지</strong> 견줍니다. 서로 다르면 알려 줍니다.<em>규칙을 고르는 키는 위의 소분류입니다. 이 칸이 아닙니다.</em></span></span></label>
                 <input type="text" id="field-prdlst-dcnm" name="prdlst_dcnm"
                        class="form-control bg-light border-0 v2-field-input"
