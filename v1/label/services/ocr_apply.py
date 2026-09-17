@@ -133,6 +133,21 @@ def to_per_100(rows, basis_amount):
 
     basis_amount 가 없거나(기준을 못 읽음) 100 이면 그대로 둔다. 기준을
     모르면서 환산하면 모든 수치의 뜻이 바뀐다 - 그건 더 나쁘다.
+
+    줄은 두 모양으로 온다
+    ─────────────────────
+        {'field': …, 'value': '318', 'unit': 'kcal'}    갈라 놓은 것
+        {'field': …, 'raw': '318 kcal'}                 원문 그대로
+
+    **화면이 실제로 보내는 것은 뒤쪽이다**(basic_info_ocr.applyExtras 가
+    `{field, raw}` 를 담는다 - 숫자와 단위를 가르는 일은 규정 단위 표를 가진
+    서버가 한다). 그런데 여기서는 `value` 만 읽고 있어서, 사진 판독으로 들어온
+    값은 **한 번도 환산되지 않았다.** 시험이 전부 `value` 꼴로만 쓰여 있어
+    그 어긋남을 아무도 못 봤다 - 함수는 맞고 시험도 통과하는데 실제 경로만
+    비껴간 자리였다.
+
+    그래서 여기서도 원문을 갈라 본다. 가르는 규칙은 apply_nutrition 과 같은
+    함수를 쓴다 - 두 벌로 두면 어느 날 한쪽만 고쳐진다.
     """
     try:
         basis = float(basis_amount)
@@ -145,12 +160,21 @@ def to_per_100(rows, basis_amount):
     converted = []
     for row in rows:
         value = row.get('value')
+        unit = row.get('unit')
+        if not value and row.get('raw') is not None:
+            value, unit = split_value_unit(row.get('raw'), row.get('field', ''))
         try:
             number = float(str(value).replace(',', ''))
         except (TypeError, ValueError):
             converted.append(row)   # 숫자가 아니면 손대지 않는다
             continue
-        converted.append(dict(row, value=_trim_number(number * factor)))
+        # 환산한 뒤에는 `raw` 를 남기지 않는다. 남겨 두면 apply_nutrition 이
+        # 둘 중 무엇을 믿을지 정해야 하고, 그 판단이 두 곳에 생긴다.
+        out = {k: v for k, v in row.items() if k != 'raw'}
+        out['value'] = _trim_number(number * factor)
+        if unit:
+            out['unit'] = unit
+        converted.append(out)
     return converted
 
 

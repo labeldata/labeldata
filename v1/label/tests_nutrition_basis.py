@@ -87,6 +87,55 @@ class BasisResolveTests(SimpleTestCase):
         self.assertFalse(basis_blocks_apply('', None))
 
 
+class ToPer100RowShapeTests(SimpleTestCase):
+    """
+    환산 함수가 **화면이 실제로 보내는 모양**을 받는가.
+
+    줄은 두 모양으로 온다.
+
+        {'field': …, 'value': '318', 'unit': 'kcal'}    갈라 놓은 것
+        {'field': …, 'raw': '318 kcal'}                 원문 그대로
+
+    화면이 보내는 것은 뒤쪽인데(basic_info_ocr.applyExtras) `to_per_100` 은
+    앞쪽만 읽고 있었다. **그래서 사진 판독으로 들어온 값은 한 번도 환산되지
+    않았다.** 기존 시험이 전부 앞쪽 모양으로 쓰여 있어 아무도 못 봤다 —
+    함수도 맞고 시험도 통과하는데 실제 경로만 비껴간 자리였다.
+    """
+
+    def test_원문_줄도_환산한다(self):
+        from v1.label.services.ocr_apply import to_per_100
+
+        out = to_per_100([{'field': 'calories', 'raw': '317 kcal'}], '90')
+        self.assertAlmostEqual(float(out[0]['value']), 352.22, places=1)
+        self.assertEqual(out[0]['unit'], 'kcal')
+
+    def test_갈라_놓은_줄도_그대로_환산한다(self):
+        """기존 계약이다. 두 모양을 함께 받아야 한다."""
+        from v1.label.services.ocr_apply import to_per_100
+
+        out = to_per_100(
+            [{'field': 'calories', 'value': '318', 'unit': 'kcal'}], '87')
+        self.assertEqual(out[0]['value'], '365.52')
+        self.assertEqual(out[0]['unit'], 'kcal')
+
+    def test_환산한_줄에는_원문을_남기지_않는다(self):
+        """
+        둘 다 남기면 apply_nutrition 이 무엇을 믿을지 정해야 하고, 그 판단이
+        두 곳에 생긴다. 실제로 raw 를 남기면 환산 전 값이 다시 쓰인다.
+        """
+        from v1.label.services.ocr_apply import to_per_100
+
+        out = to_per_100([{'field': 'natriums', 'raw': '200 mg'}], '90')
+        self.assertNotIn('raw', out[0])
+        self.assertAlmostEqual(float(out[0]['value']), 222.22, places=1)
+
+    def test_숫자가_아닌_원문은_손대지_않는다(self):
+        from v1.label.services.ocr_apply import to_per_100
+
+        rows = [{'field': 'calories', 'raw': '5kcal 미만'}]
+        self.assertEqual(to_per_100(rows, '90'), rows)
+
+
 class OcrNutritionBasisApplyTests(TestCase):
     """판독값을 라벨에 넣는 자리 — 환산과 표시기준이 한 몸으로 움직이는가."""
 
