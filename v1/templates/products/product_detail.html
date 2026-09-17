@@ -1441,6 +1441,44 @@ function loadNutritionIframe() {
     }, 10000);
 }
 
+/*
+ * 영양성분 iframe 을 **서버에서 다시 읽게 한다.**
+ *
+ * 왜 필요한가 — 사진 판독이 쓴 값이 되돌아가고 있었다
+ * ───────────────────────────────────────────────────
+ * 이 화면에는 영양성분을 쓰는 길이 둘이다.
+ *
+ *   ① 영양성분 탭의 iframe (사람이 표를 채운다)
+ *   ② 사진 판독의 `ocr-extras` (서버가 바로 쓴다 — 이 탭에 칸이 없다)
+ *
+ * 그런데 iframe 은 **한 번 뜨면 영영 다시 읽지 않고**(loadNutritionIframe 의
+ * "이미 로드되어 있으면 바로 표시"), 탭을 떠날 때 **제가 들고 있던 값을
+ * 그대로 저장한다**(hide.bs.tab 의 saveData).
+ *
+ * 그래서 이런 일이 났다.
+ *
+ *   1. 영양성분 탭을 한 번 연다        -> iframe 이 317 을 읽어 들고 있다
+ *   2. 사진 판독이 352.22 를 DB 에 쓴다 -> iframe 은 모른다
+ *   3. 영양성분 탭으로 간다            -> 다시 안 읽으니 317 이 보인다
+ *   4. 그 탭을 떠난다                  -> saveData 가 317 을 되쓴다
+ *
+ * 판독한 값이 조용히 사라지고, 화면에는 "예전 데이터 그대로" 만 남는다.
+ * 밖에서 값을 바꿨으면 iframe 이 그 사실을 알아야 한다.
+ */
+window.reloadNutritionIframe = function () {
+    const iframe = document.getElementById('nutritionEditorFrame');
+    const url = iframe && iframe.getAttribute('data-nutrition-url');
+    // 아직 한 번도 안 열었으면 그대로 둔다. 다음에 열 때 어차피 새로 읽는다.
+    if (!iframe || !url || !iframe.src) return;
+    try {
+        // replace 를 쓴다 — src 를 다시 넣으면 뒤로 가기 이력에 한 칸이 쌓이고,
+        // iframe.src 는 그대로라 loadNutritionIframe 의 캐시 판정도 안 깨진다.
+        iframe.contentWindow.location.replace(url);
+    } catch (e) {
+        iframe.src = url;
+    }
+};
+
 function showNutritionError(url) {
     const loadingMessage = document.getElementById('nutritionLoadingMessage');
     const errorMessage = document.getElementById('nutritionErrorMessage');

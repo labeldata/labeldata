@@ -16191,27 +16191,60 @@ class 꼬리말이_없어도_혼입_목록을_안다(TestCase):
         self.assertFalse(_looks_like_cross_list(names, raw))
 
 
-class 두_묶음은_하는_일이_다르다(TestCase):
+class 두_묶음은_위아래로_쌓는다(TestCase):
     """
-    ① 제품 규격은 칸이 셋(단위량 + 단위 · 포장개수 · 1회 섭취참고량)이고
-    ② 값의 출처는 고르는 상자 하나다. 그런데 둘이 같은 폭을 쓰고 있어서
-    ① 이 네 줄로 접히고 그만큼 아래 표가 밀렸다.
+    ① 제품 규격과 ② 값의 출처를 **나란히 세우지 않는다.**
+
+    예전에는 폭을 7:3 으로 나눠 한 줄에 세웠다. 자리를 아끼려던 것인데, 실제로
+    받는 폭(800px 안팎)에서는 ① 의 칸 셋이 좁아진 제 폭 안에서 접혀 두세 줄이
+    됐다 — **한 줄을 아끼고 그 안에서 두 줄을 잃었다.** 좁아지면 글자와
+    입력칸이 서로 겹쳐 보이기까지 했다.
+
+    위아래로 쌓으면 ① 이 폭을 통째로 써서 칸 셋이 한 줄에 다 선다. 묶음이
+    둘이니 두 줄 — 예전의 최악(네 줄)보다 짧고, 무엇보다 **폭에 따라 달라지지
+    않는다.**
     """
 
     def css(self):
         import io
         return io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
 
-    def test_폭을_일곱_대_셋으로_나눈다(self):
-        css = self.css()
-        self.assertIn('.cfg-group--spec   { flex: 7 1 340px; }', css)
-        self.assertIn('.cfg-group--source { flex: 3 1 170px; }', css)
-
-    def test_좁아지면_여전히_접힌다(self):
+    def test_세로로_쌓는다(self):
         css = self.css()
         block = css[css.index('.config-section {'):]
         block = block[:block.index('}')]
-        self.assertIn('flex-wrap: wrap', block)
+        self.assertIn('flex-direction: column', block)
+
+    def test_폭을_나눠_쓰지_않는다(self):
+        """7:3 으로 나누던 자리. 나누는 순간 ① 이 제 폭 안에서 다시 접힌다."""
+        css = self.css()
+        self.assertNotIn('.cfg-group--spec   { flex: 7', css)
+        self.assertNotIn('.cfg-group--source { flex: 3', css)
+
+    def test_묶음은_폭을_통째로_쓴다(self):
+        css = self.css()
+        block = css[css.index('.cfg-group {'):]
+        block = block[:block.index('}')]
+        self.assertIn('width: 100%', block)
+
+    def test_한_줄을_유지한다(self):
+        """
+        접히면 줄이 늘고 그만큼 아래 표가 밀린다. 입력칸이 몇 px 좁아지는 것은
+        티가 안 나므로, 모자라면 접지 말고 줄어들게 한다.
+        """
+        css = self.css()
+        self.assertIn('.cfg-group .cfg-row  { flex-wrap: nowrap; }', css)
+        self.assertIn('.cfg-group .cfg-item { flex: 0 1 auto; min-width: 0; }', css)
+        self.assertIn('min-width: 44px', css)
+
+    def test_조건부_규칙에_기대지_않는다(self):
+        """
+        예전에는 한 줄 규칙이 `@container (min-width: 760px)` 안에만 있었다.
+        그보다 좁아지면 규칙이 통째로 사라져 칸들이 겹쳐 보였다. 폭을 나눠
+        쓰지 않으니 조건도 필요 없다 — 늘 한 줄이다.
+        """
+        css = self.css()
+        self.assertNotIn('@container (min-width: 760px)', css)
 
 
 class 올려_둔_시안을_다시_쓴다(TestCase):
@@ -16336,9 +16369,14 @@ class 접기를_걷었다(TestCase):
         self.assertIn('네 번 다 같은 곳이 잘렸으면', h)
 
     def test_자리는_다른_길로_아꼈다(self):
+        """
+        접기로 아끼지 않는다. 지금은 **각 묶음을 한 줄로 유지해서** 아낀다 —
+        폭을 7:3 으로 나누던 때에는 ① 이 제 폭 안에서 다시 접혀 두세 줄이
+        됐다(두_묶음은_위아래로_쌓는다 참고).
+        """
         import io
         css = io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
-        self.assertIn('.cfg-group--spec', css)
+        self.assertIn('.cfg-group .cfg-row  { flex-wrap: nowrap; }', css)
         self.assertNotIn('is-folded', css)
 
 
@@ -20332,51 +20370,26 @@ class SpecNutritionTableLayoutTests(TestCase):
         self.assertNotIn('calories', got)
 
 
-class 넓으면_접지_않는다(TestCase):
+class 폭을_재서_고르던_길을_걷었다(TestCase):
     """
-    7:3 은 **좁은 화면의 값**이다. 넓어져도 그 비율 그대로라 ① 은 1회
-    섭취참고량이 둘째 줄로 떨어지고 ② 는 단추가 셋째 줄로 떨어졌다 —
-    자리는 남는데 접혀 있는 꼴이다.
+    컨테이너 질의로 **넓으면 한 줄, 좁으면 접기**를 하던 자리다. 폭을 나눠
+    쓰는 한 그 조건이 필요했는데, 나눠 쓰기를 그만두니 조건 자체가 사라졌다.
+
+    남은 함정이 있어 시험으로 잠근다 — 한 줄 규칙이 `@container` 안에만
+    있으면 그 기준보다 좁아질 때 **규칙이 통째로 사라져** 칸들이 겹쳐 보인다.
+    실제로 그렇게 보였다. 조건 없이 늘 한 줄이어야 한다.
     """
 
     def css(self):
         import io
         return io.open('v1/static/css/nutrition_editor.css', encoding='utf-8').read()
 
-    def test_창_크기가_아니라_받은_너비로_판단한다(self):
-        """
-        이 화면은 iframe 안이고 오른쪽 미리보기가 폭을 가져간다. 창 크기로
-        재면 "넓은 창 + 좁은 설정칸" 을 넓다고 잘못 본다.
-        """
+    def test_한_줄_규칙이_조건_밖에_있다(self):
         css = self.css()
-        self.assertIn('.config-section { container-type: inline-size; }', css)
-        # 기준을 1000px 로 뒀다가 **아무 데도 안 걸렸다.** 이 설정칸이 실제로
-        # 받는 폭은 800px 안팎이다 — 오른쪽 미리보기가 절반을 가져간다.
-        self.assertIn('@container (min-width: 760px)', css)
-
-    def test_좁을_때_값은_그대로다(self):
-        # 받쳐 주지 않는 브라우저에서는 이 규칙만 무시되고 7:3 이 살아야 한다.
-        css = self.css()
-        self.assertIn('.cfg-group--spec   { flex: 7 1 340px; }', css)
-        self.assertIn('.cfg-group--source { flex: 3 1 170px; }', css)
-
-    def test_넓으면_제품_규격이_한_줄이다(self):
-        css = self.css()
-        at = css.index('@container (min-width: 760px)')
-        block = css[at:at + 700]
-        self.assertIn('.cfg-group--spec .cfg-row  { flex-wrap: nowrap; }', block)
-        self.assertIn('.cfg-group--source { flex: 4 1 285px; }', block)
-
-    def test_모자라면_접지_말고_줄어든다(self):
-        """
-        접히면 줄이 하나 늘고 그만큼 아래 표가 밀린다. 입력칸이 몇 px
-        좁아지는 것은 티가 안 난다. 넘쳐 흐르지 않게 최소 폭을 준다.
-        """
-        css = self.css()
-        at = css.index('@container (min-width: 760px)')
-        block = css[at:at + 700]
-        self.assertIn('.cfg-group--spec .cfg-item { flex: 0 1 auto; min-width: 0; }', block)
-        self.assertIn('min-width: 44px', block)
+        self.assertIn('.cfg-group .cfg-row  { flex-wrap: nowrap; }', css)
+        # 규칙이 없는지를 본다. 같은 글자가 **주석에** 남아 있는데(왜 걷었는지가
+        # 거기 적혀 있다), 그것까지 막으면 까닭을 지워야 한다.
+        self.assertNotIn('@container (min-width: 760px) {', css)
 
     def test_칸이_내용에_맞게_좁다(self):
         # "133" · "1" · "30" 이 들어가는 칸에 열 자리를 잡아 두고 그 때문에

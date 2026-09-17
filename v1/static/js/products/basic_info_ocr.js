@@ -1789,6 +1789,12 @@
           }
           return;
         }
+        /* 영양성분 탭의 iframe 은 한 번 뜨면 다시 안 읽고, 탭을 떠날 때 제가
+           들고 있던 값을 되쓴다. 방금 서버에 쓴 값을 그 iframe 이 모르면
+           **다음에 그 탭을 떠날 때 옛 값으로 덮인다.** 여기서 알려 준다. */
+        if (r.nutrition_applied && typeof window.reloadNutritionIframe === 'function') {
+          window.reloadNutritionIframe();
+        }
         var parts = [];
         if (r.nutrition_applied) parts.push('영양성분 ' + r.nutrition_applied + '개');
         if (r.recycling_applied) {
