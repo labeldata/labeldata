@@ -218,6 +218,15 @@
                 el.value = /^\d{8}$/.test(value || '')
                     ? value.slice(0, 4) + '-' + value.slice(4, 6) + '-' + value.slice(6, 8)
                     : '';
+            } else if (spec.type === 'number') {
+                // 영양성분 수치 범위. 기준량(100g·mL당)을 placeholder 로 말해 준다 —
+                // 한 봉지당 값을 넣으면 결과가 통째로 틀리는데 터지지는 않는다.
+                el.type = 'number';
+                el.step = 'any';
+                el.min = '0';
+                el.value = value || '';
+                el.placeholder = spec.hint || spec.label;
+                el.setAttribute('data-search-enter', '');
             } else {
                 el.type = 'text';
                 el.value = value || '';
@@ -241,20 +250,36 @@
         sel.className = 'form-select form-select-sm pv-cond-field';
         sel.name = 'f';
         if (REQUIRE_FAST) {
-            // 빠른 조건을 위쪽 그룹으로 묶어 무엇을 골라야 하는지 눈에 띄게 한다
+            // 빠른 조건을 위쪽 그룹으로 묶어 무엇을 골라야 하는지 눈에 띄게 한다.
+            // spec.group 이 있는 조건은 그 이름으로 따로 묶는다 — 영양성분
+            // 수치 범위가 열여덟 줄이라, 섞어 두면 '추가 조건' 이 스무 줄이 넘어
+            // 무엇이 있는지 훑을 수가 없다.
             var fastGrp = document.createElement('optgroup');
             fastGrp.label = '⚡ 빠른 조건 (하나 이상 필수)';
             var restGrp = document.createElement('optgroup');
             restGrp.label = '추가 조건 (단독 사용 불가)';
+            var named = {};      // 그룹 이름 -> optgroup
+            var namedOrder = [];
             SPECS.forEach(function (sp) {
                 var o = document.createElement('option');
                 o.value = sp.key;
                 o.textContent = (sp.fast ? '⚡ ' : '') + sp.label;
                 if (sp.key === spec.key) o.selected = true;
-                (sp.fast ? fastGrp : restGrp).appendChild(o);
+                if (sp.fast) { fastGrp.appendChild(o); return; }
+                if (sp.group) {
+                    if (!named[sp.group]) {
+                        named[sp.group] = document.createElement('optgroup');
+                        named[sp.group].label = sp.group + ' (단독 사용 불가)';
+                        namedOrder.push(sp.group);
+                    }
+                    named[sp.group].appendChild(o);
+                    return;
+                }
+                restGrp.appendChild(o);
             });
             sel.appendChild(fastGrp);
             sel.appendChild(restGrp);
+            namedOrder.forEach(function (name) { sel.appendChild(named[name]); });
         } else {
             SPECS.forEach(function (sp) {
                 var o = document.createElement('option');

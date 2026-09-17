@@ -13,6 +13,9 @@ urlpatterns = [
     path('food-items/domestic/', views.food_item_list_domestic, name='food_item_list_domestic'),
     path('food-items/imported/', views.food_item_list_imported, name='food_item_list_imported'),
     path('food-item-detail/<str:prdlst_report_no>/', views.food_item_detail, name='food_item_detail'),
+    # 상세의 영양성분 탭 — 눌렀을 때만 받는다 (첫 화면에 싣지 않는다)
+    path('food-item/<str:prdlst_report_no>/nutrition/', views.food_item_nutrition,
+         name='food_item_nutrition'),
     path('fetch-food-item/<str:prdlst_report_no>/', views.fetch_food_item, name='fetch_food_item'),
     
     # 식품첨가물 검색

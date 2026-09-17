@@ -305,6 +305,21 @@
         margin-top: 8px;
         font-size: 14px;
     }
+
+    /* 영양성분 보유 뱃지 — 있다/없다만 말한다. 값은 상세에서 본다 */
+    .pv-nutri {
+        font-size: 11px;
+        color: var(--ez-gray-400);
+        white-space: nowrap;
+    }
+    .pv-nutri--on {
+        display: inline-flex; align-items: center; gap: 3px;
+        padding: 2px 7px; border-radius: 10px;
+        background: var(--ez-gray-100);
+        color: var(--ez-gray-700);
+        font-weight: 500;
+    }
+    .pv-nutri--on .bi { font-size: 11px; }
 </style>
 {% endblock %}
 
@@ -464,10 +479,20 @@
                         <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt|default:'' }}">{{ item.frmlc_mtrqlt|default:"" }}</td>
                         <td class="ellipsis-cell" title="{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:'' }}">{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:"" }}</td>
                         <td class="ellipsis-cell" title="{{ item.prms_dt|default:'' }}">{{ item.prms_dt|default:"" }}</td>
+                        {# 식약처 영양성분DB 에 같은 품목보고번호가 있는가. 상세의 영양성분 탭이 열린다 #}
+                        <td class="text-center">
+                            {% if item.prdlst_report_no in nutrition_report_nos %}
+                            <span class="pv-nutri pv-nutri--on" title="식약처 영양성분DB에 이 품목보고번호의 값이 있습니다">
+                                <i class="bi bi-clipboard-data"></i> 있음
+                            </span>
+                            {% else %}
+                            <span class="pv-nutri" title="같은 품목보고번호의 값이 식약처 영양성분DB에 없습니다">—</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="text-center text-muted py-5">제품이 없습니다.</td>
+                        <td colspan="10" class="text-center text-muted py-5">제품이 없습니다.</td>
                     </tr>
                     {% endfor %}
                 {% endif %}

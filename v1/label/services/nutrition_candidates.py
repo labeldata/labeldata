@@ -396,16 +396,32 @@ def auto_link(ingredient):
 
     숫자가 아닌 번호('2020_DNSP_04044')는 조인 키로 쓰지 않는다 — 우리
     MyIngredient 쪽은 숫자만 들고 있어 억지로 맞추면 엉뚱한 원료에 붙는다.
+
+    여러 해 조사분이 겹치면 고르는 차례는 product_nutrition 이 정한다
+    ─────────────────────────────────────────────────────────────────
+    **예전에는 SQL 에 맡겼고, 그것이 거꾸로 섰다.** `-crt_mth_nm` 은 한글
+    코드값 차례를 내림차순으로 세우는데 그 차례가
+
+        분석(U+BD84) < 산출(U+C0B0) < 수집(U+C218)
+
+    이라, 내림차순이면 **가장 못 믿을 '수집' 이 1 위**가 된다. _rank_score 가
+    분석에 +8 을 주는 뜻과 정반대였고, 터지지 않으니 드러나지도 않았다
+    (적재본의 97 % 가 '수집' 이라 거의 늘 수집이 뽑혔다).
+
+    차례를 뜻으로 세우는 일은 `product_nutrition._sort_key` 한 곳에 둔다.
+    거르는 조건은 여기가 더 좁다 — 배합 계산은 100 g 기준만 쓸 수 있다.
     """
     no = (getattr(ingredient, 'prdlst_report_no', '') or '').strip()
     if not no or not no.isdigit():
         return None
-    return (PublicFoodNutrition.objects
-            .filter(item_report_no=no, basis_unit=PublicFoodNutrition.BASIS_G)
-            .exclude(calories__isnull=True)
-            .exclude(verify_status=PublicFoodNutrition.VERIFY_FAIL)
-            .order_by('-crt_mth_nm', '-research_ymd')
-            .first())
+
+    from v1.label.services import product_nutrition
+
+    rows = list(PublicFoodNutrition.objects
+                .filter(item_report_no=no, basis_unit=PublicFoodNutrition.BASIS_G)
+                .exclude(calories__isnull=True)
+                .exclude(verify_status=PublicFoodNutrition.VERIFY_FAIL))
+    return product_nutrition.best_row(rows)
 
 
 def for_ingredient(ingredient, limit=TOP_N):

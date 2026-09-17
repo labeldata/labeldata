@@ -306,7 +306,56 @@ DOMESTIC_CONDITIONS = [
      'choices': ['예', '아니오', '해당없음']},
     {'key': 'child_crtfc_yn', 'label': '어린이기호식품 인증', 'field': 'child_crtfc_yn', 'lookup': 'exact', 'type': 'choice',
      'choices': ['Y']},
+    # 다른 조건들과 달리 **FoodItem 의 칸이 아니다.** 식약처 영양성분DB 에
+    # 같은 품목보고번호의 행이 있는가를 묻는다(product_nutrition).
+    # field 가 None 이라 conditions_q 가 따로 받아 준다.
+    #
+    # fast 로 두지 않는다. 이것만으로 거르면 183만 행에 24만 개짜리 반조인이
+    # 걸린다. 빠른 조건을 하나 더 요구해 바깥을 먼저 좁힌 뒤에 붙는다.
+    {'key': 'has_nutrition', 'label': '영양성분 보유', 'field': None, 'lookup': 'subquery', 'type': 'choice',
+     'choices': ['있음'], 'group': '영양성분'},
 ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 영양성분 수치 범위 조건
+#
+# 성분마다 '이상' 과 '이하' 두 줄을 만든다. 둘을 함께 걸면 구간이 되고
+# (열량 100 이상 · 열량 300 이하), 하나만 걸면 한쪽 열린 범위다.
+#
+# 값의 기준량은 **100 g(mL) 당**이다. 적재본이 그 기준으로 들어와 있고
+# (PublicFoodNutrition.basis_amount), 화면도 그렇게 적어 준다. 기준량을 못
+# 읽은 행은 애초에 검색 대상이 아니다(product_nutrition._usable_rows).
+#
+# 전부 fast 가 아니다 — 다른 표에 묻는 조건이라 FoodItem 인덱스를 못 탄다.
+# 빠른 조건과 함께 걸어야 검색이 실행된다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _nutrition_range_conditions():
+    from v1.label.services import product_nutrition
+
+    specs = []
+    for spec in product_nutrition.RANGE_FIELDS:
+        # 이름에 최소·최대를 적고, 이상·이하는 연산자 칸이 말한다.
+        # 허가일자(부터)/(까지) 가 같은 꼴이다 — 카탈로그 안에서 읽는 규칙이
+        # 하나여야 고르는 사람이 헷갈리지 않는다.
+        for suffix, lookup, word in (('_from', 'gte', '최소'), ('_to', 'lte', '최대')):
+            specs.append({
+                'key': '%s%s' % (spec['field'], suffix),
+                'label': '%s %s(%s)' % (spec['label'], word, spec['unit']),
+                'field': None,
+                'lookup': lookup,
+                'type': 'number',
+                'group': '영양성분',
+                # 100 g 당이라는 것을 입력칸에서도 말해 준다. 이 한 줄이 없으면
+                # 사람이 **한 봉지당** 값을 넣는다 — 그러면 결과가 통째로 틀린다.
+                'hint': '100g(mL)당 %s' % spec['unit'],
+                'nutri_field': spec['field'],
+            })
+    return specs
+
+
+DOMESTIC_CONDITIONS.extend(_nutrition_range_conditions())
 
 # 제조국(mnf_ntncn_nm)·용도(prpos)는 원본 API 가 값을 내려주지 않아 전량 비어 있다.
 # 고르면 항상 0건이 나오는 함정이라 목록에서 뺐다.
@@ -362,6 +411,8 @@ def translate_conditions(conditions, target_category):
             'key': spec['key'], 'label': spec['label'], 'value': cond['value'],
             'type': spec['type'], 'choices': spec.get('choices', []),
             'fast': bool(spec.get('fast')),
+            'group': spec.get('group', ''),
+            'hint': spec.get('hint', ''),
         })
     return moved, len(moved) == len(conditions or [])
 
@@ -369,7 +420,11 @@ _TABLE_BY_CATEGORY = {'domestic': 'food_item', 'imported': 'imported_food'}
 
 # 한 번에 걸 수 있는 조건 수 상한. UI 로는 넘길 수 없지만 URL 을 손으로 만들 수 있어
 # 서버에서도 막는다. 조건이 늘수록 LIKE 필터가 쌓여 느려진다.
-MAX_CONDITIONS = 10
+#
+# 영양성분 구간은 한 성분에 두 줄(최소·최대)을 먹는다. 열 줄이면 성분 넷에
+# 빠른 조건 둘이면 끝이라 금방 막힌다. 영양성분 조건은 LIKE 가 아니라 한
+# 하위질의 안의 AND 라 줄이 늘어도 질의가 늘지 않으므로, 상한을 조금 올린다.
+MAX_CONDITIONS = 14
 
 
 def parse_conditions(category, keys, values):
@@ -394,6 +449,14 @@ def parse_conditions(category, keys, values):
         if spec['type'] == 'date':
             # <input type="date"> 는 yyyy-mm-dd 로 보내는데 DB 는 yyyymmdd 로 들고 있다
             value = value.replace('-', '')
+        elif spec['type'] == 'number':
+            # 숫자가 아니면 버린다. 넘겨 두면 SQL 로 내려가 터진다.
+            # 음수는 영양성분 값이 될 수 없다 — 받아 주면 늘 0 건이 나오는
+            # 함정이 된다(원본에 음수가 없으니 결과가 항상 빈다).
+            number = _to_number(value)
+            if number is None or number < 0:
+                continue
+            value = _number_text(number)
         elif spec['key'] == 'prdlst_report_no':
             value = normalize_report_no(value)
         if not value:
@@ -402,6 +465,8 @@ def parse_conditions(category, keys, values):
             'key': spec['key'], 'label': spec['label'], 'value': value,
             'type': spec['type'], 'choices': spec.get('choices', []),
             'fast': bool(spec.get('fast')),
+            'group': spec.get('group', ''),
+            'hint': spec.get('hint', ''),
         })
         if len(parsed) >= MAX_CONDITIONS:
             break
@@ -419,16 +484,93 @@ def conditions_q(category, conditions):
 
     q = Q()
     ft_terms = []
+    # 영양성분 조건은 모아 두었다가 **하위질의 하나**로 건다. 조건마다 따로
+    # 걸면 서로 다른 행으로 맞아도 통과한다 — _nutrition_q 주석 참고.
+    nutrition = []
     for cond in conditions:
         spec = catalog[cond['key']]
         value = cond['value']
+        # 이 표의 칸이 아닌 조건 — 다른 표(식약처 영양성분DB)에 물어본다.
+        if spec.get('lookup') == 'subquery' or spec.get('nutri_field'):
+            nutrition.append((spec, value))
+            continue
         q &= Q(**{"%s__%s" % (spec['field'], spec['lookup']): value})
         # 포함검색이면서 FULLTEXT 가 덮는 컬럼일 때만 인덱스로 좁힐 수 있다
         if spec['lookup'] == 'icontains' and spec['field'] in ft_columns and len(value) >= MIN_FULLTEXT_LEN:
             ft_terms.append(value)
 
+    if nutrition:
+        nq = _nutrition_q(nutrition)
+        if nq is not None:
+            q &= nq
+
     narrowed = _fulltext_and_q(table, ft_terms)
     return (narrowed & q) if narrowed is not None else q
+
+
+def _nutrition_q(pairs):
+    """
+    영양성분 조건들을 **하나의** 하위질의로 묶는다. 쓸 조건이 없으면 None.
+
+    왜 하나여야 하는가
+    ──────────────────
+    조건마다 따로 걸면 이렇게 된다.
+
+        보고번호 IN (열량 100 이상인 행들)
+        AND 보고번호 IN (나트륨 200 이하인 행들)
+
+    같은 품목을 여러 해에 조사해 행이 둘이면, 2019 년 행이 열량 조건을 맞고
+    2024 년 행이 나트륨 조건을 맞아도 통과한다. **어느 행도 두 조건을 함께
+    만족하지 않는데** 결과에 들어온다. 그래서 한 질의 안에서 모두 건다.
+
+    'has_nutrition' 은 범위 없이 "행이 있기만 하면 된다" 이므로, 범위 조건이
+    함께 걸려 있으면 저절로 포함된다 — 따로 더할 것이 없다.
+    """
+    from v1.label.services import product_nutrition
+
+    filters = []
+    for spec, value in pairs:
+        field = spec.get('nutri_field')
+        if not field:
+            # has_nutrition — 존재만 묻는다. '있음' 이 아니면 조건이 아니다.
+            if spec['key'] == 'has_nutrition' and value != '있음':
+                return None
+            continue
+        number = _to_number(value)
+        if number is None:
+            continue
+        filters.append((field, spec['lookup'], number))
+
+    try:
+        return Q(prdlst_report_no__in=product_nutrition.matching_report_nos(filters))
+    except ValueError:
+        # 카탈로그에 없는 칸이 들어왔다. 조건을 조용히 버리면 결과가 넓어진
+        # 줄을 아무도 모르므로, 아무것도 안 걸리게 한다.
+        logger.warning('[제품 조회] 영양성분 조건에 모르는 칸이 섞였다: %s',
+                       [s['key'] for s, _ in pairs])
+        return Q(pk__in=[])
+
+
+def _to_number(value):
+    """조건 값에서 숫자를 읽는다. 못 읽으면 None."""
+    try:
+        return float(str(value).replace(',', '').strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _number_text(number):
+    """
+    조건 값으로 되돌려 실을 문자열. **지수 표기로 새지 않게 한다.**
+
+    '%g' 를 쓰면 100 만을 넘는 순간 '1.23457e+06' 이 되고, 그 글자가 화면의
+    <input type=number> 로 돌아가 값이 사라진다. 지금 성분 값은 그만큼 크지
+    않지만(나트륨이 가장 커도 100 g 당 4 만 mg 안쪽), 한계를 코드가 아니라
+    데이터에 기대는 것이라 언젠가 넘는다.
+    """
+    if float(number).is_integer():
+        return str(int(number))
+    return ('%.4f' % number).rstrip('0').rstrip('.')
 
 
 def _fulltext_and_q(table, terms):
@@ -500,14 +642,17 @@ def search_allowed(category, conditions, search_q='') -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 DOMESTIC_COLUMNS = [
-    {'field': 'prdlst_report_no', 'label': '품목보고번호', 'width': '15%', 'align': 'left'},
-    {'field': 'prdlst_nm', 'label': '제품명', 'width': '18%', 'align': 'left'},
-    {'field': 'prdlst_dcnm', 'label': '식품유형', 'width': '10%', 'align': 'center'},
-    {'field': 'bssh_nm', 'label': '제조사명', 'width': '12%', 'align': 'center'},
-    {'field': 'pog_daycnt', 'label': '소비기한', 'width': '10%', 'align': 'center'},
-    {'field': None, 'label': '포장재질', 'width': '10%', 'align': 'center'},
-    {'field': None, 'label': '원재료명', 'width': '12%', 'align': 'center'},
-    {'field': 'prms_dt', 'label': '허가일자', 'width': '10%', 'align': 'center'},
+    {'field': 'prdlst_report_no', 'label': '품목보고번호', 'width': '14%', 'align': 'left'},
+    {'field': 'prdlst_nm', 'label': '제품명', 'width': '17%', 'align': 'left'},
+    {'field': 'prdlst_dcnm', 'label': '식품유형', 'width': '9%', 'align': 'center'},
+    {'field': 'bssh_nm', 'label': '제조사명', 'width': '11%', 'align': 'center'},
+    {'field': 'pog_daycnt', 'label': '소비기한', 'width': '9%', 'align': 'center'},
+    {'field': None, 'label': '포장재질', 'width': '9%', 'align': 'center'},
+    {'field': None, 'label': '원재료명', 'width': '11%', 'align': 'center'},
+    {'field': 'prms_dt', 'label': '허가일자', 'width': '9%', 'align': 'center'},
+    # 정렬 링크를 걸지 않는다 — FoodItem 의 칸이 아니라 다른 표에 물어본 값이라
+    # ORDER BY 로 세울 것이 없다. 거르는 것은 조건 검색(has_nutrition)이 한다.
+    {'field': None, 'label': '영양성분', 'width': '7%', 'align': 'center'},
 ]
 
 # 수입일(procs_dtm)은 인덱스가 없어 정렬을 걸지 않는다

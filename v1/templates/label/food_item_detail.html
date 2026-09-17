@@ -114,6 +114,60 @@
       border-color: var(--google-blue-hover);
     }
 
+    /* 표시사항 생성에 영양성분을 함께 담을지 */
+    .copy-nutri {
+      display: inline-flex; align-items: center; gap: 5px;
+      margin: 0; padding: 7px 10px;
+      font-size: 12.5px; color: var(--text-secondary);
+      border: 1px solid var(--google-border); border-radius: 4px;
+      white-space: nowrap; cursor: pointer;
+    }
+    .copy-nutri input { margin: 0; cursor: pointer; }
+
+    /* 영양성분 탭 */
+    .nutri-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .nutri-basis { font-size: 12px; color: var(--text-hint); font-weight: 400; margin-left: 6px; }
+    .nutri-body { overflow-x: auto; }
+    .nutri-loading, .nutri-empty { font-size: 13px; color: var(--text-hint); margin: 0; padding: 16px 0; }
+
+    .nutri-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .nutri-table th, .nutri-table td {
+      padding: 7px 10px 7px 0; text-align: left;
+      border-bottom: 1px solid var(--google-border);
+    }
+    .nutri-table th { font-weight: 500; color: var(--text-primary); }
+    .nutri-table thead th {
+      font-size: 11px; font-weight: 500; color: var(--text-hint);
+      letter-spacing: .02em; border-bottom: 1px solid var(--google-border);
+    }
+    .nutri-table tr:last-child th, .nutri-table tr:last-child td { border-bottom: none; }
+    /* 당류·트랜스지방·포화지방은 상위 성분에 딸린 줄이다 — 표시기준의 들여쓰기 */
+    .nutri-sub th { padding-left: 14px; font-weight: 400; color: var(--text-secondary); }
+    /* 표시사항으로 함께 옮기지 않는 성분 — 보이되 앞세우지 않는다 */
+    .nutri-extra th, .nutri-extra td { color: var(--text-hint); }
+    .nutri-val {
+      text-align: right; white-space: nowrap; font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .nutri-unit { color: var(--text-hint); font-weight: 400; margin-left: 2px; font-size: 11.5px; }
+    .nutri-raw {
+      text-align: right; white-space: nowrap; width: 5.5em;
+      color: var(--text-hint); font-size: 12px; font-variant-numeric: tabular-nums;
+    }
+    .nutri-pct {
+      text-align: right; white-space: nowrap; width: 4em;
+      color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums;
+    }
+    .nutri-origin { margin-top: 14px; font-size: 12px; line-height: 1.7; }
+    .nutri-origin-line { color: var(--text-secondary); }
+    .nutri-warn {
+      margin-top: 8px; padding: 8px 11px; border-radius: 4px;
+      background: #fdf6e3; color: #7a5b00; border-left: 3px solid #f0ad4e;
+    }
+
     /* 탭 네비게이션 */
     .nav-tabs {
       border-bottom: 1px solid var(--google-border);
@@ -613,6 +667,14 @@
         <button type="button" class="btn btn-outline-primary" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}', false)">
           <i class="bi bi-download me-1"></i>내원료 저장
         </button>
+        {% if has_nutrition %}
+        {# 켜고 끌 수 있어야 한다 — 같은 화면에서 남의 제품도 조회되고,
+           그 표를 말없이 내 라벨에 넣어 주면 베끼는 도구가 된다 #}
+        <label class="copy-nutri" title="식약처에 신고된 값입니다. 내 제품의 표시값은 성적서나 배합 계산으로 정해야 합니다.">
+          <input type="checkbox" id="copyNutrition" checked>
+          영양성분 함께
+        </label>
+        {% endif %}
         <button type="button" class="btn btn-outline-primary" onclick="saveToMyLabel('{{ item.prdlst_report_no }}', false)">
           <i class="bi bi-tags me-1"></i>표시사항 생성
         </button>
@@ -634,6 +696,14 @@
     <li class="nav-item" role="presentation">
       <button class="nav-link" id="label-tab" data-toggle="tab" href="#label-content" role="tab" aria-controls="label-content" aria-selected="false">
         <i class="bi bi-bookmark"></i> 표시사항
+      </button>
+    </li>
+    {% endif %}
+    {% if has_nutrition %}
+    {# 값은 눌렀을 때 받는다. 첫 화면에 성분 스무 칸을 함께 싣지 않는다 #}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="nutrition-tab" data-toggle="tab" href="#nutrition-content" role="tab" aria-controls="nutrition-content" aria-selected="false">
+        <i class="bi bi-clipboard-data"></i> 영양성분
       </button>
     </li>
     {% endif %}
@@ -694,6 +764,27 @@
         <div class="detail-flex">
           <div class="detail-sec-title"><i class="bi bi-file-earmark-text"></i> 수입식품 한글표시사항</div>
           <div class="detail-text">{{ item.korlabel|default:"-" }}</div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- 영양성분 탭 -->
+      {% if has_nutrition %}
+      <div class="tab-pane fade" id="nutrition-content" role="tabpanel" aria-labelledby="nutrition-tab"
+           data-url="{% url 'label:food_item_nutrition' item.prdlst_report_no %}">
+        <div class="detail-flex">
+          <div class="nutri-head">
+            <div class="detail-sec-title" style="margin:0;">
+              <i class="bi bi-clipboard-data"></i> 식약처 영양성분
+              <span class="nutri-basis" id="nutriBasis"></span>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="nutriCopyBtn" hidden>
+              <i class="bi bi-clipboard"></i> 표 복사
+            </button>
+          </div>
+          <div class="nutri-body" id="nutriBody">
+            <div class="nutri-loading">불러오는 중…</div>
+          </div>
         </div>
       </div>
       {% endif %}
@@ -773,6 +864,7 @@
           <div>
             <div style="font-weight: 500; margin-bottom: 4px;">표시사항이 생성되었습니다</div>
             <div style="font-size: 12px; color: var(--text-secondary);">내 제품에서 확인할 수 있습니다</div>
+            <div style="font-size: 12px; color: #b06000; margin-top: 6px;" id="labelSuccessNutri" hidden></div>
           </div>
         </div>
       </div>

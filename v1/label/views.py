@@ -399,6 +399,23 @@ def food_item_list(request):
         # imported_mode 변수를 domestic 케이스에서도 정의
         imported_mode = False
 
+    # ── 영양성분 뱃지 ────────────────────────────────────────────────────────
+    # 이 쪽에 실린 제품 중 식약처 영양성분DB 에 같은 품목보고번호가 있는 것.
+    #
+    # 행마다 묻지 않는다 — 한 쪽이 100 행이면 질의가 100 번 나간다(N+1).
+    # 번호를 모아 IN 한 번으로 묻는다. item_report_no 에 인덱스가 있다.
+    # 수입식품은 품목보고번호 자체가 없어 조인할 키가 없다 — 빈 집합이다.
+    nutrition_report_nos = set()
+    if not imported_mode and page_obj:
+        try:
+            from v1.label.services import product_nutrition
+            found = product_nutrition.for_report_nos(
+                [item.prdlst_report_no for item in page_obj])
+            nutrition_report_nos = {no for no, row in found.items() if row is not None}
+        except Exception:
+            # 뱃지는 곁다리다. 못 채워도 목록은 그대로 나와야 한다.
+            logger.warning('[제품 조회] 영양성분 뱃지 조회 실패', exc_info=True)
+
     querystring_without_page = get_querystring_without(request, ["page", "cond_lost"])
     querystring_without_sort = get_querystring_without(request, ["sort", "order", "cond_lost"])
 
@@ -448,6 +465,7 @@ def food_item_list(request):
         "querystring_without_sort": querystring_without_sort,
         "imported_mode": imported_mode,
         "imported_items": page_obj if imported_mode else [],
+        "nutrition_report_nos": nutrition_report_nos,
         "search_result_count": search_result_count,
         "has_search_params": has_search_params,
         "tab_counts": tab_counts,
@@ -707,12 +725,54 @@ def food_item_detail(request, prdlst_report_no):
 
     # 일반식품
     food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
+    # 영양성분 탭을 띄울지. 값 자체는 탭을 누를 때 따로 받는다(food_item_nutrition) —
+    # 첫 화면에 성분 스무 칸을 함께 실어 보낼 이유가 없다.
+    # 여기서 한 번 묻는 까닭은 **없는 탭을 보여 주지 않기 위해서**다. 눌러 보고
+    # 비어 있는 탭은 "고장" 으로 읽힌다.
+    has_nutrition = False
+    try:
+        from v1.label.services import product_nutrition
+        has_nutrition = product_nutrition.for_report_no(
+            food_item.prdlst_report_no) is not None
+    except Exception:
+        logger.warning('[제품 상세] 영양성분 유무 확인 실패', exc_info=True)
+
     context = {
         "item": food_item,
         "imported_mode": False,
+        "has_nutrition": has_nutrition,
         # "actions": ... # 필요시 추가
     }
     return render(request, "label/food_item_detail.html", context)
+
+
+@login_required
+def food_item_nutrition(request, prdlst_report_no):
+    """
+    이 품목보고번호의 식약처 영양성분. 상세 팝업의 영양성분 탭이 부른다.
+
+    **번호가 맞는 행만 돌려준다.** 이름이 비슷한 후보는 여기서 내보내지 않는다 —
+    번호는 고를 것이 없지만 이름은 사람이 골라야 하고, 둘을 한 응답에 담으면
+    화면이 "확정된 값" 과 "골라야 하는 후보" 를 같은 얼굴로 내보이게 된다.
+    """
+    from v1.label.services import product_nutrition
+
+    row = product_nutrition.for_report_no(prdlst_report_no)
+    if row is None:
+        return JsonResponse({
+            'success': True, 'found': False,
+            'report_no': prdlst_report_no,
+            'message': '같은 품목보고번호의 영양성분이 식약처 DB에 없습니다.',
+        })
+
+    return JsonResponse({
+        'success': True, 'found': True,
+        'report_no': prdlst_report_no,
+        'rows': product_nutrition.panel(row),
+        'origin': product_nutrition.origin(row),
+        'source_note': product_nutrition.source_note(row),
+        'copy_fields': list(product_nutrition.COPY_FIELDS),
+    })
 
 
 FOODITEM_MYLABEL_MAPPING = {
@@ -787,24 +847,48 @@ def save_to_my_label(request, prdlst_report_no):
             )
         data_mapping = {field: getattr(food_item, field, "") for field in FOODITEM_MYLABEL_MAPPING.keys()}
         label_name = f"임시 - {food_item.prdlst_nm}"
-        
-        if existing_label and confirm_flag:
-            new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
-            
-            
-            return JsonResponse({
-                "success": True, 
-                "message": "내 표시사항으로 저장되었습니다.",
-                "label_name": new_label.my_label_name
-            })
-        
-        new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
-        
-        
+
+        # ── 영양성분도 함께 옮긴다 ───────────────────────────────────────────
+        # 사용자가 켜 두었을 때만 옮긴다. **끄고 켤 수 있어야 하는 값**이다 —
+        # 같은 화면에서 남의 제품도 똑같이 조회되고, 그 표를 말없이 내 라벨에
+        # 넣어 주면 제품 조회가 "남의 영양성분표 베끼는 도구" 가 된다.
+        #
+        # 옮기는 것은 표시 필수 아홉뿐이고(product_nutrition.COPY_FIELDS),
+        # 어느 행을 보고 넣었는지를 nutrition_source_note 에 남긴다. 이론치로
+        # 만든 표는 그 자체가 감사 대상이라 "이 숫자 어디서 왔죠" 에 답할 수
+        # 있어야 한다 — 성적서 판독이 같은 자리에 같은 방식으로 적는다.
+        #
+        # nutrition_source 는 비워 둔다. 그 칸의 값은 'lab'(공인기관 성적서) /
+        # 'theory'(이론치 계산) 둘뿐인데, 식약처 신고값은 둘 다 아니다.
+        # 없는 값을 억지로 고르면 계산기가 허용오차 칸을 열어 준다.
+        nutrition_copied = []
+        if to_bool(data.get("copy_nutrition", False)):
+            try:
+                from v1.label.services import product_nutrition
+                row = product_nutrition.for_report_no(food_item.prdlst_report_no)
+                if row is not None:
+                    values = product_nutrition.label_values(row)
+                    data_mapping.update(values)
+                    data_mapping['nutrition_source_note'] = product_nutrition.source_note(row)
+                    nutrition_copied = list(values.keys())
+            except Exception:
+                # 영양성분은 곁다리다. 그것 때문에 표시사항 저장이 통째로
+                # 실패하면 사용자는 하려던 일을 잃는다.
+                logger.warning('[표시사항 생성] 영양성분 복사 실패 report_no=%s',
+                               food_item.prdlst_report_no, exc_info=True)
+
+        new_label = MyLabel.objects.create(
+            user_id=request.user, my_label_name=label_name, **data_mapping)
+
+        message = "내 표시사항으로 저장되었습니다."
+        if nutrition_copied:
+            message += " 영양성분 %d개 항목도 함께 담았습니다 — 식약처 신고값이므로 참고치로 보세요." % len(nutrition_copied)
+
         return JsonResponse({
-            "success": True, 
-            "message": "내 표시사항으로 저장되었습니다.",
-            "label_name": new_label.my_label_name
+            "success": True,
+            "message": message,
+            "label_name": new_label.my_label_name,
+            "nutrition_copied": len(nutrition_copied),
         })
     except Exception as e:
         logger.exception('[처리 실패]')
