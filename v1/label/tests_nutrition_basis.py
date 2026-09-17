@@ -136,6 +136,64 @@ class ToPer100RowShapeTests(SimpleTestCase):
         self.assertEqual(to_per_100(rows, '90'), rows)
 
 
+class OcrPickWiringTests(SimpleTestCase):
+    """
+    확인 창에서 **고르는 줄**이 무엇인가.
+
+    영양성분·분리배출도 체크박스가 있는 고르는 줄이다. 기본 정보 탭에 칸이
+    없어 서버가 바로 저장할 뿐, 사용자에게는 똑같은 한 줄이다.
+
+    그 셋을 갈라 두었더니 이렇게 났다 — 영양성분표만 찍은 사진에서는
+    `[data-field]` 줄이 내용량 하나뿐인데, 그 하나를 체크 해제하면 picked 가
+    0 이 되어 적용 단추의 가드에 걸린다. **체크해 둔 영양성분 아홉 줄까지
+    통째로 버려졌다.** 화면은 "1개 중 0개 선택" 이라고 적고 있었지만 눈앞에는
+    체크된 줄이 아홉이었다.
+    """
+
+    def source(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/products/basic_info_ocr.js'
+                ).read_text(encoding='utf-8')
+
+    def test_고르는_줄에_영양성분과_분리배출이_들어간다(self):
+        js = self.source()
+        at = js.index('var PICKABLE')
+        block = js[at:at + 400]
+        self.assertIn('[data-field]', block)
+        self.assertIn('[data-nutri]', block)
+        self.assertIn('[data-recycle]', block)
+
+    def test_세는_곳과_고르는_곳이_같은_목록을_쓴다(self):
+        """
+        하나만 고치면 "전체 선택" 을 눌러도 숫자가 안 움직이는 화면이 된다.
+        둘 다 PICKABLE 을 보게 묶어 둔다.
+        """
+        js = self.source()
+        for fn in ('function refreshPickState', 'function applyPickPreset'):
+            at = js.index(fn)
+            self.assertIn('PICKABLE', js[at:at + 400],
+                          '%s 가 PICKABLE 을 쓰지 않는다' % fn)
+
+    def test_영양성분_줄이_현재_값을_받아_채운다(self):
+        """
+        예전에는 '영양성분 탭' 이라는 글자를 박아 두어, 이미 값이 있는 칸을
+        덮어쓰는 줄인지 화면이 말하지 못했다.
+        """
+        js = self.source()
+        self.assertIn('data-nutri-current', js)
+        self.assertIn('/products/api/nutrition/', js)
+        self.assertNotIn("<span class=\"ocr-empty\">영양성분 탭</span>", js)
+
+    def test_현재_값을_못_받으면_비어_있다고_적지_않는다(self):
+        """'비어 있음' 으로 적으면 덮어쓰는 줄을 안 덮어쓰는 줄로 보이게 한다."""
+        js = self.source()
+        at = js.index('function fillCurrentNutrition')
+        self.assertIn('확인 못 함', js[at:at + 2600])
+
+
 class OcrNutritionBasisApplyTests(TestCase):
     """판독값을 라벨에 넣는 자리 — 환산과 표시기준이 한 몸으로 움직이는가."""
 

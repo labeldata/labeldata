@@ -672,8 +672,24 @@
 
   // 선택 상태가 바뀔 때마다 다시 그린다. 숫자가 눈앞에서 움직여야 "지금 무엇을
   // 하는 중인지" 가 전달된다.
+  /* 고를 수 있는 줄 **전부**.
+   *
+   * 예전에는 `[data-field]` 만 봤다. 그런데 영양성분(`[data-nutri]`)과
+   * 분리배출(`[data-recycle]`)도 체크박스가 있는 고르는 줄이다. 기본 정보
+   * 탭에 칸이 없어 서버가 바로 저장할 뿐, 사용자에게는 똑같은 한 줄이다.
+   *
+   * 그 셋을 갈라 놓은 대가가 컸다. 영양성분표만 찍은 사진에서는 `[data-field]`
+   * 줄이 내용량 하나뿐인데, 그 하나를 체크 해제하면 picked 가 0 이 된다.
+   * 그러면 적용 단추의 가드(`if (!state.picked) return`)에 걸려 **체크해 둔
+   * 영양성분 아홉 줄까지 통째로 버려졌다.** 화면은 "1개 중 0개 선택" 이라고
+   * 적고 있었지만 눈앞에는 체크된 줄이 아홉이라, 무슨 일이 일어난 건지
+   * 알 길이 없었다. */
+  var PICKABLE = '#basicInfoOcrBody .ocr-row[data-field],'
+               + '#basicInfoOcrBody .ocr-row[data-nutri],'
+               + '#basicInfoOcrBody .ocr-row[data-recycle]';
+
   function refreshPickState() {
-    var rows = document.querySelectorAll('#basicInfoOcrBody .ocr-row[data-field]');
+    var rows = document.querySelectorAll(PICKABLE);
     var picked = 0, overwrite = 0, total = rows.length;
 
     rows.forEach(function (row) {
@@ -726,7 +742,9 @@
   }
 
   function applyPickPreset(mode) {
-    document.querySelectorAll('#basicInfoOcrBody .ocr-row[data-field]').forEach(function (row) {
+    // 세는 줄과 고르는 줄이 같아야 한다. 하나만 고치면 "전체 선택" 을 눌러도
+    // 숫자가 안 움직이는 화면이 된다.
+    document.querySelectorAll(PICKABLE).forEach(function (row) {
       var box = row.querySelector('.ocr-pick');
       if (!box) return;
       if (mode === 'all') box.checked = true;
@@ -865,6 +883,8 @@
       modal.hide();
     };
     modal.show();
+    // 영양성분의 '현재 값' 은 서버에 물어야 한다. 창을 먼저 띄우고 채운다.
+    fillCurrentNutrition();
   }
 
   /*
@@ -1343,11 +1363,22 @@
     var nutriRows = Object.keys(NUTRITION_MAP)
       .filter(function (k) { return val(k); })
       .map(function (k) {
-        return '<div class="ocr-row" data-nutri="' + k + '">'
+        /* 현재 값은 **비워 두고 나중에 채운다.**
+         *
+         * 예전에는 여기에 '영양성분 탭' 이라는 글자를 박아 두었다. 그래서
+         * 이미 값이 들어 있는 칸을 덮어쓰는 줄인지 아닌지 화면이 말하지
+         * 못했고, `data-state` 도 없어 "몇 개는 이미 값이 있는 칸입니다"
+         * 경고가 영양성분에는 영영 뜨지 않았다.
+         *
+         * 값은 이 탭에 없어 서버에 물어야 한다(products:nutrition_data_api).
+         * 창을 띄우는 일을 그 왕복에 묶어 두지 않으려고 뒤에서 채운다. */
+        return '<div class="ocr-row" data-nutri="' + k + '" data-state="new">'
           + '  <input class="form-check-input ocr-pick" type="checkbox" checked>'
           + '  <div class="ocr-label">' + esc(NUTRITION_MAP[k]) + '</div>'
-          + '  <div class="ocr-current"><span class="ocr-empty">영양성분 탭</span></div>'
-          + '  <div class="ocr-arrow"><span class="ocr-state-new">채움</span></div>'
+          + '  <div class="ocr-current" data-nutri-current="' + k + '">'
+          + '<span class="ocr-empty">확인 중…</span></div>'
+          + '  <div class="ocr-arrow" data-nutri-state="' + k + '">'
+          + '<span class="ocr-state-new">채움</span></div>'
           + '  <div class="ocr-control">'
           + '    <input type="text" class="form-control form-control-sm ocr-value"'
           + '           value="' + esc(val(k)) + '"></div>'
@@ -1385,6 +1416,57 @@
         + '</div></div>';
     }
     return html;
+  }
+
+  /* 영양성분 줄의 '현재 값' 을 뒤에서 채운다.
+   *
+   * 이 값은 기본 정보 탭에 없어(영양성분 탭이 들고 있다) 서버에 물어야 한다.
+   * 창이 뜨는 일을 그 왕복에 묶지 않으려고 창을 띄운 뒤에 부른다 — 못 받아도
+   * 읽어낸 값과 체크는 그대로 쓸 수 있어야 한다.
+   *
+   * 받아 오면 `data-state` 까지 고쳐 준다. 그래야 "몇 개는 이미 값이 있는
+   * 칸입니다" 경고가 영양성분에도 뜬다 — 덮어쓰기는 되돌릴 수 없는 일이라
+   * 누르기 전에 보여야 한다.
+   */
+  function fillCurrentNutrition() {
+    var id = labelId();
+    if (!id) return;
+    if (!document.querySelector('#basicInfoOcrBody [data-nutri-current]')) return;
+
+    fetch('/products/api/nutrition/' + id + '/', {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data) throw new Error('no data');
+        document.querySelectorAll('#basicInfoOcrBody [data-nutri-current]')
+          .forEach(function (cell) {
+            var key = cell.dataset.nutriCurrent;
+            var cur = (data[key] === 0 || data[key]) ? String(data[key]).trim() : '';
+            var row = cell.closest('.ocr-row');
+            var badge = row && row.querySelector('[data-nutri-state]');
+
+            cell.title = cur;
+            cell.innerHTML = cur
+              ? esc(cur)
+              : '<span class="ocr-empty">비어 있음</span>';
+            if (row) row.dataset.state = cur ? 'replace' : 'new';
+            if (badge) {
+              badge.innerHTML = cur
+                ? '<span class="ocr-state-replace">덮어씀</span>'
+                : '<span class="ocr-state-new">새로 채움</span>';
+            }
+          });
+        refreshPickState();   // 덮어쓰기 경고를 다시 센다
+      })
+      .catch(function () {
+        /* 못 받아도 판독값은 쓸 수 있어야 한다. 다만 **모른다고 적는다** —
+           '비어 있음' 으로 적으면 덮어쓰는 줄을 안 덮어쓰는 줄로 보이게 한다. */
+        document.querySelectorAll('#basicInfoOcrBody [data-nutri-current]')
+          .forEach(function (cell) {
+            cell.innerHTML = '<span class="ocr-empty">확인 못 함</span>';
+          });
+      });
   }
 
   // 판독값과 사용자가 실제로 쓴 값을 함께 보낸다.
