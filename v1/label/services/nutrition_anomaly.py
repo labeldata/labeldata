@@ -107,12 +107,14 @@ def check_internal(row):
             value = _get(row, field)
             if value is not None and value > basis + SLACK_G:
                 found.append(('A4', HIGH,
-                              '%s 가 기준량을 넘는다 (%.2f > %.0f)' % (field, value, basis)))
+                              '%s 이 기준량을 넘는다 (%.2f > %.0f)'
+                              % (name_of(field), value, basis)))
 
     for field in GRAM_FIELDS + MG_FIELDS:
         value = _get(row, field)
         if value is not None and value < 0:
-            found.append(('A5', HIGH, '%s 가 음수다 (%.2f)' % (field, value)))
+            found.append(('A5', HIGH,
+                          '%s 이 음수다 (%.2f)' % (name_of(field), value)))
 
     return found
 
@@ -151,6 +153,22 @@ MARKERS = (
 )
 
 UNIT = {'natriums': 'mg'}
+
+# 목록은 **사람이 읽는다.** 'sugars 가 기준량을 넘는다' 로 적어 두면 그 칸이
+# 무엇인지 알아야 읽히는데, 관리자 화면에서 이것을 보는 사람이 우리 칸 이름을
+# 알아야 할 까닭이 없다.
+NAMES = {
+    'calories': '열량', 'proteins': '단백질', 'fats': '지방',
+    'carbohydrates': '탄수화물', 'sugars': '당류', 'dietary_fiber': '식이섬유',
+    'saturated_fats': '포화지방', 'trans_fats': '트랜스지방',
+    'natriums': '나트륨', 'cholesterols': '콜레스테롤',
+    'moisture': '수분', 'ash': '회분',
+    'calcium': '칼슘', 'iron': '철', 'potassium': '칼륨',
+}
+
+
+def name_of(field):
+    return NAMES.get(field, field)
 
 
 # 2순위 이상을 "상위" 로 보려면 원재료가 이만큼은 있어야 한다.
@@ -220,8 +238,9 @@ def check_top_ingredients(row, sorted_text):
             if not hit:
                 continue
             found.append((code, HIGH if order == 1 else WATCH,
-                          '%d순위가 "%s" 인데 %s 가 %.2f%s' % (
-                              order, name, field, value, UNIT.get(field, 'g'))))
+                          '%d순위가 "%s" 인데 %s 이 %.2f%s' % (
+                              order, name, name_of(field), value,
+                              UNIT.get(field, 'g'))))
             break
     return found
 

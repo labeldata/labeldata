@@ -20600,6 +20600,15 @@ class NutritionAnomalyRuleTests(TestCase):
         self.assertIn('A3', self.check(fats=10.0, saturated_fats=8.0, trans_fats=4.0))
         self.assertNotIn('A3', self.check(fats=10.0, saturated_fats=6.0, trans_fats=1.0))
 
+    def test_목록은_사람_말로_적는다(self):
+        # 관리자 화면에서 이것을 보는 사람이 우리 칸 이름을 알아야 할 까닭이 없다.
+        from v1.label.services import nutrition_anomaly as rules
+
+        hits = rules.check_internal({'basis_amount': 100.0, 'basis_unit': 'g',
+                                     'saturated_fats': 138.29})
+        self.assertIn('포화지방', hits[0][2])
+        self.assertNotIn('saturated_fats', hits[0][2])
+
     def test_기준량을_넘는_성분(self):
         self.assertIn('A4', self.check(fats=120.0))
         self.assertNotIn('A4', self.check(fats=99.0))
