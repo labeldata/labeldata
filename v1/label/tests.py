@@ -20898,3 +20898,107 @@ class SearchBusyTests(TestCase):
         css = self._read('static/css/style.css')
         at = css.index('.search-busy-spinner {')
         self.assertIn('prefers-reduced-motion', css[at:at + 900])
+
+
+class 영양성분_등록_요령의_검토_규칙(TestCase):
+    """
+    식약처 「영양성분 등록 요령」은 열량·당류·지방에 검토 규칙 셋을 둔다.
+
+        열량(kcal) = ... ±20 %
+        당류(g) ≤ 탄수화물(g)
+        지방(g) ≥ 트랜스지방(g) + 포화지방(g) + 콜레스테롤(mg)/1,000
+
+    뒤의 둘을 **우리는 남의 데이터에만 대고 있었다.** `nutrition_anomaly` 가
+    식약처 DB 34 만 행을 A1·A3 으로 재는데, 정작 사용자가 손으로 넣은 표는
+    아무도 보지 않았다. 등록에서 거절될 값이 우리 화면에서는 통과한다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='요령', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='요령',
+                                      **kwargs)
+
+    def _check(self, **kwargs):
+        from v1.label.services.validation_service import (
+            check_nutrition_internal_consistency)
+
+        return check_nutrition_internal_consistency(self._label(**kwargs))
+
+    # ── 당류 ≤ 탄수화물 ────────────────────────────────────────────────
+
+    def test_당류가_탄수화물보다_많으면_지적한다(self):
+        issues = self._check(carbohydrates='7', sugars='104')
+        self.assertEqual([i['category'] for i in issues], ['nutrition_subset'])
+        self.assertIn('104', issues[0]['message'])
+        self.assertIn('7', issues[0]['message'])
+
+    def test_반올림_폭으로는_지적하지_않는다(self):
+        """당류·탄수화물은 1 g 단위로 적는다. 같은 값이 10 과 11 로 갈린다."""
+        self.assertEqual(self._check(carbohydrates='10', sugars='11'), [])
+
+    def test_어느_한쪽이_비면_재지_않는다(self):
+        self.assertEqual(self._check(carbohydrates='10'), [])
+
+    # ── 지방 ≥ 포화 + 트랜스 + 콜레스테롤 ──────────────────────────────
+
+    def test_지방_무리의_합이_지방을_넘으면_지적한다(self):
+        issues = self._check(fats='1', saturated_fats='5', trans_fats='0.5')
+        self.assertEqual([i['category'] for i in issues], ['nutrition_fat_sum'])
+
+    def test_콜레스테롤은_mg_을_g_으로_환산해_센다(self):
+        """
+        환산하지 않으면 콜레스테롤 100 이 그대로 더해져 **1,000 배** 틀린다.
+        지방 10 g 짜리 제품이 전부 지적으로 걸린다.
+        """
+        self.assertEqual(
+            self._check(fats='10', saturated_fats='3', cholesterols='100'), [])
+
+    def test_콜레스테롤이_커지면_그때는_지적한다(self):
+        """환산한 뒤에도 넘으면 진짜 어긋난 것이다. 0.5 + 9.6 > 1 + 0.5"""
+        issues = self._check(fats='1', saturated_fats='0.5',
+                             cholesterols='9600')
+        self.assertEqual([i['category'] for i in issues], ['nutrition_fat_sum'])
+
+    def test_표가_없으면_아무_말도_하지_않는다(self):
+        self.assertEqual(self._check(), [])
+
+    # ── 열량 계수 ──────────────────────────────────────────────────────
+
+    def test_에리스리톨은_열량이_0_이다(self):
+        """
+        화학적으로는 당알코올이지만 요령은 2.4 가 아니라 0 으로 센다.
+        당알코올로 묶으면 10 g 쓴 제품에서 24 kcal 이 허공에서 생긴다.
+        """
+        from v1.label.services.nutrition_calc import calories_from_macros
+
+        base = {'carbohydrates': 10, 'proteins': 0, 'fats': 0}
+        self.assertEqual(
+            calories_from_macros(dict(base, erythritol=10)), 0.0)
+        self.assertEqual(
+            calories_from_macros(dict(base, sugar_alcohols=10)), 24.0)
+
+    def test_타가토스와_알룰로오스도_계수가_따로다(self):
+        from v1.label.services.nutrition_calc import calories_from_macros
+
+        base = {'carbohydrates': 10, 'proteins': 0, 'fats': 0}
+        self.assertEqual(calories_from_macros(dict(base, tagatose=10)), 15.0)
+        self.assertEqual(calories_from_macros(dict(base, allulose=10)), 0.0)
+
+    def test_적재_검산이_요령의_20퍼센트를_쓴다(self):
+        """
+        15 % 로 재던 때 34 만 건 적재에서 어긋남 표본 다섯 중 넷이 김치였다.
+        '배추김치_가을재배' 는 재계산 30.1 / 표기 37.0 으로 18.6 % 차 —
+        요령으로는 통과다. 우리가 규정보다 빡빡하면 규정이 받아 주는 행을
+        우리만 어긋났다고 적는다.
+        """
+        from v1.label.services.mfds_nutrition import verify_row
+
+        kimchi = {'moisture': 89.0, 'proteins': 1.5, 'fats': 0.3,
+                  'ash': 2.5, 'carbohydrates': 5.5, 'calories': 37.0}
+        self.assertEqual(verify_row(kimchi, 100.0, 'g'), (True, ''))
+
+        # 폭이 좁으면 같은 행이 어긋남으로 뽑힌다 — 바뀐 것이 이 수임을 보인다
+        verdict, _ = verify_row(kimchi, 100.0, 'g', energy_tol=0.15)
+        self.assertIs(verdict, False)

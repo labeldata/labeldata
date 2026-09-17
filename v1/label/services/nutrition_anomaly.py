@@ -85,13 +85,25 @@ def check_internal(row):
             found.append((code, HIGH if gap >= SMALL_GAP_G else WATCH,
                           '%s (%.2f > %.2f)' % (why, a, b)))
 
+    # 지방 ≥ 트랜스지방 + 포화지방 + 콜레스테롤
+    #
+    # 식약처 「영양성분 등록 요령」의 검토 규칙이 그대로 이것이다. **콜레스테롤이
+    # 빠져 있었다.** 단위가 달라서(mg) 그냥 더하면 1,000 배 틀리므로 g 으로
+    # 환산해 넣는다 — 요령도 '/1,000' 을 괄호에 적어 둔다.
+    #
+    # 콜레스테롤은 지방산이 아니라 스테롤이라 화학적으로는 '지방' 의 부분집합이
+    # 아니지만, 요령이 이 셋을 함께 세라고 정했고 등록 화면이 그 잣대로 막는다.
+    # 우리가 더 느슨하면 여기서는 통과한 표가 등록에서 거절된다.
     fats = _get(row, 'fats')
     sat, trans = _get(row, 'saturated_fats'), _get(row, 'trans_fats')
-    if fats is not None and (sat is not None or trans is not None):
-        part = (sat or 0) + (trans or 0)
+    chol = _get(row, 'cholesterols')
+    if fats is not None and (sat is not None or trans is not None
+                             or chol is not None):
+        part = (sat or 0) + (trans or 0) + (chol or 0) / 1000.0
         if part > fats + SLACK_G:
             found.append(('A3', HIGH,
-                          '포화+트랜스가 지방보다 많다 (%.2f > %.2f)' % (part, fats)))
+                          '포화+트랜스+콜레스테롤이 지방보다 많다 (%.2f > %.2f)'
+                          % (part, fats)))
 
     # 기준량을 넘는 성분. 100 g 짜리 행에 지방 120 g 은 있을 수 없다.
     #

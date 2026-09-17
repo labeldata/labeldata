@@ -139,6 +139,8 @@ _LEGAL_BASIS = {
     'font_size': '「식품등의 표시기준」 표시사항의 활자 크기 규정(10포인트 이상)',
     'calorie_macros': '「식품등의 표시기준」 영양성분 표시 규정(열량 산출 방법 — 탄수화물·단백질 4 kcal/g, 지방 9 kcal/g)',
     'calorie_macros_advice': '「식품등의 표시기준」 영양성분 표시 규정(열량 산출 방법 — 탄수화물·단백질 4, 지방 9, 식이섬유 2, 당알코올 2.4 kcal/g)',
+    'nutrition_subset': '식약처 「영양성분 등록 요령」 영양성분 검토 규칙(당류 함량 ≤ 탄수화물 함량)',
+    'nutrition_fat_sum': '식약처 「영양성분 등록 요령」 영양성분 검토 규칙(지방 ≥ 트랜스지방 + 포화지방 + 콜레스테롤/1,000)',
     'thawing_method': '「식품등의 표시기준」 냉동식품의 조리·해동방법 표시 규정',
     'exchange_notice': '「소비자기본법」 소비자분쟁해결기준에 따른 제품 교환 안내',
     'origin_emphasis': '「농수산물의 원산지 표시 등에 관한 법률 시행규칙」 원산지 표시 방법(포장재 바탕색과 구분되는 색·굵기)',
@@ -156,6 +158,9 @@ _LEGAL_BASIS = {
 # 빈 목록이고, 화면은 표에 얹지 않고 목록으로만 보여 준다.
 _ISSUE_FIELDS = {
     'calorie_consistency':   ('content_weight',),
+    'nutrition_subset':      ('sugars', 'carbohydrates'),
+    'nutrition_fat_sum':     ('fats', 'saturated_fats', 'trans_fats',
+                              'cholesterols'),
     'ingredient_order':      ('rawmtrl_nm_display',),
     'content_weight':        ('content_weight',),
     'farm_seafood':          ('ingredient_info', 'rawmtrl_nm_display'),
@@ -1819,8 +1824,18 @@ def check_calorie_matches_macros(label) -> list[dict]:
             'calorie_macros', CAUSE_UNREADABLE,
             '탄수화물·지방·단백질로 계산한 열량이 0 이라 견줄 수 없었습니다.')]
 
+    # 폭은 요령이 정한 **±20 %** 다(NUTRITION_CALORIE_TOLERANCE). 30 % 였던
+    # 것을 규정에 맞춘다 — 우리가 더 느슨하면 등록에서 거절될 표를 여기서
+    # 통과시킨다.
+    #
+    # **25 kcal 바닥은 남긴다.** 열량이 낮은 제품에서 20 % 는 몇 kcal 밖에
+    # 안 되는데, 그런 제품일수록 당알코올·에리스리톨을 쓴다. 그 칸이 MyLabel
+    # 에 아직 없어서(calories_from_macros 주석) 우리 계산이 구조적으로 높게
+    # 나온다 — 우리가 못 세는 성분 때문에 사용자를 부르는 일은 없어야 한다.
+    from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
+
     gap = abs(calories - computed)
-    if gap <= max(25.0, computed * 0.3):
+    if gap <= max(25.0, computed * NUTRITION_CALORIE_TOLERANCE):
         return _calorie_advice(calories, computed, gap, macros)
 
     detail = (f'탄수화물 {macros["carbohydrates"]:g} g × 4 + '
@@ -1904,6 +1919,114 @@ def _is_frozen(label) -> bool:
     if 'frozen' in haystack:
         return True
     return any(hint in haystack for hint in _FROZEN_HINTS)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 영양성분끼리의 모순 — 식약처 「영양성분 등록 요령」의 검토 규칙
+#
+#     당류(g)  ≤ 탄수화물(g)
+#     지방(g)  ≥ 트랜스지방(g) + 포화지방(g) + 콜레스테롤(mg)/1,000
+#
+# 이 둘은 **어떤 식품이든 성립한다.** 당류는 탄수화물의 부분집합이고, 트랜스·
+# 포화는 지방의 부분집합이다. 배합비도 식품유형도 필요 없어서 오탐이 거의 없다.
+#
+# 우리는 이미 같은 잣대를 갖고 있었다 — `nutrition_anomaly` 가 식약처 DB
+# 34 만 행에 A1·A3 으로 대고 있다. **정작 우리 사용자가 손으로 입력한 표는
+# 아무도 보지 않았다.** 남의 데이터는 재고 우리 데이터는 안 잰 셈이다.
+#
+# 이건 '지적' 이다(확정을 막는다)
+# ────────────────────────────────
+# 산술이라 확신이 높고, 고칠 데가 분명하다 — 숫자 하나다. 게다가 이 값으로는
+# 식약처 등록 자체가 거절되므로, 여기서 통과시키면 **사용자는 더 뒤에서
+# 막힌다.** `check_nutrition_label_scope` 가 확정을 안 막는 것과는 처지가
+# 다르다. 거기서는 대상 여부 판정이 식품유형 이름에 기대고 있어 확신이 얕았다.
+#
+# 폭은 넉넉히 잡는다
+# ──────────────────
+# 표시기준의 반올림만으로도 벌어진다. 당류·탄수화물은 1 g 단위라 실제로는
+# 같은 값이 10 과 11 로 갈릴 수 있어 1 g, 지방 무리는 0.1 g 단위라 0.5 g 을
+# 준다. `nutrition_anomaly` 와 `mfds_nutrition.verify_row` 가 같은 교훈을
+# 적어 두었다 — 좁게 잡았더니 멀쩡한 것이 무더기로 걸렸다.
+# ─────────────────────────────────────────────────────────────────────────────
+_SUBSET_SLACK_G = 1.0     # 당류 ≤ 탄수화물 (표시 단위 1 g)
+_FAT_SLACK_G = 0.5        # 지방 ≥ 포화+트랜스+콜레스테롤 (표시 단위 0.1 g)
+
+
+def _nutrient_g(label, field, mg=False):
+    """
+    영양성분 값을 g 으로 읽는다. 못 읽으면 None.
+
+    단위 칸(`<field>_unit`)이 g·mg 중 무엇인지까지 본다. 화면은 성분마다
+    단위를 고정해 두지만(콜레스테롤은 mg), 예전에 들어간 값이나 판독이 채운
+    값에는 다른 단위가 남아 있을 수 있다. **단위를 안 보고 더하면 1,000 배
+    틀린다** — 그러고도 숫자라서 조용히 계산된다.
+    """
+    raw = _number((getattr(label, field, '') or '').strip())
+    if raw is None:
+        return None
+    unit = (getattr(label, field + '_unit', '') or '').strip().lower()
+    if not unit:
+        unit = 'mg' if mg else 'g'
+    if unit == 'mg':
+        return raw / 1000.0
+    if unit == 'g':
+        return raw
+    return None       # ㎍ 등 — 이 검사가 다룰 단위가 아니다
+
+
+def check_nutrition_internal_consistency(label) -> list[dict]:
+    """
+    영양성분 표 안에서 서로 어긋나는 값이 있는가.
+
+    식약처 「영양성분 등록 요령」의 검토 규칙 둘을 그대로 잰다. 값이 없으면
+    아무 말도 하지 않는다 — 표를 안 만든 제품은 `check_nutrition_label_scope`
+    가 따로 본다.
+    """
+    if not _has_nutrition_display(label):
+        return []
+
+    found = []
+
+    carb = _nutrient_g(label, 'carbohydrates')
+    sugar = _nutrient_g(label, 'sugars')
+    if carb is not None and sugar is not None and sugar > carb + _SUBSET_SLACK_G:
+        found.append(_issue(
+            'nutrition_subset',
+            '당류 %g g 이 탄수화물 %g g 보다 많습니다 — 당류는 탄수화물에 '
+            '들어 있는 성분이라 더 많을 수 없습니다.' % (sugar, carb),
+            '두 값 중 어느 쪽이 잘못 들어갔는지 확인해 주세요. 성적서를 보고 '
+            '넣었다면 기준량(100 g 당 등)이 서로 다른 줄에서 온 것은 아닌지 '
+            '함께 보시면 좋습니다.',
+            comparison=[
+                _row('탄수화물', '%g g' % carb, '%g g' % carb, VERDICT_OK),
+                _row('당류(탄수화물 이하)', '%g g 이하' % carb, '%g g' % sugar),
+            ]))
+
+    fats = _nutrient_g(label, 'fats')
+    sat = _nutrient_g(label, 'saturated_fats')
+    trans = _nutrient_g(label, 'trans_fats')
+    chol = _nutrient_g(label, 'cholesterols', mg=True)
+    if fats is not None and (sat is not None or trans is not None
+                             or chol is not None):
+        part = (sat or 0.0) + (trans or 0.0) + (chol or 0.0)
+        if part > fats + _FAT_SLACK_G:
+            found.append(_issue(
+                'nutrition_fat_sum',
+                '포화지방·트랜스지방·콜레스테롤을 더하면 %.2f g 으로 지방 '
+                '%g g 을 넘습니다 — 지방 안에 들어 있는 성분들이라 더 많을 수 '
+                '없습니다.' % (part, fats),
+                '콜레스테롤은 mg 을 g 으로 환산해(÷1,000) 함께 셉니다. '
+                '지방 값이 빠졌거나 나머지 셋 중 하나의 단위가 어긋났는지 '
+                '확인해 주세요.',
+                comparison=[
+                    _row('포화지방', None, '%g g' % (sat or 0.0), VERDICT_OK),
+                    _row('트랜스지방', None, '%g g' % (trans or 0.0), VERDICT_OK),
+                    _row('콜레스테롤', None,
+                         '%g g (환산)' % (chol or 0.0), VERDICT_OK),
+                    _row('지방(셋의 합 이상)', '%.2f g 이상' % part, '%g g' % fats),
+                ]))
+
+    return found
 
 
 def check_thawing_method(label) -> list[dict]:
@@ -2452,6 +2575,7 @@ _CHECKS = [
     check_font_size,
     # 사람이 검수하며 짚어 낸 것들
     check_calorie_matches_macros,
+    check_nutrition_internal_consistency,
     check_thawing_method,
     check_exchange_notice,
     check_origin_emphasis,

@@ -38,6 +38,8 @@ _ALLERGEN_CATEGORY_NAMES = set(ALLERGEN_KEYWORDS.keys())
 _CATEGORY_LABELS = {
     'required_missing': '필수 입력 항목',
     'calorie_consistency': '열량 표시 정합성',
+    'nutrition_subset': '영양성분 간 정합성(당류·탄수화물)',
+    'nutrition_fat_sum': '영양성분 간 정합성(지방 무리)',
     'content_weight': '내용량 표시',
     'farm_seafood': '농수산물 함량 표시',
     'forbidden_phrase': '금지 문구',

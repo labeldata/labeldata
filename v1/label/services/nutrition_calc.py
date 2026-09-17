@@ -20,6 +20,7 @@
 부를 수는 없어서다. 둘이 어긋나지 않는지는 시험이 지킨다.
 """
 from v1.label.constants import (
+    CALORIE_CARB_PARTS,
     CALORIE_FACTORS,
     HIENG_LNTRT_CRITERIA,
     HIENG_LNTRT_KIND_NAMES,
@@ -103,9 +104,16 @@ def calories_from_macros(values):
     """
     탄수화물·단백질·지방으로 열량을 계산한다. 규정이 정한 계수를 쓴다.
 
-    **식이섬유와 당알코올은 탄수화물 안에 들어 있으면서 계수가 다르다.**
-    탄수화물에서 그만큼을 빼고 각자의 계수로 센다. 이걸 빼먹으면 식이섬유가
-    많은 제품에서 열량이 실제보다 높게 나온다.
+    **식이섬유·당알코올처럼 탄수화물 안에 들어 있으면서 계수가 다른 것들이
+    있다.** 탄수화물에서 그만큼을 빼고 각자의 계수로 센다(CALORIE_CARB_PARTS).
+    이걸 빼먹으면 식이섬유가 많은 제품에서 열량이 실제보다 높게 나온다.
+
+    식약처 「영양성분 등록 요령」의 계산식이 괄호 안에서 하는 일이 그것이고,
+    요령은 거기에 **타가토스(1.5) · 알룰로오스(0) · 에리스리톨(0)** 을 따로
+    이름 붙여 둔다. 셋 다 받아 두었다 — 다만 **MyLabel 에는 그 칸이 아직
+    없다.** 당알코올조차 칸이 없어서, 지금 이 셋을 넣어 줄 수 있는 것은
+    값을 직접 만들어 부르는 쪽(성적서 판독·배합 계산)뿐이다. 칸을 만드는 것은
+    마이그레이션이 필요한 별개의 결정이다.
 
     Returns: 열량(float) 또는 None (탄단지 중 하나라도 못 읽으면)
     """
@@ -116,17 +124,17 @@ def calories_from_macros(values):
             return None
         macros[field] = number
 
-    fiber = _number(values.get('dietary_fiber')) or 0.0
-    alcohols = _number(values.get('sugar_alcohols')) or 0.0
+    parts = {field: (_number(values.get(field)) or 0.0)
+             for field in CALORIE_CARB_PARTS}
     # 뺀 값이 음수가 되면 적은 값이 서로 어긋난 것이다. 그대로 두면 열량이
     # 줄어드는 이상한 계산이 되므로 0 에서 멈춘다.
-    rest = max(macros['carbohydrates'] - fiber - alcohols, 0.0)
+    rest = max(macros['carbohydrates'] - sum(parts.values()), 0.0)
 
     total = (rest * CALORIE_FACTORS['carbohydrates']
-             + fiber * CALORIE_FACTORS['dietary_fiber']
-             + alcohols * CALORIE_FACTORS['sugar_alcohols']
              + macros['proteins'] * CALORIE_FACTORS['proteins']
              + macros['fats'] * CALORIE_FACTORS['fats'])
+    for field, amount in parts.items():
+        total += amount * CALORIE_FACTORS[field]
     for field in ('organic_acids', 'alcohol'):
         number = _number(values.get(field))
         if number:

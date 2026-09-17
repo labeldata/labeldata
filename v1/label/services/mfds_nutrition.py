@@ -26,6 +26,7 @@
 """
 import logging
 
+from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
 from v1.label.services.nutrition_calc import _number
 
 logger = logging.getLogger(__name__)
@@ -130,7 +131,8 @@ def _plain_energy(values):
     return float(carb) * 4 + float(protein) * 4 + float(fat) * 9
 
 
-def verify_row(values, basis_amount, basis_unit, mass_tol=10.0, energy_tol=0.15):
+def verify_row(values, basis_amount, basis_unit, mass_tol=10.0,
+               energy_tol=NUTRITION_CALORIE_TOLERANCE):
     """
     이 행이 매핑대로 읽혔는가를 데이터 자신에게 물어본다.
 
@@ -198,6 +200,14 @@ def verify_row(values, basis_amount, basis_unit, mass_tol=10.0, energy_tol=0.15)
     #     둘 중 하나  어긋남 848 (1.41 %)   ← 46 행이 돌아온다
     #
     # 크게 줄지는 않는다. 남은 848 행은 15~25 % 어긋난 **진짜 이상한 행**이다.
+    #
+    # 위 수치는 폭이 15 % 이던 때 잰 것이다. 지금은 식약처 「영양성분 등록
+    # 요령」이 정한 **±20 %** 를 쓴다(NUTRITION_CALORIE_TOLERANCE). 우리가
+    # 규정보다 빡빡하면 **규정이 받아 주는 행을 우리만 어긋났다고 적는다** —
+    # 34 만 건 적재에서 어긋남으로 뽑힌 표본 다섯 중 넷이 김치였고, 그중
+    # '배추김치_가을재배' 는 재계산 30.1 / 표기 37.0 으로 18.6 % 차였다.
+    # 김치가 걸린 이유는 따로 있다: 유기산은 이 DB 에 컬럼 자체가 없어
+    # (NOT_IN_SOURCE) 우리 계산이 구조적으로 낮게 나온다.
     plain = _plain_energy(values)
     fits = abs(calc - energy) <= allowed or (
         plain is not None and abs(plain - energy) <= allowed)
