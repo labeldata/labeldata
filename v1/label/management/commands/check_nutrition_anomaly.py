@@ -54,7 +54,6 @@ class Command(BaseCommand):
 
         found, by_rule, with_names, seen = [], {}, 0, 0
         by_sev = {}       # (규칙, 심각도) -> 건수
-        no_fiber = 0      # C1 중 식이섬유 값이 아예 없던 행
         samples = {}      # 규칙마다 몇 건은 눈으로 봐야 오탐인지 안다
         for chunk in self._chunks(qs.iterator(chunk_size=CHUNK), CHUNK):
             # 원재료는 번호로 한 번에 끌어온다. 행마다 조회하면 32만 번이다.
@@ -75,15 +74,7 @@ class Command(BaseCommand):
                 if do_b and sorted_text:
                     hits += rules.check_top_ingredients(row, sorted_text)
                 if do_c:
-                    energy_hits = rules.check_energy(row)
-                    # **재계산이 높게 나오는 쪽은 대개 식이섬유가 빈 행이다.**
-                    # 우리 계산은 식이섬유를 탄수화물에서 빼고 2 kcal 로 세는데,
-                    # 값이 없으면 그 몫까지 4 kcal 로 센다. 코코아·미숫가루처럼
-                    # 섬유가 많은 식품에서 열량이 구조적으로 높게 나온다 —
-                    # 원본이 부실한 것이지 그 행이 틀린 것이 아니다.
-                    if energy_hits and row.dietary_fiber is None:
-                        no_fiber += 1
-                    hits += energy_hits
+                    hits += rules.check_energy(row)
                 for code, severity, detail in hits:
                     by_rule[code] = by_rule.get(code, 0) + 1
                     by_sev[(code, severity)] = by_sev.get((code, severity), 0) + 1
@@ -123,9 +114,6 @@ class Command(BaseCommand):
             w('  %-4s %d   (%s)' % (code, by_rule[code], split))
             for line in samples.get(code, []):
                 w('        %s' % line)
-        if do_c and by_rule.get('C1'):
-            w('        └ 이 중 식이섬유 값이 아예 없는 행 %d 건 — 우리 계산이 '
-              '구조적으로 높게 나온다' % no_fiber)
         w(self.style.SUCCESS('이상 판정 %d 건' % len(found)))
 
         if dry:

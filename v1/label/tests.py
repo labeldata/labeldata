@@ -21131,10 +21131,6 @@ class 이상_판정_보고가_심각도를_갈라_적는다(TestCase):
         self.assertIn('C1', text)
         self.assertIn('그럴 수 없음 1', text)
 
-    def test_식이섬유가_빈_행을_따로_센다(self):
-        """재계산이 높게 나오는 쪽은 대개 이것이다. 원본이 부실한 것이다."""
-        self.assertIn('식이섬유 값이 아예 없는 행 1 건', self._run(rules='C'))
-
     def test_B_를_안_돌리면_원재료_줄을_찍지_않는다(self):
         self.assertNotIn('원재료를 붙인 행', self._run(rules='C'))
         self.assertIn('원재료를 붙인 행', self._run(rules='B'))
@@ -21176,13 +21172,36 @@ class 허용오차의_분모는_둘_중_큰_쪽이다(TestCase):
             {'calories': 37.0, 'carbohydrates': 5.5, 'proteins': 1.5,
              'fats': 0.3}), [])
 
-    def test_진짜_어긋난_행은_그대로_걸린다(self):
-        """'커피_디카페인 제로슈가' — 표기 1.0 · 재계산 12.5. 에리스리톨이다."""
+    def test_감미료로_설명되는_행은_걸리지_않는다(self):
+        """
+        '커피_디카페인 제로슈가' — 표기 1.0 · 탄수화물을 전부 당으로 세면 12.5.
+        그 탄수화물이 에리스리톨이면 0 kcal 이라 표기 1.0 이 나온다. **낼 수
+        있는 값**이므로 이상이 아니다 — 우리에게 그 칸이 없을 뿐이다.
+        """
         from v1.label.services.nutrition_anomaly import check_energy
 
-        row = {'calories': 1.0, 'carbohydrates': 3.125, 'proteins': 0.0,
-               'fats': 0.0}   # 12.5
-        self.assertEqual([c for c, _, _ in check_energy(row)], ['C1'])
+        self.assertEqual(check_energy(
+            {'calories': 1.0, 'carbohydrates': 3.125, 'proteins': 0.0,
+             'fats': 0.0, 'sugars': 0.0}), [])
+
+    def test_성분이_열량을_설명하지_못하면_걸린다(self):
+        """'명인꿀약과' — 표기 500.0. 탄수화물을 전부 당으로 세도 99.6 이다."""
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        hits = check_energy({'calories': 500.0, 'carbohydrates': 24.9,
+                             'proteins': 0.0, 'fats': 0.0, 'sugars': 0.0})
+        self.assertEqual([c for c, _, _ in hits], ['C1'])
+
+    def test_당류만으로도_넘는_열량은_걸린다(self):
+        """
+        아래쪽 담장이다. 당류는 반드시 4 kcal/g 이라 그 몫은 0 으로 내려갈 수
+        없다 — 당류 50 g 인 행의 열량이 50 kcal 일 수는 없다.
+        """
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        hits = check_energy({'calories': 50.0, 'carbohydrates': 50.0,
+                             'proteins': 0.0, 'fats': 0.0, 'sugars': 50.0})
+        self.assertEqual([c for c, _, _ in hits], ['C2'])
 
     def test_적재_검산도_같은_분모를_쓴다(self):
         from v1.label.services.mfds_nutrition import verify_row

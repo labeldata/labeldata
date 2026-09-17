@@ -13,7 +13,7 @@
   A. 성분끼리의 모순   원재료가 없어도 성립한다. 당류가 탄수화물보다 많을
                        수는 없다 — 부분집합이기 때문이다. 오탐이 거의 없다.
   B. 상위 원료와 0     설탕이 1순위인데 당류가 0 이면 둘 중 하나는 틀렸다.
-  C. 열량과 성분       탄단지로 센 열량이 표기와 ±20 % 안에 드는가.
+  C. 열량과 성분       성분으로 **낼 수 있는 범위** 안에 열량이 있는가.
 
 **"틀렸다" 가 아니라 "봐야 한다" 다.** 원본이 부실한 것일 수도, 우리 매핑이
 밀린 것일 수도 있다. `mfds_nutrition.verify_row` 가 같은 교훈을 적어 두었다 —
@@ -24,6 +24,8 @@
 순서는 알아도 **비율은 모른다.** "설탕 1순위인데 당류 5 g" 은 못 잡는다
 (빵류는 실제로 그럴 수 있다). 잡는 것은 0 에 가까운 극단뿐이다.
 """
+
+from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
 
 # 재는 여유. 소수 둘째 자리 반올림과 원본의 자릿수 차이를 이것으로 흡수한다.
 # 좁게 잡으면 멀쩡한 행이 걸린다.
@@ -326,16 +328,16 @@ def _allowed(calc, stated, ratio):
     이 모듈이 처음부터 적어 둔 그 원칙이다 — 좁게 잡으면 멀쩡한 행이 무더기로
     걸리고, 그러면 목록 자체를 아무도 안 본다.
 
+    지금은 이 여유가 **범위의 바깥쪽에만** 쓰인다(check_energy). 안쪽은
+    범위 자체가 감당한다 — 허용오차를 쓴 제품은 애초에 상한보다 낮다.
+
     5 kcal 바닥은 남긴다. 그 아래에서는 비율로 재면 반올림도 크게 보인다.
     """
     return max(max(calc, stated) * ratio, 5.0)
 
 
 def check_energy(row):
-    """열량이 탄단지와 맞는가. [(규칙, 심각도, 설명)]"""
-    from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
-    from v1.label.services.nutrition_calc import calories_from_macros
-
+    """열량이 성분으로 낼 수 있는 범위 안에 있는가. [(규칙, 심각도, 설명)]"""
     energy = _get(row, 'calories')
     if energy is None or energy <= 0:
         return []
@@ -346,27 +348,34 @@ def check_energy(row):
         if value is None:
             return []       # 셋 중 하나라도 없으면 잴 수 없다
         values[field] = value
-    for field in ('dietary_fiber', 'sugar_alcohols'):
-        value = _get(row, field)
-        if value is not None:
-            values[field] = value
 
-    calc = calories_from_macros(values)
-    if calc is None:
-        return []
+    carb = values['carbohydrates']
+    base = values['proteins'] * 4 + values['fats'] * 9
 
-    # **원본이 두 규칙을 섞어 쓴다.** verify_row 가 6 만 행으로 재 보고 알아낸
-    # 것이고 여기서도 그대로다 — 규정 계수(식이섬유 2.0 · 당알콜 2.4)로 만든
-    # 행과 단순 4·4·9 로 만든 행이 섞여 있다. 한 규칙으로만 재면 다른 규칙으로
-    # 만든 행이 억울하게 걸린다. 그래서 **가까운 쪽으로 잰다.**
-    plain = (values['carbohydrates'] * 4 + values['proteins'] * 4
-             + values['fats'] * 9)
-    gap, base = min(((abs(calc - energy), calc), (abs(plain - energy), plain)))
+    # 탄수화물 1 g 이 낼 수 있는 열량은 **0 에서 4 사이**다. 전분·당류는 4,
+    # 식이섬유 2, 당알콜 2.4, 타가토스 1.5, 알룰로오스·에리스리톨 0.
+    # 어느 몫이 무엇인지는 이 DB 가 말해 주지 않는다(컬럼이 없다).
+    upper = carb * 4 + base
 
-    if gap <= _allowed(base, energy, NUTRITION_CALORIE_TOLERANCE):
-        return []
+    # 다만 **당류만은 반드시 4 다.** 그 몫은 0 으로 내려갈 수 없으므로,
+    # 나머지 탄수화물이 전부 에리스리톨이라 쳐도 이보다 낮아질 수 없다.
+    sugars = _get(row, 'sugars')
+    lower = (min(sugars, carb) if sugars is not None else 0.0) * 4 + base
 
-    return [('C1',
-             HIGH if gap >= _allowed(base, energy, ENERGY_HIGH_RATIO) else WATCH,
-             '열량이 성분과 맞지 않는다 (표기 %.1f · 재계산 %.1f)'
-             % (energy, calc))]
+    if energy > upper + _allowed(upper, energy, NUTRITION_CALORIE_TOLERANCE):
+        gap = energy - upper
+        return [('C1',
+                 HIGH if gap >= _allowed(upper, energy, ENERGY_HIGH_RATIO)
+                 else WATCH,
+                 '성분이 이 열량을 설명하지 못한다 (표기 %.1f · 탄단지를 전부 '
+                 '당·전분으로 세도 %.1f)' % (energy, upper))]
+
+    if energy < lower - _allowed(lower, energy, NUTRITION_CALORIE_TOLERANCE):
+        gap = lower - energy
+        return [('C2',
+                 HIGH if gap >= _allowed(lower, energy, ENERGY_HIGH_RATIO)
+                 else WATCH,
+                 '당류·단백질·지방만으로도 이보다 높다 (표기 %.1f · 최소 %.1f)'
+                 % (energy, lower))]
+
+    return []
