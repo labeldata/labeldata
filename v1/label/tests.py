@@ -6266,10 +6266,13 @@ class OcrNutritionBasisTests(TestCase):
         from django.conf import settings as dj
 
         source = (Path(dj.BASE_DIR) / 'products/views.py').read_text(encoding='utf-8')
-        head = source.index('basis_value, basis_unit = parse_nutrition_basis')
-        block = source[head:head + 1400]
-        self.assertIn('basis_is_total(basis_text)', block)
+        # 기준을 정하는 자리가 `parse_nutrition_basis` 한 줄에서
+        # `resolve_basis` 로 옮겨 갔다. 잠그려는 것은 그 이름이 아니라
+        # **총 내용량당이면 포장개수를 1 로 되돌린다** 는 규칙이다.
+        head = source.index('if basis_is_total(basis_text):')
+        block = source[head:head + 400]
         self.assertIn("label.units_per_package = '1'", block)
+        self.assertIn("fields.append('units_per_package')", block)
 
 
 class AllergenNameTests(TestCase):
@@ -10465,11 +10468,13 @@ class 설정을_성격별로_묶는다(TestCase):
     def test_긴_설명은_물음표에_둔다(self):
         """안내가 길면 표가 밀려나고 아무도 안 읽는다."""
         self.assertIn('class="cfg-why"', self.editor)
+        # 짧은 설명은 **그 칸의 title** 에 붙는다. 화면에 늘어놓으면 표가
+        # 밀려나고, 그러면 정작 아무도 안 읽는다.
+        self.assertIn('title="켜면 적용값이 표와 저장에 쓰입니다', self.editor)
+        # 긴 규정 설명은 묶음 이름 옆 물음표에만 둔다
         head = self.editor.index('function refreshApplied')
-        block = self.editor[head:head + 1800]
-        self.assertIn('표와 저장에 적용값', block)
-        # 긴 규정 설명은 화면에 늘어놓지 않는다
-        self.assertNotIn('트랜스지방·콜레스테롤·나트륨만 올리고', block)
+        self.assertNotIn('트랜스지방·콜레스테롤·나트륨만 올리고',
+                         self.editor[head:head + 1800])
 
 
 class UncheckedCauseTests(TestCase):
@@ -16243,7 +16248,12 @@ class 두_묶음은_위아래로_쌓는다(TestCase):
         그보다 좁아지면 규칙이 통째로 사라져 칸들이 겹쳐 보였다. 폭을 나눠
         쓰지 않으니 조건도 필요 없다 — 늘 한 줄이다.
         """
-        css = self.css()
+        import re
+
+        # **주석은 세지 않는다.** 왜 걷어냈는지를 그 자리에 적어 두는 것이
+        # 이 저장소의 방식이라 옛 규칙 이름이 주석에 남는다 — 그것까지
+        # 잡으면 설명을 적을수록 시험이 우는 꼴이 된다.
+        css = re.sub(r'/\*.*?\*/', '', self.css(), flags=re.S)
         self.assertNotIn('@container (min-width: 760px)', css)
 
 

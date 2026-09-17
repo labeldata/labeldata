@@ -452,6 +452,13 @@ class OcrNutritionBasisApplyTests(TestCase):
 
     def test_미리보기가_기준을_모르면_그렇다고_말한다(self):
         """숫자를 비워 두면 '바뀌는 게 없다' 로 읽힌다. 무엇이 막혔는지 적는다."""
+        # **저장된 내용량도 비운다.** 화면이 빈 값을 보내도 저장된 값이
+        # 있으면 그것으로 받쳐 준다(views 의 `weight_text or label.content_weight`).
+        # 그래서 둘 다 비어야 정말 "기준을 모르는" 상태가 된다 — 바로 위
+        # 분리배출 시험도 같은 자리를 비우고 시작한다.
+        self.label.content_weight = ''
+        self.label.save(update_fields=['content_weight'])
+
         res = self._apply(preview=True, nutrition=self.ROWS,
                           nutrition_basis='총 내용량당', content_weight='')
         body = res.json()

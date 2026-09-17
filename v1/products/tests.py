@@ -6047,7 +6047,14 @@ class 성적서는_어디서_넣느냐에_따라_다른_곳에_붙는다(TestCas
         block = src[src.index('def document_spec_nutrition_save'):]
         block = block[:block.index('def ingredient_spec_nutrition')]
         self.assertIn('계산을 거치지 않는다', block)
-        self.assertNotIn('nutrition_calc', block)
+
+        # **주석과 설명문은 세지 않는다.** 옛 계산값을 치운다는 사실을
+        # 적어 두느라 그 이름이 글에 나온다 — 부르는 것과 말하는 것은
+        # 다르다.
+        import re
+        code = re.sub(r'""".*?"""', '', block, flags=re.S)
+        code = re.sub(r'(?m)#.*$', '', code)
+        self.assertNotIn('nutrition_calc', code)
 
     # ── 원료 쪽 ────────────────────────────────────────────────────────
     def test_원료_성적서는_파일을_남기지_않는다(self):
