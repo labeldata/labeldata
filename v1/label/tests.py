@@ -20576,6 +20576,22 @@ class NutritionAnomalyRuleTests(TestCase):
         self.assertIn('A1', self.check(sugars=12.0, carbohydrates=8.0))
         self.assertNotIn('A1', self.check(sugars=8.0, carbohydrates=12.0))
 
+    def test_어긋난_폭이_작으면_봐야_함으로_내린다(self):
+        """
+        갈비탕의 식이섬유 1.9 > 탄수화물 0.4 는 물리적으로 불가능하지만,
+        그 표를 그대로 써도 표시가 크게 틀어지지는 않는다. 같은 무게로
+        세우면 **진짜 큰 어긋남**(당류 104 > 탄수화물 7)이 그 안에 묻힌다.
+        """
+        from v1.label.services import nutrition_anomaly as rules
+
+        small = rules.check_internal({'basis_amount': 100.0, 'basis_unit': 'g',
+                                      'dietary_fiber': 1.9, 'carbohydrates': 0.4})
+        self.assertEqual([sev for _c, sev, _w in small], ['watch'])
+
+        big = rules.check_internal({'basis_amount': 100.0, 'basis_unit': 'g',
+                                    'sugars': 104.47, 'carbohydrates': 7.32})
+        self.assertIn('high', [sev for _c, sev, _w in big])
+
     def test_반올림_차이는_봐주고_넘긴다(self):
         # 폭을 좁게 잡으면 멀쩡한 행이 무더기로 걸린다(verify_row 의 교훈).
         self.assertEqual(self.check(sugars=8.3, carbohydrates=8.0), [])
@@ -20646,6 +20662,21 @@ class NutritionTopIngredientRuleTests(TestCase):
         self.assertTrue(self.check('정제소금, 밀가루', natriums=30.0))
         self.assertEqual(self.check('정제소금, 밀가루', natriums=800.0), [])
 
+    def test_소금은_1순위일_때만_본다(self):
+        """
+        다른 원료와 다르다. 설탕·유지·곡분은 앞자리면 상당량이지만, 소금은
+        2순위여도 0.1 % 인 일이 흔하다 — 곡물 하나에 미량 첨가물 여럿인
+        뻥튀기가 그렇다. 가짓수를 다섯으로 올려도 그 구조는 그대로라 832 건이
+        남았고, 표본은 전부 나트륨 38~62 mg 인 뻥튀기였다(정상이다).
+        """
+        stays = self.check('쌀, 천일염, 효소처리스테비아, 정제수, 산화칼슘, 산화아연',
+                           natriums=62.0)
+        self.assertEqual(stays, [])
+
+        hits = self.check('천일염, 향신료, 효모추출물, 포도당, 마늘분말',
+                          natriums=62.0)
+        self.assertEqual([c for c, _s, _w in hits], ['B3'])
+
     def test_괄호_안은_하위_원료라_뗀다(self):
         from v1.label.services.nutrition_anomaly import top_ingredients
 
@@ -20661,17 +20692,18 @@ class NutritionTopIngredientRuleTests(TestCase):
         천일염이 2순위여도 실제로는 0.1 % 일 수 있다 — 나트륨 10 mg 이
         정상인 것이다. 운영에서 B3(소금) 1,877 건의 상당수가 그런 행이었다.
         """
-        few = self.check('곡류가공품, 천일염, 사카린나트륨', natriums=10.0)
+        # 소금은 아예 1순위만 보므로(아래 시험) 설탕으로 잰다.
+        few = self.check('곡류가공품, 설탕, 팽창제', sugars=0.0)
         self.assertEqual(few, [])
 
-        many = self.check('밀가루, 천일염, 설탕, 팜유, 유청분말, 향료',
-                          natriums=10.0)
-        self.assertEqual([c for c, _s, _w in many], ['B3'])
+        many = self.check('계란흰자, 설탕, 아몬드분말, 버터, 정제수, 잼',
+                          sugars=0.0)
+        self.assertEqual([c for c, _s, _w in many], ['B1'])
 
     def test_1순위는_가짓수와_상관없이_본다(self):
         # 제일 많이 쓴 것이므로.
-        hits = self.check('천일염, 곡류가공품', natriums=10.0)
-        self.assertEqual([c for c, _s, _w in hits], ['B3'])
+        hits = self.check('설탕, 곡류가공품', sugars=0.0)
+        self.assertEqual([c for c, _s, _w in hits], ['B1'])
 
     def test_원물로_기름을_짜면_탄수화물은_0_이_맞다(self):
         # "딱한번만짜서만든옥수수유" 가 '옥수수' 부분 일치로 걸렸다.
