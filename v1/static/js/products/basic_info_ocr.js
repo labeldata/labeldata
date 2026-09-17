@@ -1568,18 +1568,44 @@
     if (!nutrition.length && !markText) return;
 
     var basisEl = document.getElementById('ocrNutritionBasis');
+
+    /* 내용량을 **함께 보낸다.**
+
+       영양정보 표는 기준("총 내용량당")과 그 양("총 내용량 90 g")을 다른 줄에
+       적는다. 판독이 열 머리만 집어 오면 양을 모르는데, 그 양은 내용량 칸에
+       이미 있다.
+
+       그런데 서버의 내용량은 아직 **판독 전 값**이다 — applySelected 는 폼만
+       채우고 저장은 사용자가 한다("저장해야 검증에 반영됩니다"). 서버에서
+       label.content_weight 를 읽으면 낡은 값으로 환산하게 되고, 그건 지금
+       고치려는 버그와 같은 종류다. 그래서 화면이 방금 채운 값을 보낸다. */
+    var weightEl = document.getElementById('field-content-weight');
+
     fetch('/products/labels/' + labelId() + '/ocr-extras/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
       body: JSON.stringify({
         nutrition: nutrition,
         nutrition_basis: basisEl ? basisEl.value : '',
+        content_weight: weightEl ? (weightEl.value || '').trim() : '',
         recycling_mark_text: markText
       })
     })
       .then(function (res) { return res.json(); })
       .then(function (r) {
         if (!r.success) return;
+        /* 기준량을 몰라 영양성분을 건너뛴 경우. **조용히 넘어가면 안 된다** —
+           사용자는 값이 들어간 줄 알고 넘어가고, 나중에 검증에서 "열량이 맞지
+           않습니다" 만 본다. 무엇을 어떻게 고쳐야 하는지 여기서 말한다. */
+        if (r.nutrition_basis_unknown) {
+          status(r.nutrition_basis_warning || '표의 기준량을 읽지 못했습니다.');
+          var basisInput = document.getElementById('ocrNutritionBasis');
+          if (basisInput) {
+            basisInput.focus();
+            if (basisInput.select) basisInput.select();
+          }
+          return;
+        }
         var parts = [];
         if (r.nutrition_applied) parts.push('영양성분 ' + r.nutrition_applied + '개');
         if (r.recycling_applied) {

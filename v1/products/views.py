@@ -7293,8 +7293,8 @@ def ocr_apply_extras(request, label_id):
     항목을 빈 값으로 덮으므로 여기서 쓸 수 없다 - 사진에 없던 성분이 지워진다.
     """
     from v1.label.services.ocr_apply import (
-        apply_nutrition, apply_recycling_mark, basis_is_total, basis_kind,
-        parse_nutrition_basis, to_per_100,
+        apply_nutrition, apply_recycling_mark, basis_blocks_apply,
+        basis_is_total, resolve_basis, to_per_100,
     )
 
     label = _resolve_editable_label(request, label_id)
@@ -7311,10 +7311,47 @@ def ocr_apply_extras(request, label_id):
     # 바뀌는데 분자는 인쇄값 그대로라, 화면이 318 kcal 를 275 로 바꿔 보여 주고
     # 검증은 "열량이 맞지 않습니다" 라고 했다. 사진에도 라벨에도 318 인데도.
     basis_text = payload.get('nutrition_basis')
-    basis_value, basis_unit = parse_nutrition_basis(basis_text)
-    kind = basis_kind(basis_text)
+    # 기준은 열 머리("총 내용량당")에, 그 양은 표 머리("총 내용량 90 g")에
+    # 따로 적힌다. 판독이 열 머리만 집어 오면 기준은 알고 양은 모르는 상태가
+    # 되는데, 그때 양은 내용량 칸에 이미 있다 — resolve_basis 가 거기까지 본다.
+    #
+    # 내용량은 **화면이 보낸 것을 먼저** 본다. 저장된 값은 아직 판독 전이다 —
+    # 화면은 폼만 채우고 저장은 사용자가 누른다(basic_info_ocr.applySelected
+    # 의 "저장해야 검증에 반영됩니다"). 저장된 값으로 환산하면 낡은 총량으로
+    # 나누게 되고, 그건 지금 고치려는 버그와 같은 종류다.
+    weight_text = (payload.get('content_weight') or '').strip()
+    kind, basis_value, basis_unit = resolve_basis(
+        basis_text, weight_text or getattr(label, 'content_weight', ''))
 
     nutrition = payload.get('nutrition') or []
+
+    # **환산할 수 없으면 값을 쓰지 않는다.**
+    #
+    # 예전에는 기준을 못 읽어도 인쇄된 숫자를 그대로 넣었다. 저장 칸은 언제나
+    # 100 g 당인데 인쇄된 표는 총 내용량당이라, 넣는 순간 뜻이 달라진다.
+    # 게다가 아래에서 basic_display_type 은 따로 세워졌으므로 표를 그릴 때
+    # `값 x 총량/100` 이 한 번 더 걸렸다 — 실제로 이렇게 났다.
+    #
+    #     인쇄:  총 내용량 90 g · 317 kcal
+    #     저장:  317 (환산 안 됨) + 기준 '총 내용량당'
+    #     표시:  317 x 90/100 = 285 kcal      <- 인쇄와 다르다
+    #
+    # 터지지 않으니 아무도 모르고, 검증만 "열량이 맞지 않습니다" 라고 운다.
+    # 성적서 판독(spec_nutrition.to_per_100)은 이미 같은 자리에서 "기준량을
+    # 모르면 손대지 않는다" 로 정해 두었다. 두 판독이 같은 규칙을 따른다.
+    #
+    # **되돌아가지 않고 영양성분만 건너뛴다.** 여기서 응답을 내 버리면 같은
+    # 요청에 실려 온 분리배출까지 함께 버려진다 — 서로 상관없는 두 가지다.
+    blocked = basis_blocks_apply(kind, basis_value)
+    basis_warning = ''
+    if nutrition and blocked:
+        basis_warning = (
+            '표의 기준량을 읽지 못해 영양성분은 넣지 않았습니다. '
+            '저장 칸은 100 g(mL) 당인데 인쇄된 표가 무엇 당인지 모르면 '
+            '숫자의 뜻이 달라집니다. '
+            '기준 칸에 "총 내용량 90 g" 처럼 **양까지** 적고 다시 눌러 주세요.')
+        nutrition = []
+
     applied = apply_nutrition(label, to_per_100(nutrition, basis_value))
 
     fields = []
@@ -7323,7 +7360,11 @@ def ocr_apply_extras(request, label_id):
     # 그대로 두면, 표를 다시 그릴 때 인쇄된 값과 다른 숫자가 나온다 - 저장값에
     # 표시기준의 배수를 곱해 그리기 때문이다("100 g당" 표를 총량당으로 그리면
     # 총량이 500 g 일 때 다섯 배가 된다). 사진에서 읽은 기준을 그대로 쓴다.
-    if kind:
+    #
+    # **환산이 실제로 된 때만 적는다.** 값은 인쇄된 그대로 두고 기준만
+    # '총 내용량당' 이라고 적어 두면, 표를 그릴 때 총량/100 이 한 번 더 걸려
+    # 인쇄된 표보다 작은 숫자가 나온다. 둘은 한 몸이라 따로 세우면 안 된다.
+    if kind and not blocked:
         label.basic_display_type = '100g' if kind == 'per_100' else kind
         fields.append('basic_display_type')
 
@@ -7363,6 +7404,11 @@ def ocr_apply_extras(request, label_id):
         'nutrition_applied': len([f for f in applied if not f.endswith('_unit')]),
         'recycling_applied': bool(marked),
         'recycling_type': mark_type,
+        # 기준을 몰라 영양성분을 건너뛰었으면 그 사실을 화면이 말해야 한다.
+        # 조용히 0 개를 넣으면 사용자는 판독이 안 된 줄 안다.
+        'nutrition_basis_unknown': bool(basis_warning),
+        'nutrition_basis_warning': basis_warning,
+        'basis_kind': kind,
     })
 
 

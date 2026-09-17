@@ -296,6 +296,81 @@ def parse_nutrition_basis(text):
     return m.group(1).replace(',', ''), _UNIT_FORM.get(m.group(2).lower(), m.group(2))
 
 
+def resolve_basis(basis_text, content_weight=None):
+    """
+    표의 기준과 **그 양**을 함께 정한다. (kind, amount, unit).
+
+    Returns
+        kind    'per_100' / 'total' / 'unit', 모르면 ''
+        amount  환산에 쓸 기준량(문자열). 정하지 못하면 None
+        unit    'g' / 'mL' …, 모르면 ''
+
+    왜 따로 두는가 — **기준을 알면서 양을 모르는 일이 흔하다**
+    ────────────────────────────────────────────────────────
+    영양정보 표는 그 둘을 **다른 줄에** 적는다.
+
+        영양정보      총 내용량 90 g      <- 양은 여기
+        총 내용량당   1일 영양성분 …       <- 기준은 여기
+
+    판독이 열 머리만 집어 "총 내용량당" 을 기준으로 주면 `basis_kind` 는
+    'total' 을 내는데 `parse_nutrition_basis` 는 붙은 숫자가 없어 None 을
+    낸다. **둘이 갈리는 그 순간이 위험하다** — 기준은 '총 내용량당' 이라고
+    적어 놓고 값은 환산하지 않으면, 표를 그릴 때 `값 x 총량/100` 이 한 번 더
+    걸려 인쇄된 표보다 작은 숫자가 나온다.
+
+        인쇄:  총 내용량 90 g · 317 kcal
+        저장:  317 (환산 안 됨)  +  기준 '총 내용량당'
+        표시:  317 x 90/100 = 285 kcal      <- 인쇄와 다르다
+
+    그래서 양을 한 번 더 찾아본다. 기준이 총 내용량이면 그 양은 **내용량
+    칸에 이미 있다** — 같은 판독이 읽어 둔 값이다.
+
+    내용량에서 가져오는 것은 **총 내용량일 때뿐이다.** '1회 제공량당' 표의
+    1회량은 내용량과 아무 관계가 없다(90 g 봉지의 1회 제공량이 30 g 일 수
+    있다). 모르면 모르는 채로 둔다.
+    """
+    text = (basis_text or '').strip()
+    kind = basis_kind(text)
+    amount, unit = parse_nutrition_basis(text)
+
+    if amount is None and kind == 'total' and content_weight:
+        m = _AMOUNT.search(str(content_weight))
+        if m:
+            amount = m.group(1).replace(',', '')
+            unit = _UNIT_FORM.get(m.group(2).lower(), m.group(2))
+
+    return kind, amount, unit
+
+
+def basis_blocks_apply(kind, amount):
+    """
+    이 기준으로는 값을 **넣으면 안 되는가**.
+
+    막는 것은 한 가지뿐이다 — **100 g 당이 아닌 줄 알면서 그 양을 모를 때.**
+
+        'total' / 'unit' + 양 모름   ->  막는다
+        'total' / 'unit' + 양 앎     ->  환산해서 넣는다
+        'per_100'                    ->  바꿀 것이 없다
+        ''(기준을 아예 못 읽음)       ->  막지 않는다
+
+    **마지막 줄을 넓히고 싶은 유혹을 참는다.** 기준을 아예 못 읽었을 때도
+    인쇄된 표가 100 g 당이 아닐 수 있으니 막는 편이 안전해 보인다. 그런데
+    그건 이 경로의 오래된 계약이고(`nutrition_basis` 없이 부르는 길이 있다),
+    넓히면 기준을 한 번도 안 적어 온 사용자의 판독이 통째로 막힌다. 여기서
+    잡으려는 것은 **둘이 어긋나는 자리**이지 "모르는 것 전부" 가 아니다.
+
+    어긋나는 자리가 왜 위험한가: 양을 몰라 환산은 건너뛰면서 기준만
+    '총 내용량당' 으로 세워지면, 표를 그릴 때 총량/100 이 **한 번 더** 걸린다.
+    317 kcal 로 인쇄된 표가 285 로 그려진다.
+    """
+    if kind not in ('total', 'unit'):
+        return False
+    try:
+        return not (float(amount) > 0)
+    except (TypeError, ValueError):
+        return True
+
+
 # ── 사진값에서 화면 버튼 상태를 유도한다 ────────────────────────────────────
 #
 # 기본정보 탭에는 글자 칸 말고도 **눌러서 고르는 것**이 셋 있다.

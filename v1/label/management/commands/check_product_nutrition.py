@@ -18,7 +18,7 @@ IMPROVEMENT_PLAN 7-0 에 전례가 있다. **개발 DB 를 재고 실서버라�
 ───────
   ① 적재본 쪽    얼마나 쌓여 있고 그중 번호가 있는 것이 몇인가
   ② 번호의 생김새 두 표가 번호를 같은 모양으로 적고 있는가 (자릿수 분포)
-  ③ 도달률       **적재본 → 제품 조회 방향으로** 전수로 센다
+  ③ 도달률       **적재본 → 제품 조회 방향으로** 전수로 센다 (+ 안 붙은 번호의 생김새)
   ④ 중복도       한 번호에 행이 여럿인가 (고르는 규칙이 필요한가)
   ⑤ 쓸 만한가    기준 단위(g·mL) · 표시 필수 아홉 충족률 · 검산 분포
 
@@ -38,6 +38,7 @@ IMPROVEMENT_PLAN 7-0 에 전례가 있다. **개발 DB 를 재고 실서버라�
 """
 from django.core.management.base import BaseCommand
 from django.db.models import Count, Q
+from django.db.models.functions import Length
 
 from v1.label.models import FoodItem, PublicFoodNutrition
 from v1.label.services import product_nutrition
@@ -86,10 +87,20 @@ class Command(BaseCommand):
         # 도달률이 0 에 가까우면 원인은 둘 중 하나다. **자릿수 분포를 나란히
         # 놓으면 눈으로 갈린다** — 한쪽이 13 자리인데 다른 쪽이 14 자리면
         # 아무리 많이 쌓여 있어도 영영 안 만난다.
-        self._shape('   적재본 ', product_nutrition.matching_report_nos()
-                    .values_list('item_report_no', flat=True)[:20000])
-        self._shape('   제품조회', FoodItem.objects
-                    .values_list('prdlst_report_no', flat=True)[:20000])
+        #
+        # 예전에는 앞 20,000 건만 잘라 세었다. **정렬 없는 LIMIT 은 표본이
+        # 아니다** — MySQL 이 PK 차례(사전순)로 돌려주니 '1' 로 시작하는 번호에
+        # 통째로 쏠린다. 그 표본으로는 적재본이 14자리 59 %, 제품 조회가
+        # 13자리 41 % 로 찍혔는데, 어느 쪽도 실제 분포가 아니다.
+        #
+        # 그래서 자릿수로 묶어 **전수로** 센다. FoodItem 184 만 행을 한 번
+        # 훑지만 읽는 칸이 번호 하나뿐이라(prdlst_report_no 는 PK,
+        # item_report_no 에는 인덱스가 있다) 돌아오는 것은 줄 네댓 개다.
+        # 하루에 한 번 사람이 눈으로 보려고 돌리는 진단 명령이라 몇 초는
+        # 치러도 된다 — 틀린 분포보다 느린 분포가 낫다.
+        self._shape('   적재본 ',
+                    product_nutrition.matching_report_nos(), 'item_report_no')
+        self._shape('   제품조회', FoodItem.objects.all(), 'prdlst_report_no')
 
         w('')
         w('③ 도달률 — 적재본에서 제품 조회 쪽으로 센다')
@@ -120,6 +131,22 @@ class Command(BaseCommand):
         w('   → 목록에서 뱃지가 뜨는 제품 %s / %s 건 (%.2f%%)'
           % (f'{len(matched):,}', f'{food_total:,}',
              len(matched) / food_total * 100 if food_total else 0))
+
+        # **남은 기회가 어디 있나.** 26,577 개는 적재본에 있는데 제품 조회에
+        # 없다. 안 붙은 것들의 자릿수가 붙은 쪽과 같으면 그냥 FoodItem 에 없는
+        # 품목이라 여기서 할 일이 없고, 다르면 번호 체계가 갈린 것이라 고칠
+        # 여지가 있다. 둘은 대책이 전혀 다르므로 합계 하나로는 못 가른다.
+        #
+        # keys 와 matched 가 이미 메모리에 있어 차집합이면 된다 — 질의를 더
+        # 던지지 않는다.
+        unmatched = {}
+        for key in keys:
+            if key not in matched:
+                unmatched[len(key)] = unmatched.get(len(key), 0) + 1
+        gap = sum(unmatched.values())
+        if gap:
+            w('   → 안 붙은 번호 %s 개의 생김새 %s'
+              % (f'{gap:,}', self._dist(unmatched, gap)))
 
         if not matched:
             w(self.style.WARNING(
@@ -162,16 +189,22 @@ class Command(BaseCommand):
             n = sum(1 for r in rows if r.basis_unit == unit)
             w('   %-12s %6s (%5.1f%%)' % (label, f'{n:,}', n / len(rows) * 100))
 
+        # **반올림이 화살표와 싸우면 안 된다.** 나트륨은 197,771/197,824 =
+        # 99.973 % 라 %.1f 로는 100.0 % 로 찍혔다. 화살표는 붙었는데 숫자는 꽉
+        # 차 보이니 읽는 사람이 모순을 본다 — 그래서 빈 칸이 있는 줄만 소수
+        # 둘째 자리까지 내리고 **모자란 개수**를 함께 적는다. 53 건이면 53 건이
+        # 보이는 편이 99.97 % 보다 빠르다. '100.0' 과 '99.97' 은 둘 다 다섯
+        # 자리라 칸은 그대로 선다.
         full = sum(1 for r in rows
                    if all(getattr(r, f, None) is not None for f in REQUIRED))
-        w('   표시 필수 아홉이 모두 있는 행 %s (%.1f%%)'
-          % (f'{full:,}', full / len(rows) * 100))
+        w('   표시 필수 아홉이 모두 있는 행 %s%s'
+          % (f'{full:,}', self._share(full, len(rows))))
 
         for field in REQUIRED:
             n = sum(1 for r in rows if getattr(r, field, None) is not None)
-            flag = '' if n == len(rows) else '  ←'
-            w('      %-16s %6s (%5.1f%%)%s'
-              % (field, f'{n:,}', n / len(rows) * 100, flag))
+            # 화살표는 _share 가 붙인다. 여기서 또 붙이면 '← 53건 빔  ←' 가 된다.
+            w('      %-16s %6s%s'
+              % (field, f'{n:,}', self._share(n, len(rows))))
 
         w('')
         verified = sum(1 for r in rows
@@ -180,28 +213,69 @@ class Command(BaseCommand):
           % (f'{verified:,}', verified / len(rows) * 100))
         w('─' * 66)
 
-    def _shape(self, tag, values):
+    def _shape(self, tag, qs, field):
         """
-        번호의 자릿수 분포와 표본 몇 개. **두 표를 나란히 찍는 것이 목적이다.**
+        번호의 자릿수 분포. **두 표를 나란히 찍는 것이 목적이다.**
 
         "안 붙는다" 는 증상 하나에 까닭이 둘이다 — 정말 값이 없거나, 두 표가
         번호를 다른 모양으로 적고 있거나. 자릿수를 세면 그 자리에서 갈린다.
+
+        세는 일은 DB 에 맡긴다. 파이썬으로 돌려받아 세려면 두 표에서 216 만
+        줄을 끌어와야 하고, 그래서 예전에는 앞 20,000 건만 잘라 세다가 PK
+        차례에 쏠린 분포를 찍었다. GROUP BY 는 번호 칸 하나만 읽고 돌려주는
+        것은 자릿수별 줄 몇 개뿐이다.
+
+        파이썬 len(strip()) 과 달리 SQL 의 CHAR_LENGTH 는 공백을 세지만, 공백이
+        섞인 번호는 normalize() 가 조인 전에 어차피 버린다 — ② 는 원본이 어떤
+        모양으로 적혀 있는지를 보는 자리라 원본 그대로 세는 편이 맞다.
         """
-        lengths = {}
-        samples = []
-        n = 0
-        for raw in values:
-            text = (raw or '').strip()
-            n += 1
-            lengths[len(text)] = lengths.get(len(text), 0) + 1
-            if len(samples) < 3:
-                samples.append(text)
-        if not n:
+        rows = (qs.order_by()
+                .annotate(n=Length(field))
+                .values('n')
+                .annotate(c=Count('pk'))
+                .order_by('-c'))
+        lengths = {row['n']: row['c'] for row in rows}
+        total = sum(lengths.values())
+        if not total:
             self.stdout.write('%s (비어 있다)' % tag)
             return
+
+        # 예시는 분포와 상관없이 **맨 앞 3 건**이다. 하이픈·공백·문자가 섞여
+        # 있는지를 눈으로 보는 용도라 그것으로 족하지만, 대표하는 값으로 읽히면
+        # 위의 분포와 어긋나 보인다. 그래서 이름표에 적어 둔다.
+        samples = [(raw or '').strip()
+                   for raw in qs.order_by().values_list(field, flat=True)[:3]]
+        # **센 줄 수를 함께 적는다.** 이 GROUP BY 가 자릿수가 아니라 번호로
+        # 묶이면(values/annotate 를 잘못 엮으면 그렇게 된다) 분포는 그럴듯한데
+        # 합이 ①·③ 의 건수와 어긋난다. 비율만 찍으면 그 어긋남이 안 보인다 —
+        # 합계를 옆에 적어 두면 읽는 사람이 대조할 것도 없이 바로 드러난다.
+        self.stdout.write('%s %s개 · %s   예(맨 앞 3건): %s'
+                          % (tag, f'{total:,}', self._dist(lengths, total),
+                             ', '.join(samples)))
+
+    def _dist(self, lengths, total):
+        """
+        {자릿수: 개수} 를 '14자리 59% · 13자리 26%' 한 줄로.
+
+        많은 것부터 넷까지만 적는다 — 꼬리는 1 % 미만이라 줄만 길어진다.
+        자릿수가 None 인 칸(NULL)은 '?' 로 적는다. 숨기면 합이 안 맞는다.
+        """
         top = sorted(lengths.items(), key=lambda kv: -kv[1])[:4]
-        dist = ' · '.join('%d자리 %.0f%%' % (ln, c / n * 100) for ln, c in top)
-        self.stdout.write('%s %s   예: %s' % (tag, dist, ', '.join(samples)))
+        return ' · '.join(
+            '%s자리 %.0f%%' % ('?' if ln is None else ln, c / total * 100)
+            for ln, c in top)
+
+    def _share(self, n, total):
+        """
+        ' (99.97%)  ← 53건 빔' 또는 ' (100.0%)'.
+
+        꽉 찬 줄은 지금처럼 짧게 둔다 — 아홉 줄 중 여섯이 100 % 인데 전부
+        '(100.00%)  ← 0건 빔' 으로 늘어놓으면 모자란 줄이 묻힌다.
+        """
+        share = n / total * 100 if total else 0
+        if n == total:
+            return ' (%5.1f%%)' % share
+        return ' (%5.2f%%)  ← %s건 빔' % (share, f'{total - n:,}')
 
     def _existing_food_items(self, keys, size=5000):
         """
