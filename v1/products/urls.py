@@ -159,6 +159,9 @@ urlpatterns = [
     path('labels/<int:label_id>/lookup/relink/', views.ocr_relink, name='ocr_relink'),
     # 사진으로 불러오기에 쓴 원본 사진을 문서함에 남긴다
     path('labels/<int:label_id>/label-photo/', views.label_photo_upload, name='label_photo_upload'),
+    # 불러오기에서 읽은 사진을 포장지 시안으로 남긴다
+    path('labels/<int:label_id>/design-proof/', views.design_proof_upload,
+         name='design_proof_upload'),
     path('labels/<int:label_id>/ingredient-photo/upload/', views.ingredient_photo_upload, name='ingredient_photo_upload'),
     path('labels/<int:label_id>/ingredient/to-bom/', views.ingredient_to_bom, name='ingredient_to_bom'),
 

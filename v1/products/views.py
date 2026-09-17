@@ -7469,21 +7469,9 @@ def design_compare_record(request, label_id):
     diff = result.get('diff') or []
     same = int(result.get('same') or 0)
 
-    doc_type, _ = DocumentType.objects.get_or_create(
-        type_code='DESIGN_PROOF',
-        defaults={
-            'type_name': '포장지 시안',
-            'description': '디자인 담당자가 만든 포장지 시안. 표시사항과 대조한 기록이 함께 남는다',
-            'required_yn': False,
-            'active_yn': True,
-            'display_order': 1,
-            'icon': 'bi-image',
-            'color': '#1a73e8',
-            'detection_keywords': '시안,도안,포장지',
-            'expiry_alert_days': 0,
-            'requires_expiry': False,
-        },
-    )
+    # 시안을 남기는 규칙(판 잇기 · 슬롯 꽂기)은 한 벌로 둔다 —
+    # 불러오기에서 읽은 사진도 같은 자리로 들어온다.
+    from v1.products.services import design_proof
 
     document = None
     if design_file:
@@ -7492,22 +7480,9 @@ def design_compare_record(request, label_id):
                                  'error': '파일 크기는 %d MB 를 초과할 수 없습니다.'
                                           % upload_limit_mb()},
                                 status=400)
-        latest = ProductDocument.objects.filter(
-            label=label, document_type=doc_type, active_yn=True,
-        ).order_by('-version', '-uploaded_datetime').first()
-
-        document = ProductDocument.objects.create(
-            label=label,
-            document_type=doc_type,
-            file=design_file,
-            original_filename=design_file.name,
-            file_size=design_file.size,
-            uploaded_by=request.user,
-            parent_document=latest,
-            version=(latest.version + 1) if latest else 1,
-            metadata={
-                'expiry_unlimited': True,
-                'source': 'design_compare',
+        document = design_proof.save(
+            label, design_file, request.user, source='design_compare',
+            extra={
                 # 대조 기록은 그 파일에 붙어 있어야 한다 — 파일과 결과가
                 # 따로 놀면 "이 시안을 본 결과인가" 를 알 수 없다.
                 'compare': {
@@ -7517,8 +7492,7 @@ def design_compare_record(request, label_id):
                     'same_count': same,
                     'diff': diff[:40],      # 화면이 보여 줄 만큼만
                 },
-            },
-        )
+            })
 
     ProductActivityLog.objects.create(
         label=label,
@@ -8134,6 +8108,43 @@ def discard_if_untouched(request, product_id):
         temp_label.discard(label)
         return JsonResponse({'success': True, 'discarded': True})
     return JsonResponse({'success': True, 'discarded': False})
+
+
+@login_required
+@require_POST
+def design_proof_upload(request, label_id):
+    """
+    불러오기에서 읽은 **그 사진**을 포장지 시안으로 문서함에 남긴다.
+
+    예전에는 남지 않았다. 기본 정보 탭에서 시안을 읽어 값을 다 채워 놓고도
+    문서함에는 아무것도 없어서, 2차 검증을 하려면 **같은 파일을 다시** 올려야
+    했다 — 사용자는 "아까 올린 그 사진" 을 찾아 헤맸다.
+
+    판독과 저장을 한 요청에 묶지 않는다. 판독은 `/label/ocr-extract/` 가
+    하고 그 통로는 제품을 모른다(여러 화면이 함께 쓴다). 여기서는 파일만
+    받아 남긴다 — 판독이 실패해도 사진은 남고, 사진 저장이 실패해도 읽은
+    값은 화면에 그대로 있다.
+    """
+    from v1.products.services import design_proof
+
+    label = _resolve_editable_label(request, label_id)
+    upload = request.FILES.get('file') or request.FILES.get('image')
+    if not upload:
+        return JsonResponse({'success': False, 'error': '파일이 없습니다.'},
+                            status=400)
+
+    problem = upload_check(request.user, upload, '사진')
+    if problem:
+        return JsonResponse({'success': False, 'error': problem}, status=400)
+
+    document = design_proof.save(label, upload, request.user,
+                                 source=(request.POST.get('source') or 'import_photo'))
+    return JsonResponse({
+        'success': True,
+        'document_id': document.document_id,
+        'version': document.version,
+        'filename': document.original_filename,
+    })
 
 
 @login_required

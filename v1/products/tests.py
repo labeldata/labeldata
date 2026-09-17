@@ -12672,3 +12672,91 @@ class NutritionSourceIsTwoButtonsTests(TestCase):
         # 단추가 늘어도 그대로 돈다.
         self.assertIn("document.querySelector('.cfg-srcbtns')", self.html)
         self.assertIn("e.target.closest('[data-source]')", self.html)
+
+
+class ImportPhotoBecomesDesignProofTests(TestCase):
+    """
+    불러오기에 쓴 사진은 **포장지 시안**으로 남는다.
+
+    예전에는 '한글표시사항도안' 으로 넣었다. 그런데 사용자가 거기 올리는 것은
+    대개 포장지 시안이고, 도안 칸에 들어가 있으면 2차 검증에서 찾지 못해
+    같은 파일을 다시 올려야 했다 — "아까 올린 그 사진" 을 찾아 헤맸다.
+
+    게다가 도안으로 세지도 않았다. 표시사항 완료 판정이 이 사진을 빼고 센다
+    (`metadata__source='ocr_import'` 를 exclude 한다).
+    """
+
+    def setUp(self):
+        import tempfile
+
+        from django.test import override_settings
+
+        self._override = override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+        self._override.enable()
+        self.addCleanup(self._override.disable)
+
+        self.user = User.objects.create_user(username='proofup', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='크림빵')
+
+    def _post(self, name='시안.jpg'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        url = reverse('products:design_proof_upload',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(url, data={
+            'file': SimpleUploadedFile(name, b'\xff\xd8\xff\xe0 jpeg',
+                                       content_type='image/jpeg')})
+
+    def test_포장지_시안으로_남는다(self):
+        from v1.products.models import ProductDocument
+
+        res = self._post()
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        doc = ProductDocument.objects.get(label=self.label)
+        self.assertEqual(doc.document_type.type_code, 'DESIGN_PROOF')
+        self.assertEqual(doc.metadata.get('source'), 'import_photo')
+
+    def test_두_번_올리면_다음_판이_된다(self):
+        from v1.products.models import ProductDocument
+
+        self._post('시안1.jpg')
+        self._post('시안2.jpg')
+        versions = sorted(ProductDocument.objects
+                          .filter(label=self.label).values_list('version', flat=True))
+        self.assertEqual(versions, [1, 2])
+
+    def test_2차_검증과_같은_한_벌을_쓴다(self):
+        """
+        두 벌이면 판 세는 규칙이나 슬롯에 꽂는 규칙이 갈라지고, 어느 날
+        한쪽만 고쳐진다.
+        """
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, 'products/views.py'),
+                     encoding='utf-8') as f:
+            src = f.read()
+        at = src.index('def design_compare_record(')
+        block = src[at:at + 4000]
+        self.assertIn('design_proof.save(', block)
+        # 시안 종류를 그 자리에서 또 만들지 않는다
+        self.assertNotIn("type_code='DESIGN_PROOF'", block)
+
+    def test_화면이_실패를_삼키지_않는다(self):
+        # 용량이나 한도에 걸려 안 남았을 때 사용자는 남은 줄 알았다.
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR,
+                                  'static/js/products/basic_info_ocr.js'),
+                     encoding='utf-8') as f:
+            js = f.read()
+        at = js.index('function saveSourcePhoto')
+        block = js[at:at + 1400]
+        self.assertIn('design-proof/', block)
+        self.assertIn('문서함에 남기지 못했습니다', block)

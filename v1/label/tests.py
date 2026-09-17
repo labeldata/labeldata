@@ -16287,7 +16287,14 @@ class 올려_둔_시안을_다시_쓴다(TestCase):
         read = inspect.getsource(views.design_compare_latest)
         write = inspect.getsource(views.design_compare_record)
         self.assertIn("type_code='DESIGN_PROOF'", read)
-        self.assertIn("type_code='DESIGN_PROOF'", write)
+
+        # 저장은 이제 한 벌(`services/design_proof`)로 간다 — 불러오기에서
+        # 읽은 사진도 같은 자리로 들어오기 때문이다. 열쇠가 한 곳에 있으므로
+        # 갈라질 일이 없어졌고, 그 값이 읽는 쪽과 같은지를 여기서 본다.
+        self.assertIn('design_proof.save(', write)
+
+        from v1.products.services import design_proof
+        self.assertEqual(design_proof.TYPE_CODE, 'DESIGN_PROOF')
         # 주석에서 "예전에는 이랬다" 고 적는 것은 세지 않는다
         code = [ln for ln in read.split(chr(10))
                 if "type_name='포장지 시안'" in ln and not ln.strip().startswith('#')]

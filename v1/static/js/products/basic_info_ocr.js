@@ -2060,19 +2060,38 @@
    * 실패해도 조용히 넘어간다. 사용자가 지금 하려는 일은 판독이고, 문서 저장이
    * 안 됐다고 그 앞을 막으면 잃는 것이 더 크다. 상태줄로만 알린다.
    */
+  /*
+   * 불러오기에 쓴 사진을 문서함에 남긴다 — **포장지 시안으로.**
+   *
+   * 예전에는 '한글표시사항도안' 으로 넣었다. 그런데 사용자가 여기 올리는
+   * 것은 대개 **포장지 시안**이고, 도안 칸에 들어가 있으면 2차 검증에서
+   * 찾지 못해 같은 파일을 다시 올려야 했다. 게다가 도안으로 세지도 않았다 —
+   * 표시사항 완료 판정이 이 사진을 빼고 센다(views.py 의 exclude).
+   *
+   * 실패를 조용히 삼키지 않는다. 예전에는 콘솔에만 적어서, 용량이나 한도에
+   * 걸려 안 남았을 때 사용자는 남은 줄 알았다.
+   */
   function saveSourcePhoto(file) {
     var id = labelId();
     if (!file || !id) return;
     var form = new FormData();
-    form.append('image', file);
+    form.append('file', file);
+    form.append('source', 'import_photo');
     form.append('csrfmiddlewaretoken', csrfToken());
-    fetch('/products/labels/' + id + '/label-photo/', { method: 'POST', body: form })
+    fetch('/products/labels/' + id + '/design-proof/', { method: 'POST', body: form })
       .then(function (res) { return res.json(); })
       .then(function (body) {
-        if (!body || !body.success) return;
-        status('판독에 사용한 사진을 문서함(한글표시사항도안)에 남겼습니다.');
+        if (!body || !body.success) {
+          status('사진을 문서함에 남기지 못했습니다: '
+                 + ((body && body.error) || '알 수 없는 오류'), true);
+          return;
+        }
+        status('불러온 사진을 문서함(포장지 시안)에 남겼습니다.');
       })
-      .catch(function (err) { console.error('표시사항 사진 저장 실패', err); });
+      .catch(function (err) {
+        console.error('시안 저장 실패', err);
+        status('사진을 문서함에 남기지 못했습니다.', true);
+      });
   }
 
   function extract(parts, sourceFile) {
