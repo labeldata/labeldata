@@ -47,6 +47,25 @@ WATCH = 'watch'   # 봐야 한다
 SMALL_GAP_G = 2.0
 
 
+def _severity(gap):
+    """
+    어긋난 폭으로 심각도를 정한다. **잣대를 한 곳에만 적는다.**
+
+    A1·A2 는 처음부터 이렇게 했는데 A3·A4 는 늘 '그럴 수가 없다' 였다. 그래서
+    갈비탕의 식이섬유 1.9 > 탄수화물 0.4 는 '봐야 함' 인데, 같은 크기의
+    스무디 포화지방 0.60 > 지방 0.00 은 '그럴 수가 없다' 로 올라갔다.
+
+    잣대가 갈래마다 다르면 **'그럴 수 없음 104 건' 이라는 수를 믿을 수 없다.**
+    사람은 그 수를 보고 볼 분량을 정하는데, 그 안에 반올림 크기의 어긋남이
+    섞여 있으면 진짜 큰 어긋남이 그 속에 묻힌다.
+
+    B 규칙은 이 잣대를 쓰지 않는다. 거기서 심각도를 가르는 것은 폭이 아니라
+    **원료의 순위**이고(1순위면 상당량이다), B3·B4 가 전부 '그럴 수가 없다'
+    인 것은 그 둘이 1순위만 보기 때문이다 — 설계대로다.
+    """
+    return HIGH if gap >= SMALL_GAP_G else WATCH
+
+
 def _num(value):
     """
     숫자로 읽는다. **적재 쪽과 같은 함수를 쓴다.**
@@ -93,8 +112,7 @@ def check_internal(row):
             # 탄수화물 0.4 는 물리적으로 불가능하지만, 그 표를 그대로 써도
             # 표시가 크게 틀어지지는 않는다. 같은 무게로 세우면 진짜 큰
             # 어긋남이 그 안에 묻힌다.
-            gap = a - b
-            found.append((code, HIGH if gap >= SMALL_GAP_G else WATCH,
+            found.append((code, _severity(a - b),
                           '%s (%.2f > %.2f)' % (why, a, b)))
 
     # 지방 ≥ 트랜스지방 + 포화지방 + 콜레스테롤
@@ -113,7 +131,7 @@ def check_internal(row):
                              or chol is not None):
         part = (sat or 0) + (trans or 0) + (chol or 0) / 1000.0
         if part > fats + SLACK_G:
-            found.append(('A3', HIGH,
+            found.append(('A3', _severity(part - fats),
                           '포화+트랜스+콜레스테롤이 지방보다 많다 (%.2f > %.2f)'
                           % (part, fats)))
 
@@ -130,7 +148,7 @@ def check_internal(row):
         for field in GRAM_FIELDS:
             value = _get(row, field)
             if value is not None and value > basis + SLACK_G:
-                found.append(('A4', HIGH,
+                found.append(('A4', _severity(value - basis),
                               '%s 이 기준량을 넘는다 (%.2f > %.0f)'
                               % (name_of(field), value, basis)))
 

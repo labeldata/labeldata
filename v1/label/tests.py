@@ -21466,3 +21466,57 @@ class 잣대를_고치면_다시_잴_길이_있어야_한다(TestCase):
         self.assertIn('0 / 1', text)
         self.row.refresh_from_db()
         self.assertEqual(self.row.verify_status, PublicFoodNutrition.VERIFY_PASS)
+
+
+class 심각도_잣대가_갈래마다_다르지_않다(TestCase):
+    """
+    A1·A2 는 어긋난 폭이 작으면 '봐야 함' 으로 내리는데 A3·A4 는 늘 '그럴 수가
+    없다' 였다. 그래서 갈비탕의 식이섬유 1.9 > 탄수화물 0.4 는 '봐야 함' 인데,
+    같은 크기의 스무디 포화지방 0.60 > 지방 0.00 은 '그럴 수가 없다' 였다.
+
+    잣대가 갈래마다 다르면 **'그럴 수 없음 104 건' 이라는 수를 믿을 수 없다.**
+    사람은 그 수로 볼 분량을 정하는데, 반올림 크기의 어긋남이 섞여 있으면
+    진짜 큰 어긋남이 그 속에 묻힌다.
+    """
+
+    def _codes(self, **row):
+        from v1.label.services.nutrition_anomaly import check_internal
+
+        return [(c, s) for c, s, _ in check_internal(row)]
+
+    def test_A3_도_작은_폭은_봐야_함이다(self):
+        from v1.label.services.nutrition_anomaly import HIGH, WATCH
+
+        self.assertEqual(
+            self._codes(fats=0.0, saturated_fats=0.6, trans_fats=0.0),
+            [('A3', WATCH)])
+        self.assertEqual(
+            self._codes(fats=0.0, saturated_fats=9.0, trans_fats=0.0),
+            [('A3', HIGH)])
+
+    def test_A4_도_작은_폭은_봐야_함이다(self):
+        from v1.label.services.nutrition_anomaly import HIGH, WATCH
+
+        small = self._codes(carbohydrates=101.0, basis_amount=100,
+                            basis_unit='g')
+        self.assertEqual(small, [('A4', WATCH)])
+        big = self._codes(carbohydrates=138.0, basis_amount=100,
+                          basis_unit='g')
+        self.assertEqual(big, [('A4', HIGH)])
+
+    def test_음수는_폭을_보지_않는다(self):
+        """작아도 측정값이 아니다. mg 성분이 섞여 있어 g 잣대를 댈 수도 없다."""
+        from v1.label.services.nutrition_anomaly import HIGH
+
+        self.assertIn(('A5', HIGH), self._codes(natriums=-0.1))
+
+    def test_B_규칙은_폭이_아니라_순위로_가른다(self):
+        """
+        B3·B4 가 전부 '그럴 수가 없다' 인 것은 설계대로다 — 그 둘은 1순위만
+        본다. 폭 잣대를 B 에 들이대면 안 된다.
+        """
+        from v1.label.services.nutrition_anomaly import MARKERS
+
+        ranks = {code: rank for code, _, _, rank, _ in MARKERS}
+        self.assertEqual(ranks['B3'], 1)
+        self.assertEqual(ranks['B4'], 1)
