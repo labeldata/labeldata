@@ -668,8 +668,10 @@
           <i class="bi bi-download me-1"></i>내원료 저장
         </button>
         {% if has_nutrition %}
-        {# 켜고 끌 수 있어야 한다 — 같은 화면에서 남의 제품도 조회되고,
-           그 표를 말없이 내 라벨에 넣어 주면 베끼는 도구가 된다 #}
+        {% comment %}
+          켜고 끌 수 있어야 한다 — 같은 화면에서 남의 제품도 조회되고,
+          그 표를 말없이 내 라벨에 넣어 주면 베끼는 도구가 된다.
+        {% endcomment %}
         <label class="copy-nutri" title="식약처에 신고된 값입니다. 내 제품의 표시값은 성적서나 배합 계산으로 정해야 합니다.">
           <input type="checkbox" id="copyNutrition" checked>
           영양성분 함께
