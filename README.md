@@ -13,6 +13,7 @@ python manage.py test --settings=v1.config.settings_test   # 시험
 ## 배포
 
 ```bash
+cd ~/mysite && workon mysite-env             # **먼저 환경을 켠다**
 git pull origin main
 python manage.py migrate --plan              # 무엇이 도는지 먼저 본다
 python manage.py migrate
@@ -20,6 +21,24 @@ python manage.py collectstatic --noinput     # 정적 파일이 바뀌었으면 
 ```
 
 마지막으로 **Web 탭 → Reload**.
+
+### 환경을 켜는 줄이 첫 줄인 까닭
+
+DRF·corsheaders·django-ratelimit 은 **가상환경 안에만** 있다. 맨 `python` 으로
+부르면 시스템 파이썬이 `~/.local` 의 Django 를 집어 들고, `manage.py` 가 앱을
+읽다가 이렇게 멈춘다.
+
+    ModuleNotFoundError: No module named 'django_ratelimit'
+
+`git pull` 과 `collectstatic` 은 환경 없이도 도는 탓에 **중간까지 멀쩡해
+보인다** — 그래서 `migrate` 에서야 걸리고, 그때는 이미 파일이 바뀐 뒤다.
+프롬프트 앞에 `(mysite-env)` 가 있는지 보면 된다.
+
+환경을 켜지 않고 그 파이썬을 직접 불러도 된다. 예약 작업(Tasks)이 그렇게 쓴다.
+
+```bash
+/home/labeldata/.virtualenvs/mysite-env/bin/python manage.py migrate
+```
 
 ## 문서
 
