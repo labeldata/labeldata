@@ -820,6 +820,59 @@ def backfill_inspection_on_label_save(sender, instance, created, update_fields, 
         logging.getLogger(__name__).exception('[I0460 소급] MyLabel 트리거 오류')
 
 
+class NutritionAnomaly(models.Model):
+    """
+    영양성분DB 에서 **이상해 보이는 행**. 규칙은 `services/nutrition_anomaly.py`.
+
+    왜 표에 남기나
+    ──────────────
+    32 만 행을 화면에서 그때그때 재면 관리자 화면이 못 쓸 만큼 느리다.
+    판정은 커맨드가 미리 하고, 화면은 그 결과만 거른다.
+
+    **판정이지 진실이 아니다.** 원본이 부실한 것일 수도, 우리 매핑이 밀린
+    것일 수도, 정말 그런 제품일 수도 있다(설탕이 1순위인 무설탕 제품처럼).
+    그래서 지우거나 고치지 않고 **줄 세워 보여 주기만** 한다.
+
+    다시 돌리면 그 규칙의 옛 판정을 지우고 새로 쓴다 — 규칙을 고쳤을 때
+    옛 결과가 섞여 있으면 무엇을 보고 있는지 알 수 없다.
+    """
+
+    HIGH = 'high'
+    WATCH = 'watch'
+    SEVERITY_CHOICES = [(HIGH, '그럴 수 없음'), (WATCH, '봐야 함')]
+
+    nutrition = models.ForeignKey('PublicFoodNutrition', on_delete=models.CASCADE,
+                                  related_name='anomalies', verbose_name='영양성분 행')
+    # 원본을 지우고 다시 적재해도 목록이 말을 하도록 값을 함께 베껴 둔다.
+    report_no = models.CharField(max_length=30, blank=True, default='', db_index=True,
+                                 verbose_name='품목보고번호')
+    food_name = models.CharField(max_length=300, blank=True, default='',
+                                 verbose_name='식품명')
+    maker_nm = models.CharField(max_length=200, blank=True, default='',
+                                verbose_name='업체명')
+    food_type = models.CharField(max_length=100, blank=True, default='', db_index=True,
+                                 verbose_name='식품유형')
+
+    rule_code = models.CharField(max_length=10, db_index=True, verbose_name='규칙')
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES,
+                                default=WATCH, db_index=True, verbose_name='심각도')
+    detail = models.CharField(max_length=300, verbose_name='무엇이 어긋났나')
+    checked_at = models.DateTimeField(auto_now_add=True, verbose_name='판정일시')
+
+    class Meta:
+        db_table = 'label_nutrition_anomaly'
+        ordering = ['severity', 'rule_code', '-checked_at']
+        indexes = [
+            models.Index(fields=['rule_code', 'severity']),
+            models.Index(fields=['food_type']),
+        ]
+        verbose_name = '영양성분 이상 판정'
+        verbose_name_plural = '영양성분 이상 판정'
+
+    def __str__(self):
+        return '%s %s — %s' % (self.rule_code, self.food_name, self.detail)
+
+
 class PublicFoodNutrition(models.Model):
     """
     식약처 식품영양성분DB 적재본 (data.go.kr FoodNtrCpntDbInfo02).

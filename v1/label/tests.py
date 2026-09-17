@@ -20547,3 +20547,144 @@ class 폭을_재서_고르던_길을_걷었다(TestCase):
         css = self.css()
         self.assertIn('.cfg-num { width: 64px; text-align: right; }', css)
         self.assertIn('.cfg-unit { width: 54px; }', css)
+
+
+class NutritionAnomalyRuleTests(TestCase):
+    """
+    배합비를 모르므로 "이 값이 맞다" 는 증명할 수 없다. **"그럴 수가 없다" 를
+    찾는 것이 최선**이다. 그 규칙들이 실제로 그것만 잡는지 잰다.
+    """
+
+    def check(self, **values):
+        from v1.label.services import nutrition_anomaly as rules
+
+        row = {'basis_amount': 100.0, 'basis_unit': 'g'}
+        row.update(values)
+        return [code for code, _sev, _why in rules.check_internal(row)]
+
+    def test_당류가_탄수화물보다_많을_수_없다(self):
+        self.assertIn('A1', self.check(sugars=12.0, carbohydrates=8.0))
+        self.assertNotIn('A1', self.check(sugars=8.0, carbohydrates=12.0))
+
+    def test_반올림_차이는_봐주고_넘긴다(self):
+        # 폭을 좁게 잡으면 멀쩡한 행이 무더기로 걸린다(verify_row 의 교훈).
+        self.assertEqual(self.check(sugars=8.3, carbohydrates=8.0), [])
+
+    def test_포화와_트랜스의_합이_지방을_넘을_수_없다(self):
+        self.assertIn('A3', self.check(fats=10.0, saturated_fats=8.0, trans_fats=4.0))
+        self.assertNotIn('A3', self.check(fats=10.0, saturated_fats=6.0, trans_fats=1.0))
+
+    def test_기준량을_넘는_성분(self):
+        self.assertIn('A4', self.check(fats=120.0))
+        self.assertNotIn('A4', self.check(fats=99.0))
+
+    def test_음수(self):
+        self.assertIn('A5', self.check(natriums=-3.0))
+
+    def test_값이_비면_재지_않는다(self):
+        # 원본에 빈 칸이 흔하다. 없는 것과 틀린 것은 다르다.
+        self.assertEqual(self.check(sugars=None, carbohydrates=None), [])
+
+
+class NutritionTopIngredientRuleTests(TestCase):
+    """
+    표시 순서는 **많이 쓴 순**이다. 앞자리에 있다는 것은 "이 제품의 상당
+    부분" 이라는 뜻이고, 그 원료가 반드시 가진 성분이 0 이면 둘 중 하나가
+    틀렸다.
+    """
+
+    def check(self, text, **values):
+        from v1.label.services import nutrition_anomaly as rules
+
+        row = {'basis_amount': 100.0}
+        row.update(values)
+        return rules.check_top_ingredients(row, text)
+
+    def test_설탕이_앞인데_당류가_0(self):
+        hits = self.check('설탕, 밀가루, 마가린', sugars=0.0)
+        self.assertEqual([c for c, _s, _w in hits][:1], ['B1'])
+        self.assertEqual(hits[0][1], 'high')      # 1순위는 그럴 수 없음
+
+    def test_뒤로_갈수록_약하게_본다(self):
+        hits = self.check('밀가루, 설탕, 마가린', sugars=0.0)
+        codes = {c: sev for c, sev, _w in hits}
+        self.assertEqual(codes.get('B1'), 'watch')   # 2순위는 봐야 함
+
+    def test_순위_밖은_보지_않는다(self):
+        # 넷째부터는 향료·첨가물이 흔하다.
+        hits = self.check('밀가루, 마가린, 난백액, 설탕', sugars=0.0)
+        self.assertNotIn('B1', [c for c, _s, _w in hits])
+
+    def test_값이_있으면_잡지_않는다(self):
+        self.assertEqual(self.check('설탕, 밀가루', sugars=21.0), [])
+
+    def test_소금은_mg_로_잰다(self):
+        self.assertTrue(self.check('정제소금, 밀가루', natriums=30.0))
+        self.assertEqual(self.check('정제소금, 밀가루', natriums=800.0), [])
+
+    def test_괄호_안은_하위_원료라_뗀다(self):
+        from v1.label.services.nutrition_anomaly import top_ingredients
+
+        self.assertEqual(top_ingredients('혼합제제(설탕, 향료), 밀가루', 2),
+                         ['혼합제제', '밀가루'])
+
+    def test_원재료가_없으면_이_규칙은_쉰다(self):
+        self.assertEqual(self.check('', sugars=0.0), [])
+
+
+class NutritionAnomalyCommandTests(TestCase):
+    """판정을 표에 남기고, 다시 돌리면 그 규칙의 옛 판정만 갈아 끼운다."""
+
+    def setUp(self):
+        from v1.label.models import FoodItem, PublicFoodNutrition
+
+        self.row = PublicFoodNutrition.objects.create(
+            food_cd='TEST-0001', food_nm_kr='땅콩 크림 과자',
+            item_report_no='19980448010697', maker_nm='로얄제과',
+            basis_amount=100.0, basis_unit='g',
+            carbohydrates=8.0, sugars=12.0)          # A1 감
+        FoodItem.objects.create(
+            prdlst_report_no='19980448010697', prdlst_nm='땅콩 크림 과자',
+            prdlst_dcnm='과자', rawmtrl_nm_sorted='설탕, 밀가루, 마가린')
+
+    def run_cmd(self, **kw):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('check_nutrition_anomaly', stdout=out, **kw)
+        return out.getvalue()
+
+    def test_판정을_남긴다(self):
+        from v1.label.models import NutritionAnomaly
+
+        self.run_cmd()
+        codes = set(NutritionAnomaly.objects.values_list('rule_code', flat=True))
+        self.assertIn('A1', codes)      # 당류 > 탄수화물
+
+    def test_식품유형을_함께_적는다(self):
+        # 목록에서 거르는 데 쓴다.
+        from v1.label.models import NutritionAnomaly
+
+        self.run_cmd()
+        self.assertEqual(NutritionAnomaly.objects.first().food_type, '과자')
+
+    def test_미리보기는_남기지_않는다(self):
+        from v1.label.models import NutritionAnomaly
+
+        out = self.run_cmd(dry_run=True)
+        self.assertIn('세기만', out)
+        self.assertEqual(NutritionAnomaly.objects.count(), 0)
+
+    def test_돌린_규칙의_옛_판정만_갈아_끼운다(self):
+        """A 만 다시 돌렸는데 B 결과까지 사라지면 목록이 반쪽이 된다."""
+        from v1.label.models import NutritionAnomaly
+
+        self.run_cmd()
+        NutritionAnomaly.objects.create(nutrition=self.row, rule_code='B9',
+                                        severity='watch', detail='남아 있어야 한다')
+        self.run_cmd(rules='A')
+        codes = set(NutritionAnomaly.objects.values_list('rule_code', flat=True))
+        self.assertIn('B9', codes)
+        self.assertIn('A1', codes)
