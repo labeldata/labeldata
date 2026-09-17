@@ -21410,3 +21410,59 @@ class 열량만_있고_나머지가_0_인_표는_막힌다(TestCase):
         issues = check_calorie_matches_macros(label)
         self.assertEqual([i['kind'] for i in issues], ['issue'])
         self.assertIn('347', issues[0]['message'])
+
+
+class 잣대를_고치면_다시_잴_길이_있어야_한다(TestCase):
+    """
+    `verify_status` 는 적재할 때 한 번 계산해 **저장해 둔 값**이다. 잣대를
+    고치면 그 순간부터 표의 값은 낡은 판정이 되는데, 화면도 보고도 그 사실을
+    말해 주지 않는다 — 34 만 건을 다시 받아야 갱신되는 줄 알기 쉽다.
+
+    다시 받을 필요가 없다. 검산이 쓰는 값은 이미 컬럼에 다 들어 있다.
+    """
+
+    def _run(self, **opts):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('recheck_food_nutrition', stdout=out, **opts)
+        return out.getvalue()
+
+    def setUp(self):
+        from v1.label.models import PublicFoodNutrition
+
+        # 김치 — 유기산 몫으로 구제되어야 하는데 'fail' 로 굳어 있는 행
+        self.row = PublicFoodNutrition.objects.create(
+            food_cd='K1', food_nm_kr='배추김치_가을재배',
+            basis_amount=100, basis_unit='g',
+            moisture=89.0, proteins=1.5, fats=0.3, ash=2.5,
+            carbohydrates=5.5, calories=37.0,
+            verify_status=PublicFoodNutrition.VERIFY_FAIL,
+            verify_note='열량 재계산 30.7 kcal (표기 37.0)')
+
+    def test_낡은_판정을_고쳐_넣는다(self):
+        from v1.label.models import PublicFoodNutrition
+
+        self._run()
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.verify_status, PublicFoodNutrition.VERIFY_PASS)
+        self.assertEqual(self.row.verify_note, '')
+
+    def test_dry_run_은_건드리지_않는다(self):
+        from v1.label.models import PublicFoodNutrition
+
+        text = self._run(dry_run=True)
+        self.assertIn('fail -> pass', text)
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.verify_status, PublicFoodNutrition.VERIFY_FAIL)
+
+    def test_바뀔_것이_없으면_아무것도_쓰지_않는다(self):
+        from v1.label.models import PublicFoodNutrition
+
+        self._run()
+        text = self._run()
+        self.assertIn('0 / 1', text)
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.verify_status, PublicFoodNutrition.VERIFY_PASS)
