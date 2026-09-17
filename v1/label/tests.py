@@ -20628,7 +20628,9 @@ class NutritionTopIngredientRuleTests(TestCase):
         self.assertEqual(hits[0][1], 'high')      # 1순위는 그럴 수 없음
 
     def test_뒤로_갈수록_약하게_본다(self):
-        hits = self.check('밀가루, 설탕, 마가린', sugars=0.0)
+        # 가짓수를 다섯 이상으로 둔다 — 적으면 2순위를 아예 안 보기 때문이다
+        # (test_가짓수가_적으면_2순위를_믿지_않는다 참고).
+        hits = self.check('밀가루, 설탕, 마가린, 계란, 유청분말, 향료', sugars=0.0)
         codes = {c: sev for c, sev, _w in hits}
         self.assertEqual(codes.get('B1'), 'watch')   # 2순위는 봐야 함
 
@@ -20652,6 +20654,30 @@ class NutritionTopIngredientRuleTests(TestCase):
 
     def test_원재료가_없으면_이_규칙은_쉰다(self):
         self.assertEqual(self.check('', sugars=0.0), [])
+
+    def test_가짓수가_적으면_2순위를_믿지_않는다(self):
+        """
+        **순위는 비율을 말해 주지 않는다.** 원재료가 셋뿐인 뻥과자에서
+        천일염이 2순위여도 실제로는 0.1 % 일 수 있다 — 나트륨 10 mg 이
+        정상인 것이다. 운영에서 B3(소금) 1,877 건의 상당수가 그런 행이었다.
+        """
+        few = self.check('곡류가공품, 천일염, 사카린나트륨', natriums=10.0)
+        self.assertEqual(few, [])
+
+        many = self.check('밀가루, 천일염, 설탕, 팜유, 유청분말, 향료',
+                          natriums=10.0)
+        self.assertEqual([c for c, _s, _w in many], ['B3'])
+
+    def test_1순위는_가짓수와_상관없이_본다(self):
+        # 제일 많이 쓴 것이므로.
+        hits = self.check('천일염, 곡류가공품', natriums=10.0)
+        self.assertEqual([c for c, _s, _w in hits], ['B3'])
+
+    def test_원물로_기름을_짜면_탄수화물은_0_이_맞다(self):
+        # "딱한번만짜서만든옥수수유" 가 '옥수수' 부분 일치로 걸렸다.
+        self.assertEqual(self.check('옥수수배아, 규소수지', carbohydrates=0.0), [])
+        hits = self.check('밀가루, 설탕, 정제소금', carbohydrates=0.4)
+        self.assertEqual([c for c, _s, _w in hits], ['B4'])
 
 
 class NutritionAnomalyCommandTests(TestCase):

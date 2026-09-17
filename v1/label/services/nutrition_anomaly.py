@@ -122,13 +122,26 @@ MARKERS = (
                     '마가린', '쇼트닝', '유지', '참기름', '들기름'), 3, 0.5),
     ('B3', 'natriums', ('정제소금', '천일염', '소금', '간장', '된장', '고추장'),
      3, 100.0),
-    ('B4', 'carbohydrates', ('밀가루', '쌀가루', '전분', '쌀', '설탕', '감자',
-                             '옥수수', '타피오카'), 1, 0.5),
+    # 원물 이름('쌀'·'옥수수'·'감자')은 뺐다. 그 원물로 **기름을 짜면**
+    # 탄수화물이 0 인 것이 정상인데, 부분 일치라 "옥수수배아" 가 걸렸다
+    # (딱한번만짜서만든옥수수유). 가공된 곡분·전분·당류만 본다.
+    ('B4', 'carbohydrates', ('밀가루', '쌀가루', '전분', '설탕', '물엿'), 1, 0.5),
     ('B5', 'proteins', ('돼지고기', '쇠고기', '닭고기', '대두', '분리대두단백',
                         '유청단백', '계란', '난백', '탈지분유'), 3, 0.5),
 )
 
 UNIT = {'natriums': 'mg'}
+
+
+# 2순위 이상을 "상위" 로 보려면 원재료가 이만큼은 있어야 한다.
+#
+# **순위는 비율을 말해 주지 않는다.** 원재료가 셋뿐인 뻥과자에서 천일염이
+# 2순위여도 실제로는 0.1 % 일 수 있다 — 나트륨 10 mg 이 정상인 것이다.
+# 운영에서 B3(소금) 1,877 건의 상당수가 그런 행이었다. 스무 가지가 들어간
+# 과자에서 2순위면 이야기가 다르다.
+#
+# 1순위는 개수와 상관없이 본다 — 제일 많이 쓴 것이므로.
+RANK2_MIN_ITEMS = 5
 
 
 def top_ingredients(sorted_text, count=TOP_N):
@@ -172,6 +185,8 @@ def check_top_ingredients(row, sorted_text):
     names = top_ingredients(sorted_text)
     if not names:
         return []
+    # 몇 가지가 들어갔는지. 2순위부터는 이 수에 따라 뜻이 달라진다.
+    total = len(top_ingredients(sorted_text, count=99))
 
     found = []
     for code, field, markers, rank, floor in MARKERS:
@@ -179,6 +194,8 @@ def check_top_ingredients(row, sorted_text):
         if value is None or value > floor:
             continue
         for order, name in enumerate(names[:rank], start=1):
+            if order > 1 and total < RANK2_MIN_ITEMS:
+                break        # 가짓수가 적으면 2순위도 미량일 수 있다
             hit = next((m for m in markers if m in name), None)
             if not hit:
                 continue
