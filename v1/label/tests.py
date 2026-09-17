@@ -20986,21 +20986,26 @@ class 영양성분_등록_요령의_검토_규칙(TestCase):
         self.assertEqual(calories_from_macros(dict(base, tagatose=10)), 15.0)
         self.assertEqual(calories_from_macros(dict(base, allulose=10)), 0.0)
 
-    def test_적재_검산이_요령의_20퍼센트를_쓴다(self):
+    def test_적재_검산이_김치를_어긋났다고_적지_않는다(self):
         """
-        15 % 로 재던 때 34 만 건 적재에서 어긋남 표본 다섯 중 넷이 김치였다.
-        '배추김치_가을재배' 는 재계산 30.1 / 표기 37.0 으로 18.6 % 차 —
-        요령으로는 통과다. 우리가 규정보다 빡빡하면 규정이 받아 주는 행을
-        우리만 어긋났다고 적는다.
+        34 만 건 적재에서 어긋남 표본 다섯 중 넷이 김치였다. '배추김치_가을재배'
+        는 재계산 30.7 / 표기 37.0 이다.
+
+        폭을 15 -> 20 % 로 넓히는 것으로는 부족했다. 진짜 까닭은 **유기산에
+        컬럼 자체가 없다**는 것이라(NOT_IN_SOURCE), 비율이 아니라 그 몫만큼을
+        바닥으로 얹어야 한다. 그래서 폭을 좁혀도 김치는 통과한다.
         """
         from v1.label.services.mfds_nutrition import verify_row
 
         kimchi = {'moisture': 89.0, 'proteins': 1.5, 'fats': 0.3,
                   'ash': 2.5, 'carbohydrates': 5.5, 'calories': 37.0}
         self.assertEqual(verify_row(kimchi, 100.0, 'g'), (True, ''))
+        self.assertEqual(verify_row(kimchi, 100.0, 'g', energy_tol=0.05),
+                         (True, ''))
 
-        # 폭이 좁으면 같은 행이 어긋남으로 뽑힌다 — 바뀐 것이 이 수임을 보인다
-        verdict, _ = verify_row(kimchi, 100.0, 'g', energy_tol=0.15)
+        # 유기산으로 설명할 수 없는 폭은 그대로 어긋남이다
+        broken = dict(kimchi, calories=300.0)
+        verdict, _ = verify_row(broken, 100.0, 'g')
         self.assertIs(verdict, False)
 
 
@@ -21213,3 +21218,130 @@ class 허용오차의_분모는_둘_중_큰_쪽이다(TestCase):
         #   표기 분모: 350 x 0.2 = 70.0  -> 통과(간발)
         #   계산 분모: 418 x 0.2 = 83.6  -> 통과(여유)
         self.assertEqual(verify_row(cake, 100.0, 'g'), (True, ''))
+
+
+class 보이지_않는_성분_때문에_남을_나무라지_않는다(TestCase):
+    """
+    상한(탄수*4 + 단백*4 + 지방*9)은 '열량을 내는 것이 탄단지뿐' 일 때만 상한이다.
+    유기산(3 kcal/g)과 알코올(7 kcal/g)은 이 DB 에 **컬럼 자체가 없다**
+    (mfds_nutrition.NOT_IN_SOURCE). 그 몫은 표기 열량에만 들어 있다.
+
+    17 도 소주는 에탄올만 117 kcal 인데 상한이 0 이라, 어떤 비율을 줘도 반드시
+    걸린다. 목록이 주류로 채워지면 이 모듈이 첫 줄부터 경고한 실패가 그대로
+    재현된다 — 좁게 잡으면 멀쩡한 행이 무더기로 걸리고, 그러면 목록 자체를
+    아무도 안 본다.
+    """
+
+    def _hit(self, **row):
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        return check_energy(row)
+
+    def test_주류는_상한을_잴_수_없으므로_재지_않는다(self):
+        for name, cal, carb, prot in (('소주', 127.0, 0.0, 0.0),
+                                      ('맥주', 40.0, 3.0, 0.4),
+                                      ('생막걸리', 54.0, 1.6, 0.8),
+                                      ('레드와인', 80.0, 2.6, 0.1)):
+            with self.subTest(name):
+                self.assertEqual(
+                    self._hit(calories=cal, carbohydrates=carb, proteins=prot,
+                              fats=0.0, food_nm_kr=name), [])
+
+    def test_식초와_김치는_유기산_몫으로_구제된다(self):
+        """이름으로 빼지 않는다. 유기산은 일반 식품에서 20 kcal 을 넘기 어렵다."""
+        self.assertEqual(self._hit(calories=20.0, carbohydrates=0.1,
+                                   proteins=0.0, fats=0.0,
+                                   food_nm_kr='양조식초'), [])
+        self.assertEqual(self._hit(calories=37.0, carbohydrates=5.5,
+                                   proteins=1.5, fats=0.3,
+                                   food_nm_kr='배추김치_가을재배'), [])
+
+    def test_유기산으로_설명_안_되는_폭은_그대로_걸린다(self):
+        """'코코아삭' — 표기 133.0 · 상한 106.1. 폭 26.9 는 유기산 몫을 넘는다."""
+        hits = self._hit(calories=133.0, carbohydrates=26.5, proteins=0.0,
+                         fats=0.0, food_nm_kr='코코아삭')
+        self.assertEqual([c for c, _, _ in hits], ['C1'])
+
+    def test_알코올_이름이_아래쪽_담장까지_열어_주지는_않는다(self):
+        """
+        알코올은 열량을 **더한다.** 그러니 상한은 못 세워도 하한은 그대로다 —
+        없는 열량을 만들어 내는 성분은 없다.
+        """
+        hits = self._hit(calories=10.0, carbohydrates=0.0, proteins=0.0,
+                         fats=50.0, sugars=0.0, food_nm_kr='위스키봉봉')
+        self.assertEqual([c for c, _, _ in hits], ['C2'])
+
+
+class 희소당을_모르면서_단정하지_않는다(TestCase):
+    """
+    하한의 근거는 '당류만은 반드시 4' 였다. **그런데 같은 저장소의
+    CALORIE_FACTORS 가 그 말의 반례를 갖고 있다** — 타가토스 1.5 ·
+    알룰로오스 0 이고, 둘 다 단당류라 신고 당류에 합산된다.
+
+    알룰로오스 시럽(당류 70 g · 표기 20 kcal)은 정상인데 하한 280 으로 걸렸다.
+    무설탕·저열량 제품이 늘고 있으니 그대로 두면 C2 오탐의 주된 원인이 된다.
+    """
+
+    def _hit(self, **row):
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        return check_energy(row)
+
+    def test_당류에만_기댄_판정은_봐야_함으로_내린다(self):
+        from v1.label.services.nutrition_anomaly import WATCH
+
+        hits = self._hit(calories=20.0, carbohydrates=70.0, proteins=0.0,
+                         fats=0.0, sugars=70.0, food_nm_kr='알룰로오스시럽')
+        self.assertEqual([(c, s) for c, s, _ in hits], [('C2', WATCH)])
+
+    def test_단백질과_지방으로도_넘으면_그럴_수_없다로_본다(self):
+        """어떤 감미료를 써도 단백질 4 · 지방 9 는 못 내려간다."""
+        from v1.label.services.nutrition_anomaly import HIGH
+
+        hits = self._hit(calories=340.0, carbohydrates=0.0, proteins=0.0,
+                         fats=111.1, sugars=0.0, food_nm_kr='미니 다피누아')
+        self.assertEqual([(c, s) for c, s, _ in hits], [('C2', HIGH)])
+
+    def test_열량이_0_이어도_잰다(self):
+        """
+        `energy <= 0` 가드가 C2 가 잡으려는 **극한값을 정확히 면제**하고 있었다.
+        표기 0 은 하한과의 차이가 곧 하한 전액이라 가장 확실한 신호다.
+        """
+        hits = self._hit(calories=0.0, carbohydrates=0.0, proteins=0.0,
+                         fats=99.9, sugars=0.0, food_nm_kr='시험')
+        self.assertEqual([c for c, _, _ in hits], ['C2'])
+
+
+class 읽을_수_없는_값에_조용히_눈감지_않는다(TestCase):
+    """
+    · 음수가 섞인 행을 그대로 재면 상·하한이 뒤집혀 '전부 당·전분으로 세도
+      -20.0 kcal' 같은 읽을 수 없는 문장이 관리자 화면에 남는다. 그 행의 진짜
+      문제는 A5(음수)가 이미 잡는다.
+    · `_num` 이 float() 만 쓰던 탓에 '1,670.000' 처럼 쉼표가 섞인 값에서
+      **행 전체가 조용히 검사 면제**됐다. 예외도 로그도 없어 밖에서는
+      '이상 없음' 과 구분되지 않는다.
+    """
+
+    def test_음수가_섞인_행은_열량_규칙이_비켜선다(self):
+        from v1.label.services.nutrition_anomaly import check_energy, check_internal
+
+        row = {'calories': 10.0, 'carbohydrates': -5.0, 'proteins': 0.0,
+               'fats': 0.0}
+        self.assertEqual(check_energy(row), [])
+        # 비켜서도 놓치지 않는다 — A5 가 잡는다
+        self.assertIn('A5', [c for c, _, _ in check_internal(row)])
+
+    def test_쉼표가_섞인_숫자를_읽는다(self):
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        hits = check_energy({'calories': '1,670.0', 'carbohydrates': '0',
+                             'proteins': '0', 'fats': '0'})
+        self.assertEqual([c for c, _, _ in hits], ['C1'])
+
+    def test_진입점이_열량_규칙도_부른다(self):
+        """'한 행을 다 잰다' 고 적어 두고 A 와 B 만 불렀다."""
+        from v1.label.services.nutrition_anomaly import check
+
+        hits = check({'calories': 500.0, 'carbohydrates': 24.9,
+                      'proteins': 0.0, 'fats': 0.0, 'food_nm_kr': '명인꿀약과'})
+        self.assertIn('C1', [c for c, _, _ in hits])

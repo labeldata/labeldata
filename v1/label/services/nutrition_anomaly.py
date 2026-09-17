@@ -25,7 +25,11 @@
 (빵류는 실제로 그럴 수 있다). 잡는 것은 0 에 가까운 극단뿐이다.
 """
 
-from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
+from v1.label.constants import (
+    NUTRITION_CALORIE_TOLERANCE,
+    NUTRITION_ORGANIC_ACID_SLACK_KCAL,
+)
+from v1.label.services.nutrition_calc import _number
 
 # 재는 여유. 소수 둘째 자리 반올림과 원본의 자릿수 차이를 이것으로 흡수한다.
 # 좁게 잡으면 멀쩡한 행이 걸린다.
@@ -44,10 +48,15 @@ SMALL_GAP_G = 2.0
 
 
 def _num(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    """
+    숫자로 읽는다. **적재 쪽과 같은 함수를 쓴다.**
+
+    예전에는 여기서 float() 만 썼다. 그런데 이 원본은 '1,670.000' 처럼 쉼표가
+    섞여 온다(mfds_nutrition 이 표본 1,500 건에서 1,665 개를 셌다). float() 이
+    None 을 돌려주면 check_energy 는 `return []` 로 **행 전체를 조용히 검사
+    면제**한다 — 예외도 로그도 없어 밖에서는 '이상 없음' 과 구분되지 않는다.
+    """
+    return _number(value)
 
 
 def _get(row, key):
@@ -261,8 +270,16 @@ def check_top_ingredients(row, sorted_text):
 
 
 def check(row, sorted_text=None):
-    """한 행을 다 잰다. 원재료 문구가 없으면 A 만 잰다."""
+    """
+    한 행을 다 잰다. 원재료 문구가 없으면 원재료가 필요 없는 규칙만 잰다.
+
+    **C 를 빠뜨렸던 자리다.** '다 잰다' 고 적어 두고 A(+B)만 불렀다. 지금은
+    명령이 규칙을 하나씩 직접 부르고 있어 드러나지 않았지만, 화면이나 다른
+    서비스가 이 진입점을 쓰는 순간 열량 규칙이 조용히 빠진다 — 터지지 않으므로
+    아무도 모른다. 이 저장소가 AMT_NUM 매핑에서 거듭 경고한 실패 모양이다.
+    """
     found = check_internal(row)
+    found.extend(check_energy(row))
     if sorted_text:
         found.extend(check_top_ingredients(row, sorted_text))
     return found
@@ -292,90 +309,109 @@ def check(row, sorted_text=None):
 # 이 규칙은 다르다 — **같은 기준량 안에서 성분과 열량을 견주는 것**이라
 # 그 기준량이 무엇이든 관계가 성립한다. 부피 기준 5 만 행도 잴 수 있다.
 
-# 어긋난 폭이 이보다 크면 '그럴 수가 없다' 로 본다. 20~50 % 는 원본이 부실한
-# 것일 수 있어 '봐야 함' 이다 — 김치처럼 우리가 못 세는 성분(유기산)이 있는
-# 식품이 그 폭에 들어온다. 자릿수가 밀린 행은 100 % 넘게 어긋난다.
+# 상한을 넘은 폭이 상한의 이만큼이면 '그럴 수가 없다' 로 본다.
 ENERGY_HIGH_RATIO = 0.5
 
+# 보이지 않는 유기산 몫은 constants 에 한 번만 적혀 있다 — 적재 검산
+# (mfds_nutrition.verify_row)도 같은 이유로 같은 수를 쓴다.
+ORGANIC_ACID_SLACK_KCAL = NUTRITION_ORGANIC_ACID_SLACK_KCAL
 
-def _allowed(calc, stated, ratio):
+# 알코올이 든 식품. **이름으로 가릴 수밖에 없다** — 컬럼이 없기 때문이다.
+# 놓친 이름이 있으면 그 행은 오탐으로 남는다. 완전하지 않다는 것을 알고 쓴다.
+ALCOHOL_WORDS = ('주류', '소주', '맥주', '막걸리', '탁주', '약주', '청주',
+                 '위스키', '와인', '포도주', '사케', '청하', '고량주',
+                 '증류주', '발효주', '리큐르', '브랜디', '보드카', '럼',
+                 '진로', '하이볼', '칵테일', '과실주', '살균탁주')
+
+
+def _text_of(row):
+    """이름·분류를 한 줄로 이어 붙인다. 이름으로 가릴 때 쓴다."""
+    parts = []
+    for key in ('food_nm_kr', 'db_grp_nm', 'db_class_nm', 'food_cat1_nm'):
+        value = row.get(key) if isinstance(row, dict) else getattr(row, key, None)
+        if value:
+            parts.append(str(value))
+    return ' '.join(parts)
+
+
+def has_alcohol(row):
+    """알코올이 들었을 법한 행인가. 들었다면 상한을 잴 수 없다."""
+    text = _text_of(row)
+    return any(word in text for word in ALCOHOL_WORDS)
+
+
+def energy_bounds(row):
     """
-    이만큼 벌어져도 좋다 — **분모는 둘 중 큰 쪽이다.**
+    이 행의 열량이 있을 수 있는 범위. (표기, 하한, 엄격한 하한, 상한)
+    또는 잴 수 없으면 None.
 
-    처음에 표기값을 분모로 썼다가 34 만 행에서 3,538 건이 걸렸다. 표본 스물을
-    꺼내 보니 **열아홉이 재계산 쪽이 높았고 그 배율이 1.20~1.24 에 몰려
-    있었다.** 우연일 수 없는 모양이다.
+    탄수화물 1 g 이 낼 수 있는 열량은 **0 에서 4 사이**다. 전분·당류는 4,
+    식이섬유 2, 당알콜 2.4, 타가토스 1.5, 알룰로오스·에리스리톨 0. 어느 몫이
+    무엇인지는 이 DB 가 말해 주지 않는다(컬럼이 없다). 그러니 알 수 있는 것은
+    범위뿐이다.
 
-    까닭은 「식품등의 표시기준」에 있다. 열량은 **실측이 표시량의 120 % 미만**
-    이면 되므로 제조사는 계산값을 1.2 로 나눈 값을 합법적으로 적는다(우리
-    영양성분 탭의 '허용오차' 단추가 하는 일이 그것이다). 그러면
+    하한이 둘인 까닭
+    ────────────────
+    처음에는 "당류만은 반드시 4 니까 그 몫은 못 내려간다" 를 하한으로 삼았다.
+    **그런데 같은 저장소의 CALORIE_FACTORS 가 그 말의 반례를 갖고 있다** —
+    타가토스 1.5 · 알룰로오스 0 이고, 둘 다 단당류라 신고 당류에 합산된다.
+    알룰로오스 시럽(당류 70 g · 표기 20 kcal)은 정상인데 하한 280 으로 걸렸다.
 
-        표기 = 계산 / 1.2   ->   벌어진 폭 = 표기 x 0.2
+    그래서 하한을 둘로 나눈다.
 
-    이라 표기값을 분모로 삼는 순간 **그런 제품이 모두 정확히 경계 위에**
-    놓인다. '아몬드커피쿠키' 는 폭 21.0 · 문턱 20.6 으로 **0.4 kcal 차이로**
-    걸렸다.
+        strict  단백질*4 + 지방*9          어떤 감미료를 써도 못 내려간다
+        lower   strict + 당류*4            희소당을 안 썼다면 여기가 바닥
 
-    그렇다고 계산값으로 바꾸기만 하면 이번에는 반대쪽이 걸린다. 표기가 계산
-    보다 **높은** 행 — 김치(표기 37.0 · 재계산 30.7)가 20.5 % 로 경계를
-    넘는다. 그 차이는 유기산 때문인데 **그 컬럼이 이 DB 에 아예 없다**
-    (mfds_nutrition.NOT_IN_SOURCE). 우리가 못 세는 성분으로 남의 행을 나무라는
-    셈이다.
-
-    양쪽 모두 **우리 자료가 빈 탓**이다. 높은 쪽으로 새는 것은 식이섬유·
-    당알콜이 비어서이고, 낮은 쪽으로 새는 것은 유기산 컬럼이 없어서다. 그래서
-    둘 중 큰 쪽을 분모로 삼아 **어느 쪽으로 읽어도 구제되지 않는 행만** 남긴다.
-    이 모듈이 처음부터 적어 둔 그 원칙이다 — 좁게 잡으면 멀쩡한 행이 무더기로
-    걸리고, 그러면 목록 자체를 아무도 안 본다.
-
-    지금은 이 여유가 **범위의 바깥쪽에만** 쓰인다(check_energy). 안쪽은
-    범위 자체가 감당한다 — 허용오차를 쓴 제품은 애초에 상한보다 낮다.
-
-    5 kcal 바닥은 남긴다. 그 아래에서는 비율로 재면 반올림도 크게 보인다.
+    strict 를 넘으면 '그럴 수가 없다', lower 만 넘으면 '봐야 함' 이다.
     """
-    return max(max(calc, stated) * ratio, 5.0)
-
-
-def check_energy(row):
-    """열량이 성분으로 낼 수 있는 범위 안에 있는가. [(규칙, 심각도, 설명)]"""
     energy = _get(row, 'calories')
-    if energy is None or energy <= 0:
-        return []
+    if energy is None:
+        return None
 
     values = {}
     for field in ('carbohydrates', 'proteins', 'fats'):
         value = _get(row, field)
         if value is None:
-            return []       # 셋 중 하나라도 없으면 잴 수 없다
+            return None     # 셋 중 하나라도 없으면 잴 수 없다
         values[field] = value
 
-    carb = values['carbohydrates']
-    base = values['proteins'] * 4 + values['fats'] * 9
-
-    # 탄수화물 1 g 이 낼 수 있는 열량은 **0 에서 4 사이**다. 전분·당류는 4,
-    # 식이섬유 2, 당알콜 2.4, 타가토스 1.5, 알룰로오스·에리스리톨 0.
-    # 어느 몫이 무엇인지는 이 DB 가 말해 주지 않는다(컬럼이 없다).
-    upper = carb * 4 + base
-
-    # 다만 **당류만은 반드시 4 다.** 그 몫은 0 으로 내려갈 수 없으므로,
-    # 나머지 탄수화물이 전부 에리스리톨이라 쳐도 이보다 낮아질 수 없다.
     sugars = _get(row, 'sugars')
-    lower = (min(sugars, carb) if sugars is not None else 0.0) * 4 + base
+    # 음수가 섞인 행은 A5 가 이미 잡는다. 여기서 또 재면 상·하한이 뒤집혀
+    # '전부 당·전분으로 세도 -20.0 kcal' 같은 읽을 수 없는 문장이 남는다.
+    if any(v < 0 for v in values.values()) or (sugars is not None and sugars < 0):
+        return None
 
-    if energy > upper + _allowed(upper, energy, NUTRITION_CALORIE_TOLERANCE):
-        gap = energy - upper
-        return [('C1',
-                 HIGH if gap >= _allowed(upper, energy, ENERGY_HIGH_RATIO)
-                 else WATCH,
-                 '성분이 이 열량을 설명하지 못한다 (표기 %.1f · 탄단지를 전부 '
-                 '당·전분으로 세도 %.1f)' % (energy, upper))]
+    carb = values['carbohydrates']
+    strict = values['proteins'] * 4 + values['fats'] * 9
+    lower = strict + (min(sugars, carb) if sugars is not None else 0.0) * 4
+    return energy, lower, strict, carb * 4 + strict
 
-    if energy < lower - _allowed(lower, energy, NUTRITION_CALORIE_TOLERANCE):
-        gap = lower - energy
-        return [('C2',
-                 HIGH if gap >= _allowed(lower, energy, ENERGY_HIGH_RATIO)
-                 else WATCH,
-                 '당류·단백질·지방만으로도 이보다 높다 (표기 %.1f · 최소 %.1f)'
-                 % (energy, lower))]
+
+def check_energy(row):
+    """열량이 성분으로 낼 수 있는 범위 안에 있는가. [(규칙, 심각도, 설명)]"""
+    bounds = energy_bounds(row)
+    if bounds is None:
+        return []
+    energy, lower, strict, upper = bounds
+
+    # 위쪽 담장 — 알코올이 든 행에는 담장을 세울 수 없다
+    if not has_alcohol(row):
+        room = max(upper * NUTRITION_CALORIE_TOLERANCE, ORGANIC_ACID_SLACK_KCAL)
+        if energy > upper + room:
+            gap = energy - upper
+            return [('C1',
+                     HIGH if gap >= max(upper * ENERGY_HIGH_RATIO,
+                                        ORGANIC_ACID_SLACK_KCAL) else WATCH,
+                     '성분이 이 열량을 설명하지 못한다 (표기 %.1f · 탄단지를 '
+                     '전부 당·전분으로 세도 %.1f)' % (energy, upper))]
+
+    # 아래쪽 담장 — 여기는 보이지 않는 성분이 도와줄 수 없다. 없는 열량을
+    # 만들어 내는 성분은 없기 때문이다.
+    if energy < lower - max(lower * NUTRITION_CALORIE_TOLERANCE, 5.0):
+        beyond_strict = energy < strict - max(strict * NUTRITION_CALORIE_TOLERANCE, 5.0)
+        return [('C2', HIGH if beyond_strict else WATCH,
+                 '%s만으로도 이보다 높다 (표기 %.1f · 최소 %.1f)'
+                 % ('단백질·지방' if beyond_strict else '당류·단백질·지방',
+                    energy, strict if beyond_strict else lower))]
 
     return []

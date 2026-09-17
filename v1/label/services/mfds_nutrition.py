@@ -26,7 +26,10 @@
 """
 import logging
 
-from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
+from v1.label.constants import (
+    NUTRITION_CALORIE_TOLERANCE,
+    NUTRITION_ORGANIC_ACID_SLACK_KCAL,
+)
 from v1.label.services.nutrition_calc import _number
 
 logger = logging.getLogger(__name__)
@@ -182,13 +185,15 @@ def verify_row(values, basis_amount, basis_unit, mass_tol=10.0,
     if calc is None:
         return None, '열량을 재계산할 값이 없다'
 
-    # 폭의 **분모는 계산값이지 표기값이 아니다.** 제조사는 「식품등의
-    # 표시기준」의 허용오차(실측 < 표시량의 120 %)를 써서 계산값을 1.2 로 나눈
-    # 값을 합법적으로 적는데, 표기값을 분모로 삼으면 그런 제품이 모두 정확히
-    # 경계 위에 놓인다. 자세한 것은 nutrition_anomaly._allowed 에 적어 두었다.
-    # (5 kcal 아래에서는 비율로 재면 작은 차이도 크게 보이므로 바닥을 둔다.)
+    # 폭의 **분모는 계산값이다.** 제조사는 「식품등의 표시기준」의 허용오차
+    # (실측 < 표시량의 120 %)를 써서 계산값을 1.2 로 나눈 값을 합법적으로 적는데,
+    # 표기값을 분모로 삼으면 그런 제품이 모두 정확히 경계 위에 놓인다.
+    #
+    # 바닥은 5 kcal 이 아니라 **유기산 몫**이다. 유기산은 이 DB 에 컬럼이 없어
+    # (NOT_IN_SOURCE) 우리 계산이 구조적으로 낮게 나온다 — 김치가 늘 걸리던
+    # 이유가 그것이다. 같은 수를 nutrition_anomaly 도 쓴다.
     def allowed_for(base):
-        return max(max(base, energy) * energy_tol, 5.0)
+        return max(base * energy_tol, NUTRITION_ORGANIC_ACID_SLACK_KCAL)
 
     # **원본이 두 규칙을 섞어 쓴다.** 6 만 행을 재 보고 알았다.
     #
