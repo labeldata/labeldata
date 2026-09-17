@@ -20777,3 +20777,31 @@ class NutritionAnomalyCommandTests(TestCase):
         codes = set(NutritionAnomaly.objects.values_list('rule_code', flat=True))
         self.assertIn('B9', codes)
         self.assertIn('A1', codes)
+
+
+class ReportNumberNormalizeTests(TestCase):
+    """
+    같은 품목보고번호가 두 꼴로 온다 — '20220460436160' 과
+    '19980448010-697'. 하이픈이 붙은 것을 통째로 버리면 조인이 그만큼 준다.
+    """
+
+    def norm(self, value):
+        from v1.label.services.mfds_nutrition import normalize_report_no
+
+        return normalize_report_no(value)
+
+    def test_하이픈은_뗀다(self):
+        self.assertEqual(self.norm('19980448010-697'), '19980448010697')
+        self.assertEqual(self.norm(' 2022046 0436160 '), '20220460436160')
+
+    def test_글자가_섞이면_쓰지_않는다(self):
+        """
+        억지로 숫자만 뽑아 맞추면 엉뚱한 원료에 붙는다 —
+        '2020_DNSP_04044' 에서 뽑은 '202004044' 가 남의 번호일 수 있다.
+        """
+        self.assertEqual(self.norm('2020_DNSP_04044'), '')
+        self.assertEqual(self.norm('N/A'), '')
+
+    def test_빈_값(self):
+        self.assertEqual(self.norm(''), '')
+        self.assertEqual(self.norm(None), '')
