@@ -21098,3 +21098,99 @@ class 규칙_갈래를_다시_돌려도_다른_갈래는_남는다(TestCase):
 
         left = set(NutritionAnomaly.objects.values_list('rule_code', flat=True))
         self.assertEqual(left, {'C1'})
+
+
+class 이상_판정_보고가_심각도를_갈라_적는다(TestCase):
+    """
+    `--rules C` 가 3,538 건을 냈는데 **총계만으로는 손댈 목록인지 알 수 없다.**
+    '그럴 수가 없다' 가 몇 건인지가 곧 사람이 볼 분량이다. 그리고 B 를 안
+    돌린 판에 '원재료를 붙인 행 0 / 340555' 가 찍히면, 붙이려다 실패한 것으로
+    읽힌다 — 애초에 붙일 일이 없었다.
+    """
+
+    def _run(self, **opts):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('check_nutrition_anomaly', dry_run=True, stdout=out, **opts)
+        return out.getvalue()
+
+    def setUp(self):
+        from v1.label.models import PublicFoodNutrition
+
+        # 열량이 크게 어긋난 행 하나 — 표기 100, 재계산 0
+        PublicFoodNutrition.objects.create(
+            food_cd='HIGH0001', food_nm_kr='그럴 수 없음',
+            basis_amount=100, basis_unit='g',
+            calories=100, carbohydrates=0, proteins=0, fats=0)
+
+    def test_심각도를_갈라_적는다(self):
+        text = self._run(rules='C')
+        self.assertIn('C1', text)
+        self.assertIn('그럴 수 없음 1', text)
+
+    def test_식이섬유가_빈_행을_따로_센다(self):
+        """재계산이 높게 나오는 쪽은 대개 이것이다. 원본이 부실한 것이다."""
+        self.assertIn('식이섬유 값이 아예 없는 행 1 건', self._run(rules='C'))
+
+    def test_B_를_안_돌리면_원재료_줄을_찍지_않는다(self):
+        self.assertNotIn('원재료를 붙인 행', self._run(rules='C'))
+        self.assertIn('원재료를 붙인 행', self._run(rules='B'))
+
+
+class 허용오차의_분모는_둘_중_큰_쪽이다(TestCase):
+    """
+    표기값을 분모로 삼았더니 34 만 행에서 3,538 건이 걸렸다. 표본 스물 중
+    **열아홉이 재계산 쪽이 높았고 배율이 1.20~1.24 에 몰려 있었다.**
+
+    「식품등의 표시기준」은 열량을 실측이 표시량의 120 % 미만이면 되게 한다.
+    제조사는 계산값을 1.2 로 나눈 값을 합법적으로 적고(우리 영양성분 탭의
+    '허용오차' 단추가 하는 일이다), 그러면 벌어진 폭이 정확히 표기 x 0.2 라
+    **그런 제품이 모두 경계 위에** 놓인다.
+
+    그렇다고 계산값으로 바꾸기만 하면 반대쪽이 걸린다 — 김치는 표기가 계산
+    보다 높은데(유기산 컬럼이 DB 에 없다) 20.5 % 로 경계를 넘는다. 양쪽 다
+    **우리 자료가 빈 탓**이라 둘 중 큰 쪽을 분모로 삼는다.
+    """
+
+    def test_허용오차를_쓴_제품은_걸리지_않는다(self):
+        """
+        '아몬드커피쿠키' — 표기 103.0 · 재계산 124.0. 표기값을 분모로 재면
+        폭 21.0 · 문턱 20.6 으로 **0.4 kcal 차이로** 걸렸다.
+        """
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        # 탄수화물 21 · 단백질 4 · 지방 4 -> 21x4 + 4x4 + 4x9 = 136... 이 아니라
+        # 표본의 수를 그대로 쓰기 위해 계산값이 124.0 이 되게 맞춘다
+        row = {'calories': 103.0, 'carbohydrates': 22.0, 'proteins': 4.0,
+               'fats': 2.0}   # 88 + 16 + 18 = 122.0 · 폭 19.0 · 문턱 24.4
+        self.assertEqual(check_energy(row), [])
+
+    def test_표기가_계산보다_높은_쪽도_구제된다(self):
+        """김치 — 표기 37.0 · 재계산 30.7. 차이는 DB 에 없는 유기산이다."""
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        self.assertEqual(check_energy(
+            {'calories': 37.0, 'carbohydrates': 5.5, 'proteins': 1.5,
+             'fats': 0.3}), [])
+
+    def test_진짜_어긋난_행은_그대로_걸린다(self):
+        """'커피_디카페인 제로슈가' — 표기 1.0 · 재계산 12.5. 에리스리톨이다."""
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        row = {'calories': 1.0, 'carbohydrates': 3.125, 'proteins': 0.0,
+               'fats': 0.0}   # 12.5
+        self.assertEqual([c for c, _, _ in check_energy(row)], ['C1'])
+
+    def test_적재_검산도_같은_분모를_쓴다(self):
+        from v1.label.services.mfds_nutrition import verify_row
+
+        # 표기 350 · 재계산 422 — 허용오차를 쓴 케이크. 표기 분모면 어긋남이다
+        cake = {'moisture': 20.0, 'proteins': 5.0, 'fats': 22.0, 'ash': 1.0,
+                'carbohydrates': 50.0, 'calories': 350.0}
+        # 50x4 + 5x4 + 22x9 = 418.0 · 폭 68.0
+        #   표기 분모: 350 x 0.2 = 70.0  -> 통과(간발)
+        #   계산 분모: 418 x 0.2 = 83.6  -> 통과(여유)
+        self.assertEqual(verify_row(cake, 100.0, 'g'), (True, ''))

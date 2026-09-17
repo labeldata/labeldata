@@ -182,8 +182,13 @@ def verify_row(values, basis_amount, basis_unit, mass_tol=10.0,
     if calc is None:
         return None, '열량을 재계산할 값이 없다'
 
-    # 5 kcal 아래에서는 비율로 재면 작은 차이도 크게 보인다
-    allowed = max(energy * energy_tol, 5.0)
+    # 폭의 **분모는 계산값이지 표기값이 아니다.** 제조사는 「식품등의
+    # 표시기준」의 허용오차(실측 < 표시량의 120 %)를 써서 계산값을 1.2 로 나눈
+    # 값을 합법적으로 적는데, 표기값을 분모로 삼으면 그런 제품이 모두 정확히
+    # 경계 위에 놓인다. 자세한 것은 nutrition_anomaly._allowed 에 적어 두었다.
+    # (5 kcal 아래에서는 비율로 재면 작은 차이도 크게 보이므로 바닥을 둔다.)
+    def allowed_for(base):
+        return max(max(base, energy) * energy_tol, 5.0)
 
     # **원본이 두 규칙을 섞어 쓴다.** 6 만 행을 재 보고 알았다.
     #
@@ -209,8 +214,8 @@ def verify_row(values, basis_amount, basis_unit, mass_tol=10.0,
     # 김치가 걸린 이유는 따로 있다: 유기산은 이 DB 에 컬럼 자체가 없어
     # (NOT_IN_SOURCE) 우리 계산이 구조적으로 낮게 나온다.
     plain = _plain_energy(values)
-    fits = abs(calc - energy) <= allowed or (
-        plain is not None and abs(plain - energy) <= allowed)
+    fits = abs(calc - energy) <= allowed_for(calc) or (
+        plain is not None and abs(plain - energy) <= allowed_for(plain))
     if not fits:
         return False, '열량 재계산 %.1f kcal (표기 %.1f)' % (calc, energy)
 

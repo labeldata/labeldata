@@ -53,6 +53,8 @@ class Command(BaseCommand):
         w('행 %d 개를 잰다 (규칙 %s)' % (total, want))
 
         found, by_rule, with_names, seen = [], {}, 0, 0
+        by_sev = {}       # (규칙, 심각도) -> 건수
+        no_fiber = 0      # C1 중 식이섬유 값이 아예 없던 행
         samples = {}      # 규칙마다 몇 건은 눈으로 봐야 오탐인지 안다
         for chunk in self._chunks(qs.iterator(chunk_size=CHUNK), CHUNK):
             # 원재료는 번호로 한 번에 끌어온다. 행마다 조회하면 32만 번이다.
@@ -73,9 +75,18 @@ class Command(BaseCommand):
                 if do_b and sorted_text:
                     hits += rules.check_top_ingredients(row, sorted_text)
                 if do_c:
-                    hits += rules.check_energy(row)
+                    energy_hits = rules.check_energy(row)
+                    # **재계산이 높게 나오는 쪽은 대개 식이섬유가 빈 행이다.**
+                    # 우리 계산은 식이섬유를 탄수화물에서 빼고 2 kcal 로 세는데,
+                    # 값이 없으면 그 몫까지 4 kcal 로 센다. 코코아·미숫가루처럼
+                    # 섬유가 많은 식품에서 열량이 구조적으로 높게 나온다 —
+                    # 원본이 부실한 것이지 그 행이 틀린 것이 아니다.
+                    if energy_hits and row.dietary_fiber is None:
+                        no_fiber += 1
+                    hits += energy_hits
                 for code, severity, detail in hits:
                     by_rule[code] = by_rule.get(code, 0) + 1
+                    by_sev[(code, severity)] = by_sev.get((code, severity), 0) + 1
                     if opts['sample'] and len(samples.setdefault(code, [])) < opts['sample']:
                         samples[code].append(
                             '%s | %s | %s' % (row.food_nm_kr or '',
@@ -97,11 +108,24 @@ class Command(BaseCommand):
             for a in found:
                 a.food_type = (types.get(a.report_no) or '')[:100]
 
-        w('원재료를 붙인 행 %d / %d' % (with_names, seen))
+        # B 를 안 돌렸으면 원재료를 붙일 일이 없었다. 그때 '0 / 340555' 는
+        # 아무것도 못 붙였다는 말로 읽혀 사람을 놀라게 한다.
+        if do_b:
+            w('원재료를 붙인 행 %d / %d' % (with_names, seen))
         for code in sorted(by_rule):
-            w('  %-4s %d' % (code, by_rule[code]))
+            # 심각도를 함께 적는다. **총계만으로는 손댈 목록인지 알 수 없다** —
+            # 3,538 건 중 '그럴 수가 없다' 가 몇인지가 곧 볼 분량이다.
+            split = ' · '.join(
+                '%s %d' % ('그럴 수 없음' if sev == rules.HIGH else '봐야 함',
+                           by_sev[(code, sev)])
+                for sev in (rules.HIGH, rules.WATCH)
+                if (code, sev) in by_sev)
+            w('  %-4s %d   (%s)' % (code, by_rule[code], split))
             for line in samples.get(code, []):
                 w('        %s' % line)
+        if do_c and by_rule.get('C1'):
+            w('        └ 이 중 식이섬유 값이 아예 없는 행 %d 건 — 우리 계산이 '
+              '구조적으로 높게 나온다' % no_fiber)
         w(self.style.SUCCESS('이상 판정 %d 건' % len(found)))
 
         if dry:

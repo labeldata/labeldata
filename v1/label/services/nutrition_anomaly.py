@@ -296,6 +296,41 @@ def check(row, sorted_text=None):
 ENERGY_HIGH_RATIO = 0.5
 
 
+def _allowed(calc, stated, ratio):
+    """
+    이만큼 벌어져도 좋다 — **분모는 둘 중 큰 쪽이다.**
+
+    처음에 표기값을 분모로 썼다가 34 만 행에서 3,538 건이 걸렸다. 표본 스물을
+    꺼내 보니 **열아홉이 재계산 쪽이 높았고 그 배율이 1.20~1.24 에 몰려
+    있었다.** 우연일 수 없는 모양이다.
+
+    까닭은 「식품등의 표시기준」에 있다. 열량은 **실측이 표시량의 120 % 미만**
+    이면 되므로 제조사는 계산값을 1.2 로 나눈 값을 합법적으로 적는다(우리
+    영양성분 탭의 '허용오차' 단추가 하는 일이 그것이다). 그러면
+
+        표기 = 계산 / 1.2   ->   벌어진 폭 = 표기 x 0.2
+
+    이라 표기값을 분모로 삼는 순간 **그런 제품이 모두 정확히 경계 위에**
+    놓인다. '아몬드커피쿠키' 는 폭 21.0 · 문턱 20.6 으로 **0.4 kcal 차이로**
+    걸렸다.
+
+    그렇다고 계산값으로 바꾸기만 하면 이번에는 반대쪽이 걸린다. 표기가 계산
+    보다 **높은** 행 — 김치(표기 37.0 · 재계산 30.7)가 20.5 % 로 경계를
+    넘는다. 그 차이는 유기산 때문인데 **그 컬럼이 이 DB 에 아예 없다**
+    (mfds_nutrition.NOT_IN_SOURCE). 우리가 못 세는 성분으로 남의 행을 나무라는
+    셈이다.
+
+    양쪽 모두 **우리 자료가 빈 탓**이다. 높은 쪽으로 새는 것은 식이섬유·
+    당알콜이 비어서이고, 낮은 쪽으로 새는 것은 유기산 컬럼이 없어서다. 그래서
+    둘 중 큰 쪽을 분모로 삼아 **어느 쪽으로 읽어도 구제되지 않는 행만** 남긴다.
+    이 모듈이 처음부터 적어 둔 그 원칙이다 — 좁게 잡으면 멀쩡한 행이 무더기로
+    걸리고, 그러면 목록 자체를 아무도 안 본다.
+
+    5 kcal 바닥은 남긴다. 그 아래에서는 비율로 재면 반올림도 크게 보인다.
+    """
+    return max(max(calc, stated) * ratio, 5.0)
+
+
 def check_energy(row):
     """열량이 탄단지와 맞는가. [(규칙, 심각도, 설명)]"""
     from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
@@ -326,12 +361,12 @@ def check_energy(row):
     # 만든 행이 억울하게 걸린다. 그래서 **가까운 쪽으로 잰다.**
     plain = (values['carbohydrates'] * 4 + values['proteins'] * 4
              + values['fats'] * 9)
-    gap = min(abs(calc - energy), abs(plain - energy))
+    gap, base = min(((abs(calc - energy), calc), (abs(plain - energy), plain)))
 
-    # 5 kcal 아래에서는 비율로 재면 작은 차이도 크게 보인다
-    if gap <= max(energy * NUTRITION_CALORIE_TOLERANCE, 5.0):
+    if gap <= _allowed(base, energy, NUTRITION_CALORIE_TOLERANCE):
         return []
 
-    return [('C1', HIGH if gap >= energy * ENERGY_HIGH_RATIO else WATCH,
+    return [('C1',
+             HIGH if gap >= _allowed(base, energy, ENERGY_HIGH_RATIO) else WATCH,
              '열량이 성분과 맞지 않는다 (표기 %.1f · 재계산 %.1f)'
              % (energy, calc))]
