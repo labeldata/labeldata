@@ -21002,3 +21002,99 @@ class 영양성분_등록_요령의_검토_규칙(TestCase):
         # 폭이 좁으면 같은 행이 어긋남으로 뽑힌다 — 바뀐 것이 이 수임을 보인다
         verdict, _ = verify_row(kimchi, 100.0, 'g', energy_tol=0.15)
         self.assertIs(verdict, False)
+
+
+class 열량_규칙이_못_재던_행을_잰다(TestCase):
+    """
+    질량 합 검산(`mfds_nutrition.verify_row`)은 수분·회분을 쓰는데, 그 둘은
+    실험실이 잰 행에만 있다. 가공식품은 제조사 신고값이라 표시 9 종뿐이다.
+    34 만 건 적재에서 **96.6 %(328,894 건)가 '못 잼'** 이었다.
+
+    열량 규칙은 표시 9 종만으로 성립한다 — 그 32 만 행이 이 규칙의 자리다.
+    """
+
+    def _energy(self, **row):
+        from v1.label.services.nutrition_anomaly import check_energy
+
+        return check_energy(row)
+
+    def test_맞으면_조용하다(self):
+        self.assertEqual(
+            self._energy(calories=100, carbohydrates=25, proteins=0, fats=0), [])
+
+    def test_요령의_20퍼센트_안이면_조용하다(self):
+        """배추김치_가을재배 — 재계산 30.7 / 표기 37.0 은 17 % 차다."""
+        self.assertEqual(
+            self._energy(calories=37.0, carbohydrates=5.5, proteins=1.5,
+                         fats=0.3), [])
+
+    def test_크게_어긋나면_그럴_수_없다로_본다(self):
+        from v1.label.services.nutrition_anomaly import HIGH
+
+        hits = self._energy(calories=100, carbohydrates=0, proteins=0, fats=0)
+        self.assertEqual([(c, s) for c, s, _ in hits], [('C1', HIGH)])
+
+    def test_애매한_폭은_봐야_함으로_내린다(self):
+        """20~50 % 는 원본이 부실한 것일 수 있다 — 우리가 못 세는 유기산 같은."""
+        from v1.label.services.nutrition_anomaly import WATCH
+
+        hits = self._energy(calories=100, carbohydrates=17.5, proteins=0, fats=0)
+        self.assertEqual([(c, s) for c, s, _ in hits], [('C1', WATCH)])
+
+    def test_부피_기준_행도_잰다(self):
+        """
+        A4(기준량 초과)는 g 일 때만 쟀다 — 비중 때문이다. 이 규칙은 같은
+        기준량 안에서 견주는 것이라 그 기준량이 무엇이든 성립한다.
+        적재본의 5 만 행(14.7 %)이 100 mL 기준이다.
+        """
+        hits = self._energy(calories=100, carbohydrates=0, proteins=0, fats=0,
+                            basis_amount=100, basis_unit='mL')
+        self.assertEqual([c for c, _, _ in hits], ['C1'])
+
+    def test_탄단지_중_하나라도_없으면_재지_않는다(self):
+        self.assertEqual(
+            self._energy(calories=100, carbohydrates=25, proteins=0), [])
+
+    def test_열량이_낮으면_비율_대신_5kcal_로_잰다(self):
+        """4 kcal 짜리 행에서 20 % 는 0.8 kcal 이다. 반올림만으로도 넘는다."""
+        self.assertEqual(
+            self._energy(calories=4, carbohydrates=0, proteins=0, fats=0), [])
+
+    def test_단순_4_4_9_로_만든_행도_통과시킨다(self):
+        """
+        원본이 두 규칙을 섞어 쓴다(verify_row 가 6 만 행으로 재 보고 알아낸 것).
+        식이섬유 10 g 인 이 행은 규정 계수로는 60, 단순 4·4·9 로는 80 이다.
+        한 규칙으로만 재면 다른 규칙으로 만든 행이 억울하게 걸린다.
+        """
+        self.assertEqual(
+            self._energy(calories=80, carbohydrates=20, dietary_fiber=10,
+                         proteins=0, fats=0), [])
+
+
+class 규칙_갈래를_다시_돌려도_다른_갈래는_남는다(TestCase):
+    """
+    옛 판정을 지우는 조건이 A·B 를 if/elif 로 갈랐다. 둘 다 돌리면 '전부
+    지우기' 로 떨어지는데, 갈래가 셋이 된 지금 그대로 두면 `--rules AB` 가
+    **C 결과까지 쓸어 간다.** 다시 돌린 적도 없는 규칙의 목록이 사라진다.
+    """
+
+    def test_AB_를_다시_돌려도_C_판정은_남는다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from v1.label.models import NutritionAnomaly, PublicFoodNutrition
+
+        row = PublicFoodNutrition.objects.create(
+            food_cd='TEST0001', food_nm_kr='시험품',
+            basis_amount=100, basis_unit='g',
+            calories=100, carbohydrates=25, proteins=0, fats=0)
+        for code in ('A1', 'B1', 'C1'):
+            NutritionAnomaly.objects.create(
+                nutrition=row, report_no='', food_name='시험품',
+                rule_code=code, severity='high', detail='옛 판정')
+
+        call_command('check_nutrition_anomaly', rules='AB', stdout=StringIO())
+
+        left = set(NutritionAnomaly.objects.values_list('rule_code', flat=True))
+        self.assertEqual(left, {'C1'})

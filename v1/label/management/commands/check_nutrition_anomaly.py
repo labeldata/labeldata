@@ -4,6 +4,7 @@
 
     python manage.py check_nutrition_anomaly            # 전량, 결과 저장
     python manage.py check_nutrition_anomaly --rules A  # 성분 모순만
+    python manage.py check_nutrition_anomaly --rules C --dry-run   # 열량만 세기
     python manage.py check_nutrition_anomaly --dry-run  # 세기만 (저장 안 함)
     python manage.py check_nutrition_anomaly --limit 5000
 
@@ -17,6 +18,7 @@
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Q
 
 from v1.label.models import FoodItem, NutritionAnomaly, PublicFoodNutrition
 from v1.label.services import nutrition_anomaly as rules
@@ -29,7 +31,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--rules', default='AB',
-                            help='A=성분 모순 · B=상위 원료와 0 (기본 AB)')
+                            help='A=성분 모순 · B=상위 원료와 0 · C=열량 (기본 AB)')
         parser.add_argument('--limit', type=int, default=0,
                             help='앞에서 몇 행만 (0=전량)')
         parser.add_argument('--dry-run', action='store_true',
@@ -39,7 +41,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         want = str(opts['rules']).upper()
-        do_a, do_b = 'A' in want, 'B' in want
+        do_a, do_b, do_c = 'A' in want, 'B' in want, 'C' in want
         limit, dry = opts['limit'], opts['dry_run']
         w = self.stdout.write
 
@@ -70,6 +72,8 @@ class Command(BaseCommand):
                 hits = rules.check_internal(row) if do_a else []
                 if do_b and sorted_text:
                     hits += rules.check_top_ingredients(row, sorted_text)
+                if do_c:
+                    hits += rules.check_energy(row)
                 for code, severity, detail in hits:
                     by_rule[code] = by_rule.get(code, 0) + 1
                     if opts['sample'] and len(samples.setdefault(code, [])) < opts['sample']:
@@ -106,13 +110,18 @@ class Command(BaseCommand):
 
         # 돌린 규칙의 옛 판정만 지운다 — A 만 다시 돌렸는데 B 결과까지
         # 사라지면 목록이 반쪽이 된다.
-        codes = [c for c in by_rule] or None
+        #
+        # 돌린 갈래를 그대로 조건으로 쓴다. 예전에는 A·B 를 if/elif 로 갈랐는데,
+        # 둘 다 돌리면 '전부 지우기' 로 떨어졌다. 갈래가 셋이 된 지금 그대로
+        # 두면 `--rules AB` 가 **C 결과까지 쓸어 간다.**
+        families = [f for f in ('A', 'B', 'C') if f in want]
         with transaction.atomic():
             old = NutritionAnomaly.objects.all()
-            if do_a and not do_b:
-                old = old.filter(rule_code__startswith='A')
-            elif do_b and not do_a:
-                old = old.filter(rule_code__startswith='B')
+            if families:
+                condition = Q()
+                for family in families:
+                    condition |= Q(rule_code__startswith=family)
+                old = old.filter(condition)
             removed = old.count()
             old.delete()
             NutritionAnomaly.objects.bulk_create(found, batch_size=1000)

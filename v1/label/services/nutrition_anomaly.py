@@ -13,6 +13,7 @@
   A. 성분끼리의 모순   원재료가 없어도 성립한다. 당류가 탄수화물보다 많을
                        수는 없다 — 부분집합이기 때문이다. 오탐이 거의 없다.
   B. 상위 원료와 0     설탕이 1순위인데 당류가 0 이면 둘 중 하나는 틀렸다.
+  C. 열량과 성분       탄단지로 센 열량이 표기와 ±20 % 안에 드는가.
 
 **"틀렸다" 가 아니라 "봐야 한다" 다.** 원본이 부실한 것일 수도, 우리 매핑이
 밀린 것일 수도 있다. `mfds_nutrition.verify_row` 가 같은 교훈을 적어 두었다 —
@@ -263,3 +264,74 @@ def check(row, sorted_text=None):
     if sorted_text:
         found.extend(check_top_ingredients(row, sorted_text))
     return found
+
+
+# ── C. 열량이 성분과 맞는가 ────────────────────────────────────────────
+#
+# 식약처 「영양성분 등록 요령」의 검토 규칙 1 이다. 요령이 정한 폭이 ±20 %
+# 이고, 그 수는 constants 에 한 번만 적혀 있다.
+#
+# 왜 이 규칙이 필요한가 — 나머지가 거의 아무것도 못 재기 때문이다
+# ─────────────────────────────────────────────────────────────────
+# `mfds_nutrition.verify_row` 는 질량 합(수분+단백질+지방+회분+탄수화물)을
+# 본다. 그런데 **수분·회분은 실험실이 잰 행에만 있다.** 가공식품 행은 제조사
+# 신고값이라 표시 9 종밖에 없다. 34 만 건 적재에서 실제로 이렇게 나왔다.
+#
+#     검산 통과     10,815 ( 3.2 %)
+#     검산 어긋남      846 ( 0.2 %)
+#     못 잼        328,894 (96.6 %)   ← 여기가 통째로 비어 있었다
+#
+# 이 규칙은 **표시 9 종만으로 성립한다.** 가공식품 행이 가진 것이 정확히
+# 그것이고, 우리 원료에 붙는 행도 100 % 아홉 항목을 다 들고 있다.
+#
+# 기준량이 g 이든 mL 이든 잰다
+# ────────────────────────────
+# A4 는 g 일 때만 쟀다. 100 mL 를 g 자로 재면 비중 때문에 멀쩡한 행이 걸려서다.
+# 이 규칙은 다르다 — **같은 기준량 안에서 성분과 열량을 견주는 것**이라
+# 그 기준량이 무엇이든 관계가 성립한다. 부피 기준 5 만 행도 잴 수 있다.
+
+# 어긋난 폭이 이보다 크면 '그럴 수가 없다' 로 본다. 20~50 % 는 원본이 부실한
+# 것일 수 있어 '봐야 함' 이다 — 김치처럼 우리가 못 세는 성분(유기산)이 있는
+# 식품이 그 폭에 들어온다. 자릿수가 밀린 행은 100 % 넘게 어긋난다.
+ENERGY_HIGH_RATIO = 0.5
+
+
+def check_energy(row):
+    """열량이 탄단지와 맞는가. [(규칙, 심각도, 설명)]"""
+    from v1.label.constants import NUTRITION_CALORIE_TOLERANCE
+    from v1.label.services.nutrition_calc import calories_from_macros
+
+    energy = _get(row, 'calories')
+    if energy is None or energy <= 0:
+        return []
+
+    values = {}
+    for field in ('carbohydrates', 'proteins', 'fats'):
+        value = _get(row, field)
+        if value is None:
+            return []       # 셋 중 하나라도 없으면 잴 수 없다
+        values[field] = value
+    for field in ('dietary_fiber', 'sugar_alcohols'):
+        value = _get(row, field)
+        if value is not None:
+            values[field] = value
+
+    calc = calories_from_macros(values)
+    if calc is None:
+        return []
+
+    # **원본이 두 규칙을 섞어 쓴다.** verify_row 가 6 만 행으로 재 보고 알아낸
+    # 것이고 여기서도 그대로다 — 규정 계수(식이섬유 2.0 · 당알콜 2.4)로 만든
+    # 행과 단순 4·4·9 로 만든 행이 섞여 있다. 한 규칙으로만 재면 다른 규칙으로
+    # 만든 행이 억울하게 걸린다. 그래서 **가까운 쪽으로 잰다.**
+    plain = (values['carbohydrates'] * 4 + values['proteins'] * 4
+             + values['fats'] * 9)
+    gap = min(abs(calc - energy), abs(plain - energy))
+
+    # 5 kcal 아래에서는 비율로 재면 작은 차이도 크게 보인다
+    if gap <= max(energy * NUTRITION_CALORIE_TOLERANCE, 5.0):
+        return []
+
+    return [('C1', HIGH if gap >= energy * ENERGY_HIGH_RATIO else WATCH,
+             '열량이 성분과 맞지 않는다 (표기 %.1f · 재계산 %.1f)'
+             % (energy, calc))]
