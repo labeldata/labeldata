@@ -136,6 +136,136 @@ class ToPer100RowShapeTests(SimpleTestCase):
         self.assertEqual(to_per_100(rows, '90'), rows)
 
 
+class StaleCalcValuesTests(TestCase):
+    """
+    **옛 계산값이 방금 저장한 값을 이겼다.**
+
+    편집기는 저장 칸을 그대로 보여 주지 않는다 — `nutrition_calc_values`
+    (오차 물리기 전 계산값)가 있으면 그것으로 표를 채운다. 저장 칸에는
+    적용값이 들어 있어서, 다시 열 때마다 사람이 넣은 값이 부푼 값으로
+    바뀌지 않게 하려는 설계다.
+
+    그런데 판독은 성분 칸만 쓰고 이 JSON 을 건드리지 않았다.
+
+        DB.calories               352.22   <- 판독이 제대로 썼다
+        DB.nutrition_calc_values     317   <- 옛 값이 남아 있다
+        화면                         317   <- 이쪽이 이긴다
+
+    **신규 제품은 이 JSON 이 비어 있어 멀쩡했고, 기존 제품에서만 났다.**
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='stalecalc', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='과자', content_weight='90 g',
+            calories='317', natriums='200',
+            nutrition_calc_values='{"calories": "317", "natriums": "200",'
+                                  ' "dietary_fiber": "3"}')
+
+    def _apply(self, **body):
+        url = reverse('products:ocr_apply_extras',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(url, data=json.dumps(body),
+                                content_type='application/json')
+
+    def test_쓴_칸의_옛_계산값을_치운다(self):
+        self._apply(nutrition=[{'field': 'calories', 'raw': '317 kcal'}],
+                    nutrition_basis='총 내용량당', content_weight='90 g')
+
+        label = MyLabel.objects.get(pk=self.label.pk)
+        self.assertAlmostEqual(float(label.calories), 352.22, places=1)
+        saved = json.loads(label.nutrition_calc_values)
+        self.assertNotIn('calories', saved)
+
+    def test_손대지_않은_칸의_계산값은_남긴다(self):
+        """식이섬유는 판독이 건드리지 않았다. 그 칸의 계산값은 여전히 맞다."""
+        self._apply(nutrition=[{'field': 'calories', 'raw': '317 kcal'}],
+                    nutrition_basis='총 내용량당', content_weight='90 g')
+
+        saved = json.loads(
+            MyLabel.objects.get(pk=self.label.pk).nutrition_calc_values)
+        self.assertEqual(saved['dietary_fiber'], '3')
+        self.assertEqual(saved['natriums'], '200')
+
+    def test_전부_치우면_빈_문자열로_둔다(self):
+        """'{}' 를 남기면 편집기가 그것을 진짜 계산값으로 읽고 한 겹 더 돈다."""
+        self.label.nutrition_calc_values = '{"calories": "317"}'
+        self.label.save(update_fields=['nutrition_calc_values'])
+
+        self._apply(nutrition=[{'field': 'calories', 'raw': '317 kcal'}],
+                    nutrition_basis='총 내용량당', content_weight='90 g')
+
+        self.assertEqual(
+            MyLabel.objects.get(pk=self.label.pk).nutrition_calc_values, '')
+
+    def test_깨진_JSON은_건드리지_않는다(self):
+        """화면도 못 읽는 값이다(그쪽도 try/catch 로 넘긴다). 손대면 더 나쁘다."""
+        from v1.label.services.ocr_apply import drop_calc_values
+
+        self.label.nutrition_calc_values = '{깨진'
+        self.assertEqual(drop_calc_values(self.label, ['calories']), [])
+        self.assertEqual(self.label.nutrition_calc_values, '{깨진')
+
+
+class PrintedValueColumnTests(SimpleTestCase):
+    """
+    `인쇄될 값` 칸은 **표에 찍히는 그 글자**여야 한다.
+
+    예전에는 적용값(계산값+오차)을 소수 둘째 자리로 자르기만 했다. 그래서 칸
+    이름은 "인쇄될 값" 인데 미리보기와 다른 숫자가 떴다.
+
+        입력값 352.22  ->  인쇄될 값 352.22   <- 이 칸
+        미리보기                      315     <- 실제로 인쇄되는 값
+
+    표시기준 환산(총내용량당이면 총량/100 배)과 규정 반올림(열량 5 단위)이
+    빠져 있었다. 그 둘을 여기서 다시 구현하지 않고 미리보기를 그리는
+    함수와 **같은 것**을 부른다.
+    """
+
+    def source(self):
+        import io
+        return io.open('v1/templates/products/nutrition_editor.html',
+                       encoding='utf-8').read()
+
+    def block(self):
+        html = self.source()
+        at = html.index('function refreshApplied()')
+        return html[at:at + 3200]
+
+    def test_미리보기와_같은_함수를_쓴다(self):
+        block = self.block()
+        self.assertIn('window.processNutritionValue', block)
+        self.assertIn('normalizeBasicDisplayType', block)
+
+    def test_표시기준별_배수가_미리보기와_같다(self):
+        """generateBasicDisplayV3 의 switch 와 같은 값이어야 한다."""
+        block = self.block()
+        self.assertIn('multiplier = baseAmount / 100', block)
+        self.assertIn("case '100g': multiplier = 1;", block)
+        self.assertIn('multiplier = (baseAmount * perPackage) / 100', block)
+
+    def test_기준이_바뀌면_다시_그린다(self):
+        html = self.source()
+        at = html.index('function setBasicDisplayType')
+        self.assertIn('refreshApplied', html[at:at + 600])
+
+    def test_단위량이_바뀌면_다시_그린다(self):
+        html = self.source()
+        at = html.index("['serving_size', 'units_per_package'].forEach")
+        self.assertIn('refreshApplied', html[at:at + 700])
+
+    def test_화살표는_오차를_뜻한다(self):
+        """
+        표시기준 환산은 모든 칸에 똑같이 걸린다. 그것까지 세면 화살표가 늘
+        켜져서 "오차가 물렸다" 는 뜻이 사라진다 — 환산 전 값끼리 견준다.
+        """
+        block = self.block()
+        self.assertIn(
+            'const moved = Math.abs(value - (base[nutrient.field] || 0)) > 1e-9;',
+            block)
+
+
 class OcrPickWiringTests(SimpleTestCase):
     """
     확인 창에서 **고르는 줄**이 무엇인가.

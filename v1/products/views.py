@@ -8266,6 +8266,16 @@ def document_spec_nutrition_save(request, document_id):
         return JsonResponse({'success': False, 'error': '저장할 값이 없습니다.'},
                             status=400)
 
+    # 쓴 칸의 옛 계산값을 함께 치운다.
+    #
+    # 편집기는 저장 칸을 그대로 보여 주지 않는다 — nutrition_calc_values 가
+    # 있으면 그것이 이긴다. 안 치우면 성적서로 제대로 넣고도 화면에는 옛 값이
+    # 뜬다(사진 판독에서 실제로 그렇게 났다). 사진 판독 쪽과 같은 함수를 쓴다 —
+    # 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+    from v1.label.services.ocr_apply import drop_calc_values
+
+    wrote += drop_calc_values(label, wrote)
+
     # 근거를 남긴다. 이 표가 어디서 왔는지 못 대면 감사에서 설명할 수 없다.
     if hasattr(label, 'nutrition_source_note'):
         label.nutrition_source_note = (

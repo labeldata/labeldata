@@ -178,6 +178,63 @@ def to_per_100(rows, basis_amount):
     return converted
 
 
+def drop_calc_values(label, fields):
+    """
+    방금 쓴 칸을 **계산값 JSON 에서 뺀다.** 바뀌었으면 필드 이름을 돌려준다.
+
+    왜 이걸 안 하면 값이 되살아나는가
+    ─────────────────────────────────
+    영양성분 편집기는 저장 칸을 그대로 보여 주지 않는다.
+
+        let gridSource = data;
+        if (data.nutrition_calc_values) {
+            gridSource = Object.assign({}, data, JSON.parse(...));  // 계산값이 이긴다
+        }
+
+    저장 칸에는 **적용값**(오차를 물린 값)이 들어 있어서, 오차를 물리기 전
+    **계산값**을 따로 남겨 둔 것이다 — 안 그러면 다시 열 때마다 사람이 넣은
+    값이 사라지고 부푼 값만 남는다. 그 자체는 맞는 설계다.
+
+    그런데 판독은 성분 칸만 쓰고 이 JSON 을 건드리지 않았다. 그래서 예전에
+    계산기로 저장한 적이 있는 제품은 **옛 계산값이 계속 이겼다.**
+
+        DB.calories            352.22   <- 판독이 제대로 썼다
+        DB.nutrition_calc_values  317   <- 옛 값이 남아 있다
+        화면                      317   <- 이쪽이 이긴다
+
+    신규 제품은 이 JSON 이 비어 있어 멀쩡했고, 기존 제품에서만 났다.
+
+    왜 같은 값을 넣지 않고 빼는가
+    ─────────────────────────────
+    **판독으로 넣은 값에는 계산값이 따로 없다.** 오차를 물린 적이 없으니
+    적용값이 곧 그 값이다. 같은 숫자를 계산값 자리에 또 적어 두면, 오차가
+    켜져 있는 제품에서 다시 열 때 그 값에 오차가 한 번 더 물린다 — 표와
+    DB 가 갈라지는 바로 그 사고다.
+
+    빼면 `Object.assign` 이 저장 칸의 값을 쓴다. 손대지 않은 다른 칸의
+    계산값은 그대로 남는다.
+    """
+    import json
+
+    raw = (getattr(label, 'nutrition_calc_values', '') or '').strip()
+    if not raw:
+        return []
+    try:
+        saved = json.loads(raw)
+    except (ValueError, TypeError):
+        # 깨진 JSON 은 화면도 못 읽는다(그쪽도 try/catch 로 넘긴다). 건드리지 않는다.
+        return []
+    if not isinstance(saved, dict):
+        return []
+
+    left = {k: v for k, v in saved.items() if k not in set(fields)}
+    if len(left) == len(saved):
+        return []
+
+    label.nutrition_calc_values = json.dumps(left, ensure_ascii=False) if left else ''
+    return ['nutrition_calc_values']
+
+
 def apply_nutrition(label, rows):
     """
     고른 영양성분만 라벨에 쓴다. 안 고른 것은 건드리지 않는다.
@@ -211,6 +268,10 @@ def apply_nutrition(label, rows):
                 setattr(label, unit_field, unit)
                 changed.append(unit_field)
     if changed:
+        # 쓴 칸의 옛 계산값을 함께 치운다. 안 치우면 편집기가 그것을 먼저
+        # 보여 주어, 제대로 저장하고도 화면에는 옛 값이 뜬다(drop_calc_values).
+        changed += drop_calc_values(
+            label, [f for f in changed if not f.endswith('_unit')])
         # update_fields 를 준다 - 전체 save 는 수거검사 소급 매칭 시그널을 깨운다
         label.save(update_fields=sorted(set(changed)))
     return changed
