@@ -300,6 +300,48 @@ class OcrNutritionBasisApplyTests(TestCase):
         self.assertTrue(body['nutrition_basis_unknown'])
         self.assertTrue(body['recycling_applied'])
 
+    def test_미리보기는_저장될_값을_돌려주고_쓰지_않는다(self):
+        """
+        화면이 "이 값이 이렇게 들어갑니다" 를 보이려면 환산된 값이 필요한데,
+        그 셈을 JS 로 한 벌 더 만들면 언젠가 서버와 어긋난다. **저장할 때와
+        똑같은 코드**를 태우고 결과만 낸다 — 미리 본 값과 저장되는 값이 다를
+        수가 없다.
+        """
+        res = self._apply(preview=True, nutrition=self.ROWS,
+                          nutrition_basis='총 내용량당', content_weight='90 g')
+        body = res.json()
+        self.assertTrue(body['preview'])
+        self.assertAlmostEqual(float(body['values']['calories']), 352.22, places=1)
+        self.assertEqual(body['units']['calories'], 'kcal')
+        self.assertEqual(body['basis_amount'], '90')
+
+        # 아무것도 쓰지 않았다
+        label = MyLabel.objects.get(pk=self.label.pk)
+        self.assertFalse(label.calories)
+        self.assertFalse(label.basic_display_type)
+
+    def test_미리보기가_기준을_모르면_그렇다고_말한다(self):
+        """숫자를 비워 두면 '바뀌는 게 없다' 로 읽힌다. 무엇이 막혔는지 적는다."""
+        res = self._apply(preview=True, nutrition=self.ROWS,
+                          nutrition_basis='총 내용량당', content_weight='')
+        body = res.json()
+        self.assertTrue(body['nutrition_basis_unknown'])
+        self.assertEqual(body['values'], {})
+
+    def test_미리본_값과_저장된_값이_같다(self):
+        """둘이 갈리면 미리보기는 거짓말이 된다. 한 코드를 태우는 이유다."""
+        preview = self._apply(preview=True, nutrition=self.ROWS,
+                              nutrition_basis='총 내용량당',
+                              content_weight='90 g').json()['values']
+
+        self._apply(nutrition=self.ROWS, nutrition_basis='총 내용량당',
+                    content_weight='90 g')
+
+        label = MyLabel.objects.get(pk=self.label.pk)
+        for field, shown in preview.items():
+            self.assertEqual(getattr(label, field), shown,
+                             '%s 가 미리 본 값과 다르다' % field)
+
     def test_총_내용량_기준이면_포장개수를_1로_맞춘다(self):
         """
         저장 칸의 총 내용량은 `단위량 x 포장개수` 다. 기준이 총 내용량이면

@@ -636,6 +636,21 @@
 .ocr-control .form-select { font-size: 12.5px; padding: 3px 8px; }
 .ocr-control textarea     { line-height: 1.4; }
 
+/* 실제로 저장될 값. 사진의 표가 100 g 당이 아니면 읽은 값과 다르다.
+   읽은 값만 보이면 그 숫자가 그대로 들어간다고 여기게 되므로 바로 아래
+   붙여 둔다 — 눈이 두 숫자를 한 번에 본다. */
+.ocr-conv {
+    font-size:   11px;
+    color:       var(--ez-success, #1e8e3e);
+    line-height: 1.4;
+    margin-top:  3px;
+    white-space: nowrap;
+    overflow:    hidden;
+    text-overflow: ellipsis;
+}
+.ocr-conv:empty { display: none; }
+.ocr-conv-stuck { color: #b06000; }
+
 .ocr-flag {
     font-size:     10px;
     padding:       0 5px;

@@ -849,6 +849,12 @@
         body.addEventListener('change', function (e) {
           if (e.target.classList.contains('ocr-pick')) refreshPickState();
         });
+        /* 값을 고치면 저장될 값도 달라진다. 안 고치면 화면이 옛 환산값을
+           들고 있게 되고, 그건 아무것도 안 보여 주는 것보다 나쁘다. */
+        body.addEventListener('input', function (e) {
+          if (!e.target.classList.contains('ocr-value')) return;
+          if (e.target.closest('[data-nutri]')) scheduleConverted();
+        });
       }
       refreshPickState();
     }
@@ -883,8 +889,10 @@
       modal.hide();
     };
     modal.show();
-    // 영양성분의 '현재 값' 은 서버에 물어야 한다. 창을 먼저 띄우고 채운다.
+    // 영양성분의 '현재 값' 과 '저장될 값' 은 둘 다 서버가 안다. 창을 먼저
+    // 띄우고 채운다 — 왕복에 창 뜨는 일을 묶지 않는다.
     fillCurrentNutrition();
+    refreshConverted();
   }
 
   /*
@@ -1381,7 +1389,12 @@
           + '<span class="ocr-state-new">채움</span></div>'
           + '  <div class="ocr-control">'
           + '    <input type="text" class="form-control form-control-sm ocr-value"'
-          + '           value="' + esc(val(k)) + '"></div>'
+          + '           value="' + esc(val(k)) + '">'
+          /* 실제로 저장될 값. 사진의 표가 100 g 당이 아니면 읽은 값과 다르다.
+             그 둘이 다르다는 것을 **누르기 전에** 보여야 한다 — 읽은 값만
+             보이면 사용자는 그 숫자가 그대로 들어간다고 여긴다. */
+          + '    <div class="ocr-conv" data-nutri-conv="' + k + '"></div>'
+          + '  </div>'
           + '</div>';
       });
 
@@ -1389,12 +1402,16 @@
     if (nutriRows.length) {
       html += '<div class="mt-3 pt-2 border-top">'
         + '<div class="fw-semibold mb-1" style="font-size:13px;">영양정보</div>'
-        + '<div class="text-muted mb-2" style="font-size:11px;">'
+        + '<div class="text-muted mb-1" style="font-size:11px;">'
         + (val('nutrition_basis')
             ? '기준: ' + esc(val('nutrition_basis')) + '. '
             : '')
         + '영양성분 탭에 바로 저장됩니다. 기본 정보의 저장 버튼과 별개입니다.'
         + '</div>'
+        /* 무엇 당인 값을 무엇 당으로 바꿔 넣는지 한 줄로. 서버가 실제로 고른
+           기준을 되받아 적는다 — 사진에 적힌 말과 서버가 읽은 것이 다를 수
+           있고, 그 차이가 곧 틀린 표가 된다. */
+        + '<div class="text-muted mb-2" id="ocrBasisNote" style="font-size:11px;"></div>'
         + '<input type="hidden" id="ocrNutritionBasis" value="' + esc(val('nutrition_basis')) + '">'
         + '<div class="ocr-table">' + nutriRows.join('') + '</div></div>';
     }
@@ -1467,6 +1484,90 @@
             cell.innerHTML = '<span class="ocr-empty">확인 못 함</span>';
           });
       });
+  }
+
+  /* 저장될 값(100 g 당)을 미리 받아 읽은 값 아래에 적는다.
+   *
+   * **셈을 여기서 하지 않는다.** 기준을 고르는 규칙(resolve_basis)과 원문을
+   * 가르는 규칙(split_value_unit)이 둘 다 서버에 있고, JS 로 한 벌 더 만들면
+   * 둘 중 하나만 바뀌어도 화면이 거짓말을 하게 된다. 저장할 때와 **똑같은
+   * 코드**에 preview 로 물어보고 결과만 그린다.
+   */
+  var convTimer = null;
+
+  function refreshConverted() {
+    var id = labelId();
+    var rows = document.querySelectorAll('#basicInfoOcrBody [data-nutri]');
+    if (!id || !rows.length) return;
+
+    var nutrition = [];
+    rows.forEach(function (row) {
+      var input = row.querySelector('.ocr-value');
+      var text = input ? (input.value || '').trim() : '';
+      if (text) nutrition.push({ field: row.dataset.nutri, raw: text });
+    });
+
+    var basisEl = document.getElementById('ocrNutritionBasis');
+    var weightEl = document.getElementById('field-content-weight');
+
+    fetch('/products/labels/' + id + '/ocr-extras/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify({
+        preview: true,
+        nutrition: nutrition,
+        nutrition_basis: basisEl ? basisEl.value : '',
+        content_weight: weightEl ? (weightEl.value || '').trim() : ''
+      })
+    })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (r) {
+        if (!r) throw new Error('no data');
+        var values = r.values || {};
+        var units = r.units || {};
+        /* 기준량을 모르면 환산할 수 없다. 그때 숫자를 비워 두면 "바뀌는 게
+           없다" 로 읽히므로, 무엇이 막혔는지 그 자리에 적는다. */
+        var stuck = r.nutrition_basis_unknown;
+
+        document.querySelectorAll('#basicInfoOcrBody [data-nutri-conv]')
+          .forEach(function (cell) {
+            var key = cell.dataset.nutriConv;
+            var v = values[key];
+            if (stuck) {
+              cell.className = 'ocr-conv ocr-conv-stuck';
+              cell.textContent = '기준량을 몰라 환산할 수 없습니다';
+              return;
+            }
+            if (v === undefined || v === null || v === '') {
+              cell.className = 'ocr-conv';
+              cell.textContent = '';
+              return;
+            }
+            cell.className = 'ocr-conv';
+            cell.textContent = '저장될 값 ' + v + (units[key] ? ' ' + units[key] : '')
+              + ' (100 g·mL 당)';
+          });
+
+        var head = document.getElementById('ocrBasisNote');
+        if (head) {
+          head.textContent = stuck
+            ? (r.nutrition_basis_warning || '')
+            : (r.basis_amount
+                ? '읽은 값은 ' + r.basis_amount + (r.basis_unit || '')
+                  + ' 당입니다. 저장은 100 g·mL 당으로 환산해 들어갑니다.'
+                : '읽은 값을 그대로 저장합니다 (이미 100 g·mL 당).');
+        }
+      })
+      .catch(function () {
+        document.querySelectorAll('#basicInfoOcrBody [data-nutri-conv]')
+          .forEach(function (cell) { cell.textContent = ''; });
+      });
+  }
+
+  // 값을 고치는 동안 매 글자마다 묻지 않는다. 손을 멈추면 한 번 묻는다.
+  function scheduleConverted() {
+    if (convTimer) clearTimeout(convTimer);
+    convTimer = setTimeout(refreshConverted, 400);
   }
 
   // 판독값과 사용자가 실제로 쓴 값을 함께 보낸다.

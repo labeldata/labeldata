@@ -7352,7 +7352,35 @@ def ocr_apply_extras(request, label_id):
             '기준 칸에 "총 내용량 90 g" 처럼 **양까지** 적고 다시 눌러 주세요.')
         nutrition = []
 
-    applied = apply_nutrition(label, to_per_100(nutrition, basis_value))
+    converted = to_per_100(nutrition, basis_value)
+
+    # ── 미리 보기 ────────────────────────────────────────────────────────
+    #
+    # **아무것도 쓰지 않고 환산 결과만 돌려준다.**
+    #
+    # 화면이 "이 값이 이렇게 들어갑니다" 를 보여 주려면 환산된 값이 필요한데,
+    # 그 셈을 JS 로 한 벌 더 만들면 언젠가 서버와 어긋난다 — 기준을 고르는
+    # 규칙(resolve_basis)과 원문을 가르는 규칙(split_value_unit)이 둘 다
+    # 서버에 있고, 둘 중 하나만 바뀌어도 화면이 거짓말을 하게 된다.
+    #
+    # 그래서 **저장할 때와 똑같은 코드**를 여기까지 태우고 결과만 낸다.
+    # 미리 본 값과 저장되는 값이 다를 수가 없다.
+    if payload.get('preview'):
+        return JsonResponse({
+            'success': True,
+            'preview': True,
+            'values': {row.get('field'): row.get('value')
+                       for row in converted if row.get('value')},
+            'units': {row.get('field'): row.get('unit') or ''
+                      for row in converted if row.get('value')},
+            'basis_kind': kind,
+            'basis_amount': basis_value or '',
+            'basis_unit': basis_unit or '',
+            'nutrition_basis_unknown': bool(basis_warning),
+            'nutrition_basis_warning': basis_warning,
+        })
+
+    applied = apply_nutrition(label, converted)
 
     fields = []
 
