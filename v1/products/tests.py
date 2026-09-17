@@ -5807,6 +5807,33 @@ class 떠날_때_치우는_주소는_url_태그로_만든다(TestCase):
         self.assertIn("products:discard_if_untouched", html)
         self.assertNotIn("'/products/{{ label", html)
 
+    def test_작업_중이면_지우지_않는다(self):
+        """
+        **서버는 저장된 것만 본다.** 그런데 사진 판독은 값을 폼에만 채워 두고
+        저장은 사람이 누른다 — 한참 작업한 뒤에도 DB 의 그 행은 전부 기본값이라
+        서버 눈에는 "열어만 보고 닫은 빈 제품" 이다.
+
+        그래서 새로고침 한 번에 작업하던 제품이 통째로 지워졌다. 라벨 464 가
+        그렇게 사라졌고, discard 는 하드 삭제라 되돌릴 것도 없었다. 화면이
+        "나 작업 중" 을 말해 줘야 하는 자리다 — 서버만으로는 못 고친다.
+        """
+        from pathlib import Path
+
+        html = Path('v1/templates/products/product_detail.html').read_text(encoding='utf-8')
+        at = html.index("navigator.sendBeacon(PRODUCT_DISCARD_URL")
+        # 비콘 **앞에** 빗장이 있어야 한다. 뒤에 있으면 이미 나간 뒤다.
+        block = html[at - 1200:at]
+        self.assertIn('if (hasUnsavedChanges) return;', block)
+        self.assertIn('if (window.__ocrApplied) return;', block)
+
+    def test_판독이_반영하면_표시를_남긴다(self):
+        """빗장이 볼 표시를 실제로 켜는 곳이 있어야 한다."""
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        at = js.index('function applySelected')
+        self.assertIn('window.__ocrApplied = true;', js[at:at + 1400])
+
     def test_실제로_그_제품_번호가_들어간다(self):
         """렌더링해서 본다 — 문자열만 보면 빈 주소를 못 잡는다."""
         from django.contrib.auth.models import User
