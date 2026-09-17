@@ -1203,9 +1203,17 @@ document.addEventListener('DOMContentLoaded', function() {
             */
             if (leavingId === '#tab-bom') {
                 const iframe = document.getElementById('bomEditorFrame');
-                if (iframe && iframe.contentWindow && typeof iframe.contentWindow.saveData === 'function') {
-                    try { trackPendingSave(iframe.contentWindow.saveData()); } catch(e) {}
-                }
+                const win = iframe && iframe.contentWindow;
+                /* **고친 적이 없으면 저장하지 않는다.** 영양성분 탭과 같은 까닭이다 —
+                   들렀다 나오기만 해도 표에 든 값이 DB 를 덮어서, 그 사이에 밖에서
+                   만들어진 행(판독의 rawmtrl-to-bom/apply)이 옛 표에 덮였다. */
+                try {
+                    if (win && typeof win.saveIfEdited === 'function') {
+                        trackPendingSave(win.saveIfEdited());
+                    } else if (win && typeof win.saveData === 'function') {
+                        trackPendingSave(win.saveData());
+                    }
+                } catch(e) {}
             }
             if (leavingId === '#tab-nutrition') {
                 const iframe = document.getElementById('nutritionEditorFrame');
@@ -1506,6 +1514,30 @@ function loadNutritionIframe() {
  * 판독한 값이 조용히 사라지고, 화면에는 "예전 데이터 그대로" 만 남는다.
  * 밖에서 값을 바꿨으면 iframe 이 그 사실을 알아야 한다.
  */
+/*
+ * BOM iframe 도 같은 까닭으로 다시 읽어야 한다.
+ *
+ * 밖에서 행을 만드는 길이 있다 — 사진 판독의 "원재료명 -> BOM 행 만들기"
+ * (rawmtrl-to-bom/apply). 그런데 이 iframe 은 `data-bom-loaded` 로 한 번만
+ * 읽고(loadBomIframe), 탭을 떠날 때 제가 들고 있던 표를 저장한다. 알려 주지
+ * 않으면 방금 만든 행이 옛 표에 덮인다.
+ *
+ * 영양성분 쪽과 달리 `src` 가 아니라 이 표시로 캐시를 판정하므로, 표시를
+ * 내려 다음에 열 때 새로 읽게 한다.
+ */
+window.reloadBomIframe = function () {
+    const iframe = document.getElementById('bomEditorFrame');
+    const url = iframe && iframe.getAttribute('data-bom-url');
+    // 아직 한 번도 안 열었으면 그대로 둔다. 다음에 열 때 어차피 새로 읽는다.
+    if (!iframe || !url || iframe.getAttribute('data-bom-loaded') !== 'true') return;
+    try {
+        iframe.contentWindow.location.replace(url);
+    } catch (e) {
+        iframe.removeAttribute('data-bom-loaded');
+        iframe.src = url;
+    }
+};
+
 window.reloadNutritionIframe = function () {
     const iframe = document.getElementById('nutritionEditorFrame');
     const url = iframe && iframe.getAttribute('data-nutrition-url');

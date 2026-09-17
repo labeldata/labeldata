@@ -2020,6 +2020,12 @@
           return;
         }
         bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        /* BOM 탭의 iframe 은 한 번 뜨면 다시 안 읽고, 탭을 떠날 때 제가 들고
+           있던 표를 저장한다. 방금 만든 행을 그 iframe 이 모르면 **다음에 그
+           탭을 떠날 때 옛 표로 덮인다.** 여기서 알려 준다. */
+        if (typeof window.reloadBomIframe === 'function') {
+          window.reloadBomIframe();
+        }
         status('원료 ' + body.total + '개를 BOM에 등록했습니다 '
              + '(새로 만든 원료 ' + body.created + '개, 기존 원료 연결 '
              + body.matched_existing + '개). BOM 탭에서 확인하세요.');

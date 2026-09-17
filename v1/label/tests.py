@@ -20426,6 +20426,64 @@ class 읽기만_한_방문은_저장하지_않는다(TestCase):
         self.assertIn('win.saveData', block)
 
 
+class BOM도_읽기만_한_방문은_저장하지_않는다(TestCase):
+    """
+    영양성분과 **똑같은 구조**가 BOM 탭에도 있었다.
+
+        iframe 이 다시 안 읽는다   loadBomIframe 의 data-bom-loaded 판정
+        떠날 때 무조건 저장        hide.bs.tab 의 saveData
+        밖에서 쓰는 길이 있다      판독의 rawmtrl-to-bom/apply
+
+    셋이 맞물리면 사진 판독으로 만든 BOM 행이 옛 표에 덮인다. 영양성분보다
+    손해가 크다 — BOM 은 다시 넣기가 훨씬 번거롭다.
+    """
+
+    def editor(self):
+        import io
+        return io.open('v1/templates/products/bom_detail.html', encoding='utf-8').read()
+
+    def detail(self):
+        import io
+        return io.open('v1/templates/products/product_detail.html',
+                       encoding='utf-8').read()
+
+    def ocr(self):
+        import io
+        return io.open('v1/static/js/products/basic_info_ocr.js',
+                       encoding='utf-8').read()
+
+    def test_고친_적이_없으면_쓰지_않는다(self):
+        html = self.editor()
+        self.assertIn('window.saveIfEdited = function () {', html)
+        self.assertIn('if (!bomEdited) return', html)
+
+    def test_표를_고치면_표시한다(self):
+        """afterChange 가 loadData·palette·syncPanel 을 이미 걸러 준다."""
+        html = self.editor()
+        at = html.index('afterChange: function(changes, source)')
+        self.assertIn('markBomEdited();', html[at:at + 600])
+
+    def test_부모가_그_문을_두드린다(self):
+        html = self.detail()
+        at = html.index("if (leavingId === '#tab-bom')")
+        block = html[at:at + 1200]
+        self.assertIn('win.saveIfEdited', block)
+        self.assertIn('win.saveData', block)
+
+    def test_밖에서_행을_만들면_iframe_에_알린다(self):
+        """알리지 않으면 다음에 그 탭을 떠날 때 옛 표가 새 행을 덮는다."""
+        self.assertIn('window.reloadBomIframe = function ()', self.detail())
+        js = self.ocr()
+        at = js.index("rawmtrl-to-bom/apply/")
+        self.assertIn('window.reloadBomIframe()', js[at:at + 1400])
+
+    def test_아직_안_연_프레임은_건드리지_않는다(self):
+        """다음에 열 때 어차피 새로 읽는다. 괜히 부르면 숨은 프레임이 한 번 더 뜬다."""
+        html = self.detail()
+        at = html.index('window.reloadBomIframe = function ()')
+        self.assertIn("data-bom-loaded') !== 'true') return", html[at:at + 700])
+
+
 class 설정칸은_이름과_내용이_한_줄이다(TestCase):
     """
     위아래로 쌓으면서 묶음마다 이름이 한 줄, 칸이 한 줄이면 둘이서 네 줄이다.

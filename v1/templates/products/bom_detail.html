@@ -1069,6 +1069,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                 if (!changes || source === 'loadData' || source === 'palette' || source === 'syncPanel') {
                     return;
                 }
+                /* 사람이 실제로 고쳤다. 이 표시가 없으면 **들렀다 나오기만 해도
+                   표에 든 값이 DB 를 덮는다** — markBomEdited 주석 참고. */
+                markBomEdited();
                 changes.forEach(change => {
                     const row = change[0];
                     const prop = change[1];
@@ -2884,6 +2887,41 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
     }
     window.resetBomWidths = resetBomWidths;
+
+    /* ── 고친 적이 있는가 ────────────────────────────────────────────────
+     *
+     * **들렀다 나오기만 해도 표가 DB 를 덮고 있었다.**
+     *
+     * 이 화면은 iframe 이고, 부모가 BOM 탭을 떠날 때마다 saveData() 를 부른다
+     * (product_detail.html 의 hide.bs.tab). 그런데 saveData 는 고쳤는지 묻지
+     * 않고 표에 든 값을 통째로 쓴다. 게다가 이 iframe 은 한 번 뜨면 다시 읽지
+     * 않는다(loadBomIframe 의 data-bom-loaded 판정).
+     *
+     * 밖에서 BOM 을 쓰는 길이 생긴 뒤로 그 구조가 값을 잡아먹는다 — 사진
+     * 판독의 "원재료명 → BOM 행 만들기"(rawmtrl-to-bom/apply)가 그것이다.
+     *
+     *   1. BOM 탭을 한 번 연다        -> 표가 그때의 행들을 들고 있다
+     *   2. 판독이 행을 만들어 넣는다   -> DB 는 맞다
+     *   3. BOM 탭을 들렀다 나온다      -> **옛 표가 새 행을 덮는다**
+     *
+     * 영양성분 탭에서 같은 일이 실제로 났고 같은 방법으로 고쳤다. 여기가 더
+     * 아프다 — BOM 은 다시 넣기가 훨씬 번거롭다.
+     *
+     * **고친 적이 없으면 쓰지 않는다.** 저장 단추를 직접 누른 것은 그대로
+     * 저장한다 — 사람이 "이 값으로 해 달라" 고 말한 것이라 뜻이 다르다.
+     * ─────────────────────────────────────────────────────────────────── */
+    let bomEdited = false;
+
+    function markBomEdited() {
+        bomEdited = true;
+    }
+    window.markBomEdited = markBomEdited;
+
+    /* 부모가 탭을 떠나며 부른다. 고친 적이 없으면 아무것도 하지 않는다. */
+    window.saveIfEdited = function () {
+        if (!bomEdited) return Promise.resolve({ skipped: true });
+        return saveData();
+    };
 
     async function saveData() {
         /* 저장이 실패해도 임시저장을 되살린다.
