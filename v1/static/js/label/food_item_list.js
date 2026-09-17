@@ -23,9 +23,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const loadingOverlay = document.getElementById('loadingOverlay');
     const foodCategorySelect = document.getElementById('foodCategorySelect');
     
+    /* **이 자리는 한 번도 돈 적이 없다.**
+     *
+     * `searchFilterForm` 을 찾는데 이 화면의 폼은 `searchForm` 이다. 이름이
+     * 어긋난 코드는 조용히 아무 일도 하지 않는다 — 그래서 검색을 눌러도
+     * 화면에는 아무 표시가 없었고, 브라우저 탭만 돌았다.
+     *
+     * 화면 한가운데 표시는 이제 공통(`search_busy.js`)이 맡는다. 폼에
+     * `data-busy` 를 붙이면 뜬다. 여기서는 **단추 모양만** 바꾼다 — 두 벌로
+     * 두면 어느 날 한쪽만 고쳐진다. */
     if (searchForm && searchBtn) {
-        searchForm.addEventListener('submit', function(e) {
-            // 로딩 상태 시작
+        searchForm.addEventListener('submit', function () {
             showLoadingState();
         });
     }
@@ -55,10 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (loadingText) loadingText.classList.remove('d-none');
         }
         
-        // 오버레이 표시
-        if (loadingOverlay) {
-            loadingOverlay.classList.remove('d-none');
-        }
+        // 화면 한가운데 표시는 공통(search_busy.js)이 맡는다
     }
     
     function hideLoadingState() {
@@ -74,10 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (loadingText) loadingText.classList.add('d-none');
         }
         
-        // 오버레이 숨김
-        if (loadingOverlay) {
-            loadingOverlay.classList.add('d-none');
-        }
+        if (typeof window.hideSearchBusy === 'function') window.hideSearchBusy();
     }
     
     function checkInputValue(input) {

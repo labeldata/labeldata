@@ -345,7 +345,13 @@
 
     <!-- 필터 및 검색 바 -->
     <div class="filter-toolbar filter-toolbar--stack">
-        <form method="get" action="" class="w-100" id="searchForm">
+        {% comment %}
+          32만 건을 훑는 질의라 몇 초가 걸린다. 누른 뒤 아무 일도 안 일어나는
+          것처럼 보이면 사람은 다시 누르고, 그러면 같은 질의가 한 번 더 돈다.
+          몇 건에서 찾는지를 함께 적는다 — 기다릴 만한 일인지 알 수 있다.
+        {% endcomment %}
+        <form method="get" action="" class="w-100" id="searchForm"
+              data-busy="{% if imported_mode %}수입식품{% else %}국내 품목보고{% endif %} {% if tab_counts.domestic or tab_counts.imported %}{% if imported_mode %}{{ tab_counts.imported|intcomma }}{% else %}{{ tab_counts.domestic|intcomma }}{% endif %}건{% else %}자료{% endif %}에서 찾는 중입니다">
           <div class="d-flex align-items-center w-100" style="gap: 12px;">
             <input type="hidden" name="food_category" value="{{ food_category }}">
             <!-- 검색 필드 선택 -->

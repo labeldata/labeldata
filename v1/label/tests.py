@@ -20812,3 +20812,66 @@ class ReportNumberNormalizeTests(TestCase):
     def test_빈_값(self):
         self.assertEqual(self.norm(''), '')
         self.assertEqual(self.norm(None), '')
+
+
+class SearchBusyTests(TestCase):
+    """
+    검색을 누르면 화면은 그대로이고 브라우저 탭에만 작은 표시가 돈다. 32만
+    건을 훑는 질의라 몇 초가 걸리는데, 그동안 사용자에게는 아무 일도 일어나지
+    않는 것으로 보인다 — **그래서 다시 누르고, 같은 질의가 한 번 더 돈다.**
+
+    표시가 있기는 했다. 그런데 JS 는 `searchFilterForm` 을 찾고 화면의 폼은
+    `searchForm` 이라 한 번도 돈 적이 없었다. 이름이 어긋난 코드는 조용히
+    아무 일도 하지 않는다.
+    """
+
+    @staticmethod
+    def _read(rel):
+        import io
+        import os
+
+        from django.conf import settings
+
+        with io.open(os.path.join(settings.BASE_DIR, rel), encoding='utf-8') as f:
+            return f.read()
+
+    def test_어느_화면에서든_같은_모양이다(self):
+        # base 에 싣는다 — 화면마다 제 것을 만들면 서로 다르게 생긴다.
+        base = self._read('templates/base_v2.html')
+        self.assertIn("js/search_busy.js", base)
+
+        css = self._read('static/css/style.css')
+        self.assertIn('.search-busy {', css)
+        self.assertIn('position: fixed', css[css.index('.search-busy {'):][:300])
+
+    def test_붙인_폼에서만_뜬다(self):
+        """
+        모든 폼에 걸면 즉시 끝나는 거르기에도 번쩍여 오히려 시끄럽다.
+        """
+        js = self._read('static/js/search_busy.js')
+        self.assertIn("form[data-busy]", js)
+
+    def test_뒤로_가기로_돌아와도_꺼진다(self):
+        """
+        브라우저가 화면을 통째로 되살리면(bfcache) 오버레이도 켜진 채 살아나
+        **영원히 찾는 중**이 된다.
+        """
+        js = self._read('static/js/search_busy.js')
+        self.assertIn("'pageshow'", js)
+        self.assertIn('hideSearchBusy', js)
+
+    def test_오래_걸리는_검색에_붙어_있다(self):
+        for rel in ('templates/label/food_item_list.html',
+                    'templates/label/food_additive_search.html'):
+            self.assertIn('data-busy=', self._read(rel), rel)
+
+    def test_몇_건에서_찾는지_말한다(self):
+        # 기다릴 만한 일인지 알 수 있어야 한다.
+        html = self._read('templates/label/food_item_list.html')
+        at = html.index('data-busy=')
+        self.assertIn('tab_counts', html[at:at + 300])
+
+    def test_움직임을_불편해하는_사람에게는_돌리지_않는다(self):
+        css = self._read('static/css/style.css')
+        at = css.index('.search-busy-spinner {')
+        self.assertIn('prefers-reduced-motion', css[at:at + 900])
