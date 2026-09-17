@@ -53,6 +53,25 @@ class Command(BaseCommand):
         for row in fails:
             w('      · %s — %s' % (row.food_nm_kr, row.verify_note))
 
+        # 열량 계산식이 쓰는데 표시 아홉에는 없는 성분들.
+        #
+        # **차 있는지를 세어야 뜻이 있다.** 칸이 있는 것과 값이 오는 것은 다르다 —
+        # 우리는 AMT_NUM8·53 을 받아 적고 있지만, 원본이 그 칸을 비워 보내면
+        # 컬럼만 있고 내용은 없다. 요령의 열량식은 이 둘을 탄수화물에서 빼고
+        # 각자의 계수로 세므로(식이섬유 2.0 · 당알콜 2.4), 비어 있으면 그 몫까지
+        # 4 kcal 로 세어 무설탕·고식이섬유 제품의 계산 열량이 높게 나온다.
+        w('')
+        w('   [열량식이 쓰는 성분 — 표시 아홉에는 없다]')
+        for label, field in (('식이섬유', 'dietary_fiber'),
+                             ('당알콜', 'sugar_alcohols')):
+            n = PublicFoodNutrition.objects.filter(
+                **{field + '__isnull': False}).count()
+            hot = PublicFoodNutrition.objects.filter(
+                **{field + '__gt': 0}).count()
+            w('   %-14s 값 있음 %8s (%5.1f%%) · 0 보다 큼 %8s (%5.1f%%)'
+              % (label, f'{n:,}', n / total * 100,
+                 f'{hot:,}', hot / total * 100))
+
         w('')
         w('   [DB그룹]')
         grp = (PublicFoodNutrition.objects.values('db_grp_nm')
