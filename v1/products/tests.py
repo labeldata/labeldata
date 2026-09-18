@@ -13443,3 +13443,46 @@ class 올린_사진을_줄_세워_확인한다(TestCase):
         block = docs[i:i + 900]
         self.assertIn('if (queued) {', block)
         self.assertIn('건너뛰기', block)
+
+
+class 창이_다_닫힌_뒤에_다음_장을_연다(TestCase):
+    """
+    4장을 올렸는데 **첫 장을 등록한 뒤 토스트만 뜨고 다음 장이 안 열렸다.**
+
+    닫으라고 이르자마자 다음 것을 열면 부트스트랩이 그 show() 를 삼킨다 —
+    아직 hide 애니메이션 중이기 때문이다.
+
+    미리 읽기를 넣은 뒤로 이 일이 거의 늘 일어난다. 예전에는 다음 장을
+    판독하느라 몇 초가 걸려 그 사이에 닫히기를 마쳤는데, 이제는 읽어 둔 것을
+    그대로 쓰므로 show() 가 곧바로 불린다. **빨라진 것이 버그를 깨웠다.**
+    """
+
+    def _docs(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+
+    def test_hidden_을_기다린_뒤_다음을_연다(self):
+        docs = self._docs()
+        i = docs.index('function closeThenNext(')
+        block = docs[i:i + 500]
+        self.assertIn("addEventListener('hidden.bs.modal'", block)
+        self.assertIn('nextInIngredientQueue();', block)
+        # 한 번 듣고 뗀다 — 남겨 두면 다음 장을 닫을 때 또 불린다
+        self.assertIn('removeEventListener', block)
+
+    def test_등록과_건너뛰기가_같은_길을_쓴다(self):
+        docs = self._docs()
+        i = docs.index('async function applyIngredientPhoto(')
+        self.assertIn('closeThenNext(modalEl)', docs[i:i + 1800])
+        j = docs.index("skip.onclick")
+        self.assertIn('closeThenNext(modalEl)', docs[j:j + 120])
+
+    def test_닫자마자_다음을_여는_옛_모양이_남아_있지_않다(self):
+        docs = self._docs()
+        self.assertNotIn(
+            "bootstrap.Modal.getOrCreateInstance(modalEl).hide();\n"
+            "                nextInIngredientQueue();", docs)

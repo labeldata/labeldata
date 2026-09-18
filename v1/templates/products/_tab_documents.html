@@ -2028,6 +2028,26 @@ async function submitImportCompanyDoc() {
         nextInIngredientQueue();
     };
 
+    /*
+     * **창이 다 닫힌 뒤에 다음 장을 연다.**
+     *
+     * 닫으라고 이르자마자 다음 것을 열면 부트스트랩이 그 show() 를 삼킨다 —
+     * 아직 hide 애니메이션 중이기 때문이다. 그러면 첫 장을 등록한 뒤 토스트만
+     * 뜨고 **다음 장이 영영 안 열린다.**
+     *
+     * 미리 읽기를 넣은 뒤로 이 일이 거의 늘 일어난다. 예전에는 다음 장을
+     * 판독하느라 몇 초가 걸려 그 사이에 닫히기를 마쳤는데, 이제는 읽어 둔 것을
+     * 그대로 쓰므로 show() 가 곧바로 불린다. **빨라진 것이 버그를 깨웠다.**
+     */
+    function closeThenNext(modalEl) {
+        const inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalEl.addEventListener('hidden.bs.modal', function once() {
+            modalEl.removeEventListener('hidden.bs.modal', once);
+            nextInIngredientQueue();
+        });
+        inst.hide();
+    }
+
     function nextInIngredientQueue() {
         if (!ingQueue.length) {
             if (ingQueueTotal > 1) {
@@ -2149,10 +2169,7 @@ async function submitImportCompanyDoc() {
             skip.type = 'button';
             skip.className = 'btn btn-outline-secondary ing-skip';
             skip.textContent = '건너뛰기';
-            skip.onclick = () => {
-                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-                nextInIngredientQueue();
-            };
+            skip.onclick = () => closeThenNext(modalEl);
             foot.insertBefore(skip, applyBtn);
         }
 
@@ -2187,12 +2204,10 @@ async function submitImportCompanyDoc() {
                 showSnackbar(body.error || '등록하지 못했습니다.', 'error');
                 return;
             }
-            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
             showSnackbar(
                 body.message + ' BOM 탭에서 함량을 넣고 저장하세요.',
                 body.created ? 'success' : 'info');
-            // 줄을 서 있으면 다음 장을 바로 연다
-            nextInIngredientQueue();
+            closeThenNext(modalEl);       // 줄을 서 있으면 다음 장으로
         } catch (err) {
             console.error(err);
             showSnackbar('등록 중 오류가 발생했습니다.', 'error');
