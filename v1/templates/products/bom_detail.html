@@ -1004,11 +1004,11 @@ body.in-iframe .bom-page-header { display: none !important; }
                    사진 표가 엉뚱한 줄에 붙는다 — rowObjectAt 이 그 변환을
                    맡는 한 곳이다. */
                 var meta = (rowObjectAt(row) || {})._meta;
-                var docId = meta && meta.photo_document_id;
+                var hasPhoto = meta && meta.photo_ingredient_id;
                 return '<span class="bom-rowno">' + (row + 1) + '</span>'
-                     + (docId
+                     + (hasPhoto
                         ? '<button type="button" class="bom-rowbtn bom-photobtn"'
-                          + ' data-doc="' + docId + '" data-row="' + row + '"'
+                          + ' data-row="' + row + '"'
                           + ' title="이 줄을 만든 원료 표시사항 사진 보기">'
                           + '<i class="bi bi-image"></i></button>'
                         : '')
@@ -2038,7 +2038,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                  * ═══════════════════════════════════════════════════════ */
                 rowData._meta = {
                     bom_id: item.bom_id || null,
-                    photo_document_id: item.photo_document_id || null,
+                    photo_ingredient_id: item.photo_ingredient_id || null,
                     photo_url: item.photo_url || '',
                     source_type: normalizeSourceType(item.source_type),
                     source_id: item.source_id || null,
@@ -2724,8 +2724,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                  * 보고 싶은 것은 사진이지 문서함이 아니다. 탭을 옮겨 놓으면
                  * 배합표로 돌아오는 길을 사용자가 다시 찾아야 하고, 정작 사진은
                  * 문서를 또 눌러야 나온다. 여기서 바로 펼쳐 보여 준다. */
-                showRowPhoto(Number(photo.dataset.doc),
-                             Number(photo.dataset.row));
+                showRowPhoto(Number(photo.dataset.row));
                 return;
             }
 
@@ -2779,7 +2778,7 @@ body.in-iframe .bom-page-header { display: none !important; }
      * 아래에 [원료 관리로 이동] 을 둔다 — 사진에서 읽은 값은 그 원료의 것이고,
      * 고쳐야 할 자리는 배합표가 아니라 원료다(여기서 고치면 이 제품에만 남는다).
      */
-    function showRowPhoto(docId, visualRow) {
+    function showRowPhoto(visualRow) {
         let modalEl = document.getElementById('bomRowPhotoModal');
         if (!modalEl) {
             modalEl = document.createElement('div');

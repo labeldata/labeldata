@@ -373,24 +373,25 @@ def bom_data_api(request, label_id):
     
     # 어느 줄이 사진에서 온 것인가.
     #
-    # 연결은 **문서 쪽에만** 적혀 있다(ProductDocument.metadata.ingredient_bom_id).
-    # 그래서 BOM 행은 자기 사진을 몰랐고, 화면도 "이 원료 정보가 어디서 왔지" 를
-    # 되짚을 길이 없었다. metadata 가 JSON 이라 거꾸로도 찾을 수 있으므로
-    # 마이그레이션 없이 한 번에 끌어온다 — 줄마다 조회하면 행 수만큼 질의가 난다.
+    # 사진은 **원료**에 붙어 있다(MyIngredient.label_photo). 문서함이 아니라
+    # 거기인 까닭은 원료가 '한 번 적고 여러 제품에서 쓰는' 것이기 때문이다 —
+    # 같은 크림치즈를 다른 제품에서 써도 사진은 한 장이면 된다.
+    #
+    # 줄마다 조회하면 행 수만큼 질의가 나므로 한 번에 끌어온다.
     photo_of = {}
     try:
-        from v1.products.models import ProductDocument
+        from v1.label.models import MyIngredient
 
-        for doc in (ProductDocument.objects
-                    .filter(label=label, active_yn=True,
-                            metadata__ingredient_bom_id__isnull=False)
-                    .only('document_id', 'metadata', 'file')):
-            bom_id = (doc.metadata or {}).get('ingredient_bom_id')
-            if bom_id:
-                # 주소까지 함께 준다 — 배합표는 iframe 안이라 문서함이 들고
-                # 있는 목록에 닿을 수 없다. 여기서 안 주면 사진을 못 그린다.
-                photo_of[bom_id] = (doc.document_id,
-                                    doc.file.url if doc.file else '')
+        ids = [b.source_ingredient_id for b in boms if b.source_ingredient_id]
+        if ids:
+            for ing in (MyIngredient.objects
+                        .filter(my_ingredient_id__in=ids)
+                        .exclude(label_photo='')
+                        .exclude(label_photo__isnull=True)
+                        .only('my_ingredient_id', 'label_photo')):
+                photo_of[ing.my_ingredient_id] = (
+                    ing.my_ingredient_id,
+                    ing.label_photo.url if ing.label_photo else '')
     except Exception:
         # 사진 표시는 덤이다. 못 붙여도 배합표는 그려져야 한다.
         photo_of = {}
@@ -421,9 +422,9 @@ def bom_data_api(request, label_id):
         
         data.append({
             'bom_id': bom.bom_id,
-            # 이 줄을 만든 원료 표시사항 사진. 없으면 None.
-            'photo_document_id': (photo_of.get(bom.bom_id) or (None, ''))[0],
-            'photo_url': (photo_of.get(bom.bom_id) or (None, ''))[1],
+            # 이 원료의 표시사항 사진. 없으면 None.
+            'photo_ingredient_id': (photo_of.get(bom.source_ingredient_id) or (None, ''))[0],
+            'photo_url': (photo_of.get(bom.source_ingredient_id) or (None, ''))[1],
             'ingredient_name': bom.ingredient_name or ingredient_name,
             'ingredient_code': ingredient_code,
             'source_type': source_type,

@@ -686,6 +686,24 @@ function syncMultipleFromType() {
 
     const hint = document.getElementById('upload-multiple-hint');
     if (hint) hint.hidden = !many;
+
+    /* **원료 사진은 다른 일이다.**
+     *
+     * 증빙 서류는 '무슨 서류인지 · 언제까지 쓸 수 있는지' 를 정해야 하지만,
+     * 원료 사진은 구분이 이미 정해져 있고 만료가 없다(무기한). 그런데도 문서
+     * 종류 목록·유효기간 여섯 단추·알림 토글이 화면 절반을 차지했다 —
+     * 정작 할 일은 **사진을 고르고 쓸 곳을 네모로 잡는 것** 하나다.
+     *
+     * 그 칸들을 감추고 왼쪽을 화면 폭 전체로 편다. 자르는 자리가 넓을수록
+     * 정확히 잡을 수 있다. */
+    const shell = document.getElementById('smartUploadModal');
+    if (shell) shell.classList.toggle('is-photo-mode', many);
+
+    const sub = document.querySelector('#smartUploadModal .modal-subtitle');
+    if (sub && many) {
+        sub.textContent = '사진을 고르고, 표시사항이 있는 곳을 끌어서 잡으세요. '
+            + '고른 곳만 잘라 올립니다.';
+    }
 }
 window.syncMultipleFromType = syncMultipleFromType;
 

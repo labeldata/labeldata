@@ -7848,6 +7848,10 @@ def document_ingredient_photo_to_bom(request, document_id):
 
     from v1.bom.models import ProductBOM
     from v1.label.services.ingredient_matching import (
+        # **이 이름이 빠져 있었다.** 아래 `except IngredientQuotaExceeded` 가
+        # 이름을 몰라, 한도에 걸리는 순간 친절한 429 대신 NameError 가 났다.
+        # 예외가 안 나는 동안에는 드러나지 않는 종류의 구멍이다.
+        IngredientQuotaExceeded,
         get_or_create_my_ingredient, load_pool, match_my_ingredient,
     )
     from v1.products.services.ingredient_photo import (
@@ -7890,13 +7894,43 @@ def document_ingredient_photo_to_bom(request, document_id):
             bom, created, matched, score, candidates = register_ingredient_bom(
                 request.user, label, fields)
 
-            # 문서에 "무엇으로 등록했는지" 를 남긴다. 같은 사진을 두 번 읽지 않게 하고,
-            # 나중에 이 BOM 행이 어디서 왔는지 되짚을 수 있다.
-            meta = dict(doc.metadata or {})
-            meta['ingredient_bom_id'] = bom.bom_id
-            meta['ingredient_fields'] = fields
-            doc.metadata = meta
-            doc.save(update_fields=['metadata'])
+            # **사진은 원료로 옮긴다. 문서함에는 남기지 않는다.**
+            #
+            # 예전에는 문서에 metadata 로 BOM 줄을 적어 두었다. 그런데
+            # ProductDocument.label 은 필수라 사진이 늘 어느 한 제품에 매였고,
+            # 같은 크림치즈를 다른 제품에서 쓰면 같은 사진을 또 올려야 했다.
+            # 원료는 '한 번 적고 여러 제품에서 쓰는' 것이다.
+            #
+            # 판독은 지금까지처럼 문서로 들어온다 — 올리는 길과 읽는 길을 한꺼번에
+            # 갈아엎지 않는다. 값을 확정하는 이 자리에서 원료로 옮기고 문서는
+            # 눕힌다(삭제 규칙은 이 저장소 어디서나 active_yn=False 다).
+            ingredient = bom.source_ingredient
+            if ingredient is not None:
+                import os
+
+                try:
+                    if doc.file:
+                        # 이미 사진이 있으면 덮는다 — 방금 사람이 확인한 것이
+                        # 최신이다.
+                        ingredient.label_photo.save(
+                            os.path.basename(doc.file.name), doc.file,
+                            save=False)
+                except (OSError, ValueError):
+                    # **파일을 못 옮겨도 등록은 끝낸다.**
+                    #
+                    # 사람은 값을 이미 확인했고 원료도 BOM 도 그 값으로 서야
+                    # 한다. 사진 한 장 때문에 그 일을 되돌리면, 사용자는 방금
+                    # 고친 값을 처음부터 다시 넣어야 한다. 사진은 다시 올리면
+                    # 되지만 손으로 고친 값은 그렇지 않다.
+                    logger.warning('원료 사진을 옮기지 못했다 (document=%s)',
+                                   doc.pk, exc_info=True)
+
+                ingredient.label_photo_fields = fields
+                ingredient.save(
+                    update_fields=['label_photo', 'label_photo_fields'])
+
+            doc.active_yn = False
+            doc.save(update_fields=['active_yn'])
     except IngredientQuotaExceeded as exc:
         return JsonResponse({'success': False, 'error': str(exc)}, status=429)
 

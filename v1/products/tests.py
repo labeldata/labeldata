@@ -693,10 +693,22 @@ class IngredientPhotoToBomTests(TestCase):
         res = self._apply(ingredient_name='')
         self.assertEqual(res.status_code, 400)
 
-    def test_등록하면_문서에_흔적이_남는다(self):
+    def test_등록하면_사진은_원료로_가고_문서는_눕는다(self):
+        """
+        예전에는 문서 metadata 에 BOM 줄을 적어 두었다. 이제 사진과 읽은 값은
+        **원료**가 들고, 문서함에는 남기지 않는다 — 같은 원료를 다른 제품에서
+        쓸 때 사진을 또 올리지 않기 위해서다.
+        """
+        from v1.bom.models import ProductBOM
+
         self._apply()
         self.doc.refresh_from_db()
-        self.assertIn('ingredient_bom_id', self.doc.metadata)
+        self.assertFalse(self.doc.active_yn)
+        self.assertNotIn('ingredient_bom_id', self.doc.metadata or {})
+
+        bom = ProductBOM.objects.get(parent_label=self.label)
+        self.assertIsNotNone(bom.source_ingredient)
+        self.assertTrue(bom.source_ingredient.label_photo_fields)
 
     def test_남의_문서는_못_건드린다(self):
         other = User.objects.create_user(username='ingphoto2', password='x')
@@ -13797,31 +13809,28 @@ class 사진에서_온_배합_줄을_되짚을_수_있다(TestCase):
     사진을 판독해 넣은 줄과 손으로 적은 줄이 배합표에서 **똑같이 생겼다.**
     그래서 "이 원료 정보가 어디서 왔지" 를 되짚을 길이 없었다.
 
-    연결은 문서 쪽에만 적혀 있었다(metadata.ingredient_bom_id). BOM 행은 자기
-    사진을 몰랐는데, metadata 가 JSON 이라 거꾸로도 찾을 수 있다 —
-    마이그레이션 없이 붙는다.
+    사진은 **원료**에 붙어 있다(MyIngredient.label_photo). 배합 줄은
+    source_ingredient 로 그 원료를 가리키므로, 줄에서 사진까지 한 걸음이다.
     """
 
     def setUp(self):
         from v1.bom.models import ProductBOM
-        from v1.label.models import MyLabel
-        from v1.products.models import DocumentType, ProductDocument
+        from v1.label.models import MyIngredient, MyLabel
 
         self.user = User.objects.create_user(username='trace', password='x')
         self.client.force_login(self.user)
         self.label = MyLabel.objects.create(
             user_id=self.user, my_label_name='과자', delete_YN='N')
+        # 파일이 실제로 없어도 이름만 있으면 .url 이 선다 — 여기서 보려는 것은
+        # 줄과 사진이 이어지는가이지 그림이 열리는가가 아니다.
+        self.ingredient = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='크림치즈', delete_YN='N',
+            label_photo='ingredient_photos/2026/09/cream_cheese.jpg')
         self.bom = ProductBOM.objects.create(
-            parent_label=self.label, ingredient_name='크림치즈', active_yn=True)
-        dtype = DocumentType.objects.create(
-            type_code='INGREDIENT_LABEL', type_name='원료 표시사항',
-            multiple_yn=True, display_order=90)
-        self.doc = ProductDocument.objects.create(
-            label=self.label, document_type=dtype, active_yn=True,
-            original_filename='크림치즈.jpg',
-            metadata={'ingredient_bom_id': self.bom.bom_id})
+            parent_label=self.label, ingredient_name='크림치즈',
+            source_ingredient=self.ingredient, active_yn=True)
 
-    def test_배합_목록이_사진_번호를_함께_준다(self):
+    def test_배합_목록이_사진_주소를_함께_준다(self):
         import json
 
         res = self.client.get(
@@ -13830,7 +13839,20 @@ class 사진에서_온_배합_줄을_되짚을_수_있다(TestCase):
         rows = json.loads(res.content.decode()).get('data') or []
         mine = [r for r in rows if r.get('bom_id') == self.bom.bom_id]
         self.assertTrue(mine)
-        self.assertEqual(mine[0].get('photo_document_id'), self.doc.document_id)
+        self.assertEqual(mine[0].get('photo_ingredient_id'),
+                         self.ingredient.my_ingredient_id)
+        self.assertIn('cream_cheese.jpg', mine[0].get('photo_url') or '')
+
+    def test_사진_없는_원료는_주소가_비어_있다(self):
+        import json
+
+        self.ingredient.label_photo = ''
+        self.ingredient.save(update_fields=['label_photo'])
+        res = self.client.get(
+            reverse('bom:bom_data_api', args=[self.label.my_label_id]))
+        rows = json.loads(res.content.decode()).get('data') or []
+        mine = [r for r in rows if r.get('bom_id') == self.bom.bom_id][0]
+        self.assertIsNone(mine.get('photo_ingredient_id'))
 
     def test_한_번에_끌어온다(self):
         """줄마다 조회하면 행 수만큼 질의가 난다."""
@@ -13841,7 +13863,7 @@ class 사진에서_온_배합_줄을_되짚을_수_있다(TestCase):
         src = (Path(dj.BASE_DIR) / 'bom/views.py').read_text(encoding='utf-8')
         i = src.index('photo_of = {}')
         block = src[i:i + 1000]
-        self.assertIn('metadata__ingredient_bom_id__isnull=False', block)
+        self.assertIn('my_ingredient_id__in=ids', block)
         self.assertIn('.only(', block)
 
     def test_못_붙여도_배합표는_그려진다(self):

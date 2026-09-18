@@ -218,6 +218,28 @@
     overflow-y: auto;
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   원료 사진 모드 — 사진 고르기와 영역 잡기만 남긴다
+
+   증빙 서류는 '무슨 서류인지 · 언제까지 쓸 수 있는지' 를 정해야 하지만,
+   원료 사진은 구분이 이미 정해져 있고 만료가 없다. 그런데도 문서 종류 목록·
+   유효기간 여섯 단추·알림 토글이 화면 절반을 차지했다 — 정작 할 일은 사진을
+   고르고 쓸 곳을 네모로 잡는 것 하나다.
+
+   감추되 지우지 않는다. 그 칸들은 값이 그대로 실려 올라간다(유효기간은
+   '무기한' 이 기본으로 눌려 있다) — 화면에서만 걷어낸다.
+   ───────────────────────────────────────────────────────────────────── */
+#smartUploadModal.is-photo-mode .smart-upload-right { display: none !important; }
+#smartUploadModal.is-photo-mode .smart-upload-left {
+    flex: 0 0 100%;
+    max-width: 100%;
+    border-right: 0 !important;
+    background: #fff;
+}
+/* 자르는 자리가 넓을수록 정확히 잡을 수 있다 */
+#smartUploadModal.is-photo-mode .imgcrop-img { max-height: 52vh; }
+#smartUploadModal.is-photo-mode .upload-preview-slot { margin-top: 4px; }
+
 /* 고른 뒤의 끌어놓기 칸 — 한 줄로 줄인다 */
 #smartUploadModal .smart-dropzone.is-compact {
     flex: 0 0 auto !important;
