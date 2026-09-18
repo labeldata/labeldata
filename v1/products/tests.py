@@ -13007,10 +13007,25 @@ class 문서_정보는_그_행_아래에_펼친다(TestCase):
         block = text[i:i + 900]
         self.assertIn(".doc-expand-row').forEach(el => el.remove())", block)
 
-    def test_칸들이_가로로_늘어선다(self):
+    def test_칸들이_한_줄에_담긴다(self):
+        """
+        격자로 두었더니 칸마다 같은 폭을 받아, 좁아도 되는 '발행일' 과 넓어야
+        하는 '유효기간 + 빠른 선택' 이 같은 폭이 됐다. 빠른 선택 여섯 개가
+        다음 줄로 떨어져 전체가 여섯 줄이 됐다.
+        """
         text = self._text()
-        self.assertIn('doc-panel-grid', text)
-        self.assertIn('repeat(auto-fit, minmax(min(100%, 300px), 1fr))', text)
+        i = text.index('#doc-edit-panel .doc-panel-grid {')
+        block = text[i:i + 400]
+        self.assertIn('flex-wrap: wrap', block)
+        # 칸마다 제 몫만큼 — 같은 폭으로 나누지 않는다
+        self.assertIn('.doc-field-cell {', text)
+        self.assertIn('flex: 3 1 420px', text)
+
+    def test_펼친_영역이_폭을_다_쓴다(self):
+        """화면 반만 쓰고 나머지가 비어 있었다."""
+        text = self._text()
+        i = text.index('#doc-edit-panel {')
+        self.assertNotIn('max-width', text[i:i + 300])
 
     def test_접기_단추가_펼친_영역_안에_있다(self):
         """닫으려고 저쪽 끝의 X 를 찾아가게 하지 않는다."""

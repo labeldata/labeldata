@@ -877,8 +877,7 @@ async function submitImportCompanyDoc() {
         white-space: normal !important;
     }
     #doc-edit-panel {
-        max-width: 860px;
-        padding: 10px 14px 12px;
+        padding: 10px 14px 10px;
         background: #fff;
         border: 1px solid var(--ez-gray-200, #e8eaed);
         border-left: 2px solid var(--ez-primary, #1a73e8);
@@ -897,15 +896,43 @@ async function submitImportCompanyDoc() {
         min-width: 0;
         flex: 1;
     }
-    /* 항목은 두 줄까지만. 셋을 넘기면 눈이 좌우로 너무 멀리 간다. */
+    /* -------------------------------------------------------------
+       한 줄에 최대한 담아 높이를 줄인다
+
+       격자(auto-fit)로 두었더니 칸마다 같은 폭을 받아, 좁아도 되는 '발행일'
+       과 넓어야 하는 '유효기간 + 빠른 선택' 이 같은 폭이 됐다. 그래서 빠른
+       선택 여섯 개가 다음 줄로 떨어지고 전체가 여섯 줄이 됐다.
+
+       flex 로 바꾸고 칸마다 **제 몫만큼** 준다. 넓은 화면에서는
+
+         문서 구분 | 발행일 | 유효기간 +1개월…무기한 | 만료 알림
+
+       이 한 줄에 들어가고, 좁아지면 뒤에서부터 저절로 내려간다.
+       ------------------------------------------------------------- */
     #doc-edit-panel .doc-panel-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-        gap: 8px 18px;
-        align-items: start;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        align-items: center;
     }
-    #doc-edit-panel .doc-panel-grid > .doc-field-wide { grid-column: 1 / -1; }
-    #doc-edit-panel textarea.form-control { resize: vertical; }
+    #doc-edit-panel .doc-panel-grid > .doc-field { flex: 1 1 200px; }
+    /* 유효기간은 빠른 선택 단추를 옆에 달고 다닌다 */
+    #doc-edit-panel .doc-field-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 3 1 420px;
+        min-width: 0;
+    }
+    #doc-edit-panel .doc-field-cell > .doc-field { flex: 0 1 190px; }
+    #doc-edit-panel .doc-expiry-quick { flex: 1 1 auto; }
+    #doc-edit-panel .doc-panel-grid > .form-check { flex: 0 0 auto; margin: 0; }
+    #doc-edit-panel .doc-panel-grid > .doc-field-wide { flex: 1 1 100%; }
+    /* 설명은 두 줄이면 족하다. 늘리고 싶으면 사용자가 끌어 늘린다. */
+    #doc-edit-panel textarea.form-control {
+        resize: vertical;
+        min-height: 48px;
+    }
 
     #doc-edit-panel .form-label {
         margin-bottom: 6px;
@@ -2152,7 +2179,7 @@ async function submitImportCompanyDoc() {
             ` : ''}
 
             <div class="doc-panel-grid">
-            <div class="doc-field mb-2">
+            <div class="doc-field">
                 <label class="form-label" for="edit-doc-type">문서 구분</label>
                 <select class="form-select form-select-sm" id="edit-doc-type">
                     ${documentTypes.map(dtype =>
@@ -2161,17 +2188,17 @@ async function submitImportCompanyDoc() {
                 </select>
             </div>
 
-            <div class="doc-field mb-2">
+            <div class="doc-field">
                 <label class="form-label" for="edit-issue-date">발행일</label>
                 <input type="date" class="form-control form-control-sm" id="edit-issue-date" value="${doc.issueDate || ''}">
             </div>
 
             <div class="doc-field-cell">
-            <div class="doc-field mb-1">
+            <div class="doc-field">
                 <label class="form-label" for="edit-expiry-date">유효기간</label>
                 <input type="date" class="form-control form-control-sm" id="edit-expiry-date" value="${doc.expiryDate || ''}">
             </div>
-            <div class="doc-expiry-quick mb-2">
+            <div class="doc-expiry-quick">
                 <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(1)">+1개월</button>
                 <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(3)">+3개월</button>
                 <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByMonths(6)">+6개월</button>
@@ -2181,14 +2208,14 @@ async function submitImportCompanyDoc() {
             </div>
             </div>
 
-            <div class="form-check form-switch mb-2">
+            <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="edit-notification-enabled" ${doc.expiryNotificationEnabled ? 'checked' : ''}>
                 <label class="form-check-label small" for="edit-notification-enabled">
                     만료 ${doc.expiryNotificationDays || 30}일 전 알림
                 </label>
             </div>
 
-            <div class="doc-field doc-field-top doc-field-wide mb-2">
+            <div class="doc-field doc-field-top doc-field-wide">
                 <label class="form-label" for="edit-description">설명</label>
                 <textarea class="form-control form-control-sm" id="edit-description" rows="2" placeholder="문서 설명...">${doc.description || ''}</textarea>
             </div>
