@@ -13431,10 +13431,11 @@ class 올린_사진을_줄_세워_확인한다(TestCase):
         self.assertGreaterEqual(block.count('if (queued) nextInIngredientQueue();'), 2)
 
     def test_등록하면_다음_장이_열린다(self):
+        """창이 다 닫힌 뒤에 연다 — closeThenNext 주석 참고."""
         docs = self._docs()
         i = docs.index('async function applyIngredientPhoto(')
-        block = docs[i:i + 1600]
-        self.assertIn('nextInIngredientQueue();', block)
+        block = docs[i:i + 1800]
+        self.assertIn('closeThenNext(modalEl)', block)
 
     def test_한_장짜리에는_건너뛰기를_두지_않는다(self):
         """창을 닫는 것과 같으므로 단추가 하나 더 있을 까닭이 없다."""
