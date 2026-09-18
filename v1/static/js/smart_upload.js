@@ -677,14 +677,25 @@ async function handleSmartUpload() {
                 continue;
             }
             if (res.ok && body && body.document_id) {
-                uploaded.push(body.document_id);
+                uploaded.push({
+                    id: body.document_id,
+                    filename: body.filename || file.name,
+                    mediaUrl: body.media_url || '',
+                    typeId: body.document_type_id,
+                    typeName: body.document_type || '',
+                    typeCode: body.document_type_code || '',
+                    type: body.document_type || '',
+                    fileSize: body.file_size || file.size,
+                    uploadedDate: body.uploaded_at || '',
+                    multiple: !!body.multiple_yn
+                });
             } else {
                 failed.push(file.name + (body && body.error ? ' — ' + body.error : ''));
             }
         }
 
         const response = { ok: uploaded.length > 0 };
-        const data = { document_id: uploaded[0], document_ids: uploaded };
+        const data = { document_id: uploaded.length ? uploaded[0].id : null };
         if (failed.length) {
             showSnackbar(failed.length + '장을 올리지 못했습니다: '
                          + failed.join(' / '), 'error');
@@ -705,29 +716,40 @@ async function handleSmartUpload() {
                 : '문서가 성공적으로 등록되었습니다.', 'success');
             sessionStorage.setItem('returnToTab', 'docs');
 
+            /* 원료 표시사항을 올렸으면 **그 자리에서 바로 줄 세워 판독한다.**
+             *
+             * 올린 사람은 사진을 쌓으러 온 것이 아니라 BOM 에 원료를 넣으러
+             * 온 것이다. 예전에는 새로고침을 먼저 하고 새로 그려진 화면에서
+             * 줄을 세웠는데, 그래서 **문서함 목록이 한 번 번쩍인 뒤에** 판독
+             * 창이 떴다. 올리자마자 읽을 참인데 중간에 딴 화면이 끼어든다.
+             *
+             * 새로고침은 줄이 다 끝난 뒤로 미룬다. 응답에 파일 주소와 구분
+             * 코드가 함께 오므로, 목록에 없는 문서라도 판독 창이 사진을 옆에
+             * 놓을 수 있다. */
+            if (uploaded.length && uploaded[0].multiple
+                    && typeof window.startIngredientQueue === 'function') {
+                window.markIngredientQueueNeedsReload();
+                /* **이 창이 다 닫힌 뒤에 연다.** 닫으라고 이르자마자 다른 창을
+                 * 열면 배경막이 겹쳐 회색 화면만 남는다 — 이 저장소가 이미
+                 * 두 번 겪은 모양이다. */
+                const startNow = () => window.startIngredientQueue(uploaded);
+                if (modal) {
+                    modalElement.addEventListener('hidden.bs.modal', function once() {
+                        modalElement.removeEventListener('hidden.bs.modal', once);
+                        startNow();
+                    });
+                } else {
+                    startNow();
+                }
+                return;                     // 새로고침하지 않는다
+            }
+
             /* 영양성분 탭에서 "성적서 첨부" 로 들어온 길이면, 새로고침 뒤에
                **방금 올린 그 문서를 읽는다.** 올린 사람은 값을 넣으러 온
                것이지 파일을 쌓으러 온 것이 아니다.
 
                그리고 **왔던 자리로 되돌린다.** 문서함 탭으로 데려다 놓으면
                값을 넣고 나서 영양성분 탭을 다시 찾아 들어가야 한다. */
-            /* 원료 표시사항을 올렸으면 **새로고침 뒤에 바로 줄 세워 판독한다.**
-             *
-             * 올린 사람은 사진을 쌓으러 온 것이 아니라 BOM 에 원료를 넣으러
-             * 온 것이다. 문서함에 파일만 남기고 끝내면, 판독하려고 한 장씩
-             * 다시 찾아 눌러야 한다 — 다섯 장이면 다섯 번이다.
-             *
-             * 새로고침을 거치는 까닭은 아래 reload 때문이다. 화면이 새로
-             * 그려져야 방금 올린 문서가 목록에 서고, 판독 창이 그 문서의
-             * 사진을 옆에 놓을 수 있다. */
-            try {
-                const manyPicked = document.getElementById('document-type-select');
-                const pickedOpt = manyPicked
-                    ? manyPicked.options[manyPicked.selectedIndex] : null;
-                if (pickedOpt && pickedOpt.dataset.multiple === '1' && uploaded.length) {
-                    sessionStorage.setItem('ingredientQueue', JSON.stringify(uploaded));
-                }
-            } catch (e) { /* 못 남겨도 업로드는 끝났다 */ }
 
             try {
                 if (sessionStorage.getItem('specReadAfterUpload') && data.document_id) {

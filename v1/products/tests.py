@@ -13277,7 +13277,7 @@ class 여러_장을_한꺼번에_올린다(TestCase):
         block = js[i:i + 1600]
         self.assertIn('continue;', block)
         self.assertIn('failed.push', block)
-        self.assertIn('uploaded.push(body.document_id)', block)
+        self.assertIn('uploaded.push({', block)
 
     def test_구분을_바꾸면_남은_장을_조용히_올리지_않는다(self):
         js = self._js()
@@ -13392,26 +13392,30 @@ class 올린_사진을_줄_세워_확인한다(TestCase):
         return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
                 ).read_text(encoding='utf-8')
 
-    def test_여러_건_구분을_올리면_줄을_남긴다(self):
+    def test_여러_건_구분을_올리면_그_자리에서_줄을_세운다(self):
         js = self._js()
-        i = js.index("sessionStorage.setItem('ingredientQueue'")
-        # '여러 건' 구분일 때만 남긴다
-        self.assertIn("dataset.multiple === '1'", js[max(0, i - 400):i])
+        i = js.index('window.startIngredientQueue(uploaded)')
+        block = js[max(0, i - 900):i]
+        # '여러 건' 구분일 때만
+        self.assertIn('uploaded[0].multiple', block)
 
-    def test_꺼내자마자_지운다(self):
+    def test_목록이_번쩍인_뒤에_판독_창이_뜨지_않는다(self):
         """
-        남겨 두면 새로고침할 때마다 같은 줄이 다시 서고, 이미 등록한 원료를
-        또 등록하라고 묻게 된다.
+        예전에는 새로고침을 먼저 하고 새로 그려진 화면에서 줄을 세웠다. 올리
+        자마자 읽을 참인데 중간에 문서함 목록이 한 번 끼어들었다.
         """
+        js = self._js()
+        i = js.index('window.startIngredientQueue(uploaded)')
+        block = js[i:i + 700]
+        self.assertIn('return;', block)          # 새로고침으로 내려가지 않는다
         docs = self._docs()
-        i = docs.index("sessionStorage.getItem('ingredientQueue')")
-        block = docs[i:i + 300]
-        self.assertIn("removeItem('ingredientQueue')", block)
+        j = docs.index('if (ingNeedsReload)')
+        self.assertIn('window.location.reload()', docs[j:j + 300])
 
     def test_앞_장을_보는_동안_다음_장을_미리_읽는다(self):
         docs = self._docs()
         i = docs.index('function nextInIngredientQueue()')
-        block = docs[i:i + 600]
+        block = docs[i:i + 1400]
         self.assertIn('if (ingQueue.length) fetchIngredientPreview(ingQueue[0])', block)
 
     def test_같은_문서를_두_번_청하지_않는다(self):

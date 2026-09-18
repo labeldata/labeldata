@@ -4124,6 +4124,12 @@ def document_upload_api(request, label_id):
             'file_size': document.file_size,
             'document_type': document.document_type.type_name,
             'document_type_id': document.document_type.type_id,
+            # 화면이 **새로고침 없이** 방금 올린 문서를 다룰 수 있게 한다.
+            # 원료 사진은 올린 즉시 판독 창이 그 사진을 옆에 놓아야 하는데,
+            # 그러려면 파일 주소와 구분 코드가 필요하다.
+            'document_type_code': document.document_type.type_code or '',
+            'media_url': document.file.url if document.file else '',
+            'multiple_yn': bool(document.document_type.multiple_yn),
             'expiry_date': document.expiry_date.isoformat() if document.expiry_date else None,
             'uploaded_at': document.uploaded_datetime.strftime('%Y-%m-%d %H:%M'),
             'message': message,

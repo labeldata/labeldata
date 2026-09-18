@@ -1707,27 +1707,6 @@ async function submitImportCompanyDoc() {
         });
     })();
 
-    /* 원료 사진을 여러 장 올리고 새로고침한 뒤 — 줄을 세워 한 장씩 연다.
-     *
-     * 세션에서 꺼내자마자 지운다. 남겨 두면 새로고침할 때마다 같은 줄이 다시
-     * 서고, 이미 등록한 원료를 또 등록하라고 묻게 된다. */
-    (function () {
-        let raw = null;
-        try {
-            raw = sessionStorage.getItem('ingredientQueue');
-            if (raw) sessionStorage.removeItem('ingredientQueue');
-        } catch (e) { return; }
-        if (!raw) return;
-
-        let ids = [];
-        try { ids = JSON.parse(raw) || []; } catch (e) { return; }
-        if (!ids.length) return;
-
-        window.addEventListener('load', function () {
-            setTimeout(function () { window.startIngredientQueue(ids); }, 200);
-        });
-    })();
-
     window.pickSpecNutritionDoc = function () {
         const docs = Object.values(documentData || {}).filter(looksLikeSpecSheet);
 
@@ -1997,6 +1976,8 @@ async function submitImportCompanyDoc() {
     let ingQueue = [];          // 아직 확인하지 않은 문서
     let ingQueueTotal = 0;      // 이번 줄의 전체 장수
     const ingPrefetch = {};     // 문서 -> 판독 요청(Promise)
+    let ingNeedsReload = false; // 줄이 끝나면 목록을 다시 그려야 하는가
+    window.markIngredientQueueNeedsReload = function () { ingNeedsReload = true; };
 
     /* 판독을 한 번 청한다. 같은 문서를 두 번 청하지 않는다 — 미리 읽어 둔 것이
        있으면 그것을 그대로 쓴다. */
@@ -2020,8 +2001,28 @@ async function submitImportCompanyDoc() {
         return ingPrefetch[docId];
     }
 
-    window.startIngredientQueue = function (ids) {
-        const list = (ids || []).filter(id => documentData[id]);
+    /*
+     * 줄을 세운다. 문서 번호만 받아도 되고, 방금 올려서 아직 목록에 없는
+     * 문서라면 그 정보를 통째로 받아 목록에 끼워 넣는다.
+     *
+     * **끼워 넣는 길이 필요한 까닭.** 예전에는 올린 뒤 새로고침을 하고, 새로
+     * 그려진 화면에서 줄을 세웠다. 그래서 사용자는 **문서함 목록이 한 번
+     * 번쩍인 뒤에** 판독 창을 만났다 — 올리자마자 읽을 참인데 중간에 딴
+     * 화면이 끼어든다. 새로고침은 줄이 다 끝난 뒤로 미룬다.
+     */
+    window.startIngredientQueue = function (items) {
+        const list = [];
+        (items || []).forEach(item => {
+            if (item && typeof item === 'object') {
+                documentData[item.id] = Object.assign(
+                    { fileSize: 0, uploadedBy: '나', uploadedDate: '',
+                      ingredientBomId: null, slotId: null },
+                    documentData[item.id] || {}, item);
+                list.push(item.id);
+            } else if (documentData[item]) {
+                list.push(item);
+            }
+        });
         if (!list.length) return;
         ingQueue = list.slice();
         ingQueueTotal = list.length;
@@ -2057,6 +2058,13 @@ async function submitImportCompanyDoc() {
                     `${ingQueueTotal}장을 모두 확인했습니다.`, 'info');
             }
             ingQueueTotal = 0;
+            /* **줄이 끝난 뒤에 새로고침한다.** 올린 문서를 목록에 세우려면
+               화면을 다시 그려야 하는데, 그것을 앞에 두면 판독 창 앞에서
+               목록이 번쩍인다. 일이 다 끝난 뒤가 그 자리다. */
+            if (ingNeedsReload) {
+                ingNeedsReload = false;
+                setTimeout(() => window.location.reload(), 600);
+            }
             return;
         }
         const docId = ingQueue.shift();
