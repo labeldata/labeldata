@@ -4231,9 +4231,15 @@ class BOM을_통째로_지운다(TestCase):
     def test_단추가_있다(self):
         self.assertIn('onclick="clearAllRows()"', self.bom)
         self.assertIn('전체 지우기', self.bom)
-        # 읽기 전용으로 열린 사람에게는 보이지 않는다
+        # 읽기 전용으로 열린 사람에게는 보이지 않는다.
+        #
+        # 거리로 재지 않는다 — 사이에 다른 단추가 끼면 창이 좁아 놓친다.
+        # **열린 can_edit 블록 안**인지를 본다: 바로 앞의 여는 표시와 그 사이에
+        # 닫는 표시가 없는지.
         head = self.bom.index('onclick="clearAllRows()"')
-        self.assertIn('{% if can_edit %}', self.bom[head - 400:head])
+        before = self.bom[:head]
+        opened = before.rindex('{% if can_edit %}')
+        self.assertNotIn('{% endif %}', before[opened:])
 
     def test_전체를_고르고_DEL_로도_지운다(self):
         head = self.bom.index("hot.addHook('beforeKeyDown'")
@@ -13767,3 +13773,152 @@ class 원료_사진은_목록에서_한_줄로_묶인다(TestCase):
         block = html[i:i + 900]
         self.assertIn('{% if group.by_type %}', block)
         self.assertIn('{{ group.count }}건', block)
+
+
+class 사진에서_온_배합_줄을_되짚을_수_있다(TestCase):
+    """
+    사진을 판독해 넣은 줄과 손으로 적은 줄이 배합표에서 **똑같이 생겼다.**
+    그래서 "이 원료 정보가 어디서 왔지" 를 되짚을 길이 없었다.
+
+    연결은 문서 쪽에만 적혀 있었다(metadata.ingredient_bom_id). BOM 행은 자기
+    사진을 몰랐는데, metadata 가 JSON 이라 거꾸로도 찾을 수 있다 —
+    마이그레이션 없이 붙는다.
+    """
+
+    def setUp(self):
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyLabel
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='trace', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='과자', delete_YN='N')
+        self.bom = ProductBOM.objects.create(
+            parent_label=self.label, ingredient_name='크림치즈', active_yn=True)
+        dtype = DocumentType.objects.create(
+            type_code='INGREDIENT_LABEL', type_name='원료 표시사항',
+            multiple_yn=True, display_order=90)
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dtype, active_yn=True,
+            original_filename='크림치즈.jpg',
+            metadata={'ingredient_bom_id': self.bom.bom_id})
+
+    def test_배합_목록이_사진_번호를_함께_준다(self):
+        import json
+
+        res = self.client.get(
+            reverse('bom:bom_data_api', args=[self.label.my_label_id]))
+        self.assertEqual(res.status_code, 200)
+        rows = json.loads(res.content.decode()).get('data') or []
+        mine = [r for r in rows if r.get('bom_id') == self.bom.bom_id]
+        self.assertTrue(mine)
+        self.assertEqual(mine[0].get('photo_document_id'), self.doc.document_id)
+
+    def test_한_번에_끌어온다(self):
+        """줄마다 조회하면 행 수만큼 질의가 난다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'bom/views.py').read_text(encoding='utf-8')
+        i = src.index('photo_of = {}')
+        block = src[i:i + 800]
+        self.assertIn('metadata__ingredient_bom_id__isnull=False', block)
+        self.assertIn('values_list', block)
+
+    def test_못_붙여도_배합표는_그려진다(self):
+        """사진 표시는 덤이다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'bom/views.py').read_text(encoding='utf-8')
+        i = src.index('photo_of = {}')
+        self.assertIn('except Exception:', src[i:i + 900])
+
+    def test_사진_단추가_부모에게_이른다(self):
+        """배합표는 iframe 안이고 문서함은 부모에 있다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+        i = html.index("closest('.bom-photobtn')")
+        block = html[i:i + 700]
+        self.assertIn("type: 'openDocument'", block)
+        self.assertIn('window.location.origin', block)
+
+    def test_부모가_그_문서를_펼친다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/product_detail.html'
+                ).read_text(encoding='utf-8')
+        i = html.index("e.data.type !== 'openDocument'")
+        block = html[i:i + 900]
+        self.assertIn('openEditPanel(docId)', block)
+        # 접힌 묶음 안에 있어 목록에 없을 수도 있다
+        self.assertIn("'?tab=docs&doc=' + docId", block)
+
+
+class 배합표에서_바로_사진으로_한_줄_만든다(TestCase):
+    """
+    원료 봉지를 찍어 줄을 만들려면 **문서함까지 가서** 올리고 판독해야 했다 —
+    배합표를 채우다 말고 다른 탭으로 건너갔다가 돌아오는 길이다. 기본정보
+    탭의 '불러오기' 와 같은 얼굴로, 하던 자리에 둔다.
+    """
+
+    def _bom(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+
+    def _detail(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/product_detail.html'
+                ).read_text(encoding='utf-8')
+
+    def test_고칠_수_있는_사람에게만_보인다(self):
+        bom = self._bom()
+        head = bom.index('openIngredientPhotoUpload()')
+        before = bom[:head]
+        opened = before.rindex('{% if can_edit %}')
+        self.assertNotIn('{% endif %}', before[opened:])
+
+    def test_부모에게_이른다(self):
+        """배합표는 iframe 안이고 업로드 창은 부모에 있다."""
+        bom = self._bom()
+        i = bom.index('window.openIngredientPhotoUpload = function')
+        block = bom[i:i + 500]
+        self.assertIn("type: 'openIngredientUpload'", block)
+        self.assertIn('window.location.origin', block)
+
+    def test_구분을_다시_고르게_하지_않는다(self):
+        """배합표에서 누른 사람은 이미 무엇을 올릴지 정했다."""
+        detail = self._detail()
+        i = detail.index("e.data.type !== 'openIngredientUpload'")
+        block = detail[i:i + 1200]
+        self.assertIn('window.openUploadModal(null,', block)
+
+    def test_구분_번호를_화면에서_읽는다(self):
+        """여기서 코드 이름을 또 적으면 두 곳이 어긋날 자리가 생긴다."""
+        detail = self._detail()
+        i = detail.index("e.data.type !== 'openIngredientUpload'")
+        block = detail[i:i + 1200]
+        self.assertIn("o.dataset.multiple === '1'", block)
+        self.assertNotIn('INGREDIENT_LABEL', block)
+
+    def test_못_찾으면_말한다(self):
+        detail = self._detail()
+        i = detail.index("e.data.type !== 'openIngredientUpload'")
+        block = detail[i:i + 1200]
+        self.assertIn('찾지 못했습니다', block)

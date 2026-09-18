@@ -1368,6 +1368,53 @@ window.sameOriginMessage = function (e) {
     return e && e.origin === window.location.origin;
 };
 
+/* 배합표의 [사진으로 등록] 을 누르면 온다.
+   문서함 탭을 열고 업로드 창을 '원료 표시사항' 으로 연다 — 구분을 다시
+   고르게 하지 않는다. 배합표에서 누른 사람은 이미 무엇을 올릴지 정했다. */
+window.addEventListener('message', function (e) {
+    if (!window.sameOriginMessage(e)) return;
+    if (!e.data || e.data.type !== 'openIngredientUpload') return;
+
+    const docsTab = document.querySelector('[data-bs-target="#tab-docs"]');
+    if (docsTab) bootstrap.Tab.getOrCreateInstance(docsTab).show();
+
+    /* 구분 번호는 화면이 이미 들고 있다 — 서버가 옵션마다 내려준 그 표시다.
+       여기서 코드 이름을 또 적으면 두 곳이 어긋날 자리가 생긴다. */
+    const sel = document.getElementById('document-type-select');
+    const opt = sel && Array.from(sel.options)
+        .find(o => o.dataset.multiple === '1');
+    if (!opt || typeof window.openUploadModal !== 'function') {
+        if (typeof showSnackbar === 'function') {
+            showSnackbar('원료 표시사항 구분을 찾지 못했습니다.', 'error');
+        }
+        return;
+    }
+    setTimeout(() => window.openUploadModal(null, opt.textContent.trim(), opt.value), 120);
+});
+
+/* 배합표에서 사진 단추를 누르면 온다 — 그 줄을 만든 원료 표시사항 사진으로
+   데려간다. 문서함 탭을 열고 그 문서를 펼치는 일은 이미 `?doc=` 이 하던
+   것이라, 같은 함수를 부른다. */
+window.addEventListener('message', function (e) {
+    if (!window.sameOriginMessage(e)) return;
+    if (!e.data || e.data.type !== 'openDocument') return;
+    const docId = Number(e.data.documentId);
+    if (!docId) return;
+
+    const docsTab = document.querySelector('[data-bs-target="#tab-docs"]');
+    if (docsTab) bootstrap.Tab.getOrCreateInstance(docsTab).show();
+
+    const row = document.querySelector(`.document-row[data-doc-id="${docId}"]`);
+    if (row && typeof window.openEditPanel === 'function') {
+        window.openEditPanel(docId);
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    } else {
+        /* 접힌 묶음 안에 있거나 목록에 없을 수 있다. 그때는 그 문서를 여는
+           주소로 보낸다 — 새로 그려지면서 펼쳐진다. */
+        window.location.href = window.location.pathname + '?tab=docs&doc=' + docId;
+    }
+});
+
 /* 영양성분 탭의 안내에서 "표시사항 탭으로 이동" 을 누르면 온다.
    영양정보 표는 표시사항 미리보기에 함께 그려지고 PDF 도 거기서 한 장으로 나온다. */
 window.addEventListener('message', function(e) {

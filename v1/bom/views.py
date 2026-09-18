@@ -371,6 +371,27 @@ def bom_data_api(request, label_id):
         'shared_receipt__share__label'
     ).order_by('level', 'sort_order')
     
+    # 어느 줄이 사진에서 온 것인가.
+    #
+    # 연결은 **문서 쪽에만** 적혀 있다(ProductDocument.metadata.ingredient_bom_id).
+    # 그래서 BOM 행은 자기 사진을 몰랐고, 화면도 "이 원료 정보가 어디서 왔지" 를
+    # 되짚을 길이 없었다. metadata 가 JSON 이라 거꾸로도 찾을 수 있으므로
+    # 마이그레이션 없이 한 번에 끌어온다 — 줄마다 조회하면 행 수만큼 질의가 난다.
+    photo_of = {}
+    try:
+        from v1.products.models import ProductDocument
+
+        for doc_id, meta in (ProductDocument.objects
+                             .filter(label=label, active_yn=True,
+                                     metadata__ingredient_bom_id__isnull=False)
+                             .values_list('document_id', 'metadata')):
+            bom_id = (meta or {}).get('ingredient_bom_id')
+            if bom_id:
+                photo_of[bom_id] = doc_id
+    except Exception:
+        # 사진 표시는 덤이다. 못 붙여도 배합표는 그려져야 한다.
+        photo_of = {}
+
     data = []
     for bom in boms:
         # 원료 소스 판단
@@ -397,6 +418,8 @@ def bom_data_api(request, label_id):
         
         data.append({
             'bom_id': bom.bom_id,
+            # 이 줄을 만든 원료 표시사항 사진. 없으면 None.
+            'photo_document_id': photo_of.get(bom.bom_id),
             'ingredient_name': bom.ingredient_name or ingredient_name,
             'ingredient_code': ingredient_code,
             'source_type': source_type,

@@ -84,6 +84,17 @@ body.in-iframe .bom-page-header { display: none !important; }
                     <i class="bi bi-file-earmark-arrow-down"></i> 붙여넣기 양식
                 </a>
                 {% if can_edit %}
+                {% comment %}
+                  원료 봉지를 찍어 그 자리에서 한 줄을 만든다.
+
+                  문서함까지 가서 올리고 판독해야 했다 — 배합표를 채우다 말고
+                  다른 탭으로 건너갔다가 돌아오는 길이다. 기본정보 탭의
+                  '불러오기' 와 같은 얼굴로, 하던 자리에 둔다.
+                {% endcomment %}
+                <button class="btn btn-outline-primary v2-btn-sm" onclick="openIngredientPhotoUpload()"
+                        title="원료 표시사항 사진을 올려 판독하고 이 표에 줄을 더합니다">
+                    <i class="bi bi-camera"></i> 사진으로 등록
+                </button>
                 {# 되돌릴 길이 우클릭 → 행 삭제뿐이었다. 스무 줄이면 스무 번이다 #}
                 <button class="btn btn-outline-danger v2-btn-sm" onclick="clearAllRows()"
                         title="표를 통째로 비웁니다. 표에서 전체를 고른 뒤 DEL 을 눌러도 됩니다">
@@ -976,12 +987,29 @@ body.in-iframe .bom-page-header { display: none !important; }
                붙여넣기 양식이기도 하다(BOM_SHEET_HEADERS). 칸을 하나 더하면
                사용자가 쓰던 엑셀 양식이 어긋난다. 행 머리는 그 밖이다. */
             rowHeaders: function (row) {
+                /* 사진에서 온 줄에는 표를 달아 준다.
+                 *
+                 * "이 원료 정보가 어디서 왔지" 를 되짚을 길이 없었다. 사진을
+                 * 판독해 넣은 줄과 손으로 적은 줄이 표에서 똑같이 생겼기
+                 * 때문이다. 눌러 그 사진으로 갈 수 있어야 값을 견줄 수 있다. */
+                /* **좌표를 바꿔서 읽는다.** rowHeaders 는 화면 좌표를 주는데
+                   데이터는 물리 좌표로 선다. 줄을 끌어 옮기면 그 둘이 갈라져
+                   사진 표가 엉뚱한 줄에 붙는다 — rowObjectAt 이 그 변환을
+                   맡는 한 곳이다. */
+                var meta = (rowObjectAt(row) || {})._meta;
+                var docId = meta && meta.photo_document_id;
                 return '<span class="bom-rowno">' + (row + 1) + '</span>'
+                     + (docId
+                        ? '<button type="button" class="bom-rowbtn bom-photobtn"'
+                          + ' data-doc="' + docId + '"'
+                          + ' title="이 줄을 만든 원료 표시사항 사진 보기">'
+                          + '<i class="bi bi-image"></i></button>'
+                        : '')
                      + '<button type="button" class="bom-rowbtn" data-row="' + row + '"'
                      + ' title="알레르기 · GMO · 표시명 기준 · 영양성분을 입력합니다">'
                      + '<i class="bi bi-pencil-square"></i></button>';
             },
-            rowHeaderWidth: 54,
+            rowHeaderWidth: 76,
             colHeaders: SHOWN_HEADERS,
             manualRowMove: CAN_EDIT,
             manualColumnResize: true,
@@ -1993,6 +2021,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                  * ═══════════════════════════════════════════════════════ */
                 rowData._meta = {
                     bom_id: item.bom_id || null,
+                    photo_document_id: item.photo_document_id || null,
                     source_type: normalizeSourceType(item.source_type),
                     source_id: item.source_id || null,
                     shared_owner: item.shared_owner || '',
@@ -2666,6 +2695,23 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (!container || container.dataset.rowBtnBound) return;
         container.dataset.rowBtnBound = '1';
         container.addEventListener('click', function (ev) {
+            /* 사진 단추가 먼저다 — 두 단추가 같은 클래스를 나눠 쓰므로
+               데이터로 가린다. 사진 쪽에는 data-row 가 없다. */
+            const photo = ev.target.closest('.bom-photobtn');
+            if (photo) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                /* 배합표는 iframe 안이다. 문서함은 부모에 있으므로 부모에게
+                   이른다 — 기본정보 탭으로 원재료명을 넘길 때 쓰는 그 길이다. */
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'openDocument',
+                        documentId: Number(photo.dataset.doc)
+                    }, window.location.origin);
+                }
+                return;
+            }
+
             const btn = ev.target.closest('.bom-rowbtn');
             if (!btn) return;
             ev.preventDefault();
@@ -2676,6 +2722,22 @@ body.in-iframe .bom-page-header { display: none !important; }
             updateContextPanel(rowObjectAt(row), row, true);
         });
     }
+
+    /*
+     * 원료 사진으로 한 줄 만들기 — 창은 부모(문서함)에 있다.
+     *
+     * 배합표는 iframe 안이라 그 창을 직접 열 수 없다. 사진 단추가 문서로
+     * 건너가는 데 쓰는 그 길을 그대로 쓴다.
+     *
+     * **줄이 끝나면 부모가 새로고침한다.** 그러면 이 iframe 도 다시 뜨면서
+     * 방금 만든 줄이 표에 선다 — 여기서 따로 받아 올 것이 없다.
+     */
+    window.openIngredientPhotoUpload = function () {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'openIngredientUpload' },
+                                      window.location.origin);
+        }
+    };
 
     /* 상세를 저절로 펴는 칸.
        모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다. 목록에서
