@@ -4021,8 +4021,12 @@ def document_upload_api(request, label_id):
                 Q(document_id=parent_document.document_id) | Q(parent_document=parent_document)
             ).aggregate(Max('version'))['version__max'] or 1
             version_number = latest_version + 1
-        elif not slot:
+        elif not slot and not document_type.multiple_yn:
             # 슬롯 없이 업로드 시 같은 label+document_type 기존 문서 중 최신 버전 처리
+            #
+            # **'여러 건' 구분은 여기 들어오면 안 된다.** 원료 표시사항은 장마다
+            # 다른 원료라, 크림치즈 다음에 올린 설탕 사진이 크림치즈의 새 판이
+            # 되면 목록에서 크림치즈가 사라진다 — 지운 적도 없는데.
             existing_root = ProductDocument.objects.filter(
                 label=label,
                 document_type=document_type,

@@ -13112,3 +13112,114 @@ class 오래_걸리는_판독은_기다린다고_말한다(TestCase):
         block = text[i:i + 2500]
         self.assertIn('JSON.parse(text)', block)
         self.assertIn('res.status', block)
+
+
+class 여러_건_구분은_판으로_쌓지_않는다(TestCase):
+    """
+    원료 표시사항은 **장마다 다른 원료**다. 그런데 업로드가 슬롯 없는 구분을
+    전부 '같은 구분의 옛 문서에 판으로 붙이기' 로 다뤘다. 원료 표시사항에는
+    슬롯이 없으니 이렇게 됐다.
+
+        크림치즈 사진  v1
+        설탕 사진      v2   <- 크림치즈의 '새 판'
+        밀가루 사진    v3
+
+    문서함 목록에는 밀가루 한 줄만 남는다. **지운 적도 없는데 사라진 것으로
+    보인다.** 만료 알림도 현재 판만 보므로 앞의 둘은 거기서도 빠진다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyLabel
+        from v1.products.models import DocumentType
+
+        self.user = User.objects.create_user(username='multi', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='과자', delete_YN='N')
+        self.many = DocumentType.objects.create(
+            type_code='INGREDIENT_LABEL', type_name='원료 표시사항',
+            multiple_yn=True, display_order=90)
+        self.once = DocumentType.objects.create(
+            type_code='ONE_ONLY', type_name='품목제조보고서',
+            multiple_yn=False, display_order=91)
+
+    def _upload(self, dtype, name):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return self.client.post(
+            reverse('products:document_upload_api',
+                    args=[self.label.my_label_id]),
+            {'file': SimpleUploadedFile(name, b'x', content_type='image/jpeg'),
+             'document_type_id': dtype.type_id})
+
+    def test_여러_건_구분은_올릴_때마다_새_문서다(self):
+        from v1.products.models import ProductDocument
+
+        for name in ('크림치즈.jpg', '설탕.jpg', '밀가루.jpg'):
+            self._upload(self.many, name)
+
+        docs = ProductDocument.objects.filter(
+            label=self.label, document_type=self.many, active_yn=True)
+        self.assertEqual(docs.count(), 3)
+        # 아무도 남의 판이 아니다
+        self.assertEqual(docs.filter(parent_document__isnull=False).count(), 0)
+        self.assertEqual(set(docs.values_list('version', flat=True)), {1})
+
+    def test_한_건_구분은_전처럼_판으로_쌓인다(self):
+        """고치려던 것은 '여러 건' 구분뿐이다. 나머지는 판이 맞다."""
+        from v1.products.models import ProductDocument
+
+        self._upload(self.once, '보고서.jpg')
+        self._upload(self.once, '보고서_수정.jpg')
+
+        docs = ProductDocument.objects.filter(
+            label=self.label, document_type=self.once, active_yn=True)
+        self.assertEqual(docs.count(), 2)
+        self.assertEqual(docs.filter(parent_document__isnull=False).count(), 1)
+
+    def test_이미_쌓인_사슬을_풀_수_있다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from v1.products.models import ProductDocument
+
+        first = ProductDocument.objects.create(
+            label=self.label, document_type=self.many,
+            original_filename='크림치즈.jpg', version=1, active_yn=True)
+        ProductDocument.objects.create(
+            label=self.label, document_type=self.many,
+            original_filename='설탕.jpg', version=2,
+            parent_document=first, active_yn=True)
+
+        out = StringIO()
+        call_command('unchain_multiple_documents', dry_run=True, stdout=out)
+        self.assertIn('1 건', out.getvalue())
+        # --dry-run 은 건드리지 않는다
+        self.assertEqual(ProductDocument.objects.filter(
+            parent_document__isnull=False).count(), 1)
+
+        call_command('unchain_multiple_documents', stdout=StringIO())
+        self.assertEqual(ProductDocument.objects.filter(
+            parent_document__isnull=False).count(), 0)
+        self.assertEqual(set(ProductDocument.objects.values_list(
+            'version', flat=True)), {1})
+
+    def test_한_건_구분의_판은_풀지_않는다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from v1.products.models import ProductDocument
+
+        root = ProductDocument.objects.create(
+            label=self.label, document_type=self.once,
+            original_filename='보고서.jpg', version=1, active_yn=True)
+        ProductDocument.objects.create(
+            label=self.label, document_type=self.once,
+            original_filename='보고서2.jpg', version=2,
+            parent_document=root, active_yn=True)
+
+        call_command('unchain_multiple_documents', stdout=StringIO())
+        self.assertEqual(ProductDocument.objects.filter(
+            parent_document__isnull=False).count(), 1)

@@ -14,10 +14,10 @@ from .models import (
 
 @admin.register(DocumentType)
 class DocumentTypeAdmin(admin.ModelAdmin):
-    list_display = ['type_code', 'type_name', 'requires_expiry', 'default_validity_days', 'expiry_alert_days', 'required_yn', 'active_yn', 'display_order']
+    list_display = ['type_code', 'type_name', 'multiple_yn', 'requires_expiry', 'default_validity_days', 'expiry_alert_days', 'required_yn', 'active_yn', 'display_order']
     list_editable = ['active_yn', 'display_order', 'required_yn']
     search_fields = ['type_code', 'type_name', 'description', 'detection_keywords']
-    list_filter = ['requires_expiry', 'active_yn', 'required_yn']
+    list_filter = ['multiple_yn', 'requires_expiry', 'active_yn', 'required_yn']
     ordering = ['display_order', 'type_name']
     
     fieldsets = (
@@ -29,7 +29,7 @@ class DocumentTypeAdmin(admin.ModelAdmin):
             'description': '파일명에 포함된 키워드로 자동 분류 (콤마로 구분)'
         }),
         ('만료일 관리', {
-            'fields': ('requires_expiry', 'default_validity_days', 'expiry_alert_days')
+            'fields': ('multiple_yn', 'requires_expiry', 'default_validity_days', 'expiry_alert_days')
         }),
         ('UI 설정', {
             'fields': ('icon', 'color'),
