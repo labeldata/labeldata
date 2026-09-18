@@ -664,8 +664,47 @@ def version_stacks(documents):
                       key=lambda d: (d.version or 1, d.uploaded_datetime or 0),
                       reverse=True)
         groups.append({'root': root, 'latest': docs[0],
-                       'older': docs[1:], 'count': len(docs)})
-    return groups
+                       'older': docs[1:], 'count': len(docs), 'by_type': False})
+
+    return _merge_multiple_types(groups)
+
+
+def _merge_multiple_types(groups):
+    """
+    '여러 건' 구분은 **구분 하나로 묶는다.**
+
+    원료 표시사항은 장마다 다른 원료다(DocumentType.multiple_yn). 그래서 판으로
+    쌓지 않게 고쳤는데, 그러고 나니 이번에는 목록이 사진 수만큼 길어졌다 —
+    원료 열 개를 넣은 제품이면 문서함 열 줄이 전부 '원료 표시사항' 이고, 정작
+    알고 싶은 "무슨 서류를 갖고 있는가" 가 그 속에 묻힌다.
+
+    판을 묶던 것과 **같은 자리**를 쓴다. 한 줄에 최신 것을 놓고 나머지는 그
+    아래에 접어 둔다 — 화면도 사용자도 배울 것이 없다. 다만 묶는 기준이 다르다:
+    저쪽은 '같은 문서의 여러 판' 이고 이쪽은 '같은 구분의 여러 건' 이라,
+    펼친 목록에 판 번호를 적으면 거짓말이 된다(by_type 이 그것을 가른다).
+    """
+    merged, by_type, order = [], {}, []
+    for group in groups:
+        dtype = group['latest'].document_type
+        if not (dtype and getattr(dtype, 'multiple_yn', False)):
+            merged.append(group)
+            continue
+        key = dtype.type_id
+        if key not in by_type:
+            by_type[key] = []
+            order.append((key, len(merged)))
+            merged.append(None)         # 자리를 잡아 둔다 — 차례를 지킨다
+        by_type[key].append(group)
+
+    for key, slot in order:
+        docs = []
+        for group in by_type[key]:
+            docs.append(group['latest'])
+            docs.extend(group['older'])
+        docs.sort(key=lambda d: d.uploaded_datetime or 0, reverse=True)
+        merged[slot] = {'root': 'type-%s' % key, 'latest': docs[0],
+                        'older': docs[1:], 'count': len(docs), 'by_type': True}
+    return merged
 
 
 @login_required

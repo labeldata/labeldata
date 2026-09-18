@@ -13441,13 +13441,13 @@ class 올린_사진을_줄_세워_확인한다(TestCase):
         block = docs[i:i + 1800]
         self.assertIn('closeThenNext(modalEl)', block)
 
-    def test_한_장짜리에는_건너뛰기를_두지_않는다(self):
+    def test_한_장짜리에는_버리기를_두지_않는다(self):
         """창을 닫는 것과 같으므로 단추가 하나 더 있을 까닭이 없다."""
         docs = self._docs()
         i = docs.index("foot.querySelector('.ing-skip')?.remove();")
         block = docs[i:i + 900]
         self.assertIn('if (queued) {', block)
-        self.assertIn('건너뛰기', block)
+        self.assertIn('이 사진 버리기', block)
 
 
 class 창이_다_닫힌_뒤에_다음_장을_연다(TestCase):
@@ -13484,7 +13484,10 @@ class 창이_다_닫힌_뒤에_다음_장을_연다(TestCase):
         i = docs.index('async function applyIngredientPhoto(')
         self.assertIn('closeThenNext(modalEl)', docs[i:i + 1800])
         j = docs.index("skip.onclick")
-        self.assertIn('closeThenNext(modalEl)', docs[j:j + 120])
+        # 버리기는 지운 **뒤에** 같은 길로 간다
+        self.assertIn('discardAndNext(docId, modalEl)', docs[j:j + 120])
+        k = docs.index('async function discardAndNext(')
+        self.assertIn('closeThenNext(modalEl)', docs[k:k + 900])
 
     def test_닫자마자_다음을_여는_옛_모양이_남아_있지_않다(self):
         docs = self._docs()
@@ -13658,3 +13661,109 @@ class 고른_사진을_넘겨_볼_수_있다(TestCase):
         js = self._js()
         i = js.index('function dropSelectedFile(')
         self.assertIn('renderUploadPreview();', js[i:i + 900])
+
+
+class 버린_사진은_문서함에도_남지_않는다(TestCase):
+    """
+    건너뛴 사진이 문서함에 그대로 쌓였다. 건너뛰는 까닭은 대개 "이 사진은 쓸
+    것이 아니다" 인데 — 잘못 찍혔거나 같은 것을 두 번 올렸거나 — 그것이
+    남으면 나중에 무엇이 쓸 것이고 무엇이 버린 것인지 알 수 없다.
+    """
+
+    def _docs(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+
+    def test_버리면_문서도_지운다(self):
+        docs = self._docs()
+        i = docs.index('async function discardAndNext(')
+        block = docs[i:i + 900]
+        self.assertIn('/delete/', block)
+        self.assertIn("method: 'POST'", block)
+        self.assertIn('delete documentData[docId]', block)
+
+    def test_하는_일을_단추_이름에_적는다(self):
+        """하는 일이 지우는 것이면 그렇게 적어야 한다."""
+        docs = self._docs()
+        self.assertIn('이 사진 버리기', docs)
+        self.assertIn('문서함에서도 지웁니다', docs)
+
+    def test_지우기가_실패해도_줄은_간다(self):
+        """파일 하나 못 지운 것으로 남은 장을 못 보게 할 까닭이 없다."""
+        docs = self._docs()
+        i = docs.index('async function discardAndNext(')
+        block = docs[i:i + 900]
+        self.assertIn('catch (err)', block)
+        # catch 뒤에도 다음으로 간다
+        self.assertLess(block.index('catch (err)'), block.index('closeThenNext(modalEl)'))
+
+
+class 원료_사진은_목록에서_한_줄로_묶인다(TestCase):
+    """
+    장마다 다른 원료라 판으로 쌓지 않게 고쳤더니, 이번에는 목록이 사진 수만큼
+    길어졌다. 원료 열 개를 넣은 제품이면 문서함 열 줄이 전부 '원료 표시사항'
+    이고, 정작 알고 싶은 "무슨 서류를 갖고 있는가" 가 그 속에 묻힌다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyLabel
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='grp', password='x')
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='과자', delete_YN='N')
+        self.many = DocumentType.objects.create(
+            type_code='INGREDIENT_LABEL', type_name='원료 표시사항',
+            multiple_yn=True, display_order=90)
+        self.once = DocumentType.objects.create(
+            type_code='ONE_ONLY', type_name='품목제조보고서', display_order=91)
+        self.docs = [
+            ProductDocument.objects.create(
+                label=self.label, document_type=self.many,
+                original_filename='%s.jpg' % n, version=1, active_yn=True)
+            for n in ('크림치즈', '설탕', '밀가루')
+        ]
+        self.other = ProductDocument.objects.create(
+            label=self.label, document_type=self.once,
+            original_filename='보고서.pdf', version=1, active_yn=True)
+
+    def _groups(self):
+        from v1.products.views import version_stacks
+
+        return version_stacks(list(self.docs) + [self.other])
+
+    def test_한_구분이_한_줄이_된다(self):
+        groups = self._groups()
+        self.assertEqual(len(groups), 2)
+        by_type = [g for g in groups if g['by_type']]
+        self.assertEqual(len(by_type), 1)
+        self.assertEqual(by_type[0]['count'], 3)
+
+    def test_나머지_구분은_전처럼_판으로_묶인다(self):
+        groups = self._groups()
+        plain = [g for g in groups if not g['by_type']]
+        self.assertEqual(len(plain), 1)
+        self.assertEqual(plain[0]['latest'].document_id, self.other.document_id)
+
+    def test_펼치면_모든_장이_나온다(self):
+        groups = self._groups()
+        g = [x for x in groups if x['by_type']][0]
+        seen = {g['latest'].document_id} | {d.document_id for d in g['older']}
+        self.assertEqual(seen, {d.document_id for d in self.docs})
+
+    def test_묶음에는_판_번호를_적지_않는다(self):
+        """판이 아니라 건수다. 여기에 v1 을 적으면 거짓말이 된다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+        i = html.index('doc-ver-btn')
+        block = html[i:i + 900]
+        self.assertIn('{% if group.by_type %}', block)
+        self.assertIn('{{ group.count }}건', block)
