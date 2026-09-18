@@ -64,11 +64,17 @@
                                     <select class="form-select" id="document-type-select" name="document_type" required>
                                         <option value="">-- 문서 종류를 선택하세요 --</option>
                                         {% for dtype in document_types %}
-                                        <option value="{{ dtype.type_id }}" data-validity="{{ dtype.default_validity_days|default:'' }}">
+                                        <option value="{{ dtype.type_id }}" data-validity="{{ dtype.default_validity_days|default:'' }}"
+                                                data-multiple="{{ dtype.multiple_yn|yesno:'1,0' }}">
                                             {{ dtype.type_name }}
                                         </option>
                                         {% endfor %}
                                     </select>
+                                    <div class="form-text mt-1" id="upload-multiple-hint" hidden>
+                                        <i class="bi bi-images me-1"></i>이 구분은
+                                        <strong>여러 장을 한꺼번에</strong> 고를 수 있습니다.
+                                        장마다 따로 등록됩니다.
+                                    </div>
                                 </div>
                                 
                                 <div class="smart-expiry-box">

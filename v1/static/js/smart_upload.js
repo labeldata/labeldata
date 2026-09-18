@@ -1,6 +1,10 @@
 // ==================== 스마트 업로드 모달 관련 함수 ====================
 
 let selectedFile = null;
+/* 여러 장을 한꺼번에 받는 구분이 있다(DocumentType.multiple_yn).
+   원료 표시사항이 그것이다 — 장마다 다른 원료라 한 장씩 올릴 까닭이 없다.
+   한 장일 때도 이 배열에 담아 두어 아래 흐름을 한 벌로 쓴다. */
+let selectedFiles = [];
 let targetSlotId = null;
 let lastSlotContext = null;
 
@@ -42,7 +46,11 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
         typeSelect.disabled = false;
         typeSelect.value = '';
     }
-    
+
+    /* 구분이 정해진 뒤에 부른다 — 슬롯 쪽은 change 로도 불리지만, 일반
+       업로드는 값을 비우기만 해서 앞서 열었던 창의 설정이 남는다. */
+    syncMultipleFromType();
+
     modal.show();
 }
 
@@ -104,18 +112,13 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             this.classList.remove('dragover');
             
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFileSelect(files[0]);
-            }
+            handleFilesSelect(e.dataTransfer.files);
         });
     }
     
     if (fileInput) {
         fileInput.addEventListener('change', function(e) {
-            if (this.files.length > 0) {
-                handleFileSelect(this.files[0]);
-            }
+            handleFilesSelect(this.files);
         });
     }
     
@@ -123,6 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
         removeFileBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             selectedFile = null;
+            selectedFiles = [];
             fileInput.value = '';
             document.getElementById('selected-file-info').style.display = 'none';
         });
@@ -131,6 +135,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 문서 종류 선택 시 유효기간 자동 설정
     const typeSelect = document.getElementById('document-type-select');
     if (typeSelect) {
+        typeSelect.addEventListener('change', syncMultipleFromType);
         typeSelect.addEventListener('change', function() {
             /* ═══ 이 아래가 **한 번도 실행되지 않았다** ═══════════════════
              *
@@ -258,21 +263,60 @@ const UPLOAD_ALLOWED_EXTS = [
     'hwp', 'hwpx', 'txt', 'csv', 'zip',
 ];
 
-function handleFileSelect(file) {
+/* 올릴 수 있는 파일인가. 여러 장을 받게 되면서 검사가 두 자리에서 필요해졌다 —
+   같은 규칙을 두 벌 적으면 한쪽만 고쳐지는 날이 온다. */
+function isUploadable(file) {
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     if (UPLOAD_ALLOWED_EXTS.indexOf(ext) === -1) {
         showSnackbar('올릴 수 없는 확장자입니다 (.' + ext + '). '
                      + '올릴 수 있는 것: ' + UPLOAD_ALLOWED_EXTS.join(', '), 'error');
-        return;
+        return false;
     }
     if (file.size > UPLOAD_MAX_MB * 1024 * 1024) {
         showSnackbar('파일 하나는 ' + UPLOAD_MAX_MB + ' MB 까지 올릴 수 있습니다 (지금 '
                      + formatFileSize(file.size) + '). 사진이면 해상도를 줄이거나 '
                      + '여러 장으로 나눠 올려 주세요.', 'error');
+        return false;
+    }
+    return true;
+}
+
+/* 고른 것이 여러 장일 수 있다. 한 장이면 예전 흐름 그대로다. */
+function handleFilesSelect(fileList) {
+    const files = Array.prototype.slice.call(fileList || []);
+    if (!files.length) return;
+
+    const input = document.getElementById('document-upload-input');
+    const many = !!(input && input.multiple) && files.length > 1;
+    if (!many) {
+        handleFileSelect(files[0]);
         return;
     }
 
+    const good = files.filter(isUploadable);
+    if (!good.length) return;
+
+    handleFileSelect(good[0]);        // 첫 장으로 칸을 채우고
+    selectedFiles = good;             // 나머지는 여기 담아 둔다
+
+    const fileName = document.getElementById('file-name');
+    if (fileName) {
+        fileName.textContent = good[0].name + ' 외 ' + (good.length - 1) + '장';
+    }
+    const fileSize = document.getElementById('file-size');
+    if (fileSize) {
+        fileSize.textContent = '모두 ' + good.length + '장 · '
+            + formatFileSize(good.reduce((sum, f) => sum + f.size, 0));
+    }
+}
+
+function handleFileSelect(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!isUploadable(file)) {
+        return;
+    }
     selectedFile = file;
+    selectedFiles = [file];
     
     // 파일 정보 표시
     const fileName = document.getElementById('file-name');
@@ -341,6 +385,33 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+/*
+ * 고른 구분이 '여러 건' 이면 파일을 여러 장 고를 수 있게 한다.
+ *
+ * **모든 구분에 여러 장을 열지 않는다.** 품목제조보고서를 세 장 고르면 그중
+ * 무엇이 그 제품의 보고서인지 알 수 없다 — 그런 구분에서는 여러 장이 실수다.
+ * 규칙은 서버가 정하고(DocumentType.multiple_yn), 화면은 그대로 따른다.
+ */
+function syncMultipleFromType() {
+    const typeSelect = document.getElementById('document-type-select');
+    const fileInput = document.getElementById('document-upload-input');
+    if (!typeSelect || !fileInput) return;
+
+    const picked = typeSelect.options[typeSelect.selectedIndex];
+    const many = !!(picked && picked.dataset.multiple === '1');
+    fileInput.multiple = many;
+    if (!many && selectedFiles.length > 1) {
+        // 여러 장을 고른 뒤 구분을 바꾸면 남은 것을 조용히 올리지 않는다
+        selectedFiles = selectedFile ? [selectedFile] : [];
+        const fileName = document.getElementById('file-name');
+        if (fileName && selectedFile) fileName.textContent = selectedFile.name;
+    }
+
+    const hint = document.getElementById('upload-multiple-hint');
+    if (hint) hint.hidden = !many;
+}
+window.syncMultipleFromType = syncMultipleFromType;
+
 // 스마트 업로드 처리
 async function handleSmartUpload() {
     const submitBtn = document.getElementById('upload-submit-btn');
@@ -348,9 +419,10 @@ async function handleSmartUpload() {
     const slotIdValue = document.getElementById('target-slot-id').value;
     const fileInput = document.getElementById('document-upload-input');
     if (!selectedFile && fileInput && fileInput.files && fileInput.files.length > 0) {
-        selectedFile = fileInput.files[0];
+        handleFilesSelect(fileInput.files);
     }
-    
+    if (!selectedFiles.length && selectedFile) selectedFiles = [selectedFile];
+
     // 유효성 검사
     if (!selectedFile) {
         showSnackbar('파일을 선택해주세요.', 'warning');
@@ -366,8 +438,11 @@ async function handleSmartUpload() {
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>업로드 중...';
     
     try {
+        /* **파일마다 FormData 를 새로 만든다.** 하나를 만들어 file 만 갈아
+         * 끼우면 append 가 쌓여 두 번째 요청에 파일이 둘 들어간다. */
+        const buildForm = (file) => {
         const formData = new FormData();
-        formData.append('file', selectedFile);
+        formData.append('file', file);
         formData.append('document_type', typeSelectValue);
         formData.append('slot_id', slotIdValue || '');
         
@@ -402,22 +477,59 @@ async function handleSmartUpload() {
         // 알림 설정
         const notificationEnabled = document.getElementById('enable-notification').checked;
         formData.append('notification_enabled', notificationEnabled);
-        
+        return formData;
+        };
+
         const csrftoken = getCsrfToken();
         // data-label-id 속성에서 labelId 읽기
         const labelId = parseInt(document.getElementById('smartUploadModal').getAttribute('data-label-id'));
         const uploadUrl = `/products/documents/api/upload/${labelId}/`;
         
-        const response = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrftoken
-            },
-            body: formData
-        });
-        
+        /* 한 장씩 차례로 올린다.
+         *
+         * 한꺼번에 보내지 않는 까닭이 있다. 서버는 판 번호를 '지금 있는 것 중
+         * 가장 큰 것 + 1' 로 매기는데, 동시에 들어오면 같은 번호를 두 번 줄 수
+         * 있다. 사진 몇 장 올리는 일에 몇 초 더 드는 것이 값을 잃는 것보다 낫다.
+         *
+         * **한 장이 실패해도 멈추지 않는다.** 다섯 장 중 셋째가 실패했다고
+         * 넷째·다섯째를 버리면, 사용자는 무엇이 올라갔는지 모른 채 처음부터
+         * 다시 해야 한다. */
+        const uploaded = [];
+        const failed = [];
+        for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            if (selectedFiles.length > 1) {
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>'
+                    + (i + 1) + ' / ' + selectedFiles.length + ' 올리는 중...';
+            }
+            let res, body;
+            try {
+                res = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrftoken },
+                    body: buildForm(file)
+                });
+                body = await res.json();
+            } catch (err) {
+                console.error('[handleSmartUpload]', file.name, err);
+                failed.push(file.name);
+                continue;
+            }
+            if (res.ok && body && body.document_id) {
+                uploaded.push(body.document_id);
+            } else {
+                failed.push(file.name + (body && body.error ? ' — ' + body.error : ''));
+            }
+        }
+
+        const response = { ok: uploaded.length > 0 };
+        const data = { document_id: uploaded[0], document_ids: uploaded };
+        if (failed.length) {
+            showSnackbar(failed.length + '장을 올리지 못했습니다: '
+                         + failed.join(' / '), 'error');
+        }
+
         if (response.ok) {
-            const data = await response.json();
             
             // 모달 닫기
             const modalElement = document.getElementById('smartUploadModal');
@@ -427,7 +539,9 @@ async function handleSmartUpload() {
             }
             
             // 성공 메시지 + 문서함 탭 복원 후 새로고침
-            showSnackbar(data.message || '문서가 성공적으로 등록되었습니다.', 'success');
+            showSnackbar(uploaded.length > 1
+                ? uploaded.length + '장을 등록했습니다.'
+                : '문서가 성공적으로 등록되었습니다.', 'success');
             sessionStorage.setItem('returnToTab', 'docs');
 
             /* 영양성분 탭에서 "성적서 첨부" 로 들어온 길이면, 새로고침 뒤에
@@ -445,9 +559,6 @@ async function handleSmartUpload() {
             } catch (e) { /* 못 남겨도 업로드는 끝났다 */ }
 
             window.location.reload();
-        } else {
-            const error = await response.json();
-            showSnackbar('업로드 실패: ' + (error.error || '알 수 없는 오류'), 'error');
         }
     } catch (error) {
         console.error('[handleSmartUpload] Exception:', error);

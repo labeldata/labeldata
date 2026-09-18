@@ -13223,3 +13223,70 @@ class 여러_건_구분은_판으로_쌓지_않는다(TestCase):
         call_command('unchain_multiple_documents', stdout=StringIO())
         self.assertEqual(ProductDocument.objects.filter(
             parent_document__isnull=False).count(), 1)
+
+
+class 여러_장을_한꺼번에_올린다(TestCase):
+    """
+    원료 표시사항은 장마다 다른 원료라 한 장씩 올릴 까닭이 없다. 다만 **모든
+    구분에 여러 장을 열지는 않는다** — 품목제조보고서를 세 장 고르면 그중
+    무엇이 그 제품의 보고서인지 알 수 없다. 규칙은 서버가 정하고
+    (DocumentType.multiple_yn) 화면은 그대로 따른다.
+    """
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_구분이_여러_건일_때만_여러_장을_연다(self):
+        js = self._js()
+        i = js.index('function syncMultipleFromType(')
+        block = js[i:i + 900]
+        self.assertIn("picked.dataset.multiple === '1'", block)
+        self.assertIn('fileInput.multiple = many', block)
+
+    def test_구분마다_여러_건_여부를_화면에_내려준다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/_modal_upload.html'
+                ).read_text(encoding='utf-8')
+        self.assertIn("data-multiple=\"{{ dtype.multiple_yn|yesno:'1,0' }}\"", html)
+
+    def test_파일마다_폼을_새로_만든다(self):
+        """
+        하나를 만들어 file 만 갈아 끼우면 append 가 쌓여 두 번째 요청에 파일이
+        둘 들어간다.
+        """
+        js = self._js()
+        self.assertIn('const buildForm = (file) => {', js)
+        self.assertIn("formData.append('file', file);", js)
+        self.assertNotIn("formData.append('file', selectedFile);", js)
+
+    def test_한_장이_실패해도_나머지를_올린다(self):
+        """
+        다섯 장 중 셋째가 실패했다고 넷째·다섯째를 버리면, 사용자는 무엇이
+        올라갔는지 모른 채 처음부터 다시 해야 한다.
+        """
+        js = self._js()
+        i = js.index('const uploaded = [];')
+        block = js[i:i + 1600]
+        self.assertIn('continue;', block)
+        self.assertIn('failed.push', block)
+        self.assertIn('uploaded.push(body.document_id)', block)
+
+    def test_구분을_바꾸면_남은_장을_조용히_올리지_않는다(self):
+        js = self._js()
+        i = js.index('function syncMultipleFromType(')
+        block = js[i:i + 900]
+        self.assertIn('if (!many && selectedFiles.length > 1)', block)
+
+    def test_검사_규칙은_한_곳에만_있다(self):
+        """같은 규칙을 두 벌 적으면 한쪽만 고쳐지는 날이 온다."""
+        js = self._js()
+        self.assertIn('function isUploadable(file)', js)
+        self.assertEqual(js.count('UPLOAD_ALLOWED_EXTS.indexOf(ext) === -1'), 1)
