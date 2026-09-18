@@ -13922,3 +13922,73 @@ class 배합표에서_바로_사진으로_한_줄_만든다(TestCase):
         i = detail.index("e.data.type !== 'openIngredientUpload'")
         block = detail[i:i + 1200]
         self.assertIn('찾지 못했습니다', block)
+
+
+class 표가_아직_없을_때도_행_머리를_그린다(TestCase):
+    """
+    배합표가 **통째로 안 그려졌다.**
+
+    rowHeaders 는 Handsontable 을 만드는 중에 불린다 — 그때 `hot` 은 아직
+    변수에 담기기 전이다. `rowObjectAt` 은 앞줄만 `hot &&` 로 막고 아래
+    getSourceDataAtRow 는 막지 않아서, 행 머리에서 그 함수를 쓰기 시작하자
+    거기서 던졌다. **던지는 자리가 그리는 중이라** 화면에는 빈 칸만 남고
+    까닭은 콘솔에만 있었다.
+    """
+
+    def _bom(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+
+    def test_표가_없으면_비어_있다고_답한다(self):
+        bom = self._bom()
+        i = bom.index('function rowObjectAt(')
+        block = bom[i:i + 1200]
+        self.assertIn('if (!hot || !hot.getSourceDataAtRow) return null;', block)
+
+    def test_막은_뒤에는_hot_을_그냥_쓴다(self):
+        """앞에서 막았으므로 아래에서 또 재는 것은 군더더기다."""
+        bom = self._bom()
+        i = bom.index('function rowObjectAt(')
+        block = bom[i:i + 1200]
+        self.assertIn('hot.toPhysicalRow ? hot.toPhysicalRow(i) : i', block)
+
+
+class 사진_묶음이_몇_건인지_말한다(TestCase):
+    """
+    묶음 줄에 최신 파일 이름만 적으니 **그 한 장짜리 줄로 읽혔다.** 일곱 장을
+    담은 줄이면 그렇게 말해야 한다.
+
+    펼친 목록도 파일명뿐이라 서로 구별이 안 됐다 —
+    '[크래프트]크림치즈스프레드_…_240103_제이백스.jpg' 가 셋이면 무엇이
+    무엇인지 알 수 없다. 판독해 둔 원료명이 있으면 그것이 훨씬 잘 말한다.
+    """
+
+    def _html(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+
+    def test_묶음_줄에_건수를_적는다(self):
+        html = self._html()
+        i = html.index('class="doc-name-text"')
+        block = html[i:i + 1200]
+        self.assertIn('{{ doc.document_type.type_name }} {{ group.count }}건', block)
+        self.assertIn('최근 {{ doc.original_filename }}', block)
+
+    def test_펼친_목록은_원료명을_앞세운다(self):
+        html = self._html()
+        self.assertIn('old.metadata.ingredient_fields.ingredient_name', html)
+
+    def test_배합에_들어갔는지_한눈에_보인다(self):
+        html = self._html()
+        i = html.index('old.metadata.ingredient_bom_id')
+        block = html[i:i + 500]
+        self.assertIn('배합 등록됨', block)
+        self.assertIn('판독 전', block)

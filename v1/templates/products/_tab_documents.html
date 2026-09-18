@@ -228,8 +228,17 @@
                             <i class="doc-file-icon bi {% if '.pdf' in fname %}bi-file-earmark-pdf text-danger{% elif '.jpg' in fname or '.jpeg' in fname or '.png' in fname %}bi-file-earmark-image text-info{% elif 'doc' in fname %}bi-file-earmark-word text-primary{% elif 'xls' in fname %}bi-file-earmark-excel text-success{% else %}bi-file-earmark text-secondary{% endif %}"></i>
                             {% endwith %}
                             <div class="doc-name-text">
+                                {% if group.by_type %}
+                                {% comment %}
+                                  묶음 줄에 최신 파일 이름만 적으면 그 한 장의 줄로
+                                  읽힌다. 일곱 장을 담은 줄이면 그렇게 말해야 한다.
+                                {% endcomment %}
+                                <div class="doc-name-main">{{ doc.document_type.type_name }} {{ group.count }}건</div>
+                                <div class="doc-name-meta" title="{{ doc.original_filename }}">최근 {{ doc.original_filename }}</div>
+                                {% else %}
                                 <div class="doc-name-main" title="{{ doc.original_filename }}">{{ doc.original_filename }}</div>
                                 <div class="doc-name-meta">{{ doc.file_size|filesizeformat }} · {{ doc.uploaded_datetime|date:"y.m.d" }}</div>
+                                {% endif %}
                             </div>
                         </div>
                     </td>
@@ -284,7 +293,28 @@
                                 {% else %}
                                 <span class="doc-ver-one">v{{ old.version|default:1 }}</span>
                                 {% endif %}
+                                {% if group.by_type and old.metadata.ingredient_fields.ingredient_name %}
+                                {% comment %}
+                                  파일명은 '[크래프트]크림치즈스프레드_…_제이백스.jpg' 처럼
+                                  길고 서로 비슷하다. 판독해 둔 **원료명**이 있으면
+                                  그것이 무엇인지 훨씬 잘 말한다.
+                                {% endcomment %}
+                                <span class="doc-version-name" title="{{ old.original_filename }}">
+                                    {{ old.metadata.ingredient_fields.ingredient_name }}
+                                    <span class="text-muted">· {{ old.original_filename }}</span>
+                                </span>
+                                {% else %}
                                 <span class="doc-version-name" title="{{ old.original_filename }}">{{ old.original_filename }}</span>
+                                {% endif %}
+                                {% if group.by_type %}
+                                <span class="doc-version-meta">
+                                    {% if old.metadata.ingredient_bom_id %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">배합 등록됨</span>
+                                    {% else %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">판독 전</span>
+                                    {% endif %}
+                                </span>
+                                {% endif %}
                                 <span class="doc-version-meta">{{ old.file_size|filesizeformat }} · {{ old.uploaded_datetime|date:"y.m.d" }}{% if old.uploaded_by %} · {% if old.uploaded_by == request.user %}나{% else %}{{ old.uploaded_by.get_full_name|default:old.uploaded_by.username }}{% endif %}{% endif %}</span>
                             </li>
                             {% endfor %}

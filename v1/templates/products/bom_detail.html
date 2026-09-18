@@ -1345,7 +1345,17 @@ body.in-iframe .bom-page-header { display: none !important; }
     function rowObjectAt(visualRow) {
         const i = Number(visualRow);
         if (!Number.isInteger(i) || i < 0) return null;
-        const phys = (hot && hot.toPhysicalRow) ? hot.toPhysicalRow(i) : i;
+
+        /* **표가 아직 없을 수도 있다.**
+         *
+         * rowHeaders 는 Handsontable 을 만드는 중에 불린다 — 그때 `hot` 은
+         * 아직 이 변수에 담기기 전이다. 앞줄은 `hot &&` 로 막았는데 아래
+         * getSourceDataAtRow 는 막지 않아서, 행 머리에서 이 함수를 쓰기
+         * 시작하자 **표가 통째로 안 그려졌다.** 던지는 자리가 그리는 중이라
+         * 화면에는 빈 칸만 남고 까닭은 콘솔에만 있었다. */
+        if (!hot || !hot.getSourceDataAtRow) return null;
+
+        const phys = hot.toPhysicalRow ? hot.toPhysicalRow(i) : i;
         if (phys === null || phys === undefined) return null;
         return hot.getSourceDataAtRow(phys);
     }
