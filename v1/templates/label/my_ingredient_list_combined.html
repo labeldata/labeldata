@@ -722,11 +722,15 @@
               그동안 감춰 두었다가 [목록으로] 로 돌아온다.
             {% endcomment %}
             <div id="ingPhotoPane" class="ing-photo-pane" hidden>
-                <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="d-flex align-items-center gap-2 ing-photo-pane-head">
                     <button type="button" class="btn btn-light border v2-btn-sm" id="ingPhotoPaneBack">
                         <i class="bi bi-chevron-left"></i> 목록으로
                     </button>
-                    <span class="small text-muted text-truncate" id="ingPhotoPaneName"></span>
+                    <span class="small text-muted text-truncate flex-grow-1" id="ingPhotoPaneName"></span>
+                    {# 닫는 길이 하나뿐이면 못 찾는 사람이 있다. 오른쪽 끝의 ✕ 와 Esc 도 같은 일을 한다. #}
+                    <button type="button" class="btn btn-light border v2-btn-icon" id="ingPhotoPaneClose" title="닫기 (Esc)" aria-label="닫기">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
                 <div id="ingPhotoPaneBody"></div>
             </div>
@@ -842,10 +846,18 @@ document.addEventListener('DOMContentLoaded', function() {
         pane.hidden = false;
         unwideForDetail();      // 넓게 펴 둔 목록이면 오른쪽 폼이 보이게 좁힌다
     };
-    document.getElementById('ingPhotoPaneBack').addEventListener('click', function () {
-        document.getElementById('ingPhotoPane').hidden = true;
+    function closeIngredientPhotoPane() {
+        var pane = document.getElementById('ingPhotoPane');
+        if (!pane || pane.hidden) return;
+        pane.hidden = true;
         document.getElementById('ingListWrap').hidden = false;
         document.getElementById('ingPhotoPaneBody').innerHTML = '';
+    }
+    window.closeIngredientPhotoPane = closeIngredientPhotoPane;
+    document.getElementById('ingPhotoPaneBack').addEventListener('click', closeIngredientPhotoPane);
+    document.getElementById('ingPhotoPaneClose').addEventListener('click', closeIngredientPhotoPane);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeIngredientPhotoPane();
     });
 
     /* `?ingredient_id=` 로 들어오면 그 원료를 펼친 채로 연다.

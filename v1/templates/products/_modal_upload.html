@@ -241,8 +241,10 @@
     border-right: 0 !important;
     background: #fff;
 }
-/* 자르는 자리가 넓을수록 정확히 잡을 수 있다 */
-#smartUploadModal.is-photo-mode .imgcrop-img { max-height: 52vh; }
+/* 자르는 자리가 넓을수록 정확히 잡을 수 있다.
+   높이는 **상자**에 걸고 그림에는 걸지 않는다 — 그림에 max-height 를 걸면
+   확대해도 높이가 눌려 커지지 않고, 폭만 늘어나 찌그러진다. */
+#smartUploadModal.is-photo-mode .imgcrop-scroll { max-height: 62vh; }
 #smartUploadModal.is-photo-mode .upload-preview-slot { margin-top: 4px; }
 
 /* 고른 뒤의 끌어놓기 칸 — 한 줄로 줄인다 */

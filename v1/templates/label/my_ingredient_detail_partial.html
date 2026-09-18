@@ -669,7 +669,7 @@
               <button type="button" class="btn btn-outline-primary v2-btn-sm" id="ingPhotoPick">
                 <i class="bi bi-camera"></i> {% if ingredient.label_photo %}사진 바꾸기{% else %}사진 등록{% endif %}
               </button>
-              <input type="file" id="ingPhotoFile" accept="image/*" hidden>
+              <input type="file" id="ingPhotoFile" accept="image/*,.pdf" hidden>
               <div class="small text-muted mt-1">
                 봉지를 찍어 올리면 읽어서 <strong>빈 칸만</strong> 채웁니다. 이미 적힌 값은 그대로 둡니다.
               </div>
@@ -679,7 +679,9 @@
                 <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
                   <span class="imgcrop-hint flex-grow-1" id="ingPhotoHint">표시사항이 있는 곳을 <strong>끌어서</strong> 고르세요. 고르지 않으면 전체를 씁니다.</span>
                   <button type="button" class="btn v2-btn-sm btn-light border" id="ingPhotoAll">전체 쓰기</button>
-                  <button type="button" class="btn v2-btn-sm btn-primary" id="ingPhotoRead"><i class="bi bi-magic"></i> 읽기</button>
+                  {# 값을 다 적어 둔 원료라면 사진만 남기면 된다 — 판독은 시간과 몫을 쓴다 #}
+                  <button type="button" class="btn v2-btn-sm btn-outline-secondary" id="ingPhotoKeep" title="읽지 않고 사진만 붙입니다"><i class="bi bi-save"></i> 저장만</button>
+                  <button type="button" class="btn v2-btn-sm btn-primary" id="ingPhotoRead" title="읽어서 아래 칸에 넣을 값을 보여 줍니다"><i class="bi bi-magic"></i> 읽어서 채우기</button>
                   <button type="button" class="btn v2-btn-sm btn-light" id="ingPhotoCancel">취소</button>
                 </div>
               </div>

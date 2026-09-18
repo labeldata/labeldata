@@ -115,6 +115,9 @@ urlpatterns = [
          views.my_ingredient_photo_read, name='my_ingredient_photo_read'),
     path('my-ingredient/<int:ingredient_id>/photo/',
          views.my_ingredient_photo_attach, name='my_ingredient_photo_attach'),
+    # PDF 첫 쪽 -> 그림. 자르기·판독은 그림만 다룬다.
+    path('my-ingredient/photo/pdf-page/',
+         views.my_ingredient_photo_pdf_page, name='my_ingredient_photo_pdf_page'),
     
     # 저장된 문구 API 패턴
     path('api/auto-fill/', views.auto_fill_api, name='auto_fill_api'),

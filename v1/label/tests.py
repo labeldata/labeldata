@@ -21683,25 +21683,164 @@ class 원료_관리에서_사진을_붙이고_폼의_빈_칸만_채운다(TestCa
         self.assertIn('row.click()', block)
         self.assertIn('loadIngredientDetail(detailContent, html)', block)
 
-    def test_화면이_빈_칸만_채우고_저장_뒤_붙인다(self):
+    def test_읽은_값은_그_칸_아래에_서고_사람이_넣는다(self):
+        """
+        따로 표로 모아 보여 줬더니 어느 칸 이야기인지 표와 폼 사이를 오가며
+        맞춰야 했다. 칸 밑에 붙이면 그 자리에서 견주고 그 자리에서 정한다.
+        빈 칸은 [넣기], 적힌 칸은 [바꾸기] — 둘 다 사람이 누른다.
+        """
         from pathlib import Path
 
         from django.conf import settings as dj
 
         js = (Path(dj.BASE_DIR) / 'static/js/label/my_ingredient_detail_partial.js'
               ).read_text(encoding='utf-8')
-        i = js.index('function renderPhotoResult(')
+        self.assertNotIn('renderPhotoResult', js)
+        i = js.index('function renderSuggestions(fields)')
         block = js[i:i + 2600]
-        self.assertIn("'keep'", block)
-        self.assertIn("'fill'", block)
-        # 그 사이 사람이 적었으면 그대로 둔다
-        self.assertIn('if (formValue(column)) return;', block)
+        # 칸의 겉상자 아래에 붙는다
+        self.assertIn("input.closest('.ing-f-v')", block)
+        self.assertIn('host.appendChild(box)', block)
+        self.assertIn('>넣기</button>', block)
+        self.assertIn('>바꾸기</button>', block)
+        # 한 번에 넣는 단추는 빈 칸만 건드린다
+        self.assertIn("querySelectorAll('.ph-suggest.is-fill')", block)
+        # 하위 원료는 폼에 칸이 없다 — 원재료 표시명 아래에 제안한다
+        self.assertIn("sub_ingredients: 'ingredient_display_name'", js)
+        # 알레르기는 숨은 칸이 아니라 칩이 화면이다
+        i = js.index("if (column === 'allergens') {")
+        self.assertIn('updateAllergyDisplay();', js[i:i + 300])
         # 새 원료: 저장 뒤 붙인다
         self.assertIn('window.IngredientPhoto.afterSave = function', js)
         self.assertIn('window.IngredientPhoto.afterSave(data.ingredient_id)', js)
         # 다시 그려질 때마다 다시 묶되 두 번 묶지 않는다
         self.assertIn('if (!row || row.dataset.bound) return;', js)
         self.assertIn('initLabelPhoto();', js[js.index('reinit = function'):])
+
+    def test_읽지_않고_저장만_할_수_있다(self):
+        """값을 다 적어 둔 원료면 사진만 남기면 된다 — 판독은 시간과 몫을 쓴다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tpl = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_detail_partial.html'
+               ).read_text(encoding='utf-8')
+        self.assertIn('id="ingPhotoKeep"', tpl)
+        self.assertIn('id="ingPhotoRead"', tpl)
+        self.assertIn('읽어서 채우기', tpl)
+        js = (Path(dj.BASE_DIR) / 'static/js/label/my_ingredient_detail_partial.js'
+              ).read_text(encoding='utf-8')
+        i = js.index("getElementById('ingPhotoKeep').onclick")
+        block = js[i:i + 1800]
+        # 저장된 원료면 지금 붙이고, 새 원료면 저장 뒤에 붙는다
+        self.assertIn("'/label/my-ingredient/' + ingredientId + '/photo/'", block)
+        self.assertIn('pendingPhoto = { file: file, fields: {} };', block)
+        # 잘랐으면 잘린 것만 간다
+        self.assertIn('window.imageCrop.apply(file, rect)', block)
+
+    def test_왼쪽_사진_칸에는_닫기가_있다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tpl = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_list_combined.html'
+               ).read_text(encoding='utf-8')
+        self.assertIn('id="ingPhotoPaneClose"', tpl)
+        i = tpl.index('function closeIngredientPhotoPane()')
+        block = tpl[i:i + 900]
+        self.assertIn("getElementById('ingPhotoPaneClose').addEventListener('click', closeIngredientPhotoPane)", block)
+        self.assertIn("if (e.key === 'Escape') closeIngredientPhotoPane();", block)
+
+
+class PDF_는_첫_쪽을_그림으로_바꿔_사진처럼_다룬다(TestCase):
+    """
+    원료 규격서는 PDF 로 오는 일이 흔한데 자르기와 판독은 그림만 다룬다. 예전에는
+    PDF 가 170px 로 잘려 보이고 확대도 되지 않았다. 서버(PyMuPDF)가 첫 쪽을
+    그림으로 바꿔 주면 그 뒤로는 사진과 같다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='pdf', password='x')
+        self.client.force_login(self.user)
+
+    def _post(self, name, data=b'%PDF-1.4 x'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return self.client.post(reverse('label:my_ingredient_photo_pdf_page'),
+                                {'file': SimpleUploadedFile(name, data)})
+
+    def test_PDF_만_받는다(self):
+        self.assertEqual(self._post('a.jpg').status_code, 400)
+        res = self.client.post(reverse('label:my_ingredient_photo_pdf_page'))
+        self.assertEqual(res.status_code, 400)
+
+    def test_첫_쪽을_JPEG_로_돌려준다(self):
+        import sys
+        from unittest import mock
+
+        page = mock.Mock()
+        page.get_pixmap.return_value.tobytes.return_value = b'\xff\xd8jpeg'
+        doc = mock.MagicMock()
+        doc.page_count = 3
+        doc.__getitem__.return_value = page
+        doc.__enter__.return_value = doc
+        fake = mock.Mock()
+        fake.open.return_value = doc
+        fake.Matrix = lambda a, b: (a, b)
+        with mock.patch.dict(sys.modules, {'fitz': fake}):
+            res = self._post('spec.pdf')
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.assertEqual(res['Content-Type'], 'image/jpeg')
+        self.assertEqual(res.content, b'\xff\xd8jpeg')
+        self.assertEqual(res['X-Page-Count'], '3')
+        # 글자를 읽을 그림이라 2 배로 그린다
+        page.get_pixmap.assert_called_once_with(matrix=(2.0, 2.0))
+
+    def test_라이브러리가_없으면_사진으로_찍으라고_한다(self):
+        import sys
+        from unittest import mock
+
+        with mock.patch.dict(sys.modules, {'fitz': None}):
+            res = self._post('spec.pdf')
+        self.assertEqual(res.status_code, 501)
+        self.assertIn('사진으로', res.json()['error'])
+
+    def test_화면은_두_자리_모두_PDF_를_먼저_그림으로_바꾼다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        crop = (base / 'static/js/image_crop.js').read_text(encoding='utf-8')
+        self.assertIn('function toImageFile(file, csrfToken)', crop)
+        self.assertIn("'/label/my-ingredient/photo/pdf-page/'", crop)
+        self.assertIn('toImageFile: toImageFile', crop)
+        # 원료 관리
+        js = (base / 'static/js/label/my_ingredient_detail_partial.js').read_text(encoding='utf-8')
+        self.assertIn("window.imageCrop.toImageFile(chosen, getCookie('csrftoken'))", js)
+        tpl = (base / 'templates/label/my_ingredient_detail_partial.html').read_text(encoding='utf-8')
+        self.assertIn('id="ingPhotoFile" accept="image/*,.pdf"', tpl)
+        # 배합 탭(올리기 창) — 사진 모드에서만. 증빙서류 PDF 는 그대로 문서다.
+        up = (base / 'static/js/smart_upload.js').read_text(encoding='utf-8')
+        i = up.index('function handleFilesSelect(fileList)')
+        block = up[i:i + 1500]
+        self.assertIn("modal.classList.contains('is-photo-mode')", block)
+        self.assertIn('window.imageCrop.toImageFile(f, getCsrfToken())', block)
+
+    def test_확대는_그림이_아니라_스크롤_상자를_묶는다(self):
+        """그림에 max-height 를 걸면 확대해도 높이가 잡혀 커지지 않았다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        css = (base / 'static/css/style.css').read_text(encoding='utf-8')
+        self.assertIn('.imgcrop-scroll .imgcrop-img { max-height: none; display: block; }', css)
+        self.assertIn('#ingPhotoCrop .imgcrop-scroll { max-height: 45vh; }', css)
+        self.assertNotIn('#ingPhotoCrop .imgcrop-img { max-height', css)
+        modal = (base / 'templates/products/_modal_upload.html').read_text(encoding='utf-8')
+        self.assertIn('#smartUploadModal.is-photo-mode .imgcrop-scroll { max-height: 62vh; }', modal)
+        self.assertNotIn('.is-photo-mode .imgcrop-img { max-height', modal)
 
 
 class 자르기에_회전과_확대가_있다(TestCase):

@@ -927,10 +927,14 @@ var PHOTO_LABELS = {
     ingredient_name: '원료명', food_type: '식품유형', manufacturer: '제조사',
     report_no: '품목보고번호', sub_ingredients: '원재료명', allergens: '알레르기'
 };
-/* 사진 값 -> 폼 칸. 서버의 PHOTO_TO_INGREDIENT 와 같은 짝이다. */
+/* 사진 값 -> 폼 칸.
+   폼에는 하위 원료(rawmtrl_nm) 칸이 없다. 봉지의 원재료명 문구는 **원재료
+   표시명** 아래에 제안으로 보여 준다 — 제품 라벨에 이 원료를 어떻게 적을지를
+   정하는 칸이라 그 문구가 가장 가까운 자리다. 넣을지는 사람이 정한다. */
 var PHOTO_TO_FORM = {
     ingredient_name: 'prdlst_nm', food_type: 'prdlst_dcnm', manufacturer: 'bssh_nm',
-    report_no: 'prdlst_report_no', sub_ingredients: 'rawmtrl_nm', allergens: 'allergens'
+    report_no: 'prdlst_report_no', sub_ingredients: 'ingredient_display_name',
+    allergens: 'allergens'
 };
 var PHOTO_PICK_HINT = '표시사항이 있는 곳을 <strong>끌어서</strong> 고르세요. 고르지 않으면 전체를 씁니다.';
 
@@ -946,10 +950,18 @@ function formValue(column) {
     return el ? String(el.value || '').trim() : '';
 }
 
-/* 폼에 값을 넣고 잠깐 밝힌다. select(식품유형)는 목록에 그 값이 있을 때만 잡힌다. */
+/* 폼에 값을 넣고 잠깐 밝힌다. select(식품유형)는 목록에 그 값이 있을 때만 잡힌다.
+   알레르기는 숨은 칸이 아니라 **칩**이 진짜 화면이라, 칸을 채운 뒤 칩을 다시 그린다. */
 function setFormValue(column, value) {
     var el = formInput(column);
     if (!el) return false;
+    if (column === 'allergens') {
+        el.value = value;
+        initAllergyGmoButtonEvents();
+        updateAllergyDisplay();
+        if (typeof window.setDetailDirty === 'function') window.setDetailDirty(true);
+        return true;
+    }
     if (el.tagName === 'SELECT') {
         var found = Array.prototype.some.call(el.options, function (o) {
             if (o.value === value || o.textContent.trim() === value) { el.value = o.value; return true; }
@@ -1006,13 +1018,25 @@ function initLabelPhoto() {
     document.getElementById('ingPhotoPick').onclick = function () { fileInput.click(); };
 
     fileInput.onchange = function () {
-        picked = this.files && this.files[0];
-        if (!picked) return;
-        result.hidden = true;
-        result.innerHTML = '';
+        var chosen = this.files && this.files[0];
+        if (!chosen) return;
+        clearSuggestions();
         stage.hidden = false;
-        crop = window.imageCrop ? window.imageCrop.attach(cropHost, picked) : null;
-        hint.innerHTML = PHOTO_PICK_HINT;
+        cropHost.innerHTML = '<div class="text-muted small py-3">사진을 여는 중…</div>';
+        /* PDF 면 서버가 첫 쪽을 그림으로 바꿔 준다. 그 뒤로는 사진과 같다. */
+        var ready = (window.imageCrop && window.imageCrop.toImageFile)
+            ? window.imageCrop.toImageFile(chosen, getCookie('csrftoken'))
+            : Promise.resolve(chosen);
+        ready.then(function (file) {
+            picked = file;
+            crop = window.imageCrop ? window.imageCrop.attach(cropHost, picked) : null;
+            hint.innerHTML = PHOTO_PICK_HINT;
+        }).catch(function (err) {
+            picked = null;
+            stage.hidden = true;
+            cropHost.innerHTML = '';
+            showSnackbar((err && err.message) || 'PDF 를 열지 못했습니다.', 'error');
+        });
     };
     cropHost.addEventListener('cropchange', function () {
         var r = crop && crop.getRect();
@@ -1027,6 +1051,48 @@ function initLabelPhoto() {
         fileInput.value = '';
         stage.hidden = true;
         cropHost.innerHTML = '';
+    };
+
+    /* 값을 다 적어 둔 원료라면 사진만 남기면 된다 — 판독은 시간과 몫을 쓴다.
+       저장된 원료면 지금 붙이고, 새 원료면 저장 뒤에 붙는다. */
+    document.getElementById('ingPhotoKeep').onclick = async function () {
+        if (!picked) return;
+        var btn = this;
+        btn.disabled = true;
+        try {
+            var file = picked;
+            var rect = crop && crop.getRect();
+            if (rect && window.imageCrop) file = await window.imageCrop.apply(file, rect);
+
+            var ingredientId = (document.getElementById('my_ingredient_id') || {}).value
+                || row.dataset.ingredientId || '';
+            if (!ingredientId) {
+                pendingPhoto = { file: file, fields: {} };
+                var cur0 = document.getElementById('ingPhotoCurrent');
+                if (cur0) cur0.innerHTML = '<img src="' + URL.createObjectURL(file)
+                    + '" alt="저장하면 붙습니다" class="ing-photo" title="저장하면 붙습니다">';
+                showSnackbar('저장하면 사진이 붙습니다.', 'info');
+            } else {
+                var fd = new FormData();
+                fd.append('file', file);
+                var res = await fetch('/label/my-ingredient/' + ingredientId + '/photo/', {
+                    method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd
+                });
+                var body = await res.json();
+                if (!res.ok || !body.success) {
+                    showSnackbar(body.error || '사진을 붙이지 못했습니다.', 'error');
+                    return;
+                }
+                showPhotoCurrent(body.photo_url);
+                showSnackbar('사진을 붙였습니다.', 'info');
+            }
+            stage.hidden = true;
+        } catch (err) {
+            console.error(err);
+            showSnackbar('사진을 붙이는 중 오류가 발생했습니다.', 'error');
+        } finally {
+            btn.disabled = false;
+        }
     };
 
     document.getElementById('ingPhotoRead').onclick = async function () {
@@ -1070,7 +1136,7 @@ function initLabelPhoto() {
                     cur.innerHTML = '<img src="' + tmp + '" alt="저장하면 붙습니다" class="ing-photo" title="저장하면 붙습니다">';
                 }
             }
-            renderPhotoResult(body.fields || {});
+            renderSuggestions(body.fields || {});
             stage.hidden = true;
         } catch (err) {
             console.error(err);
@@ -1082,57 +1148,110 @@ function initLabelPhoto() {
     };
 }
 
-/* 읽은 값과 **지금 폼의 값**을 나란히 놓고, 빈 칸만 채우게 한다. */
-function renderPhotoResult(fields) {
+/* ─────────────────────────────────────────────────────────────────────
+   읽은 값을 **그 칸 바로 아래**에 보여 준다
+
+   따로 표로 모아 보여 줬더니 "어느 칸 이야기인지" 를 사용자가 표와 폼 사이를
+   오가며 맞춰야 했다. 칸 밑에 붙이면 그 자리에서 견주고 그 자리에서 정한다.
+
+   빈 칸은 [넣기], 이미 적힌 칸은 [바꾸기] — 둘 다 사람이 눌러야 들어간다.
+   위에 [빈 칸 모두 넣기] 를 두어 한 번에 끝낼 수도 있게 한다. 적힌 칸은
+   그 단추로도 건드리지 않는다.
+   ───────────────────────────────────────────────────────────────────── */
+function clearSuggestions() {
+    document.querySelectorAll('.ph-suggest, .ph-suggest-bar').forEach(function (el) { el.remove(); });
     var result = document.getElementById('ingPhotoResult');
-    var rows = Object.keys(PHOTO_LABELS).map(function (key) {
-        var read = fields[key] || '';
-        var have = formValue(PHOTO_TO_FORM[key]);
-        var state = !read ? 'none' : (have ? 'keep' : 'fill');
-        var note = state === 'none' ? '<span class="text-muted">사진에서 읽지 못함</span>'
-                 : state === 'keep' ? '<span class="text-muted">이미 적혀 있어 그대로 둠</span>'
-                 : '<span class="text-success fw-semibold">이 값으로 채움</span>';
-        return '<tr class="ph-' + state + '">'
-             + '<td class="text-muted small text-nowrap">' + PHOTO_LABELS[key] + '</td>'
-             + '<td><input type="text" class="form-control form-control-sm ph-field" data-key="' + key
-             + '" value="' + escapeQuote(read) + '"'
-             + (state === 'keep' ? ' disabled title="이미 적힌 값: ' + escapeQuote(have) + '"' : '')
-             + '></td>'
-             + '<td class="small text-nowrap">' + note + '</td></tr>';
-    }).join('');
-
-    result.hidden = false;
-    result.innerHTML =
-        '<div class="small text-muted mb-1">사진에서 읽은 값입니다. 틀린 곳은 고친 뒤 채우세요. 채운 뒤 <strong>저장</strong>해야 남습니다.</div>'
-        + '<table class="table table-sm mb-2 ph-table"><tbody>' + rows + '</tbody></table>'
-        + '<div class="d-flex gap-2 justify-content-end">'
-        + '<button type="button" class="btn v2-btn-sm btn-light" id="ingPhotoDismiss">닫기</button>'
-        + '<button type="button" class="btn v2-btn-sm btn-primary" id="ingPhotoApply"><i class="bi bi-check-lg"></i> 빈 칸 채우기</button>'
-        + '</div>';
-
-    document.getElementById('ingPhotoDismiss').onclick = function () {
-        result.hidden = true; result.innerHTML = '';
-    };
-    document.getElementById('ingPhotoApply').onclick = function () {
-        var filled = 0;
-        result.querySelectorAll('.ph-field').forEach(function (el) {
-            if (el.disabled) return;
-            var value = el.value.trim();
-            if (!value) return;
-            var column = PHOTO_TO_FORM[el.dataset.key];
-            if (formValue(column)) return;          // 그 사이 사람이 적었으면 그대로 둔다
-            if (setFormValue(column, value)) filled++;
-        });
-        /* 표시명이 비면 원료명으로 — 라벨에 나가는 이름이 비면 안 된다 */
-        if (!formValue('ingredient_display_name') && formValue('prdlst_nm')) {
-            if (setFormValue('ingredient_display_name', formValue('prdlst_nm'))) filled++;
-        }
-        showSnackbar(filled
-            ? (filled + '칸을 채웠습니다. 확인하고 저장하세요.')
-            : '채울 빈 칸이 없었습니다. 이미 적힌 값은 그대로 두었습니다.', 'info');
-        result.hidden = true; result.innerHTML = '';
-    };
+    if (result) { result.hidden = true; result.innerHTML = ''; }
 }
+
+function renderSuggestions(fields) {
+    clearSuggestions();
+    var made = 0, fillable = 0;
+    Object.keys(PHOTO_LABELS).forEach(function (key) {
+        var read = (fields[key] || '').trim();
+        if (!read) return;
+        var column = PHOTO_TO_FORM[key];
+        var input = formInput(column);
+        if (!input) return;
+        /* 칸의 겉상자(.ing-f-v) 아래에 붙인다. 칩·select 처럼 입력이 겹겹이 싸인
+           칸도 같은 자리에 선다. */
+        var host = input.closest('.ing-f-v') || input.parentNode;
+        var have = formValue(column);
+        var box = document.createElement('div');
+        box.className = 'ph-suggest' + (have ? '' : ' is-fill');
+        box.dataset.key = key;
+        box.innerHTML =
+            '<span class="ph-suggest-label"><i class="bi bi-image me-1"></i>사진'
+            + (key === 'sub_ingredients' ? '의 원재료명' : '') + ':</span>'
+            + '<span class="ph-suggest-value">' + escapeQuote(read) + '</span>'
+            + (have
+                ? '<span class="text-muted">지금: ' + escapeQuote(have) + '</span>'
+                  + '<button type="button" class="btn v2-btn-sm btn-outline-secondary" data-put="' + key + '">바꾸기</button>'
+                : '<button type="button" class="btn v2-btn-sm btn-primary" data-put="' + key + '">넣기</button>')
+            + '<button type="button" class="btn v2-btn-sm btn-light" data-drop="' + key + '" title="이 제안 지우기">&times;</button>';
+        host.appendChild(box);
+        made++;
+        if (!have) fillable++;
+    });
+
+    var result = document.getElementById('ingPhotoResult');
+    if (!made) {
+        showSnackbar('사진에서 읽은 값이 없습니다.', 'warning');
+        return;
+    }
+    /* 맨 위 한 줄 — 한 번에 넣거나 전부 지우는 길 */
+    var bar = document.createElement('div');
+    bar.className = 'ph-suggest-bar d-flex align-items-center gap-2 flex-wrap';
+    bar.innerHTML =
+        '<span class="text-muted">사진에서 ' + made + '칸을 읽었습니다. 각 칸 아래에서 넣을지 정하세요. '
+        + '넣은 뒤 <strong>저장</strong>해야 남습니다.</span>'
+        + (fillable ? '<button type="button" class="btn v2-btn-sm btn-primary" id="ingPhotoFillAll">빈 칸 모두 넣기 (' + fillable + ')</button>' : '')
+        + '<button type="button" class="btn v2-btn-sm btn-light" id="ingPhotoDropAll">제안 모두 지우기</button>';
+    result.hidden = false;
+    result.innerHTML = '';
+    result.appendChild(bar);
+
+    document.getElementById('ingPhotoDropAll').onclick = clearSuggestions;
+    var fillAll = document.getElementById('ingPhotoFillAll');
+    if (fillAll) {
+        fillAll.onclick = function () {
+            var n = 0;
+            document.querySelectorAll('.ph-suggest.is-fill').forEach(function (box) {
+                if (putSuggestion(box, fields)) n++;
+            });
+            showSnackbar(n + '칸을 채웠습니다. 확인하고 저장하세요.', 'info');
+            if (!document.querySelector('.ph-suggest')) clearSuggestions();
+        };
+    }
+}
+
+function putSuggestion(box, fields) {
+    var key = box.dataset.key;
+    var value = (fields[key] || '').trim();
+    var column = PHOTO_TO_FORM[key];
+    if (!value || !column) return false;
+    var ok = setFormValue(column, value);
+    if (ok) box.remove();
+    else showSnackbar('식품유형 목록에 "' + value + '" 이(가) 없습니다. 직접 골라 주세요.', 'warning');
+    return ok;
+}
+
+/* 제안 줄의 단추 — 넣기·바꾸기·지우기. 폼 어디에 붙든 한 곳에서 듣는다. */
+document.addEventListener('click', function (ev) {
+    var put = ev.target.closest('[data-put]');
+    var drop = ev.target.closest('[data-drop]');
+    if (!put && !drop) return;
+    var box = (put || drop).closest('.ph-suggest');
+    if (!box) return;
+    ev.preventDefault();
+    if (drop) { box.remove(); }
+    else {
+        var value = box.querySelector('.ph-suggest-value').textContent;
+        var fields = {}; fields[box.dataset.key] = value;
+        putSuggestion(box, fields);
+    }
+    if (!document.querySelector('.ph-suggest')) clearSuggestions();
+});
 
 /* 새 원료를 저장한 뒤 — 들고 있던 사진을 그 번호에 붙인다. */
 window.IngredientPhoto = window.IngredientPhoto || {};

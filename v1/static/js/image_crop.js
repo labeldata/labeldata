@@ -268,5 +268,29 @@
         });
     }
 
-    window.imageCrop = { attach: attach, apply: apply, MIN_SIZE: MIN_SIZE, ZOOM_STEPS: ZOOM_STEPS };
+    /*
+     * PDF 면 첫 쪽을 그림으로 바꿔 온다. 자르기·판독은 그림만 다룬다.
+     * 돌아오는 것은 File 이라, 부르는 쪽은 그 뒤로 사진과 똑같이 다루면 된다.
+     */
+    function toImageFile(file, csrfToken) {
+        if (!file || !/\.pdf$/i.test(file.name || '')) return Promise.resolve(file);
+        var fd = new FormData();
+        fd.append('file', file);
+        return fetch('/label/my-ingredient/photo/pdf-page/', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken || '' }, body: fd
+        }).then(function (res) {
+            if (!res.ok) {
+                return res.json().catch(function () { return {}; }).then(function (body) {
+                    throw new Error((body && body.error) || 'PDF 를 그림으로 바꾸지 못했습니다.');
+                });
+            }
+            return res.blob();
+        }).then(function (blob) {
+            var name = (file.name || 'page').replace(/\.pdf$/i, '') + '_1쪽.jpg';
+            return new File([blob], name, { type: 'image/jpeg' });
+        });
+    }
+
+    window.imageCrop = { attach: attach, apply: apply, toImageFile: toImageFile,
+                         MIN_SIZE: MIN_SIZE, ZOOM_STEPS: ZOOM_STEPS };
 })();

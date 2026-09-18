@@ -449,8 +449,29 @@ function handleFilesSelect(fileList) {
     if (!files.length) return;
 
     const input = document.getElementById('document-upload-input');
-    const many = !!(input && input.multiple) && files.length > 1;
-    if (!many) {
+    const many = !!(input && input.multiple);
+
+    /* **사진 모드에서 PDF 는 첫 쪽을 그림으로 바꿔 받는다.**
+       원료 표시사항은 자르기와 판독이 그림만 다룬다. 그런데 거래처 규격서는
+       PDF 로 오는 일이 흔하다. 서버가 첫 쪽을 그림으로 바꿔 주면 그 뒤로는
+       사진과 같다 — 예전에는 PDF 가 170px 로 잘려 보이고 판독에서 거절됐다. */
+    const modal = document.getElementById('smartUploadModal');
+    const photoMode = !!(modal && modal.classList.contains('is-photo-mode'));
+    const pdfs = photoMode && window.imageCrop && window.imageCrop.toImageFile
+        ? files.filter(f => /\.pdf$/i.test(f.name || '')) : [];
+    if (pdfs.length) {
+        showSnackbar('PDF 의 첫 쪽을 그림으로 바꾸는 중입니다…', 'info');
+        Promise.all(files.map(f => /\.pdf$/i.test(f.name || '')
+                ? window.imageCrop.toImageFile(f, getCsrfToken()).catch(err => {
+                    showSnackbar((f.name || 'PDF') + ' — ' + (err.message || '그림으로 바꾸지 못했습니다.'), 'error');
+                    return null;
+                  })
+                : Promise.resolve(f)))
+            .then(list => handleFilesSelect(list.filter(Boolean)));
+        return;
+    }
+
+    if (!(many && files.length > 1)) {
         handleFileSelect(files[0]);
         return;
     }

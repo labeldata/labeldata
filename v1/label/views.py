@@ -6075,3 +6075,46 @@ def my_ingredient_photo_attach(request, ingredient_id):
 
     _attach_photo(ingredient, upload, fields)
     return JsonResponse({'success': True, 'photo_url': ingredient.label_photo.url})
+
+
+@login_required
+@require_POST
+def my_ingredient_photo_pdf_page(request):
+    """
+    PDF 의 **첫 쪽을 그림으로** 돌려준다. 원료 표시사항이 PDF 로 오는 일이 흔한데
+    (거래처가 보내 주는 규격서), 자르기와 판독은 그림만 다룬다.
+
+    브라우저에서 PDF 를 그리려면 라이브러리 하나를 더 실어야 한다. 서버에는
+    성적서 PDF 를 읽으려고 PyMuPDF 가 이미 있다 — 같은 것을 쓴다. 첫 쪽만
+    돌려준다. 원료 규격서는 대개 한 쪽이고, 두 쪽째가 필요하면 그 쪽을 사진으로
+    찍어 올리는 편이 빠르다.
+    """
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'success': False, 'error': '파일이 없습니다.'}, status=400)
+    if not (upload.name or '').lower().endswith('.pdf'):
+        return JsonResponse({'success': False, 'error': 'PDF 파일만 받습니다.'}, status=400)
+
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.error('PyMuPDF(fitz) 미설치 — PDF 를 그림으로 바꾸지 못한다')
+        return JsonResponse({'success': False,
+                             'error': '이 서버는 PDF 를 그림으로 바꾸지 못합니다. '
+                                      '쪽을 사진으로 찍어 올려 주세요.'}, status=501)
+    try:
+        with fitz.open(stream=upload.read(), filetype='pdf') as doc:
+            if doc.page_count < 1:
+                return JsonResponse({'success': False, 'error': '빈 PDF 입니다.'}, status=400)
+            # 2 배로 그린다 — 글자를 읽을 그림이라 기본 72dpi 로는 뭉개진다
+            page_count = doc.page_count
+            pix = doc[0].get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+            data = pix.tobytes('jpeg')
+    except Exception as exc:
+        logger.exception('PDF 첫 쪽 변환 실패')
+        return JsonResponse({'success': False, 'error': 'PDF 를 읽지 못했습니다: %s' % exc},
+                            status=400)
+
+    resp = HttpResponse(data, content_type='image/jpeg')
+    resp['X-Page-Count'] = str(page_count)   # 두 쪽 이상이면 화면이 알려 줄 수 있게
+    return resp
