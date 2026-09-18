@@ -13067,3 +13067,48 @@ class 슬롯이_없는_문서도_새_판을_올린다(TestCase):
         text = self._text()
         i = text.index('window.openUploadForUpdate = function()')
         self.assertIn('CAN_UPLOAD_DOCUMENTS', text[i:i + 400])
+
+
+class 오래_걸리는_판독은_기다린다고_말한다(TestCase):
+    """
+    원료 사진 판독을 누르면 토스트가 한 번 뜨고 사라졌다. 판독은 사진을 통째로
+    모델에 보내는 일이라 몇 초에서 수십 초가 걸리는데, 그 뒤로는 눌렀는지조차
+    알 수 없어 화면이 죽은 것으로 보였다 — 사용자는 다시 누르고, 그러면 같은
+    사진을 두 번 보낸다.
+
+    그리고 서버가 JSON 이 아닌 것(500 HTML)을 돌려주면 res.json() 이 터지면서
+    까닭이 '오류가 발생했습니다' 로 뭉개졌다. 무엇이 왔는지 남겨야 고칠 수 있다.
+    """
+
+    def _text(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+
+    def test_기다리는_동안_화면_한가운데서_말한다(self):
+        text = self._text()
+        i = text.index('window.previewIngredientPhoto = async function')
+        block = text[i:i + 2500]
+        self.assertIn('showSearchBusy', block)
+        # 성공이든 실패든 반드시 걷힌다
+        self.assertIn('hideSearchBusy', block)
+        self.assertIn('} finally {', block)
+
+    def test_검색과_같은_표시를_쓴다(self):
+        """오래 기다리게 하는 자리는 같은 얼굴로 말해야 한다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = (Path(dj.BASE_DIR) / 'templates/base_v2.html').read_text(encoding='utf-8')
+        self.assertIn('js/search_busy.js', base)
+
+    def test_JSON_이_아닌_응답의_까닭을_남긴다(self):
+        text = self._text()
+        i = text.index('window.previewIngredientPhoto = async function')
+        block = text[i:i + 2500]
+        self.assertIn('JSON.parse(text)', block)
+        self.assertIn('res.status', block)

@@ -1947,11 +1947,32 @@ async function submitImportCompanyDoc() {
     }
 
     window.previewIngredientPhoto = async function (docId) {
-        showSnackbar('사진을 판독하는 중입니다...', 'info');
+        /* **기다리는 동안 화면이 죽은 것처럼 보였다.**
+         *
+         * 판독은 사진을 통째로 모델에 보내는 일이라 몇 초에서 수십 초가 걸린다.
+         * 그런데 알림 토스트는 몇 초 뒤 스스로 사라지므로, 그 뒤로는 눌렀는지
+         * 안 눌렀는지조차 알 수 없었다 — 사용자는 고장으로 읽고 다시 누른다.
+         * 그러면 같은 사진을 두 번 보낸다.
+         *
+         * 검색에 쓰는 화면 한가운데 표시를 그대로 쓴다(search_busy.js).
+         * 오래 기다리게 하는 자리는 같은 얼굴로 말해야 한다. */
+        const busy = window.showSearchBusy;
+        if (busy) busy('사진에서 원료 정보를 읽는 중입니다',
+                       '사진 한 장에 몇 초에서 수십 초가 걸립니다. 잠시만 기다려 주세요.');
         let body;
         try {
             const res = await fetch(`/products/documents/${docId}/ingredient-photo/preview/`);
-            body = await res.json();
+            /* 서버가 JSON 이 아닌 것을 돌려줄 수도 있다(500 HTML). 그때
+             * res.json() 이 터지면서 까닭이 '오류가 발생했습니다' 로 뭉개진다.
+             * 무엇이 왔는지를 남긴다. */
+            const text = await res.text();
+            try {
+                body = JSON.parse(text);
+            } catch (parseError) {
+                console.error('판독 응답이 JSON 이 아니다', res.status, text.slice(0, 500));
+                showSnackbar(`사진을 판독하지 못했습니다 (서버 응답 ${res.status}).`, 'error');
+                return;
+            }
             if (!res.ok || !body.success) {
                 showSnackbar(body.error || '사진을 판독하지 못했습니다.', 'error');
                 return;
@@ -1960,6 +1981,8 @@ async function submitImportCompanyDoc() {
             console.error(err);
             showSnackbar('사진 판독 중 오류가 발생했습니다.', 'error');
             return;
+        } finally {
+            if (window.hideSearchBusy) window.hideSearchBusy();
         }
 
         const f = body.fields || {};
