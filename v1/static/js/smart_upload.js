@@ -50,6 +50,7 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
     /* 구분이 정해진 뒤에 부른다 — 슬롯 쪽은 change 로도 불리지만, 일반
        업로드는 값을 비우기만 해서 앞서 열었던 창의 설정이 남는다. */
     syncMultipleFromType();
+    showUploadStep(docTypeId ? 'form' : 'pick');
 
     modal.show();
 }
@@ -137,6 +138,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    document.querySelectorAll('.upload-pick-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const sel = document.getElementById('document-type-select');
+            if (sel) {
+                sel.value = this.dataset.typeId;
+                sel.dispatchEvent(new Event('change'));
+            }
+            const title = document.getElementById('upload-modal-title');
+            if (title) title.textContent = this.dataset.typeName + ' 등록';
+            showUploadStep('form');
+        });
+    });
+
+    const backBtn = document.getElementById('upload-back-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', function () {
+            resetUploadForm();
+            const title = document.getElementById('upload-modal-title');
+            if (title) title.textContent = '문서 등록';
+            showUploadStep('pick');
+        });
+    }
+
     // 문서 종류 선택 시 유효기간 자동 설정
     const typeSelect = document.getElementById('document-type-select');
     if (typeSelect) {
@@ -500,6 +524,35 @@ function formatFileSize(bytes) {
  * 무엇이 그 제품의 보고서인지 알 수 없다 — 그런 구분에서는 여러 장이 실수다.
  * 규칙은 서버가 정하고(DocumentType.multiple_yn), 화면은 그대로 따른다.
  */
+/*
+ * 창을 두 걸음으로 나눈다.
+ *
+ * 예전에는 열자마자 끌어놓기 칸·문서 종류 목록·유효기간 라디오·알림 토글이
+ * 한꺼번에 보였다. **무엇부터 해야 하는지 알 수 없다.** 게다가 증빙서류와
+ * 원료 사진은 성격이 전혀 다른데 같은 목록에 한 줄씩 나란히 있었다.
+ *
+ * 첫 걸음에서 구분만 고르고, 고른 뒤에 그 구분에 맞는 화면을 보여 준다.
+ * 슬롯의 [+] 로 열 때는 구분이 이미 정해져 있으므로 첫 걸음을 건너뛴다 —
+ * 고를 것이 없는데 고르라고 물으면 그것이 곧 군더더기다.
+ */
+function showUploadStep(which) {
+    const pick = document.getElementById('upload-step-pick');
+    const form = document.getElementById('upload-step-form');
+    const foot = document.getElementById('upload-step-foot');
+    const sub = document.querySelector('#smartUploadModal .modal-subtitle');
+    if (!pick || !form || !foot) return;
+
+    const picking = which === 'pick';
+    pick.hidden = !picking;
+    form.hidden = picking;
+    foot.hidden = picking;
+    if (sub) {
+        sub.textContent = picking
+            ? '무엇을 올리시는지 먼저 골라 주세요.'
+            : '파일을 올리고 유효기간을 정합니다.';
+    }
+}
+
 function syncMultipleFromType() {
     const typeSelect = document.getElementById('document-type-select');
     const fileInput = document.getElementById('document-upload-input');

@@ -13538,3 +13538,72 @@ class 고른_사진을_한_장씩_뺄_수_있다(TestCase):
         js = self._js()
         i = js.index('function renderSelectedList()')
         self.assertIn('if (selectedFiles.length < 2)', js[i:i + 500])
+
+
+class 무엇을_올리는지부터_고르게_한다(TestCase):
+    """
+    창을 열자마자 끌어놓기 칸·문서 종류 목록·유효기간 라디오·알림 토글이
+    한꺼번에 보였다. **무엇부터 해야 하는지 알 수 없다.**
+
+    게다가 증빙서류와 원료 사진은 성격이 전혀 다른데 같은 목록에 한 줄씩
+    나란히 있었다 — 하나는 제품에 딸린 서류이고, 하나는 원재료 한 건을 사진으로
+    넣는 일이다.
+
+    구분을 버튼으로 일렬로 놓는다. 목록을 열고 고르고 닫는 세 동작이 한 번으로
+    준다.
+    """
+
+    def _html(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_modal_upload.html'
+                ).read_text(encoding='utf-8')
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_증빙서류와_원료_정보를_갈라_놓는다(self):
+        html = self._html()
+        i = html.index('id="upload-step-pick"')
+        block = html[i:i + 2200]
+        self.assertIn('증빙 서류', block)
+        self.assertIn('원료 정보', block)
+        # 가르는 기준은 서버가 정한 그 플래그다
+        self.assertIn('{% if not dtype.multiple_yn %}', block)
+        self.assertIn('{% if dtype.multiple_yn %}', block)
+
+    def test_구분이_버튼으로_일렬이다(self):
+        html = self._html()
+        i = html.index('id="upload-step-pick"')
+        block = html[i:i + 2200]
+        self.assertIn('upload-pick-btn', block)
+        self.assertIn('d-flex flex-wrap gap-2', block)
+
+    def test_구분이_이미_정해졌으면_첫_걸음을_건너뛴다(self):
+        """슬롯의 [+] 로 열면 고를 것이 없다. 물으면 그것이 곧 군더더기다."""
+        js = self._js()
+        self.assertIn("showUploadStep(docTypeId ? 'form' : 'pick')", js)
+
+    def test_구분을_다시_고르러_돌아갈_수_있다(self):
+        """잘못 골랐을 때 창을 닫고 다시 열지 않아도 된다."""
+        html = self._html()
+        self.assertIn('id="upload-back-btn"', html)
+        js = self._js()
+        i = js.index("getElementById('upload-back-btn')")
+        block = js[i:i + 400]
+        self.assertIn('resetUploadForm()', block)
+        self.assertIn("showUploadStep('pick')", block)
+
+    def test_첫_걸음에는_등록_단추를_보이지_않는다(self):
+        """아직 파일도 안 골랐는데 [등록하기] 가 있으면 눌러 보게 된다."""
+        js = self._js()
+        i = js.index('function showUploadStep(')
+        block = js[i:i + 900]
+        self.assertIn('foot.hidden = picking', block)
