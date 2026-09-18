@@ -763,7 +763,13 @@ async function handleSmartUpload() {
             showSnackbar(uploaded.length > 1
                 ? uploaded.length + '장을 등록했습니다.'
                 : '문서가 성공적으로 등록되었습니다.', 'success');
-            sessionStorage.setItem('returnToTab', 'docs');
+            /* 배합표에서 시작했으면 그리로 돌아간다 — 사진을 올린 것은
+               배합표를 채우려던 것이지 문서함을 보려던 것이 아니다. */
+            try {
+                if (sessionStorage.getItem('returnToTab') !== 'bom') {
+                    sessionStorage.setItem('returnToTab', 'docs');
+                }
+            } catch (e) { /* 못 읽어도 업로드는 끝났다 */ }
 
             /* 원료 표시사항을 올렸으면 **그 자리에서 바로 줄 세워 판독한다.**
              *

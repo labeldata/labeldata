@@ -2742,6 +2742,27 @@ body.in-iframe .bom-page-header { display: none !important; }
      * **줄이 끝나면 부모가 새로고침한다.** 그러면 이 iframe 도 다시 뜨면서
      * 방금 만든 줄이 표에 선다 — 여기서 따로 받아 올 것이 없다.
      */
+    /* 문서함에서 '배합 등록됨' 을 누르면 온다 — 그 줄을 골라 보여 준다. */
+    window.addEventListener('message', function (e) {
+        if (!e || e.origin !== window.location.origin) return;
+        if (!e.data || e.data.type !== 'selectBomRow') return;
+        if (!hot) return;
+
+        const target = Number(e.data.bomId);
+        const rows = hot.getSourceData() || [];
+        for (let phys = 0; phys < rows.length; phys++) {
+            const meta = rows[phys] && rows[phys]._meta;
+            if (!meta || Number(meta.bom_id) !== target) continue;
+            const visual = hot.toVisualRow ? hot.toVisualRow(phys) : phys;
+            hot.selectCell(visual, 0);
+            hot.scrollViewportTo(visual, 0);
+            if (typeof updateContextPanel === 'function') {
+                updateContextPanel(rowObjectAt(visual), visual, true);
+            }
+            return;
+        }
+    });
+
     window.openIngredientPhotoUpload = function () {
         if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: 'openIngredientUpload' },

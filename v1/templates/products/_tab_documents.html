@@ -287,7 +287,8 @@
                     <td colspan="6">
                         <ol class="doc-version-list">
                             {% for old in group.older %}
-                            <li onclick="openEditPanel({{ old.document_id }})">
+                            <li data-doc-id="{{ old.document_id }}"
+                                onclick="openEditPanel({{ old.document_id }})">
                                 {% if group.by_type %}
                                 <i class="bi bi-image text-info"></i>
                                 {% else %}
@@ -309,9 +310,19 @@
                                 {% if group.by_type %}
                                 <span class="doc-version-meta">
                                     {% if old.metadata.ingredient_bom_id %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle">배합 등록됨</span>
+                                    {% comment %}
+                                      배지를 눌러 그 배합 줄로 간다. 읽기만 하는
+                                      표시로 두면 "그래서 어느 줄인데?" 를 사람이
+                                      배합표에서 눈으로 찾아야 한다.
+                                    {% endcomment %}
+                                    <button type="button" class="badge bg-success-subtle text-success border border-success-subtle doc-gobom"
+                                            data-bom-id="{{ old.metadata.ingredient_bom_id }}"
+                                            onclick="event.stopPropagation(); gotoBomRow({{ old.metadata.ingredient_bom_id }});"
+                                            title="배합 탭의 그 줄로 갑니다">배합 등록됨 ›</button>
                                     {% else %}
-                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">판독 전</span>
+                                    <button type="button" class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle doc-gobom"
+                                            onclick="event.stopPropagation(); previewIngredientPhoto({{ old.document_id }});"
+                                            title="지금 판독해 배합에 올립니다">판독 전 ›</button>
                                     {% endif %}
                                 </span>
                                 {% endif %}
@@ -1746,6 +1757,25 @@ async function submitImportCompanyDoc() {
         });
     })();
 
+    /*
+     * 그 원료가 들어간 배합 줄로 간다.
+     *
+     * 배합표는 iframe 안이라 여기서 줄을 고를 수 없다. 탭을 열고 iframe 에
+     * 이른다 — 사진 단추가 거꾸로 하던 그 길이다.
+     */
+    window.gotoBomRow = function (bomId) {
+        const tab = document.querySelector('[data-bs-target="#tab-bom"]');
+        if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+
+        const frame = document.getElementById('bomEditorFrame');
+        if (!frame || !frame.contentWindow) return;
+        /* 배합표가 아직 안 떴을 수 있다. 뜨고 나서 이르도록 한 번 미룬다. */
+        const tell = () => frame.contentWindow.postMessage(
+            { type: 'selectBomRow', bomId: Number(bomId) }, window.location.origin);
+        tell();
+        setTimeout(tell, 700);
+    };
+
     window.pickSpecNutritionDoc = function () {
         const docs = Object.values(documentData || {}).filter(looksLikeSpecSheet);
 
@@ -2300,12 +2330,14 @@ async function submitImportCompanyDoc() {
      * "무슨 문서를 갖고 있는가" 를 훑을 수가 없다. 판(version) 펼침이 이미
      * 같은 규칙으로 돌고 있으므로 사용자가 배울 것도 없다.
      */
-    function ensureDocExpander(row) {
+    function ensureDocExpander(row, docId) {
         document.querySelectorAll('.doc-expand-row').forEach(el => el.remove());
 
         const tr = document.createElement('tr');
         tr.className = 'doc-expand-row';
-        const cols = row.children.length || 7;
+        tr.dataset.forDoc = String(docId);
+        /* 묶음 목록 줄(td 하나짜리)에 붙을 때도 폭을 다 써야 한다 */
+        const cols = row.children.length > 1 ? row.children.length : 7;
         tr.innerHTML = `<td colspan="${cols}">
             <div id="doc-edit-panel"><div id="edit-panel-content"></div></div>
         </td>`;
@@ -2320,19 +2352,29 @@ async function submitImportCompanyDoc() {
             return;
         }
 
+        /* **묶음 안의 문서도 열어야 한다.**
+         *
+         * 목록의 큰 줄에만 data-doc-id 가 있고, 판·구분 묶음을 펼쳤을 때
+         * 나오는 줄에는 없었다. 그래서 그 줄을 눌러도 아무 일이 없었다 —
+         * 여기서 찾지 못하고 조용히 돌아갔기 때문이다. 펼친 줄이면 그 묶음
+         * 목록 **아래**에 붙인다. */
         const row = document.querySelector(`.document-row[data-doc-id="${docId}"]`);
-        if (!row) return;
+        const inList = row ? null
+            : document.querySelector(`.doc-version-list > li[data-doc-id="${docId}"]`);
+        const anchor = row || (inList && inList.closest('.doc-version-row'));
+        if (!anchor) return;
 
         /* 펼친 문서를 다시 누르면 접는다. 여는 것과 닫는 것이 같은 자리에
          * 있어야 한다 — 닫으려고 저쪽 끝의 X 를 찾아가게 하지 않는다. */
-        if (row.nextElementSibling?.classList.contains('doc-expand-row')) {
+        if (anchor.nextElementSibling?.classList.contains('doc-expand-row')
+                && anchor.nextElementSibling.dataset.forDoc === String(docId)) {
             window.closeEditPanel();
             return;
         }
-        ensureDocExpander(row);
-        document.querySelectorAll('.document-row.is-open')
+        ensureDocExpander(anchor, docId);
+        document.querySelectorAll('.document-row.is-open, .doc-version-list > li.is-open')
             .forEach(el => el.classList.remove('is-open'));
-        row.classList.add('is-open');
+        (row || inList).classList.add('is-open');
 
         /* 앞 문서의 성적서 판독 상자를 먼저 걷어낸다.
          *
@@ -2483,7 +2525,7 @@ async function submitImportCompanyDoc() {
          * 쥐고 있어 [저장] 을 누르면 **앞 문서에** 저장됐다. 통째로 지우면
          * 그런 찌꺼기가 남을 자리가 없다. */
         document.querySelectorAll('.doc-expand-row').forEach(el => el.remove());
-        document.querySelectorAll('.document-row.is-open')
+        document.querySelectorAll('.document-row.is-open, .doc-version-list > li.is-open')
             .forEach(el => el.classList.remove('is-open'));
     };
 

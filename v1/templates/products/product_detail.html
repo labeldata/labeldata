@@ -1375,8 +1375,17 @@ window.addEventListener('message', function (e) {
     if (!window.sameOriginMessage(e)) return;
     if (!e.data || e.data.type !== 'openIngredientUpload') return;
 
-    const docsTab = document.querySelector('[data-bs-target="#tab-docs"]');
-    if (docsTab) bootstrap.Tab.getOrCreateInstance(docsTab).show();
+    /* **탭을 옮기지 않는다.**
+     *
+     * 예전에는 문서함 탭을 먼저 열고 창을 띄웠다. 그런데 탭이 바뀌는 동안
+     * 기본정보 탭과 문서함 목록이 번갈아 스치듯 보였다 — 부트스트랩의 탭
+     * 전환이 사라지는 쪽과 나타나는 쪽을 함께 그리기 때문이다. 사용자는
+     * 배합표에 있었는데 화면이 두 번 바뀐 뒤에야 창이 뜬다.
+     *
+     * 창은 어차피 body 로 옮겨 붙으므로 어느 탭에 있든 뜬다. 옮길 까닭이 없다.
+     * 대신 **일이 끝나면 배합표로 돌아오게** 표시를 남긴다 — 사진을 올린 것은
+     * 배합표를 채우려던 것이지 문서함을 보려던 것이 아니다. */
+    try { sessionStorage.setItem('returnToTab', 'bom'); } catch (e) {}
 
     /* 구분 번호는 화면이 이미 들고 있다 — 서버가 옵션마다 내려준 그 표시다.
        여기서 코드 이름을 또 적으면 두 곳이 어긋날 자리가 생긴다. */
@@ -1389,7 +1398,7 @@ window.addEventListener('message', function (e) {
         }
         return;
     }
-    setTimeout(() => window.openUploadModal(null, opt.textContent.trim(), opt.value), 120);
+    window.openUploadModal(null, opt.textContent.trim(), opt.value);
 });
 
 /* 배합표에서 사진 단추를 누르면 온다 — 그 줄을 만든 원료 표시사항 사진으로

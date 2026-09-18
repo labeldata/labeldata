@@ -129,6 +129,9 @@ _OWN_SIZED_BUTTONS = frozenset({
     # 큰 칸. 아이콘 위·이름 아래·설명까지 담는 격자 칸이라 v2-btn 의 한 줄
     # 크기 체계로는 담기지 않는다. 고르는 일 하나만 하는 자리다.
     'upload-pick-btn',
+    # doc-gobom: 문서함 목록의 '배합 등록됨 ·  판독 전' 표. 배지 크기 그대로
+    # 누를 수 있게 한 것이라 v2-btn 을 씌우면 줄 안에서 혼자 커진다.
+    'doc-gobom',
     'allergen-add-btn', 'allergen-chip', 'allergen-icon-btn',
     'allergen-selectall-btn', 'btn-apply', 'btn-storage-badge',
     'contacts-filter-btn', 'contacts-icon-btn', 'di-name', 'doc-ver-btn',

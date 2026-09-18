@@ -13989,6 +13989,20 @@ class 사진_묶음이_몇_건인지_말한다(TestCase):
     def test_배합에_들어갔는지_한눈에_보인다(self):
         html = self._html()
         i = html.index('old.metadata.ingredient_bom_id')
-        block = html[i:i + 500]
+        block = html[i:i + 1600]
         self.assertIn('배합 등록됨', block)
         self.assertIn('판독 전', block)
+
+    def test_표가_읽기만_하는_것이_아니다(self):
+        """
+        읽기만 하는 표시로 두면 "그래서 어느 줄인데?" 를 사람이 배합표에서
+        눈으로 찾아야 한다. 눌러서 그 줄로 간다.
+        """
+        html = self._html()
+        i = html.index('old.metadata.ingredient_bom_id')
+        block = html[i:i + 1600]
+        self.assertIn('gotoBomRow(', block)
+        # 판독 전이면 지금 판독한다
+        self.assertIn('previewIngredientPhoto(', block)
+        # 줄 전체를 누르는 것과 겹치지 않게 막는다
+        self.assertIn('event.stopPropagation()', block)
