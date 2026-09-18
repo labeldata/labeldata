@@ -365,6 +365,7 @@ function dropSelectedFile(index) {
     refreshSelectedSummary();
     warnDuplicateNames(selectedFiles);
     renderSelectedList();
+    renderUploadPreview();
 }
 
 /* 파일 칸의 이름·크기 요약. 한 장이면 그 장, 여럿이면 장수를 적는다. */
@@ -438,6 +439,8 @@ function handleFilesSelect(fileList) {
     warnDuplicateNames(good);
     refreshSelectedSummary();
     renderSelectedList();
+    previewAt = 0;
+    renderUploadPreview();
 }
 
 function handleFileSelect(file) {
@@ -489,7 +492,21 @@ function handleFileSelect(file) {
  * 회전·확대가 붙고 PDF 도 그대로 열린다 — 이 창만 따로 만들면 같은 일을
  * 하는 화면이 서로 다르게 생기고, 뷰어를 고칠 때 두 곳을 고쳐야 한다.
  */
+let previewAt = 0;      // 여러 장일 때 지금 보고 있는 장
+
 function showUploadPreview(file) {
+    previewAt = Math.max(0, selectedFiles.indexOf(file));
+    renderUploadPreview();
+}
+
+/*
+ * 고른 장을 미리 보여 준다. **여러 장이면 넘겨 볼 수 있어야 한다.**
+ *
+ * 예전에는 첫 장만 그렸다. 다섯 장을 골라 놓고 한 장만 보이면, 나머지 넷이
+ * 제대로 골라졌는지 알 길이 없다 — 보여 주지 않느니만 못하다. 넘기는 단추를
+ * 붙이고 '2 / 5' 로 어디쯤인지 적는다.
+ */
+function renderUploadPreview() {
     const host = document.querySelector('#selected-file-info .smart-preview-hint');
     if (!host || typeof window.photoViewerElement !== 'function') return;
 
@@ -502,8 +519,35 @@ function showUploadPreview(file) {
     }
     slot.innerHTML = '';
 
+    if (!selectedFiles.length) return;
+    if (previewAt >= selectedFiles.length) previewAt = selectedFiles.length - 1;
+    if (previewAt < 0) previewAt = 0;
+
+    const file = selectedFiles[previewAt];
     const viewer = window.photoViewerElement(file, file.name);
     if (!viewer) return;
+
+    if (selectedFiles.length > 1) {
+        const bar = document.createElement('div');
+        bar.className = 'd-flex align-items-center justify-content-between mb-1';
+        bar.innerHTML =
+            '<button type="button" class="btn btn-sm btn-light border" data-step="-1"'
+            + (previewAt === 0 ? ' disabled' : '') + '>'
+            + '<i class="bi bi-chevron-left"></i></button>'
+            + '<span class="small text-muted text-truncate px-2">'
+            + (previewAt + 1) + ' / ' + selectedFiles.length + ' · ' + file.name + '</span>'
+            + '<button type="button" class="btn btn-sm btn-light border" data-step="1"'
+            + (previewAt === selectedFiles.length - 1 ? ' disabled' : '') + '>'
+            + '<i class="bi bi-chevron-right"></i></button>';
+        bar.querySelectorAll('[data-step]').forEach(btn => {
+            btn.addEventListener('click', function () {
+                previewAt += Number(this.dataset.step);
+                renderUploadPreview();
+            });
+        });
+        slot.appendChild(bar);
+    }
+
     slot.appendChild(viewer);
     if (typeof window.photoViewerRelease === 'function') {
         window.photoViewerRelease(viewer);   // 창이 닫히면 놓아 준다

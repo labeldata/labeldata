@@ -13583,12 +13583,20 @@ class 무엇을_올리는지부터_고르게_한다(TestCase):
         self.assertIn('{% if not dtype.multiple_yn %}', block)
         self.assertIn('{% if dtype.multiple_yn %}', block)
 
-    def test_구분이_버튼으로_일렬이다(self):
+    def test_구분이_버튼으로_늘어선다(self):
         html = self._html()
         i = html.index('id="upload-step-pick"')
-        block = html[i:i + 2200]
+        block = html[i:i + 2600]
         self.assertIn('upload-pick-btn', block)
-        self.assertIn('d-flex flex-wrap gap-2', block)
+        self.assertIn('upload-pick-grid', block)
+
+    def test_두_갈래를_좌우로_갈라_놓는다(self):
+        """위아래로 두면 같은 목록의 앞뒤로 읽힌다."""
+        html = self._html()
+        i = html.index('id="upload-step-pick"')
+        block = html[i:i + 2600]
+        self.assertIn('col-md-7', block)
+        self.assertIn('col-md-5', block)
 
     def test_구분이_이미_정해졌으면_첫_걸음을_건너뛴다(self):
         """슬롯의 [+] 로 열면 고를 것이 없다. 물으면 그것이 곧 군더더기다."""
@@ -13611,3 +13619,42 @@ class 무엇을_올리는지부터_고르게_한다(TestCase):
         i = js.index('function showUploadStep(')
         block = js[i:i + 900]
         self.assertIn('foot.hidden = picking', block)
+
+
+class 고른_사진을_넘겨_볼_수_있다(TestCase):
+    """
+    여러 장을 골라도 **첫 장만** 보였다. 다섯 장을 골라 놓고 한 장만 보이면
+    나머지 넷이 제대로 골라졌는지 알 길이 없다 — 보여 주지 않느니만 못하다.
+    """
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_넘기는_단추와_몇_번째인지가_있다(self):
+        js = self._js()
+        i = js.index('function renderUploadPreview()')
+        block = js[i:i + 2200]
+        self.assertIn('data-step', block)
+        self.assertIn("(previewAt + 1) + ' / ' + selectedFiles.length", block)
+
+    def test_끝에서는_더_넘기지_못한다(self):
+        js = self._js()
+        i = js.index('function renderUploadPreview()')
+        block = js[i:i + 2200]
+        self.assertIn("previewAt === 0 ? ' disabled' : ''", block)
+        self.assertIn("previewAt === selectedFiles.length - 1 ? ' disabled' : ''", block)
+
+    def test_한_장일_때는_넘기는_줄을_두지_않는다(self):
+        js = self._js()
+        i = js.index('function renderUploadPreview()')
+        self.assertIn('if (selectedFiles.length > 1) {', js[i:i + 2200])
+
+    def test_한_장을_빼면_미리보기도_따라_바뀐다(self):
+        js = self._js()
+        i = js.index('function dropSelectedFile(')
+        self.assertIn('renderUploadPreview();', js[i:i + 900])

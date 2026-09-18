@@ -125,6 +125,10 @@ _OWN_SIZED_BUTTONS = frozenset({
     # 있는 이름표**라 v2-btn 크기 체계를 쓰면 줄이 무너진다. 링크였던 것을
     # 단추로 바꾼 자리다(그 자리에서 바로 묻기 위해).
     'bom-nut-pickbtn',
+    # upload-pick-btn: 문서 등록 창의 첫 걸음에서 '무엇을 올리는가' 를 고르는
+    # 큰 칸. 아이콘 위·이름 아래·설명까지 담는 격자 칸이라 v2-btn 의 한 줄
+    # 크기 체계로는 담기지 않는다. 고르는 일 하나만 하는 자리다.
+    'upload-pick-btn',
     'allergen-add-btn', 'allergen-chip', 'allergen-icon-btn',
     'allergen-selectall-btn', 'btn-apply', 'btn-storage-badge',
     'contacts-filter-btn', 'contacts-icon-btn', 'di-name', 'doc-ver-btn',
