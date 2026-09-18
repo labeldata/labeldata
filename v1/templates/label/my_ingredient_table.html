@@ -13,7 +13,16 @@
         {% endif %}
     </td>
     <td>{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
-    <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
+    <td>
+        {% comment %}
+          사진이 있으면 이름 앞에 작게 보여 준다. 글보다 빨리 알아본다 —
+          같은 '크림치즈' 가 셋일 때 봉지 사진이 그 셋을 가른다.
+        {% endcomment %}
+        {% if ingredient.label_photo %}
+        <img src="{{ ingredient.label_photo.url }}" alt="" class="ing-thumb" loading="lazy">
+        {% endif %}
+        {{ ingredient.prdlst_nm|default_if_none:'' }}
+    </td>
     <td>{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
 </tr>
 {% empty %}

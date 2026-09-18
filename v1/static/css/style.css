@@ -1795,3 +1795,25 @@ select.form-control.select2-date-option {
     line-height: 1.4;
     color: var(--ez-text-muted, #5f6368);
 }
+
+/* 원료 관리 — 표시사항 사진 */
+.ing-thumb {
+    width: 28px; height: 28px; object-fit: cover;
+    border-radius: 4px; border: 1px solid var(--ez-gray-200, #e8eaed);
+    vertical-align: middle; margin-right: 6px;
+}
+.ing-photo {
+    width: 120px; height: 120px; object-fit: cover; display: block;
+    border-radius: 8px; border: 1px solid var(--ez-gray-200, #e8eaed);
+    background: var(--ez-gray-50, #f8f9fa);
+}
+.ing-photo-empty {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ez-gray-400, #bdc1c6); font-size: 28px;
+}
+#ingPhotoCrop .imgcrop-img { max-height: 40vh; }
+.ph-table td { vertical-align: middle; }
+.ph-table tr.ph-keep .form-control { background: var(--ez-gray-100, #f1f3f4); }
+.ph-table tr.ph-fill .form-control { border-color: var(--ez-success, #1e8e3e); }
+/* 방금 채워진 칸 — 잠깐 밝혔다가 돌아온다 */
+.ph-just-filled { background: var(--ez-success-bg, #e6f4ea) !important; transition: background 1.2s ease; }

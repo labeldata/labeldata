@@ -811,6 +811,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    /* `?ingredient_id=` 로 들어오면 그 원료를 펼친 채로 연다.
+     *
+     * 배합표의 사진 창에서 [원료 관리로 이동] 이 이 주소로 보낸다. 예전에는
+     * 그 값을 아무도 읽지 않아 목록만 열렸다 — 보낸 쪽은 열릴 줄 알았다.
+     *
+     * 목록에 그 줄이 있으면 누른 것과 같게 하고, 다른 쪽(페이지)에 있으면
+     * 상세만 바로 불러온다. */
+    (function () {
+        var want = new URLSearchParams(window.location.search).get('ingredient_id');
+        if (!want) return;
+        var row = document.querySelector('.ingredient-row[data-ingredient-id="' + want + '"]');
+        if (row) { row.click(); row.scrollIntoView({ block: 'center' }); return; }
+        fetch('/label/my-ingredient-detail/' + encodeURIComponent(want) + '/', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.text(); })
+          .then(function (html) { loadIngredientDetail(detailContent, html); })
+          .catch(function () { /* 못 열어도 목록은 그대로다 */ });
+    })();
+
     // ===== 체크박스 & 선택 액션바 =====
     const actionsBar = document.getElementById('ingredient-selection-actions');
     const selectedCountSpan = document.getElementById('ing-selected-count');

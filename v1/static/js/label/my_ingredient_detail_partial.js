@@ -905,8 +905,183 @@ window.IngredientDetailPartial.isSyncing = false;
 // IIFE 외부(onclick 속성 등)에서 호출 가능하도록 전역 노출
 window.fetchFoodItemByReportNo = function() { fetchFoodItemByReportNo(); };
 
+/* ─────────────────────────────────────────────────────────────────────
+   표시사항 사진 — 고르고, 쓸 곳을 잘라, 읽고, 빈 칸만 채운다
+
+   자르기는 image_crop.js 가, 읽기는 서버가 한다. 여기서 하는 일은 그 둘을
+   잇고 "어느 칸이 채워질지" 를 사람이 보고 확정하게 하는 것이다.
+
+   **빈 칸만 채운다**(서버 apply 가 그 규칙을 지킨다). 이미 적힌 값은 사람이
+   고른 것이라 말없이 덮지 않는다. 미리보기에서 그 둘을 색으로 가른다.
+   ───────────────────────────────────────────────────────────────────── */
+var PHOTO_LABELS = {
+    ingredient_name: '원료명', food_type: '식품유형', manufacturer: '제조사',
+    report_no: '품목보고번호', sub_ingredients: '원재료명', allergens: '알레르기'
+};
+var PHOTO_PICK_HINT = '표시사항이 있는 곳을 <strong>끌어서</strong> 고르세요. 고르지 않으면 전체를 씁니다.';
+
+function escapeQuote(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+function initLabelPhoto() {
+    var row = document.getElementById('ingPhotoRow');
+    if (!row || row.dataset.bound) return;
+    row.dataset.bound = '1';
+
+    var ingredientId = row.dataset.ingredientId;
+    var fileInput = document.getElementById('ingPhotoFile');
+    var stage = document.getElementById('ingPhotoStage');
+    var cropHost = document.getElementById('ingPhotoCrop');
+    var result = document.getElementById('ingPhotoResult');
+    var hint = document.getElementById('ingPhotoHint');
+    var picked = null;
+    var crop = null;
+
+    document.getElementById('ingPhotoPick').onclick = function () { fileInput.click(); };
+
+    fileInput.onchange = function () {
+        picked = this.files && this.files[0];
+        if (!picked) return;
+        result.hidden = true;
+        result.innerHTML = '';
+        stage.hidden = false;
+        crop = window.imageCrop ? window.imageCrop.attach(cropHost, picked) : null;
+        hint.innerHTML = PHOTO_PICK_HINT;
+    };
+    cropHost.addEventListener('cropchange', function () {
+        var r = crop && crop.getRect();
+        hint.innerHTML = r ? '고른 곳만 잘라 올립니다 (' + r.w + ' × ' + r.h + ').' : PHOTO_PICK_HINT;
+    });
+    document.getElementById('ingPhotoAll').onclick = function () {
+        if (crop) crop.clear();
+        hint.innerHTML = '사진 전체를 씁니다.';
+    };
+    document.getElementById('ingPhotoCancel').onclick = function () {
+        picked = null; crop = null;
+        fileInput.value = '';
+        stage.hidden = true;
+        cropHost.innerHTML = '';
+    };
+
+    document.getElementById('ingPhotoRead').onclick = async function () {
+        if (!picked) return;
+        var btn = this;
+        btn.disabled = true;
+        if (window.showSearchBusy) {
+            window.showSearchBusy('사진에서 원료 정보를 읽는 중입니다',
+                                  '사진 한 장에 몇 초에서 수십 초가 걸립니다.');
+        }
+        try {
+            var file = picked;
+            var rect = crop && crop.getRect();
+            if (rect && window.imageCrop) file = await window.imageCrop.apply(file, rect);
+
+            var fd = new FormData();
+            fd.append('file', file);
+            var res = await fetch('/label/my-ingredient/' + ingredientId + '/photo/read/', {
+                method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd
+            });
+            var body = await res.json();
+            if (!res.ok || !body.success) {
+                showSnackbar(body.error || '사진을 읽지 못했습니다.', 'error');
+                return;
+            }
+            renderPhotoResult(body, ingredientId);
+            /* 사진은 read 에서 이미 붙었다 — 위쪽 그림을 바로 바꾼다 */
+            var cur = document.getElementById('ingPhotoCurrent');
+            if (cur && body.photo_url) {
+                cur.innerHTML = '<a href="' + escapeQuote(body.photo_url) + '" target="_blank" rel="noopener">'
+                    + '<img src="' + escapeQuote(body.photo_url) + '" alt="표시사항 사진" class="ing-photo"></a>';
+            }
+            stage.hidden = true;
+        } catch (err) {
+            console.error(err);
+            showSnackbar('사진 판독 중 오류가 발생했습니다.', 'error');
+        } finally {
+            btn.disabled = false;
+            if (window.hideSearchBusy) window.hideSearchBusy();
+        }
+    };
+}
+
+function renderPhotoResult(body, ingredientId) {
+    var result = document.getElementById('ingPhotoResult');
+    var fields = body.fields || {};
+    var current = body.current || {};
+    var rows = Object.keys(PHOTO_LABELS).map(function (key) {
+        var read = fields[key] || '';
+        var have = current[key] || '';
+        var state = !read ? 'none' : (have ? 'keep' : 'fill');
+        var note = state === 'none' ? '<span class="text-muted">사진에서 읽지 못함</span>'
+                 : state === 'keep' ? '<span class="text-muted">이미 적혀 있어 그대로 둠</span>'
+                 : '<span class="text-success fw-semibold">이 값으로 채움</span>';
+        return '<tr class="ph-' + state + '">'
+             + '<td class="text-muted small text-nowrap">' + PHOTO_LABELS[key] + '</td>'
+             + '<td><input type="text" class="form-control form-control-sm ph-field" data-key="' + key
+             + '" value="' + escapeQuote(read) + '"'
+             + (state === 'keep' ? ' disabled title="이미 적힌 값: ' + escapeQuote(have) + '"' : '')
+             + '></td>'
+             + '<td class="small text-nowrap">' + note + '</td></tr>';
+    }).join('');
+
+    result.hidden = false;
+    result.innerHTML =
+        '<div class="small text-muted mb-1">사진에서 읽은 값입니다. 틀린 곳은 고친 뒤 적용하세요.</div>'
+        + '<table class="table table-sm mb-2 ph-table"><tbody>' + rows + '</tbody></table>'
+        + '<div class="d-flex gap-2 justify-content-end">'
+        + '<button type="button" class="btn v2-btn-sm btn-light" id="ingPhotoDismiss">닫기</button>'
+        + '<button type="button" class="btn v2-btn-sm btn-primary" id="ingPhotoApply"><i class="bi bi-check-lg"></i> 빈 칸 채우기</button>'
+        + '</div>';
+
+    document.getElementById('ingPhotoDismiss').onclick = function () {
+        result.hidden = true; result.innerHTML = '';
+    };
+    document.getElementById('ingPhotoApply').onclick = async function () {
+        var btn = this;
+        var send = {};
+        result.querySelectorAll('.ph-field').forEach(function (el) {
+            if (!el.disabled) send[el.dataset.key] = el.value.trim();
+        });
+        btn.disabled = true;
+        try {
+            var res = await fetch('/label/my-ingredient/' + ingredientId + '/photo/apply/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ fields: send })
+            });
+            var body = await res.json();
+            if (!res.ok || !body.success) {
+                showSnackbar(body.error || '적용하지 못했습니다.', 'error');
+                return;
+            }
+            /* 채워진 칸을 폼에도 바로 반영한다 — 새로고침 없이 눈으로 확인하게.
+               서버가 채운 칸 이름을 주므로 그것만 손댄다. */
+            var back = { prdlst_nm: 'ingredient_name', prdlst_dcnm: 'food_type', bssh_nm: 'manufacturer',
+                         prdlst_report_no: 'report_no', rawmtrl_nm: 'sub_ingredients', allergens: 'allergens' };
+            (body.filled || []).forEach(function (column) {
+                var key = back[column];
+                var input = document.getElementById(column) || document.querySelector('[name="' + column + '"]');
+                if (input && key && send[key] !== undefined) {
+                    input.value = send[key];
+                    input.classList.add('ph-just-filled');
+                    setTimeout(function () { input.classList.remove('ph-just-filled'); }, 2500);
+                }
+            });
+            showSnackbar((body.filled || []).length
+                ? (body.filled.length + '칸을 채웠습니다. 확인하고 저장하세요.')
+                : '채울 빈 칸이 없었습니다. 이미 적힌 값은 그대로 두었습니다.', 'info');
+            result.hidden = true; result.innerHTML = '';
+        } catch (err) {
+            console.error(err);
+            showSnackbar('적용 중 오류가 발생했습니다.', 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    };
+}
+
 // AJAX 재로드 시 재초기화 진입점
 window.IngredientDetailPartial.reinit = function() {
+    initLabelPhoto();
     initFoodTypeSelect();
     setupFoodCategoryChangeEvent();
     toggleReportNoRow();
