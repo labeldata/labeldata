@@ -13646,7 +13646,8 @@ class 무엇을_올리는지부터_고르게_한다(TestCase):
         html = self._html()
         self.assertIn('id="upload-back-btn"', html)
         js = self._js()
-        i = js.index("getElementById('upload-back-btn')")
+        # 누르는 자리에 닻을 내린다 — 같은 id 를 읽는 곳이 둘이다(감추기·누르기)
+        i = js.index("backBtn.addEventListener('click'")
         block = js[i:i + 400]
         self.assertIn('resetUploadForm()', block)
         self.assertIn("showUploadStep('pick')", block)
@@ -14258,3 +14259,39 @@ class 사진_등록_단추가_배합_탭에서_보인다(TestCase):
         before = bom[:head]
         opened = before.rindex('{% if can_edit %}')
         self.assertNotIn('{% endif %}', before[opened:])
+
+
+class 슬롯_없이_구분만_넘겨도_그_구분으로_연다(TestCase):
+    """
+    배합 탭의 [사진으로 등록] 은 슬롯 없이 구분만 넘긴다 — 원료 표시사항에는
+    슬롯이 없다. 그런데 창은 `slotId && docTypeId` 일 때만 구분을 골라 두고
+    아니면 비웠다. 그래서 그 창은 늘 '일반 문서 등록' 으로 열려 문서 종류가
+    비고, 사진 모드도 안 걸리고, 유효기간까지 다 보였다.
+    """
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_구분만으로_고른다(self):
+        js = self._js()
+        i = js.index('function openUploadModal(')
+        block = js[i:i + 2600]
+        self.assertIn('if (docTypeId) {', block)
+        self.assertNotIn('if (slotId && docTypeId) {', block)
+        self.assertIn('typeSelect.value = docTypeId;', block)
+
+    def test_슬롯이_있을_때만_슬롯_문맥을_남긴다(self):
+        js = self._js()
+        i = js.index('function openUploadModal(')
+        self.assertIn('lastSlotContext = slotId ? {', js[i:i + 2600])
+
+    def test_첫_걸음을_건너뛰었으면_되돌아가기_단추가_없다(self):
+        """[구분 다시 고르기] 는 첫 걸음에서 온 사람에게만 뜻이 있다."""
+        js = self._js()
+        i = js.index('function openUploadModal(')
+        self.assertIn('backBtn.hidden = !!docTypeId', js[i:i + 3200])

@@ -26,15 +26,22 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
     document.getElementById('target-slot-id').value = slotId || '';
     
     const typeSelect = document.getElementById('document-type-select');
-    if (slotId && docTypeId) {
-        lastSlotContext = {
+    /* **구분은 넘어온 대로 쓴다 — 슬롯이 없어도.**
+     *
+     * 예전에는 `slotId && docTypeId` 일 때만 구분을 골라 두고, 아니면 비웠다.
+     * 그런데 배합 탭의 [사진으로 등록] 은 슬롯 없이 구분만 넘긴다(원료
+     * 표시사항에는 슬롯이 없다). 그래서 그 창은 늘 '일반 문서 등록' 으로 열려
+     * 문서 종류가 비고, 사진 모드도 안 걸리고, 유효기간까지 다 보였다 —
+     * 만든 지 한 시간 만에 "아직 기존 스타일인데" 를 들었다. */
+    if (docTypeId) {
+        lastSlotContext = slotId ? {
             slotId: slotId,
             docTypeId: docTypeId,
             docTypeName: docTypeName
-        };
+        } : null;
         window.lastUploadSlotContext = lastSlotContext;
-        // 슬롯에서 열림 - 문서 종류 자동 선택
-        document.getElementById('upload-modal-title').textContent = docTypeName + ' 등록/갱신';
+        document.getElementById('upload-modal-title').textContent =
+            docTypeName + (slotId ? ' 등록/갱신' : ' 등록');
         typeSelect.value = docTypeId;
         typeSelect.dispatchEvent(new Event('change'));
         typeSelect.disabled = true;
@@ -42,7 +49,7 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
         lastSlotContext = null;
         window.lastUploadSlotContext = null;
         // 일반 업로드 버튼에서 열림
-        document.getElementById('upload-modal-title').textContent = '일반 문서 등록';
+        document.getElementById('upload-modal-title').textContent = '문서 등록';
         typeSelect.disabled = false;
         typeSelect.value = '';
     }
@@ -51,6 +58,11 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
        업로드는 값을 비우기만 해서 앞서 열었던 창의 설정이 남는다. */
     syncMultipleFromType();
     showUploadStep(docTypeId ? 'form' : 'pick');
+
+    /* 구분이 정해져서 첫 걸음을 건너뛰었으면 되돌아갈 곳도 없다.
+       [구분 다시 고르기] 는 첫 걸음에서 온 사람에게만 뜻이 있다. */
+    const backBtn = document.getElementById('upload-back-btn');
+    if (backBtn) backBtn.hidden = !!docTypeId;
 
     modal.show();
 }
