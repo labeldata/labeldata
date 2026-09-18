@@ -1795,6 +1795,29 @@ select.form-control.select2-date-option {
     line-height: 1.4;
     color: var(--ez-text-muted, #5f6368);
 }
+/* 돌리기·키우기 줄. 사진 위에 붙어 다닌다. */
+.imgcrop-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+.imgcrop-zoom { font-size: 12px; min-width: 40px; text-align: center; color: var(--ez-text-muted, #5f6368); }
+.imgcrop-sep { width: 1px; height: 18px; background: var(--ez-gray-300, #dadce0); margin: 0 4px; }
+/* 키우면 상자 안에서 스크롤한다 — 끌기는 고르는 데만 쓴다 */
+.imgcrop-scroll {
+    max-height: 60vh;
+    overflow: auto;
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: 6px;
+    background: var(--ez-gray-50, #f8f9fa);
+}
+.imgcrop-scroll .imgcrop-img { max-height: none; display: block; }
+.imgcrop-scroll .imgcrop-wrap { display: inline-block; }
+
+/* 원료 관리 — 목록 자리에 띄우는 사진 */
+.ing-photo-pane { padding: 8px 10px; }
+.ing-photo-btn { border: 0; padding: 0; background: none; cursor: zoom-in; }
 
 /* 원료 관리 — 표시사항 사진 */
 .ing-thumb {

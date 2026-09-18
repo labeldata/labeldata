@@ -2161,7 +2161,22 @@ async function submitImportCompanyDoc() {
                목록이 번쩍인다. 일이 다 끝난 뒤가 그 자리다. */
             if (ingNeedsReload) {
                 ingNeedsReload = false;
-                setTimeout(() => window.location.reload(), 600);
+                /* **배합 탭에서 시작했으면 배합표만 다시 그린다.**
+                 *
+                 * 페이지를 통째로 새로고침하면 첫 탭(기본정보)이 먼저 그려졌다가
+                 * 배합 탭으로 돌아온다 — 사용자에게는 "화면이 닫히고 기본정보에
+                 * 갔다 온다" 로 보였다. 새로 생긴 줄은 배합표 iframe 안에 있으므로
+                 * 그것만 다시 읽으면 된다. 문서함은 손댈 것이 없다 — 확정한 사진은
+                 * 원료로 옮겨 가고 문서는 눕는다. */
+                let fromBom = false;
+                try { fromBom = sessionStorage.getItem('returnToTab') === 'bom'; } catch (e) {}
+                const frame = document.getElementById('bomEditorFrame');
+                if (fromBom && frame && frame.contentWindow) {
+                    try { sessionStorage.removeItem('returnToTab'); } catch (e) {}
+                    setTimeout(() => frame.contentWindow.location.reload(), 300);
+                } else {
+                    setTimeout(() => window.location.reload(), 600);
+                }
             }
             return;
         }

@@ -1114,8 +1114,12 @@ def product_detail(request, product_id):
         hidden_yn=False  # 숨겨지지 않은 슬롯만
     ).select_related('document_type', 'current_document').order_by('document_type__display_order')
     
+    # '여러 건' 구분(원료 표시사항)은 슬롯이 될 수 없다. 슬롯은 "이 제품에
+    # 이 서류가 있는가" 한 칸인데, 원료 사진은 원료마다 한 장이고 이제 제품이
+    # 아니라 **원료에** 붙는다. 여기 후보로 남겨 두면 이관한 기능이 팝업에서
+    # 다시 나타난다.
     available_doc_types = DocumentType.objects.filter(
-        active_yn=True
+        active_yn=True, multiple_yn=False,
     ).exclude(type_id__in=visible_slot_type_ids).order_by('display_order', 'type_name')
     
     # 슬롯 상태 업데이트 (만료일 기준)
@@ -7049,85 +7053,6 @@ def label_photo_upload(request, label_id):
         'filename': filename,
         'version': version_number,
         'message': '판독에 사용한 사진을 문서함에 남겼습니다.',
-    })
-
-
-@login_required
-@require_POST
-def ingredient_photo_upload(request, label_id):
-    """
-    원료 표시사항 사진을 문서함에 넣고 바로 읽는다. BOM 에는 아직 쓰지 않는다.
-
-    "원료로 등록" 은 두 가지를 한 번에 한다 - 사진을 문서함에 남기고, 그 내용을
-    BOM 원료로 만든다. 사진이 문서함에 남아야 나중에 "이 원료 정보가 어디서
-    왔는지" 를 되짚을 수 있다(원료 표시사항은 근거 자료다).
-
-    여기서는 저장과 읽기까지만 한다. BOM 쓰기는 사용자가 확인한 뒤
-    document_ingredient_photo_to_bom 이 맡는다 - OCR 은 틀리고, 틀린 원료가
-    BOM 에 들어가면 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
-    """
-    from v1.products.services.ingredient_photo import (
-        parse_ingredient_photo, read_document_image,
-    )
-    from v1.label.services.ingredient_matching import match_my_ingredient
-
-    label = _resolve_editable_label(request, label_id)
-
-    # 읽는 데 돈이 나간다. 사진이 있는지부터 보고 나서 센다
-    uploaded = request.FILES.get('image')
-    problem = upload_check(request.user, uploaded, '사진')
-    if problem:
-        return JsonResponse({'success': False, 'error': problem}, status=400)
-
-    # 검사에 걸릴 요청까지 세면 잘못 올린 파일 하나가 그날 몫을 깎는다
-    allowed, usage = quota.check_and_charge(request.user, 'ocr_ingredient')
-    if not allowed:
-        return JsonResponse({'success': False, 'error': usage['message'],
-                             'usage': usage}, status=429)
-
-    doc_type = DocumentType.objects.filter(type_code='INGREDIENT_LABEL').first()
-    if doc_type is None:
-        return JsonResponse({
-            'success': False,
-            'error': '"원료 표시사항" 문서 타입이 없습니다. migrate 를 먼저 실행하세요.',
-        }, status=500)
-
-    _, ext = os.path.splitext(uploaded.name)
-    document = ProductDocument.objects.create(
-        label=label,
-        document_type=doc_type,
-        file=uploaded,
-        original_filename=uploaded.name,
-        file_size=uploaded.size,
-        file_extension=ext.lower(),
-        document_title=doc_type.type_name,
-        uploaded_by=request.user,
-        metadata={'source': 'ingredient_photo_upload'},
-    )
-
-    ocr_data, error = read_document_image(document)
-    if error:
-        # 문서는 남긴다. 사진 자체는 근거 자료로 쓸모가 있고, 사용자가 문서함에서
-        # 다시 읽어 볼 수 있다.
-        return JsonResponse({
-            'success': False,
-            'error': error,
-            'document_id': document.document_id,
-        }, status=400)
-
-    fields = parse_ingredient_photo(ocr_data)
-    ingredient, score, candidates = match_my_ingredient(
-        request.user, fields.get('ingredient_name') or '')
-
-    return JsonResponse({
-        'success': True,
-        'document_id': document.document_id,
-        'filename': document.original_filename,
-        'fields': fields,
-        'matched_existing': ingredient is not None,
-        'matched_name': ingredient.prdlst_nm if ingredient else '',
-        'match_score': score,
-        'candidates': candidates,
     })
 
 

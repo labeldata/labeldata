@@ -21522,24 +21522,32 @@ class 심각도_잣대가_갈래마다_다르지_않다(TestCase):
         self.assertEqual(ranks['B4'], 1)
 
 
-class 원료_관리에서_사진을_붙이고_빈_칸만_채운다(TestCase):
+class 원료_관리에서_사진을_붙이고_폼의_빈_칸만_채운다(TestCase):
     """
     사진은 **원료**에 붙는다(MyIngredient.label_photo). 제품 문서함이 아니다 —
     원료는 '한 번 적고 여러 제품에서 쓰는' 것이라 같은 크림치즈를 다른 제품에서
     써도 사진은 한 장이면 된다.
 
-    두 걸음이다. read 는 사진을 그 자리에서 붙이고 읽은 값을 돌려주고, apply
-    는 사람이 확인한 값으로 **빈 칸만** 채운다 — 손으로 적어 둔 값을 말없이
-    덮는 것이 가장 나쁘다.
+    두 자리다. read 는 읽은 값을 돌려주고 번호가 함께 오면 그 자리에서 붙인다
+    (같은 파일을 두 번 올리지 않는다). attach 는 사진만 붙인다 — 새 원료는
+    저장하기 전에는 붙일 곳이 없어, 화면이 들고 있다가 저장 뒤 보낸다.
+
+    **빈 칸을 채우는 것은 화면이 한다.** 서버가 몰래 칸을 채우면 무엇이
+    바뀌었는지 저장하기 전에는 알 수 없다.
     """
+
+    OCR = {'success': True, 'data': {
+        'prdlst_nm': '크래프트 크림치즈', 'bssh_nm': '크래프트',
+        'prdlst_dcnm': '치즈가공품', 'rawmtrl_nm': '우유, 크림, 정제소금',
+        'cautions': '우유 함유',
+    }}
 
     def setUp(self):
         import tempfile
 
         from django.test import override_settings
 
-        self.media = tempfile.mkdtemp()
-        self._settings = override_settings(MEDIA_ROOT=self.media)
+        self._settings = override_settings(MEDIA_ROOT=tempfile.mkdtemp())
         self._settings.enable()
         self.addCleanup(self._settings.disable)
 
@@ -21548,82 +21556,98 @@ class 원료_관리에서_사진을_붙이고_빈_칸만_채운다(TestCase):
         self.ing = MyIngredient.objects.create(
             user_id=self.user, prdlst_nm='크림치즈', bssh_nm='', delete_YN='N')
 
-    def _read(self, ingredient=None, name='cheese.jpg'):
+    def _read(self, ingredient_id=None, name='cheese.jpg'):
         from unittest import mock
 
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        ing = ingredient or self.ing
+        data = {'file': SimpleUploadedFile(name, b'\xff\xd8jpg', content_type='image/jpeg')}
+        if ingredient_id is not None:
+            data['ingredient_id'] = ingredient_id
         with mock.patch('v1.label.services.ocr_service.extract_label_from_image',
-                        return_value={'success': True, 'data': {
-                            'prdlst_nm': '크래프트 크림치즈',
-                            'bssh_nm': '크래프트',
-                            'prdlst_dcnm': '치즈가공품',
-                            'rawmtrl_nm': '우유, 크림, 정제소금',
-                            'cautions': '우유 함유',
-                        }}):
-            return self.client.post(
-                reverse('label:my_ingredient_photo_read', args=[ing.my_ingredient_id]),
-                {'file': SimpleUploadedFile(name, b'\xff\xd8jpg', content_type='image/jpeg')})
+                        return_value=self.OCR):
+            return self.client.post(reverse('label:my_ingredient_photo_read'), data)
 
-    def test_읽으면_사진이_원료에_붙고_값이_돌아온다(self):
+    def test_번호_없이_읽으면_값만_돌려준다(self):
+        """새 원료 — 아직 붙일 곳이 없다."""
         res = self._read()
         self.assertEqual(res.status_code, 200, res.content[:200])
         body = res.json()
         self.assertEqual(body['fields']['ingredient_name'], '크래프트 크림치즈')
+        self.assertEqual(body['photo_url'], '')
+        self.assertNotIn('current', body)
+
+    def test_번호와_함께_읽으면_그_자리에서_붙는다(self):
+        res = self._read(ingredient_id=self.ing.my_ingredient_id)
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        body = res.json()
+        self.assertTrue(body['photo_url'])
         # 어느 칸이 채워질지 화면이 미리 보이게 지금 값도 함께 준다
         self.assertEqual(body['current']['ingredient_name'], '크림치즈')
         self.ing.refresh_from_db()
         self.assertTrue(self.ing.label_photo)
-        # 칸은 아직 안 건드린다 — 값은 사람이 확인해야 한다
+        self.assertEqual(self.ing.label_photo_fields['manufacturer'], '크래프트')
+        # 칸은 건드리지 않는다 — 값은 사람이 폼에서 보고 저장한다
         self.assertEqual(self.ing.bssh_nm, '')
+        self.assertEqual(self.ing.prdlst_nm, '크림치즈')
+
+    def test_저장_뒤_붙이기(self):
+        """새 원료를 저장하고 나서 들고 있던 사진을 보낸다."""
+        import json
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        res = self.client.post(
+            reverse('label:my_ingredient_photo_attach', args=[self.ing.my_ingredient_id]),
+            {'file': SimpleUploadedFile('c.jpg', b'\xff\xd8jpg', content_type='image/jpeg'),
+             'fields': json.dumps({'manufacturer': '크래프트'})})
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.ing.refresh_from_db()
+        self.assertTrue(self.ing.label_photo)
+        self.assertEqual(self.ing.label_photo_fields, {'manufacturer': '크래프트'})
 
     def test_사진_파일만_받는다(self):
         res = self._read(name='label.pdf')
         self.assertEqual(res.status_code, 400)
         self.assertIn('사진 파일만', res.json()['error'])
 
-    def test_적용은_빈_칸만_채운다(self):
-        import json
-
-        res = self.client.post(
-            reverse('label:my_ingredient_photo_apply', args=[self.ing.my_ingredient_id]),
-            data=json.dumps({'fields': {
-                'ingredient_name': '크래프트 크림치즈',   # 이미 적혀 있다 -> 그대로
-                'manufacturer': '크래프트',              # 비어 있다 -> 채운다
-                'food_type': '치즈가공품',
-            }}), content_type='application/json')
-        self.assertEqual(res.status_code, 200)
-        self.ing.refresh_from_db()
-        self.assertEqual(self.ing.prdlst_nm, '크림치즈')        # 덮지 않았다
-        self.assertEqual(self.ing.bssh_nm, '크래프트')
-        self.assertEqual(self.ing.prdlst_dcnm, '치즈가공품')
-        self.assertEqual(sorted(res.json()['filled']),
-                         sorted(['bssh_nm', 'prdlst_dcnm', 'ingredient_display_name']))
-        # 무엇을 보고 만들었는지 남는다
-        self.assertEqual(self.ing.label_photo_fields['manufacturer'], '크래프트')
-
     def test_남의_원료에는_붙일_수_없다(self):
         """없는 것처럼 답한다(404). 403 은 그 번호가 있다는 것을 알려 준다."""
         other = User.objects.create_user(username='other', password='x')
         theirs = MyIngredient.objects.create(user_id=other, prdlst_nm='설탕', delete_YN='N')
-        self.assertEqual(self._read(ingredient=theirs).status_code, 404)
+        self.assertEqual(self._read(ingredient_id=theirs.my_ingredient_id).status_code, 404)
 
     def test_공용_원료에는_붙이지_않는다(self):
         """여럿이 함께 보는 것에 한 사람의 사진을 붙이지 않는다."""
         shared = MyIngredient.objects.create(user_id=None, prdlst_nm='소금', delete_YN='N')
-        self.assertEqual(self._read(ingredient=shared).status_code, 404)
+        self.assertEqual(self._read(ingredient_id=shared.my_ingredient_id).status_code, 404)
 
-    def test_저장한_원료에만_사진_자리가_있다(self):
-        """새 원료(저장 전)에는 붙일 곳이 없다."""
-        html = self.client.get(
-            reverse('label:my_ingredient_detail', args=[self.ing.my_ingredient_id]),
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode()
-        self.assertIn('id="ingPhotoRow"', html)
-        self.assertIn('빈 칸만', html)
+    def test_새_원료에도_사진_자리가_있다(self):
+        """사진을 먼저 읽어 폼을 채우고 나서 저장하는 것이 자연스러운 차례다."""
         fresh = self.client.get(reverse('label:my_ingredient_create'),
                                 HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode()
-        self.assertNotIn('id="ingPhotoRow"', fresh)
+        self.assertIn('id="ingPhotoRow"', fresh)
+        self.assertIn('data-ingredient-id=""', fresh)
+        saved = self.client.get(
+            reverse('label:my_ingredient_detail', args=[self.ing.my_ingredient_id]),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest').content.decode()
+        self.assertIn('data-ingredient-id="%s"' % self.ing.my_ingredient_id, saved)
+
+    def test_사진은_새_탭이_아니라_왼쪽_패널에_뜬다(self):
+        """오른쪽 폼과 나란히 두고 사진을 보며 칸을 고친다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        partial = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_detail_partial.html'
+                   ).read_text(encoding='utf-8')
+        self.assertIn('class="ing-photo-btn"', partial)
+        self.assertNotIn('target="_blank" rel="noopener" title="크게 보기"', partial)
+        page = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_list_combined.html'
+                ).read_text(encoding='utf-8')
+        self.assertIn('window.showIngredientPhotoInList = function', page)
+        self.assertIn('id="ingPhotoPaneBack"', page)
+        self.assertIn('js/products/photo_viewer.js', page)
 
     def test_목록에_작은_사진이_선다(self):
         from pathlib import Path
@@ -21634,6 +21658,17 @@ class 원료_관리에서_사진을_붙이고_빈_칸만_채운다(TestCase):
                ).read_text(encoding='utf-8')
         self.assertIn('{% if ingredient.label_photo %}', tpl)
         self.assertIn('class="ing-thumb"', tpl)
+
+    def test_엑셀_단추는_엑셀이라고_적는다(self):
+        """'업로드·다운로드' 만으로는 사진인지 엑셀인지 알 수 없었다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        page = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_list_combined.html'
+                ).read_text(encoding='utf-8')
+        self.assertIn('엑셀 내려받기', page)
+        self.assertIn('엑셀 올리기', page)
 
     def test_주소로_원료를_펼친_채_연다(self):
         """배합표의 [원료 관리로 이동] 이 이 주소로 보낸다. 예전에는 아무도 읽지 않았다."""
@@ -21648,7 +21683,7 @@ class 원료_관리에서_사진을_붙이고_빈_칸만_채운다(TestCase):
         self.assertIn('row.click()', block)
         self.assertIn('loadIngredientDetail(detailContent, html)', block)
 
-    def test_화면이_읽은_값과_지금_값을_가른다(self):
+    def test_화면이_빈_칸만_채우고_저장_뒤_붙인다(self):
         from pathlib import Path
 
         from django.conf import settings as dj
@@ -21656,10 +21691,59 @@ class 원료_관리에서_사진을_붙이고_빈_칸만_채운다(TestCase):
         js = (Path(dj.BASE_DIR) / 'static/js/label/my_ingredient_detail_partial.js'
               ).read_text(encoding='utf-8')
         i = js.index('function renderPhotoResult(')
-        block = js[i:i + 1600]
+        block = js[i:i + 2600]
         self.assertIn("'keep'", block)
         self.assertIn("'fill'", block)
-        self.assertIn('이미 적혀 있어 그대로 둠', block)
+        # 그 사이 사람이 적었으면 그대로 둔다
+        self.assertIn('if (formValue(column)) return;', block)
+        # 새 원료: 저장 뒤 붙인다
+        self.assertIn('window.IngredientPhoto.afterSave = function', js)
+        self.assertIn('window.IngredientPhoto.afterSave(data.ingredient_id)', js)
         # 다시 그려질 때마다 다시 묶되 두 번 묶지 않는다
-        self.assertIn("if (!row || row.dataset.bound) return;", js)
+        self.assertIn('if (!row || row.dataset.bound) return;', js)
         self.assertIn('initLabelPhoto();', js[js.index('reinit = function'):])
+
+
+class 자르기에_회전과_확대가_있다(TestCase):
+    """
+    끌어서 고르는 것만 됐다. 봉지를 옆으로 찍었거나 글자가 작으면 고를 수가
+    없다. 회전은 캔버스에 구워 넣는다 — CSS transform 으로 돌리면 화면 좌표를
+    원본 좌표로 되돌리는 셈이 각도마다 달라져, 사용자가 잡은 곳과 다른 곳이
+    잘려 나가는데 화면에서는 멀쩡해 보인다.
+    """
+
+    def _crop(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/image_crop.js').read_text(encoding='utf-8')
+
+    def test_돌리기_키우기_단추가_있다(self):
+        crop = self._crop()
+        for act in ('rot-left', 'rot-right', 'zoom-in', 'zoom-out', 'reset'):
+            self.assertIn('data-act="%s"' % act, crop)
+
+    def test_회전은_캔버스에_구워_넣고_화면과_자르기가_같은_함수를_쓴다(self):
+        crop = self._crop()
+        self.assertIn('function rotatedCanvas(img, deg, scale)', crop)
+        self.assertEqual(crop.count('rotatedCanvas('), 3)   # 정의 · 화면 · 자르기
+        self.assertNotIn("img.style.transform", crop)
+
+    def test_자를_때_같은_각도로_돌린_뒤_자른다(self):
+        crop = self._crop()
+        i = crop.index('function apply(file, rect)')
+        block = crop[i:i + 1400]
+        self.assertIn('var deg = (rect && rect.deg) || 0;', block)
+        self.assertIn('rotatedCanvas(img, deg, 1)', block)
+
+    def test_확대는_스크롤이지_끌기가_아니다(self):
+        """transform scale 로 키우면 옮기는 끌기와 고르는 끌기가 같은 동작이 된다."""
+        crop = self._crop()
+        self.assertIn("canvas.style.width = Math.round(baseWidth * ZOOM_STEPS[zoom])", crop)
+        self.assertIn("scroller.className = 'imgcrop-scroll'", crop)
+
+    def test_돌리면_고른_네모는_버린다(self):
+        """돌린 뒤의 좌표는 돌리기 전 네모와 다른 자리다."""
+        crop = self._crop()
+        self.assertIn("case 'rot-right': deg = (deg + 90) % 360;  rect = null;", crop)

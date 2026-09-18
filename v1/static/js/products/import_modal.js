@@ -75,7 +75,7 @@
 
   function dropZone(side, title, desc, hint) {
     return ''
-      + '<div class="col-md-6">'
+      + '<div class="col-12">'
       + '  <div class="import-zone h-100 border rounded p-3 text-center" data-side="' + side + '">'
       + '    <div class="fw-semibold mb-1" style="font-size:14px;">' + title + '</div>'
       + '    <div class="text-muted mb-3" style="font-size:12px; line-height:1.5;">' + desc + '</div>'
@@ -155,12 +155,13 @@
       + '          <span class="text-muted" style="font-size:11px;">번호를 모를 때</span>'
       + '        </div>'
       + '        <div class="row g-3">'
+      /* 원료 사진 갈래는 여기서 뺐다. 원료 봉지 사진은 **배합 탭**과 **원료 관리**
+         에서 올리고, 사진은 제품이 아니라 원료에 붙는다. 여기 남겨 두면 같은
+         일이 세 곳에 있어 어디서 해야 하는지 헷갈린다. 품목보고번호로 원료를
+         만드는 단추(아래 useLookup)는 사진이 아니라 조회이므로 그대로 둔다. */
       + dropZone('product', '제품으로 등록',
                  '이 제품의 표시사항입니다.',
                  '기본 정보 탭을 채우고, 원재료명을 원료별로 쪼개 BOM에 등록합니다.')
-      + dropZone('ingredient', '원료로 등록',
-                 '이 제품에 넣는 원료의 표시사항입니다.',
-                 '사진은 문서함에 남기고, BOM에 원료 1건을 만듭니다.')
       + '        </div>'
       + '        <div id="importModalNote" class="small text-muted mt-3"></div>'
       + '      </div>'
@@ -442,19 +443,13 @@
   function startRead(side, parts, modalEl, sourceFile) {
     setBusy(modalEl, side === 'compare'
       ? '시안을 읽어 지금 표시사항과 견주는 중입니다…'
-      : side === 'product'
-        ? '표시사항을 읽는 중입니다…'
-        : '사진을 문서함에 저장하고 읽는 중입니다…');
+      : '표시사항을 읽는 중입니다…');
 
     // 결과 확인 창은 각 처리기가 띄운다. 다 읽고 나서 이 창을 닫아야 두 창이
     // 겹치지 않는다.
-    // 원료 등록은 문서함에 사진 한 장을 남기는 흐름이라 여러 장을 받지 않는다.
-    // 여러 영역을 골랐으면 첫 영역만 쓴다.
     var run = (side === 'compare')
       ? window.basicInfoOcrCompare(parts, sourceFile)
-      : (side === 'product')
-        ? window.basicInfoOcrExtract(parts, sourceFile)
-        : window.ingredientPhotoUpload(parts[0].file);
+      : window.basicInfoOcrExtract(parts, sourceFile);
 
     Promise.resolve(run)
       .then(function () {

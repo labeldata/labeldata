@@ -132,6 +132,9 @@ _OWN_SIZED_BUTTONS = frozenset({
     # doc-gobom: 문서함 목록의 '배합 등록됨 ·  판독 전' 표. 배지 크기 그대로
     # 누를 수 있게 한 것이라 v2-btn 을 씌우면 줄 안에서 혼자 커진다.
     'doc-gobom',
+    # ing-photo-btn: 원료 관리 상세의 표시사항 사진. 그림 자체가 단추라(누르면
+    # 왼쪽에 크게 뜬다) 테두리·안쪽 여백이 있는 v2-btn 을 씌우면 그림이 밀린다.
+    'ing-photo-btn',
     'allergen-add-btn', 'allergen-chip', 'allergen-icon-btn',
     'allergen-selectall-btn', 'btn-apply', 'btn-storage-badge',
     'contacts-filter-btn', 'contacts-icon-btn', 'di-name', 'doc-ver-btn',

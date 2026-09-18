@@ -2260,36 +2260,6 @@
     status(body.message + ' BOM 탭에서 함량을 넣고 저장하세요.');
   }
 
-  // 사진 -> 문서함 저장 -> 확인 -> BOM
-  window.ingredientPhotoUpload = function (file) {
-    var form = new FormData();
-    form.append('image', file);
-    form.append('csrfmiddlewaretoken', csrfToken());
-    status('사진을 문서함에 저장하고 읽는 중입니다...');
-
-    return fetch('/products/labels/' + labelId() + '/ingredient-photo/upload/',
-                 { method: 'POST', body: form })
-      .then(function (res) { return res.json(); })
-      .then(function (body) {
-        if (!body.success) {
-          var msg = body.error || '사진을 읽지 못했습니다.';
-          status(msg, true);
-          throw new Error(msg);   // 부른 쪽(불러오기 모달)이 알아야 한다
-        }
-        status('');
-        ingredientConfirm(body.fields, function (edited, modalEl) {
-          postJson('/products/documents/' + body.document_id + '/ingredient-photo/apply/',
-                   { fields: edited })
-            .then(function (res) { finishIngredient(res, modalEl); });
-        }, body, file);
-      })
-      .catch(function (err) {
-        console.error(err);
-        status(err.message || '사진을 처리하는 중 오류가 발생했습니다.', true);
-        throw err;
-      });
-  };
-
   // 품목보고번호 -> 확인 -> BOM (첨부 파일이 없으니 문서함에는 남기지 않는다)
   window.ingredientFromLookup = function (fields) {
     ingredientConfirm(fields, function (edited, modalEl) {

@@ -104,8 +104,13 @@
                                     <select class="form-select" id="document-type-select" name="document_type" required>
                                         <option value="">-- 문서 종류를 선택하세요 --</option>
                                         {% for dtype in document_types %}
+                                        {% comment %}
+                                          '여러 건' 구분은 목록에 보이지 않는다. 배합 탭이 코드로 고르는
+                                          길만 남긴다 — hidden 옵션은 사람이 못 고르고 값은 설 수 있다.
+                                        {% endcomment %}
                                         <option value="{{ dtype.type_id }}" data-validity="{{ dtype.default_validity_days|default:'' }}"
-                                                data-multiple="{{ dtype.multiple_yn|yesno:'1,0' }}">
+                                                data-multiple="{{ dtype.multiple_yn|yesno:'1,0' }}"
+                                                {% if dtype.multiple_yn %}hidden{% endif %}>
                                             {{ dtype.type_name }}
                                         </option>
                                         {% endfor %}

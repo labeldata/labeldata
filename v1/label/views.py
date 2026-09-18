@@ -5955,18 +5955,19 @@ def my_ingredient_nutrition_save(request, ingredient_id):
 # 원료는 '한 번 적고 여러 제품에서 쓰는' 것이라, 같은 크림치즈를 다른 제품에서
 # 써도 사진은 한 장이면 된다.
 #
-# 두 걸음이다.
-#   read   사진을 받아 **그 자리에서 저장하고** 읽어 낸 값을 돌려준다
-#   apply  사람이 확인한 값으로 빈 칸을 채운다
+# 두 자리다.
+#   read    사진을 읽어 값을 돌려준다. 원료 번호가 함께 오면 **그 자리에서 붙인다**
+#           — 같은 파일을 두 번 올리지 않기 위해서다.
+#   attach  사진만 붙인다. 새 원료는 저장하기 전에는 붙일 곳이 없으므로, 화면이
+#           읽어 둔 사진을 들고 있다가 저장이 끝난 뒤 여기로 보낸다.
 #
-# 사진을 read 에서 바로 저장하는 까닭: 값은 사람이 확인해야 하지만 사진은
-# 그 원료의 사진이 맞다 — 고른 사람이 그렇게 정했다. 확인을 기다렸다 저장하면
-# 같은 파일을 두 번 올려야 하거나 임시 파일을 어딘가에 들고 있어야 한다.
-# 취소해도 사진은 남고, 다시 올리면 덮인다.
+# **빈 칸을 채우는 것은 화면이 한다.** 읽은 값은 사람이 폼에서 보고 고친 뒤
+# [저장] 으로 들어간다 — 서버가 몰래 칸을 채우면 무엇이 바뀌었는지 저장하기
+# 전에는 알 수 없다. 이미 적힌 값은 화면이 건드리지 않는다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 사진에서 읽은 값 -> 원료의 칸. 원산지는 원료에 칸이 없어 넣지 않는다.
-_PHOTO_TO_INGREDIENT = (
+# 사진에서 읽은 값 -> 원료의 칸. 화면이 이 짝으로 빈 칸을 채운다.
+PHOTO_TO_INGREDIENT = (
     ('ingredient_name', 'prdlst_nm'),
     ('food_type', 'prdlst_dcnm'),
     ('manufacturer', 'bssh_nm'),
@@ -5974,6 +5975,8 @@ _PHOTO_TO_INGREDIENT = (
     ('sub_ingredients', 'rawmtrl_nm'),
     ('allergens', 'allergens'),
 )
+
+_PHOTO_EXTS = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp')
 
 
 def _my_ingredient_or_404(request, ingredient_id):
@@ -5985,35 +5988,53 @@ def _my_ingredient_or_404(request, ingredient_id):
     return ingredient
 
 
-@login_required
-@require_POST
-def my_ingredient_photo_read(request, ingredient_id):
-    """사진을 원료에 붙이고, 거기서 읽어 낸 값을 돌려준다. 칸은 아직 안 건드린다."""
+def _photo_or_error(request):
+    """올라온 사진 파일, 아니면 (None, 오류 응답)."""
     import re as _re
-
-    from v1.label.services.ocr_service import extract_label_from_image
-    from v1.products.services.ingredient_photo import parse_ingredient_photo
-
-    ingredient = _my_ingredient_or_404(request, ingredient_id)
 
     upload = request.FILES.get('file')
     if not upload:
-        return JsonResponse({'success': False, 'error': '사진이 없습니다.'}, status=400)
+        return None, JsonResponse({'success': False, 'error': '사진이 없습니다.'}, status=400)
     ext = _re.sub(r'^.*(\.[^.]+)$', r'\1', upload.name or '').lower()
-    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'):
-        return JsonResponse({'success': False,
-                             'error': '사진 파일만 읽을 수 있습니다 (현재: %s).'
-                                      % (ext or '확장자 없음')}, status=400)
+    if ext not in _PHOTO_EXTS:
+        return None, JsonResponse(
+            {'success': False,
+             'error': '사진 파일만 읽을 수 있습니다 (현재: %s).' % (ext or '확장자 없음')},
+            status=400)
+    return upload, None
 
-    # 이미 사진이 있으면 덮는다 — 방금 올린 것이 최신이다.
+
+def _attach_photo(ingredient, upload, fields=None):
+    """사진(과 읽은 값)을 원료에 붙인다. 이미 있으면 덮는다 — 방금 것이 최신이다."""
     ingredient.label_photo.save(upload.name, upload, save=False)
-    ingredient.save(update_fields=['label_photo'])
+    changed = ['label_photo']
+    if fields is not None:
+        ingredient.label_photo_fields = fields
+        changed.append('label_photo_fields')
+    ingredient.save(update_fields=changed)
+
+
+@login_required
+@require_POST
+def my_ingredient_photo_read(request):
+    """사진에서 값을 읽는다. ingredient_id 가 오면 그 원료에 붙이기까지 한다."""
+    from v1.label.services.ocr_service import extract_label_from_image
+    from v1.products.services.ingredient_photo import parse_ingredient_photo
+
+    upload, err = _photo_or_error(request)
+    if err:
+        return err
+
+    ingredient = None
+    wanted = (request.POST.get('ingredient_id') or '').strip()
+    if wanted:
+        ingredient = _my_ingredient_or_404(request, wanted)
 
     try:
-        with ingredient.label_photo.open('rb') as fh:
-            result = extract_label_from_image(fh)
+        upload.seek(0)
+        result = extract_label_from_image(upload)
     except Exception as exc:
-        logger.exception('원료 사진 OCR 실패 (ingredient=%s)', ingredient.pk)
+        logger.exception('원료 사진 OCR 실패 (ingredient=%s)', wanted or '-')
         return JsonResponse({'success': False, 'error': str(exc)}, status=400)
     if not result.get('success'):
         return JsonResponse({'success': False,
@@ -6021,53 +6042,36 @@ def my_ingredient_photo_read(request, ingredient_id):
                             status=400)
 
     fields = parse_ingredient_photo(result.get('data') or {})
-    # 화면이 "어느 칸이 채워질지" 를 미리 보여 줄 수 있게 지금 값도 함께 준다
-    current = {photo_key: (getattr(ingredient, column) or '')
-               for photo_key, column in _PHOTO_TO_INGREDIENT}
-    return JsonResponse({
-        'success': True,
-        'fields': fields,
-        'current': current,
-        'photo_url': ingredient.label_photo.url,
-    })
+    payload = {'success': True, 'fields': fields, 'photo_url': ''}
+
+    if ingredient is not None:
+        upload.seek(0)
+        _attach_photo(ingredient, upload, fields)
+        payload['photo_url'] = ingredient.label_photo.url
+        # 화면이 "어느 칸이 채워질지" 를 미리 보여 줄 수 있게 지금 값도 함께 준다
+        payload['current'] = {photo_key: (getattr(ingredient, column) or '')
+                              for photo_key, column in PHOTO_TO_INGREDIENT}
+    return JsonResponse(payload)
 
 
 @login_required
 @require_POST
-def my_ingredient_photo_apply(request, ingredient_id):
-    """
-    사람이 확인한 값으로 **빈 칸만** 채운다.
-
-    손으로 적어 둔 값을 말없이 덮는 것이 가장 나쁘다. 사진을 붙이는 까닭은
-    대개 빈 칸을 메우려는 것이고, 이미 적힌 값은 사람이 고른 것이다.
-    무엇을 채웠는지 돌려주어 화면이 그 칸을 잠깐 표시할 수 있게 한다.
-    """
-    import json
-
+def my_ingredient_photo_attach(request, ingredient_id):
+    """사진만 붙인다. 새 원료를 저장한 뒤 화면이 들고 있던 사진을 보낸다."""
     ingredient = _my_ingredient_or_404(request, ingredient_id)
+    upload, err = _photo_or_error(request)
+    if err:
+        return err
 
-    try:
-        payload = json.loads(request.body or b'{}')
-    except (ValueError, TypeError):
-        payload = {}
-    fields = payload.get('fields') or {}
+    fields = None
+    raw = request.POST.get('fields')
+    if raw:
+        import json as _json
 
-    filled = []
-    for photo_key, column in _PHOTO_TO_INGREDIENT:
-        value = (fields.get(photo_key) or '').strip()
-        if not value:
-            continue
-        if (getattr(ingredient, column) or '').strip():
-            continue        # 이미 적힌 값은 그대로 둔다
-        setattr(ingredient, column, value)
-        filled.append(column)
+        try:
+            fields = _json.loads(raw)
+        except (ValueError, TypeError):
+            fields = None
 
-    # 표시명이 비어 있으면 원료명으로 — 라벨에 나가는 이름이 비면 안 된다
-    if not (ingredient.ingredient_display_name or '').strip() and ingredient.prdlst_nm:
-        ingredient.ingredient_display_name = ingredient.prdlst_nm
-        filled.append('ingredient_display_name')
-
-    ingredient.label_photo_fields = fields
-    ingredient.save(update_fields=filled + ['label_photo_fields'])
-
-    return JsonResponse({'success': True, 'filled': filled})
+    _attach_photo(ingredient, upload, fields)
+    return JsonResponse({'success': True, 'photo_url': ingredient.label_photo.url})

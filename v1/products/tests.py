@@ -13428,12 +13428,17 @@ class 올린_사진을_줄_세워_확인한다(TestCase):
         self.assertIn('return;', block)          # 새로고침으로 내려가지 않는다
         docs = self._docs()
         j = docs.index('if (ingNeedsReload)')
-        self.assertIn('window.location.reload()', docs[j:j + 300])
+        block = docs[j:j + 1400]
+        self.assertIn('window.location.reload()', block)
+        # 배합 탭에서 시작했으면 배합표 iframe 만 다시 그린다 — 첫 탭이
+        # 스치는 일이 없다
+        self.assertIn("sessionStorage.getItem('returnToTab') === 'bom'", block)
+        self.assertIn('frame.contentWindow.location.reload()', block)
 
     def test_앞_장을_보는_동안_다음_장을_미리_읽는다(self):
         docs = self._docs()
         i = docs.index('function nextInIngredientQueue()')
-        block = docs[i:i + 1400]
+        block = docs[i:i + 2400]
         self.assertIn('if (ingQueue.length) fetchIngredientPreview(ingQueue[0])', block)
 
     def test_같은_문서를_두_번_청하지_않는다(self):
@@ -14096,13 +14101,14 @@ class 사진에서_쓸_곳만_잘라_올린다(TestCase):
     def test_브라우저에서_자른다(self):
         """서버는 이미 잘린 그림을 받으므로 판독 코드는 손댈 것이 없다."""
         crop = self._crop()
-        self.assertIn("canvas.getContext('2d').drawImage(", crop)
-        self.assertIn('canvas.toBlob(', crop)
+        self.assertIn(".getContext('2d').drawImage(", crop)
+        self.assertIn('out.toBlob(', crop)
 
     def test_화면_좌표를_원본_좌표로_한_곳에서만_바꾼다(self):
-        """두 벌로 두면 한쪽만 고쳐지는 날이 온다."""
+        """두 벌로 두면 한쪽만 고쳐지는 날이 온다. 화면 px -> 캔버스 px 는 cssPerPx 하나다."""
         crop = self._crop()
-        self.assertEqual(crop.count('img.naturalWidth / img.clientWidth'), 1)
+        self.assertEqual(crop.count('function cssPerPx()'), 1)
+        self.assertEqual(crop.count('canvas.clientWidth / canvas.width'), 1)
 
     def test_툭_누른_것은_고른_것이_아니다(self):
         """0 x 0 짜리 네모가 남으면 '잘랐다' 고 말하게 된다."""

@@ -688,6 +688,10 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
             if (idField && !idField.value && data.ingredient_id) {
                 idField.value = data.ingredient_id;
             }
+            /* 새 원료에 사진을 먼저 읽어 두었으면 이제 붙일 번호가 생겼다 */
+            if (window.IngredientPhoto && data.ingredient_id) {
+                window.IngredientPhoto.afterSave(data.ingredient_id);
+            }
 
             // 저장 성공 버튼 피드백
             if (saveBtn) {
@@ -906,28 +910,86 @@ window.IngredientDetailPartial.isSyncing = false;
 window.fetchFoodItemByReportNo = function() { fetchFoodItemByReportNo(); };
 
 /* ─────────────────────────────────────────────────────────────────────
-   표시사항 사진 — 고르고, 쓸 곳을 잘라, 읽고, 빈 칸만 채운다
+   표시사항 사진 — 고르고, 쓸 곳을 잘라, 읽고, **폼의 빈 칸만** 채운다
 
-   자르기는 image_crop.js 가, 읽기는 서버가 한다. 여기서 하는 일은 그 둘을
-   잇고 "어느 칸이 채워질지" 를 사람이 보고 확정하게 하는 것이다.
+   자르기(회전·확대 포함)는 image_crop.js 가, 읽기는 서버가 한다. 여기서 하는
+   일은 그 둘을 잇고, 읽은 값으로 **폼**을 채우는 것이다 — 서버의 칸이 아니라.
+   값은 사람이 폼에서 보고 고친 뒤 [저장] 으로 들어간다. 서버가 몰래 채우면
+   무엇이 바뀌었는지 저장하기 전에는 알 수 없다.
 
-   **빈 칸만 채운다**(서버 apply 가 그 규칙을 지킨다). 이미 적힌 값은 사람이
-   고른 것이라 말없이 덮지 않는다. 미리보기에서 그 둘을 색으로 가른다.
+   **빈 칸만 채운다.** 이미 적힌 값은 사람이 고른 것이라 말없이 덮지 않는다.
+   미리보기에서 '이 값으로 채움 / 이미 적혀 있어 그대로 둠' 을 색으로 가른다.
+
+   새 원료(저장 전)는 붙일 곳이 없다. 사진을 들고 있다가 저장이 끝나면 붙인다
+   (afterSave). 있는 원료는 읽을 때 같은 요청으로 붙는다 — 두 번 올리지 않는다.
    ───────────────────────────────────────────────────────────────────── */
 var PHOTO_LABELS = {
     ingredient_name: '원료명', food_type: '식품유형', manufacturer: '제조사',
     report_no: '품목보고번호', sub_ingredients: '원재료명', allergens: '알레르기'
 };
+/* 사진 값 -> 폼 칸. 서버의 PHOTO_TO_INGREDIENT 와 같은 짝이다. */
+var PHOTO_TO_FORM = {
+    ingredient_name: 'prdlst_nm', food_type: 'prdlst_dcnm', manufacturer: 'bssh_nm',
+    report_no: 'prdlst_report_no', sub_ingredients: 'rawmtrl_nm', allergens: 'allergens'
+};
 var PHOTO_PICK_HINT = '표시사항이 있는 곳을 <strong>끌어서</strong> 고르세요. 고르지 않으면 전체를 씁니다.';
 
+var pendingPhoto = null;   // 새 원료: 저장 뒤 붙일 {file, fields}
+
 function escapeQuote(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+function formInput(column) {
+    return document.getElementById(column) || document.querySelector('#ingredientForm [name="' + column + '"]');
+}
+function formValue(column) {
+    var el = formInput(column);
+    return el ? String(el.value || '').trim() : '';
+}
+
+/* 폼에 값을 넣고 잠깐 밝힌다. select(식품유형)는 목록에 그 값이 있을 때만 잡힌다. */
+function setFormValue(column, value) {
+    var el = formInput(column);
+    if (!el) return false;
+    if (el.tagName === 'SELECT') {
+        var found = Array.prototype.some.call(el.options, function (o) {
+            if (o.value === value || o.textContent.trim() === value) { el.value = o.value; return true; }
+            return false;
+        });
+        if (!found) return false;
+    } else {
+        el.value = value;
+    }
+    el.classList.add('ph-just-filled');
+    setTimeout(function () { el.classList.remove('ph-just-filled'); }, 2500);
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    if (typeof window.setDetailDirty === 'function') window.setDetailDirty(true);
+    return true;
+}
+
+function showPhotoCurrent(url) {
+    var cur = document.getElementById('ingPhotoCurrent');
+    if (!cur || !url) return;
+    cur.innerHTML = '<button type="button" class="ing-photo-btn" data-photo-url="' + escapeQuote(url)
+        + '" title="왼쪽에 크게 보기"><img src="' + escapeQuote(url) + '" alt="표시사항 사진" class="ing-photo"></button>';
+    var pick = document.getElementById('ingPhotoPick');
+    if (pick) pick.innerHTML = '<i class="bi bi-camera"></i> 사진 바꾸기';
+}
+
+/* 사진을 누르면 **왼쪽 패널**에 띄운다 — 오른쪽 폼과 나란히 두고 견주며 고친다.
+   상세가 혼자 열린 화면(왼쪽 패널이 없다)에서는 새 탭으로 연다. */
+function openPhotoBeside(url) {
+    if (typeof window.showIngredientPhotoInList === 'function') {
+        window.showIngredientPhotoInList(url, formValue('prdlst_nm') || '표시사항 사진');
+    } else {
+        window.open(url, '_blank', 'noopener');
+    }
+}
 
 function initLabelPhoto() {
     var row = document.getElementById('ingPhotoRow');
     if (!row || row.dataset.bound) return;
     row.dataset.bound = '1';
 
-    var ingredientId = row.dataset.ingredientId;
     var fileInput = document.getElementById('ingPhotoFile');
     var stage = document.getElementById('ingPhotoStage');
     var cropHost = document.getElementById('ingPhotoCrop');
@@ -935,6 +997,11 @@ function initLabelPhoto() {
     var hint = document.getElementById('ingPhotoHint');
     var picked = null;
     var crop = null;
+
+    row.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('.ing-photo-btn');
+        if (btn) { ev.preventDefault(); openPhotoBeside(btn.dataset.photoUrl); }
+    });
 
     document.getElementById('ingPhotoPick').onclick = function () { fileInput.click(); };
 
@@ -975,9 +1042,15 @@ function initLabelPhoto() {
             var rect = crop && crop.getRect();
             if (rect && window.imageCrop) file = await window.imageCrop.apply(file, rect);
 
+            /* 저장된 원료면 같은 요청으로 붙는다. 새 원료면 번호가 없어 읽기만
+               하고, 파일은 저장 뒤에 붙이려고 들고 있는다. */
+            var ingredientId = (document.getElementById('my_ingredient_id') || {}).value
+                || row.dataset.ingredientId || '';
             var fd = new FormData();
             fd.append('file', file);
-            var res = await fetch('/label/my-ingredient/' + ingredientId + '/photo/read/', {
+            if (ingredientId) fd.append('ingredient_id', ingredientId);
+
+            var res = await fetch('/label/my-ingredient/photo/read/', {
                 method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd
             });
             var body = await res.json();
@@ -985,13 +1058,19 @@ function initLabelPhoto() {
                 showSnackbar(body.error || '사진을 읽지 못했습니다.', 'error');
                 return;
             }
-            renderPhotoResult(body, ingredientId);
-            /* 사진은 read 에서 이미 붙었다 — 위쪽 그림을 바로 바꾼다 */
-            var cur = document.getElementById('ingPhotoCurrent');
-            if (cur && body.photo_url) {
-                cur.innerHTML = '<a href="' + escapeQuote(body.photo_url) + '" target="_blank" rel="noopener">'
-                    + '<img src="' + escapeQuote(body.photo_url) + '" alt="표시사항 사진" class="ing-photo"></a>';
+            if (ingredientId) {
+                pendingPhoto = null;
+                showPhotoCurrent(body.photo_url);
+            } else {
+                pendingPhoto = { file: file, fields: body.fields || {} };
+                /* 아직 붙지 않은 사진임을 미리보기로 보여 준다 */
+                var cur = document.getElementById('ingPhotoCurrent');
+                if (cur) {
+                    var tmp = URL.createObjectURL(file);
+                    cur.innerHTML = '<img src="' + tmp + '" alt="저장하면 붙습니다" class="ing-photo" title="저장하면 붙습니다">';
+                }
             }
+            renderPhotoResult(body.fields || {});
             stage.hidden = true;
         } catch (err) {
             console.error(err);
@@ -1003,13 +1082,12 @@ function initLabelPhoto() {
     };
 }
 
-function renderPhotoResult(body, ingredientId) {
+/* 읽은 값과 **지금 폼의 값**을 나란히 놓고, 빈 칸만 채우게 한다. */
+function renderPhotoResult(fields) {
     var result = document.getElementById('ingPhotoResult');
-    var fields = body.fields || {};
-    var current = body.current || {};
     var rows = Object.keys(PHOTO_LABELS).map(function (key) {
         var read = fields[key] || '';
-        var have = current[key] || '';
+        var have = formValue(PHOTO_TO_FORM[key]);
         var state = !read ? 'none' : (have ? 'keep' : 'fill');
         var note = state === 'none' ? '<span class="text-muted">사진에서 읽지 못함</span>'
                  : state === 'keep' ? '<span class="text-muted">이미 적혀 있어 그대로 둠</span>'
@@ -1025,7 +1103,7 @@ function renderPhotoResult(body, ingredientId) {
 
     result.hidden = false;
     result.innerHTML =
-        '<div class="small text-muted mb-1">사진에서 읽은 값입니다. 틀린 곳은 고친 뒤 적용하세요.</div>'
+        '<div class="small text-muted mb-1">사진에서 읽은 값입니다. 틀린 곳은 고친 뒤 채우세요. 채운 뒤 <strong>저장</strong>해야 남습니다.</div>'
         + '<table class="table table-sm mb-2 ph-table"><tbody>' + rows + '</tbody></table>'
         + '<div class="d-flex gap-2 justify-content-end">'
         + '<button type="button" class="btn v2-btn-sm btn-light" id="ingPhotoDismiss">닫기</button>'
@@ -1035,49 +1113,45 @@ function renderPhotoResult(body, ingredientId) {
     document.getElementById('ingPhotoDismiss').onclick = function () {
         result.hidden = true; result.innerHTML = '';
     };
-    document.getElementById('ingPhotoApply').onclick = async function () {
-        var btn = this;
-        var send = {};
+    document.getElementById('ingPhotoApply').onclick = function () {
+        var filled = 0;
         result.querySelectorAll('.ph-field').forEach(function (el) {
-            if (!el.disabled) send[el.dataset.key] = el.value.trim();
+            if (el.disabled) return;
+            var value = el.value.trim();
+            if (!value) return;
+            var column = PHOTO_TO_FORM[el.dataset.key];
+            if (formValue(column)) return;          // 그 사이 사람이 적었으면 그대로 둔다
+            if (setFormValue(column, value)) filled++;
         });
-        btn.disabled = true;
-        try {
-            var res = await fetch('/label/my-ingredient/' + ingredientId + '/photo/apply/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-                body: JSON.stringify({ fields: send })
-            });
-            var body = await res.json();
-            if (!res.ok || !body.success) {
-                showSnackbar(body.error || '적용하지 못했습니다.', 'error');
-                return;
-            }
-            /* 채워진 칸을 폼에도 바로 반영한다 — 새로고침 없이 눈으로 확인하게.
-               서버가 채운 칸 이름을 주므로 그것만 손댄다. */
-            var back = { prdlst_nm: 'ingredient_name', prdlst_dcnm: 'food_type', bssh_nm: 'manufacturer',
-                         prdlst_report_no: 'report_no', rawmtrl_nm: 'sub_ingredients', allergens: 'allergens' };
-            (body.filled || []).forEach(function (column) {
-                var key = back[column];
-                var input = document.getElementById(column) || document.querySelector('[name="' + column + '"]');
-                if (input && key && send[key] !== undefined) {
-                    input.value = send[key];
-                    input.classList.add('ph-just-filled');
-                    setTimeout(function () { input.classList.remove('ph-just-filled'); }, 2500);
-                }
-            });
-            showSnackbar((body.filled || []).length
-                ? (body.filled.length + '칸을 채웠습니다. 확인하고 저장하세요.')
-                : '채울 빈 칸이 없었습니다. 이미 적힌 값은 그대로 두었습니다.', 'info');
-            result.hidden = true; result.innerHTML = '';
-        } catch (err) {
-            console.error(err);
-            showSnackbar('적용 중 오류가 발생했습니다.', 'error');
-        } finally {
-            btn.disabled = false;
+        /* 표시명이 비면 원료명으로 — 라벨에 나가는 이름이 비면 안 된다 */
+        if (!formValue('ingredient_display_name') && formValue('prdlst_nm')) {
+            if (setFormValue('ingredient_display_name', formValue('prdlst_nm'))) filled++;
         }
+        showSnackbar(filled
+            ? (filled + '칸을 채웠습니다. 확인하고 저장하세요.')
+            : '채울 빈 칸이 없었습니다. 이미 적힌 값은 그대로 두었습니다.', 'info');
+        result.hidden = true; result.innerHTML = '';
     };
 }
+
+/* 새 원료를 저장한 뒤 — 들고 있던 사진을 그 번호에 붙인다. */
+window.IngredientPhoto = window.IngredientPhoto || {};
+window.IngredientPhoto.afterSave = function (ingredientId) {
+    if (!pendingPhoto || !ingredientId) return;
+    var held = pendingPhoto;
+    pendingPhoto = null;
+    var fd = new FormData();
+    fd.append('file', held.file);
+    fd.append('fields', JSON.stringify(held.fields || {}));
+    fetch('/label/my-ingredient/' + ingredientId + '/photo/', {
+        method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd
+    }).then(function (r) { return r.json(); })
+      .then(function (body) {
+          if (body && body.success) showPhotoCurrent(body.photo_url);
+          else showSnackbar('사진을 붙이지 못했습니다. 다시 올려 주세요.', 'warning');
+      })
+      .catch(function () { showSnackbar('사진을 붙이지 못했습니다. 다시 올려 주세요.', 'warning'); });
+};
 
 // AJAX 재로드 시 재초기화 진입점
 window.IngredientDetailPartial.reinit = function() {

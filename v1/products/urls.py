@@ -162,7 +162,6 @@ urlpatterns = [
     # 불러오기에서 읽은 사진을 포장지 시안으로 남긴다
     path('labels/<int:label_id>/design-proof/', views.design_proof_upload,
          name='design_proof_upload'),
-    path('labels/<int:label_id>/ingredient-photo/upload/', views.ingredient_photo_upload, name='ingredient_photo_upload'),
     path('labels/<int:label_id>/ingredient/to-bom/', views.ingredient_to_bom, name='ingredient_to_bom'),
 
     # 표시사항의 원재료명 한 줄 → 원료별 BOM 행 (미리보기 후 확인)

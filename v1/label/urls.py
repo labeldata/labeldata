@@ -110,11 +110,11 @@ urlpatterns = [
     # --- [신규] 엑셀 다운로드/업로드 URL 추가 ---
     path('my-ingredients/download/', views.download_my_ingredients_excel, name='download_my_ingredients_excel'),
     path('my-ingredients/upload/', views.upload_my_ingredients_excel, name='upload_my_ingredients_excel'),
-    # 원료 표시사항 사진 — 올리고(read) 읽은 값으로 빈 칸을 채운다(apply)
-    path('my-ingredient/<int:ingredient_id>/photo/read/',
+    # 원료 표시사항 사진 — 읽고(read, 번호가 오면 붙이기까지) · 붙이기만(attach)
+    path('my-ingredient/photo/read/',
          views.my_ingredient_photo_read, name='my_ingredient_photo_read'),
-    path('my-ingredient/<int:ingredient_id>/photo/apply/',
-         views.my_ingredient_photo_apply, name='my_ingredient_photo_apply'),
+    path('my-ingredient/<int:ingredient_id>/photo/',
+         views.my_ingredient_photo_attach, name='my_ingredient_photo_attach'),
     
     # 저장된 문구 API 패턴
     path('api/auto-fill/', views.auto_fill_api, name='auto_fill_api'),
