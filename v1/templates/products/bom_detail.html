@@ -84,17 +84,6 @@ body.in-iframe .bom-page-header { display: none !important; }
                     <i class="bi bi-file-earmark-arrow-down"></i> 붙여넣기 양식
                 </a>
                 {% if can_edit %}
-                {% comment %}
-                  원료 봉지를 찍어 그 자리에서 한 줄을 만든다.
-
-                  문서함까지 가서 올리고 판독해야 했다 — 배합표를 채우다 말고
-                  다른 탭으로 건너갔다가 돌아오는 길이다. 기본정보 탭의
-                  '불러오기' 와 같은 얼굴로, 하던 자리에 둔다.
-                {% endcomment %}
-                <button class="btn btn-outline-primary v2-btn-sm" onclick="openIngredientPhotoUpload()"
-                        title="원료 표시사항 사진을 올려 판독하고 이 표에 줄을 더합니다">
-                    <i class="bi bi-camera"></i> 사진으로 등록
-                </button>
                 {# 되돌릴 길이 우클릭 → 행 삭제뿐이었다. 스무 줄이면 스무 번이다 #}
                 <button class="btn btn-outline-danger v2-btn-sm" onclick="clearAllRows()"
                         title="표를 통째로 비웁니다. 표에서 전체를 고른 뒤 DEL 을 눌러도 됩니다">
@@ -151,6 +140,24 @@ body.in-iframe .bom-page-header { display: none !important; }
                     머리글을 끌어 칸 순서를 바꿀 수 있습니다
                 </div>
                 <div class="d-flex align-items-center gap-2 ms-3 text-nowrap">
+                    {% comment %}
+                      **머리글에 두었더니 아무도 못 봤다.**
+
+                      제품 화면 안에서는 배합표가 iframe 으로 들어오고, 그때
+                      `body.in-iframe .bom-page-header` 가 머리글을 통째로
+                      감춘다. 배합 탭에서 쓰라고 만든 단추가 배합 탭에서만
+                      안 보였다.
+
+                      늘 보이는 이 줄로 옮긴다. 배합표를 채우는 사람의 눈이
+                      머무는 자리이기도 하다.
+                    {% endcomment %}
+                    {% if can_edit %}
+                    <button class="btn btn-outline-primary v2-btn-sm" onclick="openIngredientPhotoUpload()"
+                            title="원료 표시사항 사진을 올려 판독하고 이 표에 줄을 더합니다">
+                        <i class="bi bi-camera"></i> 사진으로 등록
+                    </button>
+                    <div class="vr"></div>
+                    {% endif %}
                     {% comment %}
                       표시명 기준은 원료마다 따로 두지만, 한 배합비 안에서는
                       대개 하나로 간다. 줄을 고를 때마다 상세를 열어 다시

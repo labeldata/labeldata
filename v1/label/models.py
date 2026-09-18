@@ -93,6 +93,25 @@ class MyIngredient(models.Model):
     #my_ingredient_key = models.CharField(max_length=50, unique=True, editable=False, verbose_name="내 원료키", primary_key=True)
     #my_ingredient_name = models.CharField(max_length=200, verbose_name="내 원료명")
     
+    # 원료 봉지의 표시사항 사진.
+    #
+    # **사진은 원료에 붙는다. 제품이 아니다.**
+    #
+    # 예전에는 제품 문서함(ProductDocument)에 올리고 metadata 로 BOM 줄을
+    # 가리켰다. 그런데 ProductDocument.label 은 필수라 사진이 늘 어느 한
+    # 제품에 매였고, 같은 크림치즈를 다른 제품에서 쓰면 **같은 사진을 또
+    # 올려야 했다.** 원료는 '한 번 적고 여러 제품에서 쓰는' 것인데 사진만
+    # 제품마다 따로였다.
+    #
+    # 올릴 때 쓸 곳만 잘라 보낸다(image_crop.js). 원본은 남기지 않는다 —
+    # 다시 찍는 비용이 낮고, 원본까지 두면 저장고가 두 배로 분다.
+    label_photo = models.ImageField(
+        upload_to='ingredient_photos/%Y/%m/', null=True, blank=True,
+        verbose_name="표시사항 사진")
+    # 그 사진에서 읽어 낸 값. 무엇을 보고 이 원료를 만들었는지 되짚는 자리다.
+    label_photo_fields = models.JSONField(null=True, blank=True,
+                                          verbose_name="사진에서 읽은 값")
+
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", null=True, blank=True)
     prdlst_nm = models.CharField(max_length=200, verbose_name="원료명", null=True, blank=True)
     bssh_nm = models.CharField(max_length=100, verbose_name="제조사명", null=True, blank=True)

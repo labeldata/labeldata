@@ -13582,43 +13582,47 @@ class 무엇을_올리는지부터_고르게_한다(TestCase):
         return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
                 ).read_text(encoding='utf-8')
 
+    def _pick_step(self):
+        """첫 걸음(구분 고르기)만. 글자 수로 재면 두 번째 걸음까지 넘어간다."""
+        html = self._html()
+        i = html.index('id="upload-step-pick"')
+        return html[i:html.index('id="upload-step-form"')]
+
     def test_증빙서류만_여기서_올린다(self):
         """
         원료 사진은 성격도 가는 곳도 다르다 — 서류는 제품에 딸린 것이고,
         원료 사진은 원재료 한 건을 만들어 배합표로 보내는 일이다. 같은 창에
         두면 "문서를 올리러 왔는데 왜 배합표가 나오지" 가 된다.
         """
-        html = self._html()
-        i = html.index('id="upload-step-pick"')
-        block = html[i:i + 3000]
+        block = self._pick_step()
         self.assertIn('증빙 서류', block)
         # 가르는 기준은 서버가 정한 그 플래그다
         self.assertIn('{% if not dtype.multiple_yn %}', block)
         # '여러 건' 구분을 여기서 고를 수 있게 두지 않는다
         self.assertNotIn('{% if dtype.multiple_yn %}', block)
 
-    def test_어디서_올리는지_길을_남긴다(self):
-        """여기서 찾던 사람이 길을 잃지 않게 한다."""
-        html = self._html()
-        i = html.index('id="upload-step-pick"')
-        block = html[i:i + 3000]
-        self.assertIn('배합(BOM) 탭', block)
-        self.assertIn('사진으로 등록', block)
+    def test_원료_사진_자리를_아예_두지_않는다(self):
+        """
+        만든 지 하루가 안 된 기능이라 여기서 찾던 사람이 없다. 안내를 남기면
+        없앤 것을 다시 설명하는 줄만 는다.
+        """
+        block = self._pick_step()
+        self.assertNotIn('원료 사진', block)
+        self.assertNotIn('원료 정보', block)
 
     def test_구분이_버튼으로_늘어선다(self):
-        html = self._html()
-        i = html.index('id="upload-step-pick"')
-        block = html[i:i + 2600]
+        block = self._pick_step()
         self.assertIn('upload-pick-btn', block)
         self.assertIn('upload-pick-grid', block)
 
-    def test_두_갈래를_좌우로_갈라_놓는다(self):
-        """위아래로 두면 같은 목록의 앞뒤로 읽힌다."""
-        html = self._html()
-        i = html.index('id="upload-step-pick"')
-        block = html[i:i + 2600]
-        self.assertIn('col-md-7', block)
-        self.assertIn('col-md-5', block)
+    def test_증빙_서류_한_갈래만_남는다(self):
+        """
+        원료 사진을 배합 탭으로 옮기고 나니 갈래가 하나다. 한 갈래를 굳이
+        반으로 갈라 두면 오른쪽이 빈 채로 남는다.
+        """
+        block = self._pick_step()
+        self.assertIn('col-12', block)
+        self.assertNotIn('col-md-5', block)
 
     def test_구분이_이미_정해졌으면_첫_걸음을_건너뛴다(self):
         """슬롯의 [+] 로 열면 고를 것이 없다. 물으면 그것이 곧 군더더기다."""
@@ -14130,3 +14134,105 @@ class 사진에서_쓸_곳만_잘라_올린다(TestCase):
         base = (Path(dj.BASE_DIR) / 'templates/base_v2.html'
                 ).read_text(encoding='utf-8')
         self.assertIn('js/image_crop.js', base)
+
+
+class 사진은_원료에_붙는다(TestCase):
+    """
+    예전에는 제품 문서함(ProductDocument)에 올리고 metadata 로 BOM 줄을
+    가리켰다. 그런데 `ProductDocument.label` 은 필수라 사진이 늘 어느 한
+    제품에 매였고, 같은 크림치즈를 다른 제품에서 쓰면 **같은 사진을 또 올려야
+    했다.** 원료는 '한 번 적고 여러 제품에서 쓰는' 것인데 사진만 제품마다
+    따로였다.
+    """
+
+    def test_원료가_제_사진을_들고_있다(self):
+        from v1.label.models import MyIngredient
+
+        names = {f.name for f in MyIngredient._meta.get_fields()}
+        self.assertIn('label_photo', names)
+        self.assertIn('label_photo_fields', names)
+
+    def test_옛_원료_사진을_문서함에서_걷어낸다(self):
+        """
+        만든 지 하루가 안 된 기능이라 쓴 사람이 없다. 그대로 두면 사진이 두
+        군데에 있는 채로 굳는다 — 어느 쪽이 참인지 다음 사람이 알 수 없다.
+        """
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        from v1.label.models import MyLabel
+        from v1.products.models import DocumentType, ProductDocument
+
+        user = User.objects.create_user(username='oldphoto', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='과자',
+                                       delete_YN='N')
+        dtype = DocumentType.objects.create(
+            type_code='INGREDIENT_LABEL', type_name='원료 표시사항',
+            multiple_yn=True, display_order=90)
+        keep = DocumentType.objects.create(
+            type_code='REPORT_MANUFACTURING', type_name='품목제조보고서',
+            display_order=1)
+
+        doc = ProductDocument.objects.create(
+            label=label, document_type=dtype, active_yn=True,
+            original_filename='크림치즈.jpg',
+            metadata={'ingredient_bom_id': 7, 'source': 'x'})
+        other = ProductDocument.objects.create(
+            label=label, document_type=keep, active_yn=True,
+            original_filename='보고서.pdf')
+
+        mod = importlib.import_module(
+            'v1.label.migrations.0034_ingredient_label_photo')
+        mod.clear_old_ingredient_photos(django_apps, None)
+
+        doc.refresh_from_db()
+        other.refresh_from_db()
+        self.assertFalse(doc.active_yn)
+        self.assertNotIn('ingredient_bom_id', doc.metadata or {})
+        # 다른 구분은 건드리지 않는다
+        self.assertTrue(other.active_yn)
+
+    def test_파일은_지우지_않는다(self):
+        """잘못됐다면 그 줄을 다시 세우면 된다."""
+        import importlib
+
+        src = importlib.import_module(
+            'v1.label.migrations.0034_ingredient_label_photo').__file__
+        text = open(src, encoding='utf-8').read()
+        self.assertIn('active_yn = False', text)
+        self.assertNotIn('.delete()', text)
+
+
+class 사진_등록_단추가_배합_탭에서_보인다(TestCase):
+    """
+    **머리글에 두었더니 아무도 못 봤다.** 제품 화면 안에서는 배합표가 iframe
+    으로 들어오고, 그때 `body.in-iframe .bom-page-header` 가 머리글을 통째로
+    감춘다. 배합 탭에서 쓰라고 만든 단추가 배합 탭에서만 안 보였다.
+    """
+
+    def _bom(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+
+    def test_감춰지는_머리글에_두지_않는다(self):
+        bom = self._bom()
+        head = bom.index('class="bom-page-header"')
+        tail = bom.index('class="bom-workspace"')
+        self.assertNotIn('openIngredientPhotoUpload()', bom[head:tail])
+
+    def test_늘_보이는_줄에_있다(self):
+        bom = self._bom()
+        i = bom.index('class="bom-workspace"')
+        self.assertIn('openIngredientPhotoUpload()', bom[i:i + 3000])
+
+    def test_고칠_수_있는_사람에게만_보인다(self):
+        bom = self._bom()
+        head = bom.index('openIngredientPhotoUpload()')
+        before = bom[:head]
+        opened = before.rindex('{% if can_edit %}')
+        self.assertNotIn('{% endif %}', before[opened:])
