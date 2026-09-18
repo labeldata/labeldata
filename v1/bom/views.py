@@ -381,13 +381,16 @@ def bom_data_api(request, label_id):
     try:
         from v1.products.models import ProductDocument
 
-        for doc_id, meta in (ProductDocument.objects
-                             .filter(label=label, active_yn=True,
-                                     metadata__ingredient_bom_id__isnull=False)
-                             .values_list('document_id', 'metadata')):
-            bom_id = (meta or {}).get('ingredient_bom_id')
+        for doc in (ProductDocument.objects
+                    .filter(label=label, active_yn=True,
+                            metadata__ingredient_bom_id__isnull=False)
+                    .only('document_id', 'metadata', 'file')):
+            bom_id = (doc.metadata or {}).get('ingredient_bom_id')
             if bom_id:
-                photo_of[bom_id] = doc_id
+                # 주소까지 함께 준다 — 배합표는 iframe 안이라 문서함이 들고
+                # 있는 목록에 닿을 수 없다. 여기서 안 주면 사진을 못 그린다.
+                photo_of[bom_id] = (doc.document_id,
+                                    doc.file.url if doc.file else '')
     except Exception:
         # 사진 표시는 덤이다. 못 붙여도 배합표는 그려져야 한다.
         photo_of = {}
@@ -419,7 +422,8 @@ def bom_data_api(request, label_id):
         data.append({
             'bom_id': bom.bom_id,
             # 이 줄을 만든 원료 표시사항 사진. 없으면 None.
-            'photo_document_id': photo_of.get(bom.bom_id),
+            'photo_document_id': (photo_of.get(bom.bom_id) or (None, ''))[0],
+            'photo_url': (photo_of.get(bom.bom_id) or (None, ''))[1],
             'ingredient_name': bom.ingredient_name or ingredient_name,
             'ingredient_code': ingredient_code,
             'source_type': source_type,

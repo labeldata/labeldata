@@ -13823,9 +13823,9 @@ class 사진에서_온_배합_줄을_되짚을_수_있다(TestCase):
 
         src = (Path(dj.BASE_DIR) / 'bom/views.py').read_text(encoding='utf-8')
         i = src.index('photo_of = {}')
-        block = src[i:i + 800]
+        block = src[i:i + 1000]
         self.assertIn('metadata__ingredient_bom_id__isnull=False', block)
-        self.assertIn('values_list', block)
+        self.assertIn('.only(', block)
 
     def test_못_붙여도_배합표는_그려진다(self):
         """사진 표시는 덤이다."""
@@ -13837,8 +13837,12 @@ class 사진에서_온_배합_줄을_되짚을_수_있다(TestCase):
         i = src.index('photo_of = {}')
         self.assertIn('except Exception:', src[i:i + 900])
 
-    def test_사진_단추가_부모에게_이른다(self):
-        """배합표는 iframe 안이고 문서함은 부모에 있다."""
+    def test_사진_단추가_그_자리에서_사진을_편다(self):
+        """
+        보고 싶은 것은 사진이지 문서함이 아니다. 탭을 옮겨 놓으면 배합표로
+        돌아오는 길을 사용자가 다시 찾아야 하고, 정작 사진은 문서를 또 눌러야
+        나온다.
+        """
         from pathlib import Path
 
         from django.conf import settings as dj
@@ -13847,8 +13851,25 @@ class 사진에서_온_배합_줄을_되짚을_수_있다(TestCase):
                 ).read_text(encoding='utf-8')
         i = html.index("closest('.bom-photobtn')")
         block = html[i:i + 700]
-        self.assertIn("type: 'openDocument'", block)
-        self.assertIn('window.location.origin', block)
+        self.assertIn('showRowPhoto(', block)
+        self.assertNotIn("type: 'openDocument'", block)
+
+    def test_사진_아래에_원료로_가는_길이_있다(self):
+        """
+        고쳐야 할 자리는 배합표가 아니라 원료다 — 여기서 고치면 이 제품에만
+        남는다. 다만 손으로 적은 줄은 갈 곳이 없으므로 단추를 감춘다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                ).read_text(encoding='utf-8')
+        i = html.index('function showRowPhoto(')
+        block = html[i:i + 2600]
+        self.assertIn('원료 관리로 이동', block)
+        self.assertIn("meta.source_type === 'ingredient'", block)
+        self.assertIn('link.hidden = true', block)
 
     def test_부모가_그_문서를_펼친다(self):
         from pathlib import Path

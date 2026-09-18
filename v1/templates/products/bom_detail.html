@@ -1001,7 +1001,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 return '<span class="bom-rowno">' + (row + 1) + '</span>'
                      + (docId
                         ? '<button type="button" class="bom-rowbtn bom-photobtn"'
-                          + ' data-doc="' + docId + '"'
+                          + ' data-doc="' + docId + '" data-row="' + row + '"'
                           + ' title="이 줄을 만든 원료 표시사항 사진 보기">'
                           + '<i class="bi bi-image"></i></button>'
                         : '')
@@ -2032,6 +2032,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 rowData._meta = {
                     bom_id: item.bom_id || null,
                     photo_document_id: item.photo_document_id || null,
+                    photo_url: item.photo_url || '',
                     source_type: normalizeSourceType(item.source_type),
                     source_id: item.source_id || null,
                     shared_owner: item.shared_owner || '',
@@ -2711,14 +2712,13 @@ body.in-iframe .bom-page-header { display: none !important; }
             if (photo) {
                 ev.preventDefault();
                 ev.stopPropagation();
-                /* 배합표는 iframe 안이다. 문서함은 부모에 있으므로 부모에게
-                   이른다 — 기본정보 탭으로 원재료명을 넘길 때 쓰는 그 길이다. */
-                if (window.parent && window.parent !== window) {
-                    window.parent.postMessage({
-                        type: 'openDocument',
-                        documentId: Number(photo.dataset.doc)
-                    }, window.location.origin);
-                }
+                /* **문서함으로 곧장 보내지 않는다.**
+                 *
+                 * 보고 싶은 것은 사진이지 문서함이 아니다. 탭을 옮겨 놓으면
+                 * 배합표로 돌아오는 길을 사용자가 다시 찾아야 하고, 정작 사진은
+                 * 문서를 또 눌러야 나온다. 여기서 바로 펼쳐 보여 준다. */
+                showRowPhoto(Number(photo.dataset.doc),
+                             Number(photo.dataset.row));
                 return;
             }
 
@@ -2762,6 +2762,65 @@ body.in-iframe .bom-page-header { display: none !important; }
             return;
         }
     });
+
+    /*
+     * 그 줄을 만든 사진을 **여기서 펼쳐 본다.**
+     *
+     * 값이 맞는지 보려면 사진과 표를 나란히 놓아야 한다. 문서함으로 건너가면
+     * 표가 안 보이고, 돌아오는 길도 사용자가 찾아야 한다.
+     *
+     * 아래에 [원료 관리로 이동] 을 둔다 — 사진에서 읽은 값은 그 원료의 것이고,
+     * 고쳐야 할 자리는 배합표가 아니라 원료다(여기서 고치면 이 제품에만 남는다).
+     */
+    function showRowPhoto(docId, visualRow) {
+        let modalEl = document.getElementById('bomRowPhotoModal');
+        if (!modalEl) {
+            modalEl = document.createElement('div');
+            modalEl.id = 'bomRowPhotoModal';
+            modalEl.className = 'modal fade';
+            modalEl.tabIndex = -1;
+            modalEl.innerHTML =
+                '<div class="modal-dialog modal-xl modal-dialog-centered">'
+                + '<div class="modal-content">'
+                + '<div class="modal-header"><h5 class="modal-title">원료 표시사항 사진</h5>'
+                + '<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>'
+                + '<div class="modal-body"></div>'
+                + '<div class="modal-footer">'
+                + '<a class="btn btn-outline-primary v2-btn-sm" id="bomRowPhotoToIngredient" href="#">'
+                + '<i class="bi bi-box-seam"></i> 원료 관리로 이동</a>'
+                + '<button type="button" class="btn btn-light v2-btn-sm" data-bs-dismiss="modal">닫기</button>'
+                + '</div></div></div>';
+            document.body.appendChild(modalEl);
+        }
+
+        const row = rowObjectAt(visualRow) || {};
+        const meta = row._meta || {};
+        const name = row.ingredient_name || '원료';
+
+        const link = modalEl.querySelector('#bomRowPhotoToIngredient');
+        /* 원료 마스터에 붙어 있는 줄일 때만 건너갈 수 있다. 손으로 적은 줄은
+           갈 곳이 없으므로 단추를 감춘다 — 눌러서 빈 화면을 만나게 하지 않는다. */
+        if (meta.source_type === 'ingredient' && meta.source_id) {
+            link.hidden = false;
+            link.href = '{% url "label:my_ingredient_list_combined" %}?ingredient_id='
+                + encodeURIComponent(meta.source_id);
+            link.target = '_blank';
+        } else {
+            link.hidden = true;
+        }
+
+        const body = modalEl.querySelector('.modal-body');
+        body.innerHTML = '<div class="text-muted small mb-2">'
+            + '이 줄(<strong>' + (name || '') + '</strong>)을 만든 사진입니다. '
+            + '표의 값과 견줘 보세요.</div>';
+        const img = document.createElement('img');
+        img.src = meta.photo_url || '';
+        img.alt = name;
+        img.style.cssText = 'max-width:100%;max-height:70vh;display:block;margin:0 auto;';
+        body.appendChild(img);
+
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
 
     window.openIngredientPhotoUpload = function () {
         if (window.parent && window.parent !== window) {
