@@ -1307,8 +1307,24 @@ async function submitImportCompanyDoc() {
         });
     }
 
+    /*
+     * **고르기 칸의 체크박스만** 가리킨다.
+     *
+     * 예전에는 `#compact-doc-body input[type=checkbox]` 로 쓸어 담았다. 문서
+     * 정보를 행 아래에 펼치게 되면서 그 안의 '만료 30일 전 알림' 토글도 같은
+     * tbody 에 들어왔고, 그것이 켜져 있으면 **고른 적 없는 한 건이 더 세어졌다**
+     * (셋을 골랐는데 "4 개 선택됨").
+     *
+     * 세는 것만 틀린 것이 아니다. 지우기·내려받기는 체크된 것의 data-doc-id 를
+     * 모으는데, 펼친 행에는 그 값이 없어 **null 이 섞여 들어갔다.**
+     *
+     * 앞으로 펼친 영역에 무엇을 더 넣든 이 선택자는 흔들리지 않는다.
+     */
+    const DOC_PICK =
+        '#compact-doc-body > tr.document-row > td.col-checkbox input[type="checkbox"]';
+
     function updateCompactSelectionState() {
-        const selected = document.querySelectorAll('#compact-doc-body input[type="checkbox"]:checked');
+        const selected = document.querySelectorAll(DOC_PICK + ':checked');
         const countBadge = document.getElementById('compact-selected-count');
         const actionBar = document.getElementById('compact-action-bar');
         if (countBadge) {
@@ -1320,7 +1336,7 @@ async function submitImportCompanyDoc() {
     }
 
     // 체크박스 선택 시 행 강조
-    document.querySelectorAll('#compact-doc-body input[type="checkbox"]').forEach(cb => {
+    document.querySelectorAll(DOC_PICK).forEach(cb => {
         cb.addEventListener('change', function() {
             const row = this.closest('tr');
             if (row) {
@@ -1436,7 +1452,7 @@ async function submitImportCompanyDoc() {
 
     // 액션 바 핸들러
     function getSelectedDocIds() {
-        return Array.from(document.querySelectorAll('#compact-doc-body input[type="checkbox"]:checked'))
+        return Array.from(document.querySelectorAll(DOC_PICK + ':checked'))
             .map(cb => cb.closest('tr').getAttribute('data-doc-id'))
             .filter(Boolean);
     }

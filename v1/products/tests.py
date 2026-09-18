@@ -13290,3 +13290,41 @@ class 여러_장을_한꺼번에_올린다(TestCase):
         js = self._js()
         self.assertIn('function isUploadable(file)', js)
         self.assertEqual(js.count('UPLOAD_ALLOWED_EXTS.indexOf(ext) === -1'), 1)
+
+
+class 고른_문서만_센다(TestCase):
+    """
+    셋을 골랐는데 **"4 개 선택됨"** 이 떴다.
+
+    문서 정보를 행 아래에 펼치게 되면서 그 안의 '만료 30일 전 알림' 토글도
+    같은 tbody 에 들어왔다. 그런데 세는 쪽은 `#compact-doc-body
+    input[type=checkbox]` 로 쓸어 담고 있어서, 그 토글이 켜져 있으면 고른 적
+    없는 한 건이 더 세어졌다.
+
+    세는 것만 틀린 것이 아니다. 지우기·내려받기는 체크된 것의 data-doc-id 를
+    모으는데 펼친 행에는 그 값이 없어 **null 이 섞여 들어갔다.**
+    """
+
+    def _text(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+
+    def test_고르기_칸의_체크박스만_가리킨다(self):
+        text = self._text()
+        self.assertIn(
+            "'#compact-doc-body > tr.document-row > td.col-checkbox input[type=\"checkbox\"]'",
+            text)
+
+    def test_tbody_를_통째로_쓸어_담지_않는다(self):
+        text = self._text()
+        self.assertNotIn('#compact-doc-body input[type="checkbox"]', text)
+
+    def test_선택자를_한_곳에만_적는다(self):
+        """세 자리가 같은 규칙을 쓴다. 한쪽만 고쳐지면 또 어긋난다."""
+        text = self._text()
+        self.assertEqual(text.count('const DOC_PICK'), 1)
+        self.assertGreaterEqual(text.count('DOC_PICK'), 4)
