@@ -13108,8 +13108,8 @@ class 오래_걸리는_판독은_기다린다고_말한다(TestCase):
 
     def test_JSON_이_아닌_응답의_까닭을_남긴다(self):
         text = self._text()
-        i = text.index('window.previewIngredientPhoto = async function')
-        block = text[i:i + 2500]
+        i = text.index('function fetchIngredientPreview(')
+        block = text[i:i + 1200]
         self.assertIn('JSON.parse(text)', block)
         self.assertIn('res.status', block)
 
@@ -13365,3 +13365,81 @@ class 같은_이름의_문서를_말해_주되_막지_않는다(TestCase):
         js = self._js()
         i = js.index('function resetUploadForm() {')
         self.assertIn('warnDuplicateNames([])', js[i:i + 400])
+
+
+class 올린_사진을_줄_세워_확인한다(TestCase):
+    """
+    올린 사람은 사진을 쌓으러 온 것이 아니라 **BOM 에 원료를 넣으러** 온 것이다.
+    그런데 판독은 한 장씩 다시 찾아 눌러야 했다 — 다섯 장이면 다섯 번이다.
+
+    올린 장들을 줄 세워 한 장씩 연다. 앞 장을 보는 동안 다음 장을 미리 읽으므로
+    기다림이 겹치지 않는다.
+    """
+
+    def _docs(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_여러_건_구분을_올리면_줄을_남긴다(self):
+        js = self._js()
+        i = js.index("sessionStorage.setItem('ingredientQueue'")
+        # '여러 건' 구분일 때만 남긴다
+        self.assertIn("dataset.multiple === '1'", js[max(0, i - 400):i])
+
+    def test_꺼내자마자_지운다(self):
+        """
+        남겨 두면 새로고침할 때마다 같은 줄이 다시 서고, 이미 등록한 원료를
+        또 등록하라고 묻게 된다.
+        """
+        docs = self._docs()
+        i = docs.index("sessionStorage.getItem('ingredientQueue')")
+        block = docs[i:i + 300]
+        self.assertIn("removeItem('ingredientQueue')", block)
+
+    def test_앞_장을_보는_동안_다음_장을_미리_읽는다(self):
+        docs = self._docs()
+        i = docs.index('function nextInIngredientQueue()')
+        block = docs[i:i + 600]
+        self.assertIn('if (ingQueue.length) fetchIngredientPreview(ingQueue[0])', block)
+
+    def test_같은_문서를_두_번_청하지_않는다(self):
+        docs = self._docs()
+        i = docs.index('function fetchIngredientPreview(')
+        block = docs[i:i + 400]
+        self.assertIn('if (!ingPrefetch[docId])', block)
+
+    def test_한_장이_실패해도_줄이_멈추지_않는다(self):
+        """
+        다섯 장 중 셋째가 안 읽힌다고 넷째·다섯째를 버리면 처음부터 다시 해야
+        한다.
+        """
+        docs = self._docs()
+        i = docs.index('window.previewIngredientPhoto = async function')
+        block = docs[i:i + 2200]
+        self.assertGreaterEqual(block.count('if (queued) nextInIngredientQueue();'), 2)
+
+    def test_등록하면_다음_장이_열린다(self):
+        docs = self._docs()
+        i = docs.index('async function applyIngredientPhoto(')
+        block = docs[i:i + 1600]
+        self.assertIn('nextInIngredientQueue();', block)
+
+    def test_한_장짜리에는_건너뛰기를_두지_않는다(self):
+        """창을 닫는 것과 같으므로 단추가 하나 더 있을 까닭이 없다."""
+        docs = self._docs()
+        i = docs.index("foot.querySelector('.ing-skip')?.remove();")
+        block = docs[i:i + 900]
+        self.assertIn('if (queued) {', block)
+        self.assertIn('건너뛰기', block)

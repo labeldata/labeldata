@@ -1707,6 +1707,27 @@ async function submitImportCompanyDoc() {
         });
     })();
 
+    /* 원료 사진을 여러 장 올리고 새로고침한 뒤 — 줄을 세워 한 장씩 연다.
+     *
+     * 세션에서 꺼내자마자 지운다. 남겨 두면 새로고침할 때마다 같은 줄이 다시
+     * 서고, 이미 등록한 원료를 또 등록하라고 묻게 된다. */
+    (function () {
+        let raw = null;
+        try {
+            raw = sessionStorage.getItem('ingredientQueue');
+            if (raw) sessionStorage.removeItem('ingredientQueue');
+        } catch (e) { return; }
+        if (!raw) return;
+
+        let ids = [];
+        try { ids = JSON.parse(raw) || []; } catch (e) { return; }
+        if (!ids.length) return;
+
+        window.addEventListener('load', function () {
+            setTimeout(function () { window.startIngredientQueue(ids); }, 200);
+        });
+    })();
+
     window.pickSpecNutritionDoc = function () {
         const docs = Object.values(documentData || {}).filter(looksLikeSpecSheet);
 
@@ -1962,6 +1983,68 @@ async function submitImportCompanyDoc() {
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 
+    /* ─────────────────────────────────────────────────────────────────
+       줄세우기 — 여러 장을 올린 뒤 한 장씩 확인하고 확정한다
+
+       올린 사람은 사진을 쌓으러 온 것이 아니라 BOM 에 원료를 넣으러 온 것이다.
+       그런데 판독을 한 장씩 다시 찾아 눌러야 했다 — 다섯 장이면 다섯 번이다.
+
+       **앞 장을 보는 동안 다음 장을 미리 읽는다.** 판독은 사진을 통째로 모델에
+       보내는 일이라 장당 몇 초에서 수십 초다. 다섯 장이면 몇 분인데, 사용자가
+       1장째를 고치는 동안 2장째를 미리 보내 두면 그 기다림이 거의 사라진다.
+       작업 큐 같은 것은 필요 없다 — 요청 하나를 먼저 띄워 두면 된다.
+       ───────────────────────────────────────────────────────────────── */
+    let ingQueue = [];          // 아직 확인하지 않은 문서
+    let ingQueueTotal = 0;      // 이번 줄의 전체 장수
+    const ingPrefetch = {};     // 문서 -> 판독 요청(Promise)
+
+    /* 판독을 한 번 청한다. 같은 문서를 두 번 청하지 않는다 — 미리 읽어 둔 것이
+       있으면 그것을 그대로 쓴다. */
+    function fetchIngredientPreview(docId) {
+        if (!ingPrefetch[docId]) {
+            ingPrefetch[docId] = fetch(
+                `/products/documents/${docId}/ingredient-photo/preview/`
+            ).then(async (res) => {
+                const text = await res.text();
+                try {
+                    return { status: res.status, ok: res.ok, body: JSON.parse(text) };
+                } catch (parseError) {
+                    console.error('판독 응답이 JSON 이 아니다', res.status, text.slice(0, 500));
+                    return { status: res.status, ok: false, body: null };
+                }
+            }).catch((err) => {
+                console.error(err);
+                return { status: 0, ok: false, body: null };
+            });
+        }
+        return ingPrefetch[docId];
+    }
+
+    window.startIngredientQueue = function (ids) {
+        const list = (ids || []).filter(id => documentData[id]);
+        if (!list.length) return;
+        ingQueue = list.slice();
+        ingQueueTotal = list.length;
+        nextInIngredientQueue();
+    };
+
+    function nextInIngredientQueue() {
+        if (!ingQueue.length) {
+            if (ingQueueTotal > 1) {
+                /* 'success' 가 아니라 'info' 다. 등록했다는 말은 장마다 이미
+                   했고, 이것은 줄이 끝났다는 안내다. */
+                showSnackbar(
+                    `${ingQueueTotal}장을 모두 확인했습니다.`, 'info');
+            }
+            ingQueueTotal = 0;
+            return;
+        }
+        const docId = ingQueue.shift();
+        // 다음 장을 미리 읽어 둔다. 기다리지 않는다 — 결과는 그때 쓴다.
+        if (ingQueue.length) fetchIngredientPreview(ingQueue[0]);
+        previewIngredientPhoto(docId);
+    }
+
     window.previewIngredientPhoto = async function (docId) {
         /* **기다리는 동안 화면이 죽은 것처럼 보였다.**
          *
@@ -1972,31 +2055,31 @@ async function submitImportCompanyDoc() {
          *
          * 검색에 쓰는 화면 한가운데 표시를 그대로 쓴다(search_busy.js).
          * 오래 기다리게 하는 자리는 같은 얼굴로 말해야 한다. */
+        const queued = ingQueueTotal > 1;
+        const at = queued ? ingQueueTotal - ingQueue.length : 0;
+
         const busy = window.showSearchBusy;
-        if (busy) busy('사진에서 원료 정보를 읽는 중입니다',
-                       '사진 한 장에 몇 초에서 수십 초가 걸립니다. 잠시만 기다려 주세요.');
+        if (busy) busy(queued
+                ? `사진에서 원료 정보를 읽는 중입니다 (${at} / ${ingQueueTotal})`
+                : '사진에서 원료 정보를 읽는 중입니다',
+            '사진 한 장에 몇 초에서 수십 초가 걸립니다. 잠시만 기다려 주세요.');
+
         let body;
         try {
-            const res = await fetch(`/products/documents/${docId}/ingredient-photo/preview/`);
-            /* 서버가 JSON 이 아닌 것을 돌려줄 수도 있다(500 HTML). 그때
-             * res.json() 이 터지면서 까닭이 '오류가 발생했습니다' 로 뭉개진다.
-             * 무엇이 왔는지를 남긴다. */
-            const text = await res.text();
-            try {
-                body = JSON.parse(text);
-            } catch (parseError) {
-                console.error('판독 응답이 JSON 이 아니다', res.status, text.slice(0, 500));
-                showSnackbar(`사진을 판독하지 못했습니다 (서버 응답 ${res.status}).`, 'error');
+            const got = await fetchIngredientPreview(docId);
+            body = got.body;
+            if (!body) {
+                showSnackbar(`사진을 판독하지 못했습니다 (서버 응답 ${got.status}).`, 'error');
+                if (queued) nextInIngredientQueue();
                 return;
             }
-            if (!res.ok || !body.success) {
+            if (!got.ok || !body.success) {
                 showSnackbar(body.error || '사진을 판독하지 못했습니다.', 'error');
+                /* **한 장이 실패해도 줄을 멈추지 않는다.** 다섯 장 중 셋째가
+                 * 안 읽힌다고 넷째·다섯째를 버리면 처음부터 다시 해야 한다. */
+                if (queued) nextInIngredientQueue();
                 return;
             }
-        } catch (err) {
-            console.error(err);
-            showSnackbar('사진 판독 중 오류가 발생했습니다.', 'error');
-            return;
         } finally {
             if (window.hideSearchBusy) window.hideSearchBusy();
         }
@@ -2046,7 +2129,33 @@ async function submitImportCompanyDoc() {
             </div>
             ${matchNote}
             ${rows}`);
-        modalEl.querySelector('#ingredientPhotoApply').onclick = () => applyIngredientPhoto(docId);
+        const applyBtn = modalEl.querySelector('#ingredientPhotoApply');
+        applyBtn.onclick = () => applyIngredientPhoto(docId);
+        applyBtn.textContent = queued && ingQueue.length
+            ? 'BOM 에 등록하고 다음 ▶' : 'BOM 에 등록';
+
+        /* 줄을 서 있을 때만 [건너뛰기] 를 둔다. 한 장짜리에서는 창을 닫는 것과
+         * 같으므로 단추가 하나 더 있을 까닭이 없다. */
+        const foot = applyBtn.parentNode;
+        foot.querySelector('.ing-skip')?.remove();
+        foot.querySelector('.ing-progress')?.remove();
+        if (queued) {
+            const mark = document.createElement('span');
+            mark.className = 'ing-progress me-auto text-muted small';
+            mark.textContent = `${at} / ${ingQueueTotal}장째`;
+            foot.insertBefore(mark, foot.firstChild);
+
+            const skip = document.createElement('button');
+            skip.type = 'button';
+            skip.className = 'btn btn-outline-secondary ing-skip';
+            skip.textContent = '건너뛰기';
+            skip.onclick = () => {
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                nextInIngredientQueue();
+            };
+            foot.insertBefore(skip, applyBtn);
+        }
+
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     };
 
@@ -2082,6 +2191,8 @@ async function submitImportCompanyDoc() {
             showSnackbar(
                 body.message + ' BOM 탭에서 함량을 넣고 저장하세요.',
                 body.created ? 'success' : 'info');
+            // 줄을 서 있으면 다음 장을 바로 연다
+            nextInIngredientQueue();
         } catch (err) {
             console.error(err);
             showSnackbar('등록 중 오류가 발생했습니다.', 'error');

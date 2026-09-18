@@ -590,6 +590,24 @@ async function handleSmartUpload() {
 
                그리고 **왔던 자리로 되돌린다.** 문서함 탭으로 데려다 놓으면
                값을 넣고 나서 영양성분 탭을 다시 찾아 들어가야 한다. */
+            /* 원료 표시사항을 올렸으면 **새로고침 뒤에 바로 줄 세워 판독한다.**
+             *
+             * 올린 사람은 사진을 쌓으러 온 것이 아니라 BOM 에 원료를 넣으러
+             * 온 것이다. 문서함에 파일만 남기고 끝내면, 판독하려고 한 장씩
+             * 다시 찾아 눌러야 한다 — 다섯 장이면 다섯 번이다.
+             *
+             * 새로고침을 거치는 까닭은 아래 reload 때문이다. 화면이 새로
+             * 그려져야 방금 올린 문서가 목록에 서고, 판독 창이 그 문서의
+             * 사진을 옆에 놓을 수 있다. */
+            try {
+                const manyPicked = document.getElementById('document-type-select');
+                const pickedOpt = manyPicked
+                    ? manyPicked.options[manyPicked.selectedIndex] : null;
+                if (pickedOpt && pickedOpt.dataset.multiple === '1' && uploaded.length) {
+                    sessionStorage.setItem('ingredientQueue', JSON.stringify(uploaded));
+                }
+            } catch (e) { /* 못 남겨도 업로드는 끝났다 */ }
+
             try {
                 if (sessionStorage.getItem('specReadAfterUpload') && data.document_id) {
                     sessionStorage.removeItem('specReadAfterUpload');
