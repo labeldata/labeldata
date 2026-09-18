@@ -1761,3 +1761,37 @@ select.form-control.select2-date-option {
 @media (min-width: 768px) {
     .border-start-md { border-left: 1px solid var(--ez-gray-200, #e8eaed); }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   사진에서 쓸 곳만 고르기
+
+   그림 위에 네모를 끌어 그린다. 바깥은 어둡게 덮어 **고른 곳이 어디인지**
+   한눈에 보이게 한다 — 테두리만 그리면 밝은 사진에서 잘 안 보인다.
+   ───────────────────────────────────────────────────────────────────── */
+.imgcrop-wrap {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+    touch-action: none;          /* 끄는 동안 화면이 같이 움직이지 않게 */
+    cursor: crosshair;
+    user-select: none;
+}
+.imgcrop-img {
+    max-width: 100%;
+    max-height: 280px;
+    display: block;
+}
+.imgcrop-box {
+    position: absolute;
+    border: 2px solid var(--ez-primary, #1a73e8);
+    background: rgba(26, 115, 232, .12);
+    /* 바깥을 덮는 그림자. 요소를 더 만들지 않고 한 줄로 낸다. */
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45);
+    pointer-events: none;
+}
+.imgcrop-hint {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--ez-text-muted, #5f6368);
+}

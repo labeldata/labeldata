@@ -58,6 +58,8 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
 // 폼 초기화
 function resetUploadForm() {
     selectedFiles = [];
+    cropRects = {};
+    cropHandle = null;
     warnDuplicateNames([]);   // 앞서 연 창의 경고가 남지 않게
     renderSelectedList();
     selectedFile = null;
@@ -353,6 +355,16 @@ function renderSelectedList() {
 
 /* 한 장을 뺀다. 마지막 한 장까지 빼면 처음으로 돌아간다. */
 function dropSelectedFile(index) {
+    /* 장을 빼면 그 뒤 장들의 번호가 하나씩 당겨진다. 네모도 같이 당기지
+       않으면 **다른 장의 네모로 잘린다.** */
+    const moved = {};
+    Object.keys(cropRects).forEach(k => {
+        const i = Number(k);
+        if (i < index) moved[i] = cropRects[k];
+        else if (i > index) moved[i - 1] = cropRects[k];
+    });
+    cropRects = moved;
+
     selectedFiles = selectedFiles.filter((f, i) => i !== index);
     selectedFile = selectedFiles[0] || null;
 
@@ -440,6 +452,7 @@ function handleFilesSelect(fileList) {
     refreshSelectedSummary();
     renderSelectedList();
     previewAt = 0;
+    cropRects = {};
     renderUploadPreview();
 }
 
@@ -493,6 +506,9 @@ function handleFileSelect(file) {
  * 하는 화면이 서로 다르게 생기고, 뷰어를 고칠 때 두 곳을 고쳐야 한다.
  */
 let previewAt = 0;      // 여러 장일 때 지금 보고 있는 장
+/* 장마다 고른 네모(원본 좌표). 안 고른 장은 없음 — 그 장은 통째로 올라간다. */
+let cropRects = {};
+let cropHandle = null;  // 지금 보고 있는 장의 자르기 손잡이
 
 function showUploadPreview(file) {
     previewAt = Math.max(0, selectedFiles.indexOf(file));
@@ -529,8 +545,14 @@ function renderUploadPreview() {
     if (previewAt < 0) previewAt = 0;
 
     const file = selectedFiles[previewAt];
-    const viewer = window.photoViewerElement(file, file.name);
-    if (!viewer) return;
+
+    /* **사진이면 자르기 화면을 쓴다.**
+     *
+     * 원료 봉지에는 표시사항 말고도 로고·바코드·조리법이 함께 찍힌다. 그
+     * 전부를 판독에 보내면 엉뚱한 곳을 읽고, 느리고, 문서함이 분다.
+     * PDF·문서 파일은 자를 수 없으므로 예전 뷰어를 그대로 쓴다. */
+    const isPhoto = /\.(jpe?g|png|webp|bmp)$/i.test(file.name || '')
+        && window.imageCrop;
 
     if (selectedFiles.length > 1) {
         const bar = document.createElement('div');
@@ -553,10 +575,55 @@ function renderUploadPreview() {
         slot.appendChild(bar);
     }
 
+    if (isPhoto) {
+        const stage = document.createElement('div');
+        slot.appendChild(stage);
+        cropHandle = window.imageCrop.attach(stage, file);
+
+        const tools = document.createElement('div');
+        tools.className = 'd-flex align-items-center gap-2 mt-1 flex-wrap';
+        tools.innerHTML =
+            '<span class="imgcrop-hint flex-grow-1">'
+            + '표시사항이 있는 곳을 <strong>끌어서</strong> 고르세요. '
+            + '고른 곳만 잘라 올립니다.</span>'
+            + '<button type="button" class="btn btn-sm btn-light border" data-crop-all>'
+            + '전체 쓰기</button>';
+        tools.querySelector('[data-crop-all]').addEventListener('click', function () {
+            /* 이미 표시사항만 찍힌 사진도 있다. 그때 억지로 고르게 하면
+               일만 는다 — 자르기를 건너뛰는 길을 둔다. */
+            if (cropHandle) cropHandle.clear();
+            delete cropRects[previewAt];
+            markCropState(tools);
+        });
+        slot.appendChild(tools);
+
+        stage.addEventListener('cropchange', function () {
+            const r = cropHandle && cropHandle.getRect();
+            if (r) cropRects[previewAt] = r; else delete cropRects[previewAt];
+            markCropState(tools);
+        });
+        markCropState(tools);
+        return;
+    }
+
+    const viewer = window.photoViewerElement(file, file.name);
+    if (!viewer) return;
     slot.appendChild(viewer);
     if (typeof window.photoViewerRelease === 'function') {
         window.photoViewerRelease(viewer);   // 창이 닫히면 놓아 준다
     }
+}
+
+/* 지금 장을 잘라 올릴지 통째로 올릴지 한 줄로 말해 준다. */
+function markCropState(tools) {
+    const hint = tools.querySelector('.imgcrop-hint');
+    if (!hint) return;
+    const r = cropRects[previewAt];
+    hint.innerHTML = r
+        ? '고른 곳만 잘라 올립니다 (' + r.w + ' × ' + r.h + '). '
+          + '다시 끌면 새로 고릅니다.'
+        : '표시사항이 있는 곳을 <strong>끌어서</strong> 고르세요. '
+          + '고르지 않으면 사진 전체를 올립니다.';
 }
 
 // 파일 크기 포맷
@@ -707,7 +774,25 @@ async function handleSmartUpload() {
         const uploaded = [];
         const failed = [];
         for (let i = 0; i < selectedFiles.length; i++) {
-            const file = selectedFiles[i];
+            let file = selectedFiles[i];
+
+            /* **고른 곳만 잘라 올린다.** 원본은 남기지 않는다 — 다시 찍는
+             * 비용이 낮고, 원본까지 두면 문서함이 두 배로 분다.
+             *
+             * 자르기가 실패하면 **그 장을 건너뛴다.** 조용히 원본을 올리면
+             * 사용자는 잘린 줄 알고 있는데 통째로 올라가 있다 — 판독이
+             * 엉뚱한 곳을 읽고 나서야 안다. */
+            const rect = cropRects[i];
+            if (rect && window.imageCrop) {
+                try {
+                    file = await window.imageCrop.apply(file, rect);
+                } catch (err) {
+                    console.error('[handleSmartUpload] 자르기 실패', file.name, err);
+                    failed.push(file.name + ' — 사진을 자르지 못했습니다');
+                    continue;
+                }
+            }
+
             if (selectedFiles.length > 1) {
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>'
                     + (i + 1) + ' / ' + selectedFiles.length + ' 올리는 중...';

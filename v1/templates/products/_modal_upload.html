@@ -46,18 +46,30 @@
                         </div>
 
                         <div class="col-md-5 border-start-md">
-                            <div class="fw-semibold text-muted small text-uppercase mb-2">원료 정보</div>
-                            {% for dtype in document_types %}
-                            {% if dtype.multiple_yn %}
-                            <button type="button" class="upload-pick-btn is-wide"
-                                    data-type-id="{{ dtype.type_id }}"
-                                    data-type-name="{{ dtype.type_name }}">
-                                <i class="bi bi-images"></i>
-                                <span>{{ dtype.type_name }} 사진 등록</span>
-                                <small>여러 장을 한꺼번에 · 판독해 BOM 에 등록</small>
-                            </button>
-                            {% endif %}
-                            {% endfor %}
+                            {% comment %}
+                              **원료 사진은 여기서 올리지 않는다.**
+
+                              증빙 서류와 원료 사진은 성격도 가는 곳도 다르다.
+                              서류는 제품에 딸린 것이고, 원료 사진은 원재료 한
+                              건을 만들어 배합표로 보내는 일이다. 같은 창에 두면
+                              "문서를 올리러 왔는데 왜 배합표가 나오지" 가 된다.
+
+                              길을 **하나로** 둔다 — 배합표에서 시작한다. 거기가
+                              그 일을 하는 자리이고, 끝나면 그 자리로 돌아온다.
+                              지우지 않고 안내를 남기는 것은, 여기서 찾던 사람이
+                              길을 잃지 않게 하기 위해서다.
+                            {% endcomment %}
+                            <div class="fw-semibold text-muted small text-uppercase mb-2">원료 사진</div>
+                            <div class="border rounded p-3 h-100 d-flex flex-column justify-content-center text-center"
+                                 style="background: var(--ez-gray-50, #f8f9fa);">
+                                <i class="bi bi-images text-muted mb-2" style="font-size: 26px;"></i>
+                                <div class="small text-muted">
+                                    원료 표시사항 사진은 <strong>배합(BOM) 탭</strong>의
+                                    <span class="text-nowrap">[📷 사진으로 등록]</span> 에서 올립니다.<br>
+                                    거기서 올리면 판독한 값이 <strong>배합표의 줄</strong>로
+                                    바로 들어갑니다.
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -13582,15 +13582,28 @@ class 무엇을_올리는지부터_고르게_한다(TestCase):
         return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
                 ).read_text(encoding='utf-8')
 
-    def test_증빙서류와_원료_정보를_갈라_놓는다(self):
+    def test_증빙서류만_여기서_올린다(self):
+        """
+        원료 사진은 성격도 가는 곳도 다르다 — 서류는 제품에 딸린 것이고,
+        원료 사진은 원재료 한 건을 만들어 배합표로 보내는 일이다. 같은 창에
+        두면 "문서를 올리러 왔는데 왜 배합표가 나오지" 가 된다.
+        """
         html = self._html()
         i = html.index('id="upload-step-pick"')
-        block = html[i:i + 2200]
+        block = html[i:i + 3000]
         self.assertIn('증빙 서류', block)
-        self.assertIn('원료 정보', block)
         # 가르는 기준은 서버가 정한 그 플래그다
         self.assertIn('{% if not dtype.multiple_yn %}', block)
-        self.assertIn('{% if dtype.multiple_yn %}', block)
+        # '여러 건' 구분을 여기서 고를 수 있게 두지 않는다
+        self.assertNotIn('{% if dtype.multiple_yn %}', block)
+
+    def test_어디서_올리는지_길을_남긴다(self):
+        """여기서 찾던 사람이 길을 잃지 않게 한다."""
+        html = self._html()
+        i = html.index('id="upload-step-pick"')
+        block = html[i:i + 3000]
+        self.assertIn('배합(BOM) 탭', block)
+        self.assertIn('사진으로 등록', block)
 
     def test_구분이_버튼으로_늘어선다(self):
         html = self._html()
@@ -14027,3 +14040,93 @@ class 사진_묶음이_몇_건인지_말한다(TestCase):
         self.assertIn('previewIngredientPhoto(', block)
         # 줄 전체를 누르는 것과 겹치지 않게 막는다
         self.assertIn('event.stopPropagation()', block)
+
+
+class 사진에서_쓸_곳만_잘라_올린다(TestCase):
+    """
+    원료 봉지를 찍으면 표시사항 말고도 로고·바코드·조리법·손가락이 함께
+    찍힌다. 그 전부를 판독에 보내면 셋이 나빠진다 — 모델이 볼 글자가 많아져
+    **엉뚱한 곳을 읽고**(조리법의 '소금' 을 원재료로 읽는 식이다), 보내는
+    그림이 커서 느리고 비싸고, 문서함에 2.4 MB 짜리가 쌓인다.
+    """
+
+    def _crop(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/image_crop.js'
+                ).read_text(encoding='utf-8')
+
+    def _upload(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_브라우저에서_자른다(self):
+        """서버는 이미 잘린 그림을 받으므로 판독 코드는 손댈 것이 없다."""
+        crop = self._crop()
+        self.assertIn("canvas.getContext('2d').drawImage(", crop)
+        self.assertIn('canvas.toBlob(', crop)
+
+    def test_화면_좌표를_원본_좌표로_한_곳에서만_바꾼다(self):
+        """두 벌로 두면 한쪽만 고쳐지는 날이 온다."""
+        crop = self._crop()
+        self.assertEqual(crop.count('img.naturalWidth / img.clientWidth'), 1)
+
+    def test_툭_누른_것은_고른_것이_아니다(self):
+        """0 x 0 짜리 네모가 남으면 '잘랐다' 고 말하게 된다."""
+        crop = self._crop()
+        i = crop.index('function finish(')
+        block = crop[i:i + 600]
+        self.assertIn('rect.w < MIN_SIZE || rect.h < MIN_SIZE', block)
+
+    def test_고르지_않으면_통째로_올린다(self):
+        """이미 표시사항만 찍힌 사진도 있다. 억지로 고르게 하면 일만 는다."""
+        crop = self._crop()
+        i = crop.index('function apply(')
+        self.assertIn('return Promise.resolve(file)', crop[i:i + 300])
+
+    def test_전체_쓰기로_건너뛸_수_있다(self):
+        js = self._upload()
+        self.assertIn('data-crop-all', js)
+        i = js.index('[data-crop-all]')
+        self.assertIn('delete cropRects[previewAt]', js[i:i + 400])
+
+    def test_자르기가_실패하면_그_장을_건너뛴다(self):
+        """
+        조용히 원본을 올리면 사용자는 잘린 줄 알고 있는데 통째로 올라가 있다 —
+        판독이 엉뚱한 곳을 읽고 나서야 안다.
+        """
+        js = self._upload()
+        i = js.index('const rect = cropRects[i];')
+        block = js[i:i + 700]
+        self.assertIn('failed.push', block)
+        self.assertIn('continue;', block)
+
+    def test_장을_빼면_네모도_함께_당긴다(self):
+        """안 당기면 다른 장의 네모로 잘린다."""
+        js = self._upload()
+        i = js.index('function dropSelectedFile(')
+        block = js[i:i + 700]
+        self.assertIn('moved[i - 1] = cropRects[k]', block)
+
+    def test_원본은_남기지_않는다(self):
+        """다시 찍는 비용이 낮고, 원본까지 두면 문서함이 두 배로 분다."""
+        js = self._upload()
+        i = js.index('const rect = cropRects[i];')
+        block = js[i:i + 700]
+        # 자른 것을 **같은 자리에** 담는다 — 두 벌을 올리지 않는다
+        self.assertIn('file = await window.imageCrop.apply(file, rect)', block)
+
+    def test_어느_화면에서든_쓸_수_있게_싣는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = (Path(dj.BASE_DIR) / 'templates/base_v2.html'
+                ).read_text(encoding='utf-8')
+        self.assertIn('js/image_crop.js', base)
