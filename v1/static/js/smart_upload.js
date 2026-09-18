@@ -56,6 +56,8 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
 
 // 폼 초기화
 function resetUploadForm() {
+    selectedFiles = [];
+    warnDuplicateNames([]);   // 앞서 연 창의 경고가 남지 않게
     selectedFile = null;
     document.getElementById('smart-upload-form').reset();
     document.getElementById('selected-file-info').style.display = 'none';
@@ -128,6 +130,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedFile = null;
             selectedFiles = [];
             fileInput.value = '';
+            warnDuplicateNames([]);
             document.getElementById('selected-file-info').style.display = 'none';
         });
     }
@@ -263,6 +266,41 @@ const UPLOAD_ALLOWED_EXTS = [
     'hwp', 'hwpx', 'txt', 'csv', 'zip',
 ];
 
+/*
+ * 같은 이름의 문서가 이미 있으면 **말해 주되 막지는 않는다.**
+ *
+ * 여러 장을 한꺼번에 올리게 되면서 같은 사진을 두 번 넣기 쉬워졌다. 그러면
+ * 판독도 두 번 돌아 시간과 비용이 두 배로 든다. 그런데 막을 수는 없다 —
+ * 정말로 같은 이름의 다른 원료일 수 있다('영양성분.png' 는 아무 봉지에나
+ * 붙는 이름이다). 고르는 것은 사람이 한다.
+ */
+function existingFilenames() {
+    try {
+        if (typeof documentData === 'undefined' || !documentData) return [];
+        return Object.keys(documentData)
+            .map(k => (documentData[k].filename || '').toLowerCase());
+    } catch (err) {
+        return [];      // 못 읽어도 업로드는 막지 않는다
+    }
+}
+
+function warnDuplicateNames(files) {
+    const hint = document.getElementById('upload-duplicate-hint');
+    if (!hint) return;
+    const have = existingFilenames();
+    const dup = files
+        .filter(f => have.indexOf((f.name || '').toLowerCase()) !== -1)
+        .map(f => f.name);
+    if (!dup.length) {
+        hint.hidden = true;
+        hint.textContent = '';
+        return;
+    }
+    hint.hidden = false;
+    hint.textContent = '같은 이름의 문서가 이미 있습니다 — ' + dup.join(', ')
+        + '. 그래도 올리면 따로 한 건 더 남습니다.';
+}
+
 /* 올릴 수 있는 파일인가. 여러 장을 받게 되면서 검사가 두 자리에서 필요해졌다 —
    같은 규칙을 두 벌 적으면 한쪽만 고쳐지는 날이 온다. */
 function isUploadable(file) {
@@ -298,6 +336,7 @@ function handleFilesSelect(fileList) {
 
     handleFileSelect(good[0]);        // 첫 장으로 칸을 채우고
     selectedFiles = good;             // 나머지는 여기 담아 둔다
+    warnDuplicateNames(good);
 
     const fileName = document.getElementById('file-name');
     if (fileName) {
@@ -317,6 +356,7 @@ function handleFileSelect(file) {
     }
     selectedFile = file;
     selectedFiles = [file];
+    warnDuplicateNames([file]);
     
     // 파일 정보 표시
     const fileName = document.getElementById('file-name');

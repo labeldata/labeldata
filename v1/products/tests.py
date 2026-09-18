@@ -13328,3 +13328,40 @@ class 고른_문서만_센다(TestCase):
         text = self._text()
         self.assertEqual(text.count('const DOC_PICK'), 1)
         self.assertGreaterEqual(text.count('DOC_PICK'), 4)
+
+
+class 같은_이름의_문서를_말해_주되_막지_않는다(TestCase):
+    """
+    여러 장을 한꺼번에 올리게 되면서 같은 사진을 두 번 넣기 쉬워졌다. 그러면
+    판독도 두 번 돌아 시간과 비용이 두 배로 든다.
+
+    그런데 막을 수는 없다 — 정말로 같은 이름의 다른 원료일 수 있다
+    ('영양성분.png' 는 아무 봉지에나 붙는 이름이다). 고르는 것은 사람이 한다.
+    """
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_말해_주지만_올리는_것을_막지_않는다(self):
+        js = self._js()
+        i = js.index('function warnDuplicateNames(')
+        block = js[i:i + 700]
+        self.assertIn('그래도 올리면', block)
+        # 막는 낌새가 없어야 한다
+        self.assertNotIn('return false', block)
+        self.assertNotIn('disabled', block)
+
+    def test_목록을_못_읽어도_업로드를_막지_않는다(self):
+        js = self._js()
+        i = js.index('function existingFilenames(')
+        self.assertIn('return [];', js[i:i + 500])
+
+    def test_앞서_연_창의_경고가_남지_않는다(self):
+        js = self._js()
+        i = js.index('function resetUploadForm() {')
+        self.assertIn('warnDuplicateNames([])', js[i:i + 400])
