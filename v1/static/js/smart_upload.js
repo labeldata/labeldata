@@ -507,6 +507,11 @@ function showUploadPreview(file) {
  * 붙이고 '2 / 5' 로 어디쯤인지 적는다.
  */
 function renderUploadPreview() {
+    /* 고른 것이 있으면 끌어놓기 칸을 접는다. 그 칸이 큰 채로 남아 있으면
+       목록과 미리보기가 더해지면서 아래 단추가 화면 밖으로 밀린다. */
+    const zone = document.getElementById('upload-dropzone');
+    if (zone) zone.classList.toggle('is-compact', selectedFiles.length > 0);
+
     const host = document.querySelector('#selected-file-info .smart-preview-hint');
     if (!host || typeof window.photoViewerElement !== 'function') return;
 

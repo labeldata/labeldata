@@ -1,6 +1,6 @@
 <!-- 스마트 업로드 모달 (Smart Upload Modal) -->
 <div class="modal fade smart-upload-modal doc-modal" id="smartUploadModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-label-id="{{ product.my_label_id }}">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content smart-upload-shell">
             <form id="smart-upload-form">
                 {% csrf_token %}
@@ -111,7 +111,7 @@
                         </div>
                         
                         <!-- 우측: 메타데이터 영역 -->
-                        <div class="col-md-7 bg-white p-4 d-flex flex-column">
+                        <div class="col-md-7 bg-white p-4 d-flex flex-column smart-upload-right">
                             <div class="d-flex flex-column gap-3 flex-grow-1">
                                 <div>
                                     <label for="document-type-select" class="form-label">문서 종류</label>
@@ -206,6 +206,53 @@
 #smartUploadModal .smart-upload-left {
     background: var(--ez-gray-100, #f1f3f4);
     min-height: 420px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   고르고 나면 [취소]·[등록하기] 가 화면 밖으로 밀렸다
+
+   파일을 고르면 왼쪽 칸에 **목록과 미리보기가 더해지는데** 끌어놓기 칸은
+   그대로 크게 남아 있었다. 두 장만 골라도 아래 단추가 스크롤 밖으로 나간다 —
+   등록하러 온 사람이 등록 단추를 못 찾는다.
+
+   셋으로 푼다.
+     · 고르고 나면 끌어놓기 칸을 **한 줄로 접는다**. 다시 고르는 길은 남긴다.
+     · 창 몸통의 높이를 화면에 묶고, 넘치면 **왼쪽 칸만 스크롤**한다.
+       바닥글은 몸통 밖이므로 늘 보인다.
+     · 창을 넓힌다(modal-lg -> modal-xl). 왼쪽에 목록·미리보기가 함께 서는
+       칸이 되었으니 그만한 자리가 필요하다.
+   ───────────────────────────────────────────────────────────────────── */
+#smartUploadModal .modal-body.p-0 {
+    max-height: calc(100vh - 230px);
+    overflow: hidden;
+}
+#smartUploadModal .smart-upload-left,
+#smartUploadModal .smart-upload-right {
+    max-height: calc(100vh - 230px);
+    overflow-y: auto;
+}
+
+/* 고른 뒤의 끌어놓기 칸 — 한 줄로 줄인다 */
+#smartUploadModal .smart-dropzone.is-compact {
+    flex: 0 0 auto !important;
+    min-height: 0;
+    padding: 10px 12px !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    gap: 8px;
+}
+#smartUploadModal .smart-dropzone.is-compact .smart-icon-circle,
+#smartUploadModal .smart-dropzone.is-compact h6,
+#smartUploadModal .smart-dropzone.is-compact p {
+    display: none;
+}
+#smartUploadModal .smart-dropzone.is-compact::before {
+    content: '다른 파일을 고르려면';
+    font-size: 12px;
+    color: var(--ez-text-muted, #5f6368);
+}
+#smartUploadModal .smart-dropzone.is-compact #select-file-btn {
+    margin-top: 0 !important;
 }
 
 #smartUploadModal .smart-dropzone {
