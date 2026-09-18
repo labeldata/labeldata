@@ -28,6 +28,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from v1.products.models import ProductDocument, ProductNotification
+from v1.products.services import doc_expiry
 
 STATUS_CODE = 'DOC_EXPIRY'
 
@@ -72,10 +73,11 @@ class Command(BaseCommand):
         send = options['send']
         today = timezone.localdate()
 
-        docs = (ProductDocument.objects
-                .filter(active_yn=True,
-                        expiry_date__isnull=False,
-                        label__delete_YN='N')
+        # **현재 판만 말한다.** 옛 판까지 세면 문서함에 보이지도 않는 문서의
+        # 만료를 메일로 알리게 된다 — 받은 사람은 그 날짜를 화면에서 찾을 수
+        # 없다. 조건은 doc_expiry 한 곳에 있다.
+        docs = (doc_expiry.current_documents()
+                .filter(expiry_date__isnull=False, label__delete_YN='N')
                 .select_related('label', 'label__user_id', 'document_type')
                 .order_by('expiry_date'))
 

@@ -254,13 +254,10 @@ def product_explorer(request, folder_id=None):
     if expiring_filter:
         # 대시보드 카드와 **같은 기준**으로 센다 (v1/main/views.py 의 expiring_count).
         # 여기서 30일을 다시 적으면 두 숫자가 소리 없이 갈라진다.
-        _now = timezone.now()
+        from v1.products.services import doc_expiry
+
         labels = labels.filter(
-            v2_documents__active_yn=True,
-            v2_documents__expiry_date__isnull=False,
-            v2_documents__expiry_date__lte=_now + timezone.timedelta(days=EXPIRING_SOON_DAYS),
-            v2_documents__expiry_date__gte=_now.date(),
-        ).distinct()
+            v2_documents__in=doc_expiry.expiring(user)).distinct()
 
     # 원료 연결 필터: ingredient_id 파라미터가 있으면 해당 원료와 연결된 제품만 표시
     ingredient_id_filter = request.GET.get('ingredient_id')
@@ -511,15 +508,10 @@ def product_explorer(request, folder_id=None):
     # 문서가 여덟 건이어도 카드는 5라고 말했고(홈 대시보드는 8이라고 말한다),
     # 거르기를 눌러도 다섯 제품만 남았다. 같은 이름이 두 화면에서 다른
     # 숫자를 말하면 둘 다 못 믿게 된다.
+    from v1.products.services import doc_expiry
+
     today = timezone.now().date()
-    alert_date = today + timedelta(days=30)
-    expiring_documents = ProductDocument.objects.filter(
-        label__user_id=user,
-        active_yn=True,
-        expiry_date__isnull=False,
-        expiry_date__gte=today,
-        expiry_date__lte=alert_date
-    ).select_related('label', 'document_type').order_by('expiry_date')
+    expiring_documents = doc_expiry.expiring(user)
     
     # 승인 대기 및 검토 필요 통계
     approval_pending_count = ProductMetadata.objects.filter(
@@ -4586,17 +4578,12 @@ def document_download(request, document_id):
 
 @login_required
 def expiring_documents(request):
-    """만료 예정 문서 목록"""
+    """만료 예정 문서 목록. **현재 판만** 본다 — doc_expiry 주석 참고."""
+    from v1.products.services import doc_expiry
+
     today = timezone.now().date()
-    alert_date = today + timedelta(days=30)
     
-    documents = ProductDocument.objects.filter(
-        label__user_id=request.user,
-        active_yn=True,
-        expiry_date__isnull=False,
-        expiry_date__gte=today,
-        expiry_date__lte=alert_date
-    ).select_related('label', 'document_type').order_by('expiry_date')
+    documents = doc_expiry.expiring(request.user)
     
     context = {
         'documents': documents,
@@ -4608,15 +4595,12 @@ def expiring_documents(request):
 
 @login_required
 def expired_documents(request):
-    """만료된 문서 목록"""
+    """만료된 문서 목록. **현재 판만** 본다 — doc_expiry 주석 참고."""
+    from v1.products.services import doc_expiry
+
     today = timezone.now().date()
-    
-    documents = ProductDocument.objects.filter(
-        label__user_id=request.user,
-        active_yn=True,
-        expiry_date__isnull=False,
-        expiry_date__lt=today
-    ).select_related('label', 'document_type').order_by('-expiry_date')
+
+    documents = doc_expiry.expired(request.user)
     
     context = {
         'documents': documents,

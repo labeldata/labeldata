@@ -12760,3 +12760,80 @@ class ImportPhotoBecomesDesignProofTests(TestCase):
         block = js[at:at + 1400]
         self.assertIn('design-proof/', block)
         self.assertIn('문서함에 남기지 못했습니다', block)
+
+
+class 만료_알림은_현재_판만_가리킨다(TestCase):
+    """
+    운영에서 그대로 나왔다. 「만료 예정 문서」가 '겉바속쫀브라우니_주표시면1.jpg'
+    를 13일 남았다고 알렸는데, 문서함에서 같은 문서를 열면 **무기한**이었다.
+
+    문서함은 여러 판을 한 줄로 묶어 최신 판만 보여 주는데(`_group_versions`),
+    만료를 세는 자리들은 `active_yn=True` 인 행을 **전부** 셌다. 옛 판은 새 판이
+    올라와도 지워지지 않으므로(active_yn=False 는 삭제할 때만 붙는다) 그 행이
+    그대로 알림을 울린다. 사용자는 그 날짜를 화면에서 찾을 수가 없다 — 보이지
+    않는 판의 날짜이기 때문이다.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+
+        from v1.label.models import MyLabel
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='expiry', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='브라우니')
+        self.dtype = DocumentType.objects.create(
+            type_code='T_EXP', type_name='시험문서', display_order=99)
+
+        soon = timezone.localdate() + timedelta(days=13)
+        self.old = ProductDocument.objects.create(
+            label=self.label, document_type=self.dtype,
+            original_filename='주표시면1.jpg', version=1,
+            expiry_date=soon, active_yn=True)
+        # 새 판에는 만료일이 없다 — 문서함이 '무기한' 이라고 말하던 그 상태
+        self.new = ProductDocument.objects.create(
+            label=self.label, document_type=self.dtype,
+            original_filename='주표시면1.jpg', version=2,
+            parent_document=self.old, expiry_date=None, active_yn=True)
+
+    def test_옛_판은_만료_예정에_오르지_않는다(self):
+        from v1.products.services import doc_expiry
+
+        self.assertEqual(list(doc_expiry.expiring(self.user)), [])
+
+    def test_현재_판에_만료일이_있으면_오른다(self):
+        from datetime import timedelta
+
+        from v1.products.services import doc_expiry
+
+        self.new.expiry_date = timezone.localdate() + timedelta(days=13)
+        self.new.save(update_fields=['expiry_date'])
+        self.assertEqual([d.document_id for d in doc_expiry.expiring(self.user)],
+                         [self.new.document_id])
+
+    def test_새_판을_지우면_옛_판이_다시_현재가_된다(self):
+        """지워진 판은 옛 판을 밀어내지 못한다."""
+        from v1.products.services import doc_expiry
+
+        self.new.active_yn = False
+        self.new.save(update_fields=['active_yn'])
+        self.assertEqual([d.document_id for d in doc_expiry.expiring(self.user)],
+                         [self.old.document_id])
+
+    def test_만료됨_목록도_같은_잣대를_쓴다(self):
+        from datetime import timedelta
+
+        from v1.products.services import doc_expiry
+
+        self.old.expiry_date = timezone.localdate() - timedelta(days=5)
+        self.old.save(update_fields=['expiry_date'])
+        self.assertEqual(list(doc_expiry.expired(self.user)), [])
+
+    def test_알림_메일도_옛_판을_말하지_않는다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('alert_expiring_documents', stdout=out)
+        self.assertIn('오늘 말할 제품 0건', out.getvalue())

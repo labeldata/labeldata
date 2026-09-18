@@ -417,14 +417,11 @@ def home_dashboard(request):
     try:
         # 이 숫자는 제품 조회의 expiring 필터와 **같아야 한다** — 칩을 눌러
         # 넘어간 목록의 건수가 칩에 적힌 숫자와 달라지면 안 된다.
-        expiry_threshold = now + timezone.timedelta(days=EXPIRING_SOON_DAYS)
-        expiring_count = ProductDocument.objects.filter(
-            label__user_id=user,
-            active_yn=True,
-            expiry_date__isnull=False,
-            expiry_date__lte=expiry_threshold,
-            expiry_date__gte=now.date(),
-        ).count()
+        # 조건은 doc_expiry 한 곳에만 있다. 여기서 다시 적으면 **옛 판까지
+        # 세어** 문서함에 없는 문서를 알리게 된다.
+        from v1.products.services import doc_expiry
+
+        expiring_count = doc_expiry.expiring(user).count()
     except Exception:
         expiring_count = 0
 
