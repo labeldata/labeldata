@@ -850,26 +850,63 @@ async function submitImportCompanyDoc() {
         background-color: rgba(0,0,0,0.2);
     }
     
-    /* 행 아래로 펼치는 문서 정보 */
-    .document-row.is-open > td { background: var(--ez-surface-2, #f8f9fa); }
+    /* -------------------------------------------------------------
+       행 아래로 펼치는 문서 정보
+
+       **바로 위 `.doc-version-row` 와 같은 말씨를 쓴다.** 같은 표 안에서
+       아래로 펼쳐지는 것이 둘인데 생김새가 다르면, 사용자는 그 둘이 다른
+       종류의 것이라고 읽는다.
+
+         · 왼쪽 52px 들여쓰기 — '문서명' 열 밑에 맞춰 들어가 그 행에 딸린
+           것으로 보인다. 화면 왼쪽 끝부터 시작하면 표에서 떨어져 나온다.
+         · 바탕 --ez-gray-50, 글 12px/11px, 모서리 6px — 이전 판 목록과 같다.
+         · 왼쪽에 2px 띠를 세운다. 어느 행의 것인지가 한눈에 보인다.
+
+       폭은 묶어 둔다. 담는 것은 일곱 칸뿐인데 1600px 화면에서 끝까지 늘리면
+       항목 사이가 손가락 한 뼘씩 벌어져 한 덩어리로 안 읽힌다.
+       ------------------------------------------------------------- */
+    .document-row.is-open > td { background: var(--ez-gray-50, #f8f9fa); }
     .doc-expand-row > td {
-        padding: 0 !important;
-        background: var(--ez-surface-2, #f8f9fa);
-        border-bottom: 2px solid var(--ez-border, #dadce0);
+        padding: 0 12px 12px 52px !important;
+        background: var(--ez-gray-50, #f8f9fa);
+        border-top: 0;
+    }
+    /* 펼친 칸은 글이 길다. 표의 말줄임(nowrap)을 되받는다 —
+       가운데 정렬을 되받는 것은 아래 열 정렬 규칙이 함께 한다. */
+    .compact-doc-table > tbody > tr.doc-expand-row > td {
+        white-space: normal !important;
     }
     #doc-edit-panel {
-        padding: 14px 16px 12px;
+        max-width: 860px;
+        padding: 10px 14px 12px;
+        background: #fff;
+        border: 1px solid var(--ez-gray-200, #e8eaed);
+        border-left: 2px solid var(--ez-primary, #1a73e8);
+        border-radius: 6px;
     }
-    /* 일곱 칸을 가로로 늘어놓는다. 좁으면 저절로 줄이 준다 —
-       min() 이라 400px 화면에서도 가로 스크롤이 생기지 않는다. */
+    #doc-edit-panel .doc-panel-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    #doc-edit-panel .doc-panel-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ez-gray-900, #202124);
+        min-width: 0;
+        flex: 1;
+    }
+    /* 항목은 두 줄까지만. 셋을 넘기면 눈이 좌우로 너무 멀리 간다. */
     #doc-edit-panel .doc-panel-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-        gap: 8px 20px;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+        gap: 8px 18px;
         align-items: start;
     }
-    /* 설명은 넓게 쓴다 — 여러 줄짜리라 한 칸에 가두면 답답하다 */
     #doc-edit-panel .doc-panel-grid > .doc-field-wide { grid-column: 1 / -1; }
+    #doc-edit-panel textarea.form-control { resize: vertical; }
+
     #doc-edit-panel .form-label {
         margin-bottom: 6px;
     }
@@ -895,7 +932,7 @@ async function submitImportCompanyDoc() {
     #doc-edit-panel .doc-panel-actions {
         display: flex;
         gap: 6px;
-        flex-wrap: wrap;
+        flex-shrink: 0;
     }
     #doc-edit-panel .doc-panel-actions > .btn {
         padding-left: 10px;
@@ -937,7 +974,7 @@ async function submitImportCompanyDoc() {
         font-size: 11px;
         line-height: 1.4;
     }
-    #doc-edit-panel .doc-panel-rule { margin: 10px 0; }
+    #doc-edit-panel .doc-panel-rule { margin: 8px 0; }
     #doc-edit-panel .doc-panel-foot { font-size: 11px; }
     
     /* Google Drive 스타일 테이블 - 세로선 제거 */
@@ -981,7 +1018,10 @@ async function submitImportCompanyDoc() {
     .compact-doc-table th.col-version,
     .compact-doc-table td.col-version,
     .compact-doc-table th.col-uploader,
-    .compact-doc-table td.col-uploader {
+    .compact-doc-table td.col-uploader,
+    /* 행 아래로 펼치는 칸도 같은 규칙을 탄다. colspan 하나뿐이라
+       `.table td:nth-child(1)` 에 걸리므로 구체성을 더 준다. */
+    .compact-doc-table > tbody > tr.doc-expand-row > td {
         text-align: left !important;
     }
 
@@ -2061,21 +2101,20 @@ async function submitImportCompanyDoc() {
             <input type="hidden" id="edit-doc-type-id" value="${doc.typeId}">
             <input type="hidden" id="edit-doc-type-name" value="${doc.typeName || ''}">
             
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <div class="fw-bold text-dark text-truncate flex-grow-1" title="${doc.filename}">
-                    <i class="bi bi-file-earmark me-1"></i>${doc.filename}
+            <div class="doc-panel-head">
+                <div class="doc-panel-title text-truncate" title="${doc.filename}">
+                    <i class="bi bi-file-earmark me-1 text-muted"></i>${doc.filename}
+                </div>
+                <div class="doc-panel-actions">
+                    <a class="btn btn-outline-dark v2-btn-sm" href="${doc.downloadUrl}" download title="다운로드">
+                        <i class="bi bi-download"></i><span>다운로드</span>
+                    </a>
+                    ${writeButtons}
                 </div>
                 <button type="button" class="btn btn-light border v2-btn-icon"
                         onclick="closeEditPanel()" aria-label="접기" title="접기">
                     <i class="bi bi-chevron-up"></i>
                 </button>
-            </div>
-
-            <div class="doc-panel-actions mb-2">
-                <a class="btn btn-outline-dark v2-btn-sm" href="${doc.downloadUrl}" download title="다운로드">
-                    <i class="bi bi-download"></i><span>다운로드</span>
-                </a>
-                ${writeButtons}
             </div>
 
             ${looksLikeSpecSheet(doc) ? `
@@ -2111,8 +2150,6 @@ async function submitImportCompanyDoc() {
                 </button>
             </div>
             ` : ''}
-
-            <hr class="doc-panel-rule">
 
             <div class="doc-panel-grid">
             <div class="doc-field mb-2">
@@ -2283,9 +2320,18 @@ async function submitImportCompanyDoc() {
         const docTypeId = document.getElementById('edit-doc-type-id')?.value;
         
         closeEditPanel();
-        
-        if (slotId && docTypeName && docTypeId && typeof openUploadModal === 'function') {
-            openUploadModal(slotId, docTypeName, docTypeId);
+
+        /* **슬롯을 요구하지 않는다.**
+         *
+         * 예전에는 slotId 가 있어야만 열었다. 그런데 슬롯은 '필수 문서' 다섯
+         * 칸에만 있다 — 포장지 시안처럼 슬롯 없는 구분의 문서를 열고 [업로드]
+         * 를 누르면 "업로드 기능을 사용할 수 없습니다" 가 떴다. 기능이 없는
+         * 것이 아니라 **이 문서에 슬롯이 없을 뿐**인데, 그 말로는 알 길이 없다.
+         *
+         * 슬롯 없이도 올릴 수 있다. 서버(document_upload_api)가 slot_id 가 없으면
+         * 같은 구분의 살아 있는 슬롯을 찾아 잇고, 없으면 그냥 문서로 남긴다. */
+        if (docTypeId && typeof openUploadModal === 'function') {
+            openUploadModal(slotId || null, docTypeName || '', docTypeId);
         } else {
             showSnackbar('업로드 기능을 사용할 수 없습니다.', 'error');
         }

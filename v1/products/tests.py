@@ -13010,10 +13010,45 @@ class 문서_정보는_그_행_아래에_펼친다(TestCase):
     def test_칸들이_가로로_늘어선다(self):
         text = self._text()
         self.assertIn('doc-panel-grid', text)
-        self.assertIn('repeat(auto-fit, minmax(min(100%, 260px), 1fr))', text)
+        self.assertIn('repeat(auto-fit, minmax(min(100%, 300px), 1fr))', text)
 
     def test_접기_단추가_펼친_영역_안에_있다(self):
         """닫으려고 저쪽 끝의 X 를 찾아가게 하지 않는다."""
         text = self._text()
         i = text.index('bi-chevron-up')
         self.assertIn('closeEditPanel()', text[max(0, i - 300):i])
+
+
+class 슬롯이_없는_문서도_새_판을_올린다(TestCase):
+    """
+    「포장지 시안」을 펼치고 [업로드] 를 누르면 **"업로드 기능을 사용할 수
+    없습니다"** 가 떴다. 기능이 없는 것이 아니라 그 문서에 슬롯이 없을
+    뿐인데, 그 말로는 알 길이 없다.
+
+    슬롯은 '필수 문서' 다섯 칸에만 있다. 포장지 시안·원료 표시사항처럼 슬롯
+    없는 구분이 더 많고, 그런 문서도 새 판은 올려야 한다. 서버는 이미 받을
+    준비가 돼 있다 — slot_id 가 없으면 같은 구분의 살아 있는 슬롯을 찾아
+    잇고, 없으면 그냥 문서로 남긴다.
+    """
+
+    def _text(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+
+    def test_슬롯이_없어도_업로드_창을_연다(self):
+        text = self._text()
+        i = text.index('window.openUploadForUpdate = function()')
+        block = text[i:i + 1600]
+        # 슬롯을 조건에서 뺐다
+        self.assertNotIn("if (slotId && docTypeName && docTypeId", block)
+        self.assertIn('if (docTypeId && typeof openUploadModal', block)
+
+    def test_권한_확인은_그대로_있다(self):
+        """읽기 전용 사용자가 파일을 고르고 등록까지 누른 뒤에 막히면 안 된다."""
+        text = self._text()
+        i = text.index('window.openUploadForUpdate = function()')
+        self.assertIn('CAN_UPLOAD_DOCUMENTS', text[i:i + 400])
