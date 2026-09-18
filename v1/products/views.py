@@ -4542,12 +4542,17 @@ def document_detail(request, document_id):
     )
     if not user_can_download_label_files(request.user, document.label, document):
         raise Http404("문서를 찾을 수 없습니다.")
-    
-    context = {
-        'document': document,
-    }
-    
-    return render(request, 'products/documents/document_detail.html', context)
+
+    # **화면을 하나 없앤다.** 여기 있던 것(파일명·구분·크기·만료일·업로드자·
+    # 다운로드·삭제)은 문서함 오른쪽 패널에 **이미 전부 있다.** 그런데 이 쪽만
+    # V2 이전 디자인(보라색 그라데이션 머리)이라, 만료 알림을 따라온 사람은
+    # 처음 보는 화면을 만나고 거기서 다시 문서함으로 건너가야 했다.
+    #
+    # 주소는 살려 둔다 — 알림 메일과 옛 즐겨찾기가 이 주소를 들고 있다.
+    # 지우는 대신 문서함의 그 문서로 보낸다.
+    return redirect('%s?tab=docs&doc=%s' % (
+        reverse('products:product_detail', args=[document.label.my_label_id]),
+        document.document_id))
 
 
 @login_required

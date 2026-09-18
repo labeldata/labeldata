@@ -9187,14 +9187,16 @@ class AI_문서_검토_저장이_실제로_된다(TestCase):
 
 class 문서_상세가_막다른_길이_아니다(TestCase):
     """
-    · [문서 삭제] 가 평범한 <form> 으로 **JSON API** 에 보냈다. 브라우저는
-      응답을 그대로 그리므로, 지우고 나면 {"success": true} 만 적힌 흰
-      화면에 남았다 — 돌아갈 링크도 없다.
-    · 삭제는 soft delete 인데 상세 뷰가 active_yn 을 안 봐서, 지운 문서의
-      주소를 그대로 열 수 있었다. 목록에 없는 문서가 상세로는 멀쩡히 보이고
-      [다운로드] 도 눌렸다.
-    · 아이콘이 Font Awesome 인데 base_v2 는 Bootstrap Icons 만 싣는다 —
-      빈 네모만 보인다.
+    이 화면은 **없앴다.** 거기 있던 것(파일명·구분·크기·만료일·업로드자·
+    다운로드·삭제)은 문서함 오른쪽 패널에 이미 전부 있었는데, 이 쪽만 V2 이전
+    디자인이라 만료 알림을 따라온 사람은 처음 보는 화면을 만나고 다시 문서함
+    으로 건너가야 했다.
+
+    주소는 살려 둔다 — 알림 메일과 옛 즐겨찾기가 이 주소를 들고 있다.
+
+    예전에 여기서 잡았던 것들은 그대로 지킨다.
+    · 삭제는 soft delete 라, 지운 문서의 주소를 그대로 열 수 있으면 안 된다.
+    · base_v2 는 Bootstrap Icons 만 싣는다. Font Awesome 은 빈 네모가 된다.
     """
 
     def setUp(self):
@@ -9211,19 +9213,30 @@ class 문서_상세가_막다른_길이_아니다(TestCase):
 
     def test_지운_문서는_안_열린다(self):
         url = reverse('products:document_detail', args=[self.doc.document_id])
-        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.get(url).status_code, 302)
 
         self.doc.active_yn = False
         self.doc.save(update_fields=['active_yn'])
         self.assertEqual(self.client.get(url).status_code, 404)
 
-    def test_삭제가_JSON_화면으로_가지_않는다(self):
-        html = self.client.get(
-            reverse('products:document_detail',
-                    args=[self.doc.document_id])).content.decode()
-        self.assertIn('id="docDeleteBtn"', html)
-        # <form> 이 API 로 곧장 보내던 자리가 남아 있으면 안 된다
-        self.assertNotIn('document_delete_api', html.split('docDeleteBtn')[0])
+    def test_문서함의_그_문서로_보낸다(self):
+        res = self.client.get(
+            reverse('products:document_detail', args=[self.doc.document_id]))
+        self.assertIn('tab=docs', res['Location'])
+        self.assertIn('doc=%s' % self.doc.document_id, res['Location'])
+
+    def test_죽은_템플릿을_남겨_두지_않는다(self):
+        """
+        뷰가 안 그리는 템플릿이 남아 있으면 다음 사람이 그것을 고치고 있다가
+        화면이 안 바뀌는 것을 한참 뒤에 안다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.assertFalse(
+            (Path(dj.BASE_DIR) / 'templates/products/documents'
+             / 'document_detail.html').exists())
 
     def test_아이콘이_bootstrap_icons_다(self):
         import re
@@ -9231,8 +9244,7 @@ class 문서_상세가_막다른_길이_아니다(TestCase):
 
         from django.conf import settings as dj
 
-        for rel in ('templates/products/documents/document_detail.html',
-                    'templates/products/documents/expired_documents.html',
+        for rel in ('templates/products/documents/expired_documents.html',
                     'templates/products/documents/expiring_documents.html'):
             text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
             self.assertEqual(re.findall(r'fa[srlb]* fa-[a-z0-9-]*', text), [], rel)
@@ -12837,3 +12849,108 @@ class 만료_알림은_현재_판만_가리킨다(TestCase):
         out = StringIO()
         call_command('alert_expiring_documents', stdout=out)
         self.assertIn('오늘 말할 제품 0건', out.getvalue())
+
+
+class 만료_문서에서_한_번에_고치러_간다(TestCase):
+    """
+    만료 알림을 따라가면 **처음 보는 화면**이 나왔다. 「작업」 칸의 눈 모양
+    단추가 무슨 뜻인지 알 수 없었고, 눌러서 나온 「문서 상세」는 V2 이전
+    디자인이었으며, 거기 있는 것(파일명·구분·크기·만료일·업로드자·다운로드·
+    삭제)은 **문서함 오른쪽 패널에 이미 전부 있었다.**
+
+    거기서 할 수 있는 일도 없었다. 만료된 문서를 보고 하고 싶은 일은 하나다 —
+    새 파일로 갈아 끼우기. 그러려면 결국 문서함으로 건너가야 했다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyLabel
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='jump', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='브라우니')
+        dtype = DocumentType.objects.create(
+            type_code='T_JUMP', type_name='시험문서', display_order=98)
+        self.doc = ProductDocument.objects.create(
+            label=self.label, document_type=dtype,
+            original_filename='주표시면1.jpg', version=1, active_yn=True)
+
+    def test_문서_상세_주소는_문서함으로_보낸다(self):
+        """주소는 살려 둔다 — 알림 메일과 옛 즐겨찾기가 이 주소를 들고 있다."""
+        res = self.client.get('/products/documents/%s/' % self.doc.document_id)
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('tab=docs', res['Location'])
+        self.assertIn('doc=%s' % self.doc.document_id, res['Location'])
+
+    def test_만료_목록이_눈_아이콘_대신_문서함으로_보낸다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        for name in ('expiring_documents.html', 'expired_documents.html'):
+            with self.subTest(name):
+                text = (Path(dj.BASE_DIR) / 'templates/products/documents' / name
+                        ).read_text(encoding='utf-8')
+                self.assertNotIn('bi-eye', text)
+                self.assertNotIn("products:document_detail", text)
+                self.assertIn('tab=docs&doc=', text)
+
+    def test_문서함이_doc_파라미터를_받아_펼친다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        text = (Path(dj.BASE_DIR) / 'templates/products/product_detail.html'
+                ).read_text(encoding='utf-8')
+        i = text.index("urlParams.get('doc')")
+        self.assertIn('openEditPanel', text[i:i + 500])
+        # 없는 문서를 열려다 터지지 않는다
+        self.assertIn('if (row &&', text[i:i + 500])
+
+
+class 기본_유효기간은_지어내지_않는다(TestCase):
+    """
+    구분마다 그럴듯한 기간이 박혀 있었다 — 원산지증명서 365일, HACCP 1095일,
+    할랄 730일. 그런데 그 날짜는 **우리가 지어낸 것**이다. 인증서에는 저마다
+    실제 만료일이 찍혀 있고, 그것과 우리가 더한 날짜가 맞을 까닭이 없다.
+
+    틀린 날짜는 없는 날짜보다 나쁘다 — 사용자는 화면에 적힌 날짜를 보고 아직
+    여유가 있다고 믿는다. 모르는 것은 모른다고 둔다.
+    """
+
+    def _migration(self):
+        import importlib
+
+        return importlib.import_module(
+            'v1.products.migrations.0011_expiry_defaults')
+
+    def test_성적서만_6개월을_둔다(self):
+        mod = self._migration()
+        self.assertEqual(mod.DAYS, 180)
+        self.assertEqual(set(mod.SIX_MONTHS),
+                         {'TEST_QUALITY', 'ANALYSIS_NUTRITION'})
+
+    def test_나머지는_무기한이_된다(self):
+        """0 이면 무기한이다 — ProductDocument.save() 가 그때는 날짜를 안 만든다."""
+        from django.apps import apps as django_apps
+
+        from v1.products.models import DocumentType
+
+        mod = self._migration()
+        for code in ('CERT_HACCP', 'CERT_ORIGIN', 'CERT_HALAL', 'LABEL_DESIGN'):
+            DocumentType.objects.create(
+                type_code=code, type_name=code, default_validity_days=999,
+                display_order=1)
+        DocumentType.objects.create(
+            type_code='TEST_QUALITY', type_name='자가품질검사성적서',
+            default_validity_days=0, display_order=2)
+
+        mod.apply(django_apps, None)
+
+        self.assertEqual(
+            set(DocumentType.objects
+                .exclude(type_code__in=mod.SIX_MONTHS)
+                .values_list('default_validity_days', flat=True)), {0})
+        self.assertEqual(
+            DocumentType.objects.get(type_code='TEST_QUALITY').default_validity_days,
+            180)

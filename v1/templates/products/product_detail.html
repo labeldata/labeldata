@@ -1165,6 +1165,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+
+    /*
+     * `?doc=<id>` 로 들어오면 그 문서를 펼친 채로 연다.
+     *
+     * 만료 알림과 만료 목록이 이 주소로 보낸다. 예전에는 따로 있던 「문서 상세」
+     * 화면으로 갔는데, 거기 있는 것은 문서함 패널에 이미 다 있었고 디자인만
+     * 달랐다. 사용자는 처음 보는 화면을 만나고 다시 문서함으로 건너가야 했다.
+     *
+     * 문서가 목록에 없을 수도 있다 — 지웠거나, 옛 판이라 접혀 있거나. 그때는
+     * 조용히 문서함만 열어 둔다. 없는 것을 열려다 터지는 것보다 낫다.
+     */
+    const focusDocId = urlParams.get('doc');
+    if (focusDocId) {
+        const row = document.querySelector(`.document-row[data-doc-id="${focusDocId}"]`);
+        if (row && typeof window.openEditPanel === 'function') {
+            window.openEditPanel(Number(focusDocId));
+            row.classList.add('table-active');
+            row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+    }
     
     // iframe 로딩 (BOM, 영양성분, 표시사항)
     const tabContainer = document.getElementById('workspaceTab');

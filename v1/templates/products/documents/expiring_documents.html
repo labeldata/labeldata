@@ -1,48 +1,59 @@
-﻿{% extends 'base_v2.html' %}
+{% extends 'base_v2.html' %}
 
 {% block title %}만료 예정 문서{% endblock %}
 
 {% block content %}
+{% comment %}
+  만료 문서 목록.
+
+  **아이콘 하나짜리 「작업」 칸을 없앴다.** 눈 모양 단추가 무슨 뜻인지 알 수
+  없었고, 눌러도 문서함 오른쪽 패널에 이미 있는 것을 다시 보여 주는 화면으로
+  갈 뿐이었다. 여기서 하고 싶은 일은 하나다 — **그 문서를 새 파일로 갈아
+  끼우기.** 그러려면 문서함으로 가야 한다.
+
+  그래서 줄 전체를 문서함으로 보낸다(?tab=docs&doc=<id>). 문서함이 열리면서
+  그 문서의 패널이 펼쳐지므로, 만료일을 고치든 새 판을 올리든 그 자리에서
+  된다. 눈 -> 상세 -> 문서 탭 -> 문서 찾기 -> 클릭 이 두 번으로 준다.
+{% endcomment %}
 <div class="container mt-4">
     <h2><i class="bi bi-clock me-2"></i>만료 예정 문서</h2>
-    <p class="text-muted">향후 30일 이내에 만료되는 문서 목록입니다.</p>
+    <p class="text-muted">앞으로 30일 안에 만료되는 문서입니다. 줄을 누르면 그 제품 문서함이 해당 문서를 펼친 채로 열립니다.</p>
 
     {% if documents %}
     <div class="card shadow-sm mt-4">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover align-middle mb-0">
                     <thead>
                         <tr>
                             <th>제품명</th>
-                            <th>문서 타입</th>
+                            <th>문서 구분</th>
                             <th>파일명</th>
                             <th>만료일</th>
                             <th>남은 기간</th>
-                            <th>작업</th>
+                            <th class="text-end">고치기</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for doc in documents %}
-                        <tr>
-                            <td>{{ doc.label.my_label_name|default:doc.label.prdlst_nm }}</td>
-                            <td><span class="badge bg-info">{{ doc.document_type.type_name }}</span></td>
-                            <td>{{ doc.original_filename }}</td>
-                            <td>{{ doc.expiry_date }}</td>
-                            <td>
-                                {% if doc.days_until_expiry <= 7 %}
-                                    <span class="badge bg-danger">{{ doc.days_until_expiry }}일 남음</span>
+                        {% url 'products:product_detail' doc.label.my_label_id as doc_url %}
+                        <tr class="cursor-pointer" style="cursor:pointer"
+                            onclick="location.href='{{ doc_url }}?tab=docs&doc={{ doc.document_id }}'">
+                            <td class="fw-semibold">{{ doc.label.my_label_name|default:doc.label.prdlst_nm }}</td>
+                            <td><span class="badge bg-info">{{ doc.document_type.type_name|default:"미분류" }}</span></td>
+                            <td class="text-muted">{{ doc.original_filename }}</td>
+                            <td>{{ doc.expiry_date|date:"Y.m.d" }}</td>
+                            <td>{% if doc.days_until_expiry <= 7 %}
+                                <span class="badge bg-danger">{{ doc.days_until_expiry }}일 남음</span>
                                 {% elif doc.days_until_expiry <= 14 %}
-                                    <span class="badge bg-warning text-dark">{{ doc.days_until_expiry}}일 남음</span>
+                                <span class="badge bg-warning text-dark">{{ doc.days_until_expiry }}일 남음</span>
                                 {% else %}
-                                    <span class="badge bg-info">{{ doc.days_until_expiry }}일 남음</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                          <a href="{% url 'products:document_detail' doc.document_id %}" 
-                                   class="btn v2-btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye"></i>
-                                </a>
+                                <span class="badge bg-info">{{ doc.days_until_expiry }}일 남음</span>
+                                {% endif %}</td>
+                            <td class="text-end">
+                                <span class="btn v2-btn-sm btn-outline-primary">
+                                    <i class="bi bi-folder2-open me-1"></i>문서함에서 열기
+                                </span>
                             </td>
                         </tr>
                         {% endfor %}
@@ -53,7 +64,7 @@
     </div>
     {% else %}
     <div class="text-center py-5">
-        <i class="bi bi-check-circle-fill fa-4x text-success mb-3"></i>
+        <i class="bi bi-check-circle-fill display-4 text-success mb-3 d-block"></i>
         <h5 class="text-muted">만료 예정인 문서가 없습니다</h5>
     </div>
     {% endif %}
