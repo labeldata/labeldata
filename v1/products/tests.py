@@ -12927,8 +12927,7 @@ class 기본_유효기간은_지어내지_않는다(TestCase):
     def test_성적서만_6개월을_둔다(self):
         mod = self._migration()
         self.assertEqual(mod.DAYS, 180)
-        self.assertEqual(set(mod.SIX_MONTHS),
-                         {'TEST_QUALITY', 'ANALYSIS_NUTRITION'})
+        self.assertEqual(set(mod.SIX_MONTHS), {'TEST_QUALITY'})
 
     def test_나머지는_무기한이_된다(self):
         """0 이면 무기한이다 — ProductDocument.save() 가 그때는 날짜를 안 만든다."""
@@ -12937,7 +12936,8 @@ class 기본_유효기간은_지어내지_않는다(TestCase):
         from v1.products.models import DocumentType
 
         mod = self._migration()
-        for code in ('CERT_HACCP', 'CERT_ORIGIN', 'CERT_HALAL', 'LABEL_DESIGN'):
+        for code in ('CERT_HACCP', 'CERT_ORIGIN', 'CERT_HALAL', 'LABEL_DESIGN',
+                     'ANALYSIS_NUTRITION'):
             DocumentType.objects.create(
                 type_code=code, type_name=code, default_validity_days=999,
                 display_order=1)
@@ -12954,3 +12954,66 @@ class 기본_유효기간은_지어내지_않는다(TestCase):
         self.assertEqual(
             DocumentType.objects.get(type_code='TEST_QUALITY').default_validity_days,
             180)
+
+
+class 문서_정보는_그_행_아래에_펼친다(TestCase):
+    """
+    오른쪽에 280px 패널이 상시 붙어 있었다. 담는 것은 일곱 칸뿐인데 화면 폭의
+    4분의 1을 먹었고, 문서를 누르면 시선이 저쪽 끝으로 튀었다. 게다가 판
+    목록은 행 아래에 펼쳐지므로 정보와 이력을 같이 보려면 눈이 좌우로 오갔다.
+
+    행 아래로 옮기면 가로로 넓어져 일곱 칸이 세 줄에 들어가고, 판 목록과
+    한자리에서 만난다.
+    """
+
+    TAB = 'templates/products/_tab_documents.html'
+
+    def _text(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / self.TAB).read_text(encoding='utf-8')
+
+    def test_우측_패널_껍데기가_남아_있지_않다(self):
+        text = self._text()
+        self.assertNotIn('doc-edit-collapsed', text)
+        self.assertNotIn('/우측 수정 패널', text)
+
+    def test_한_번에_하나만_펼친다(self):
+        """여럿을 펼쳐 두면 '무슨 문서를 갖고 있는가' 를 훑을 수가 없다."""
+        text = self._text()
+        i = text.index('function ensureDocExpander(')
+        block = text[i:i + 600]
+        self.assertIn(".querySelectorAll('.doc-expand-row').forEach", block)
+        self.assertIn('remove()', block)
+
+    def test_같은_문서를_다시_누르면_접힌다(self):
+        """여는 자리와 닫는 자리가 같아야 한다."""
+        text = self._text()
+        i = text.index('window.openEditPanel = function(docId)')
+        block = text[i:i + 1400]
+        self.assertIn("classList.contains('doc-expand-row')", block)
+        self.assertIn('closeEditPanel()', block)
+
+    def test_닫을_때_껍데기째_걷어낸다(self):
+        """
+        폭 0 으로 접어 두고 안쪽만 비우면 성적서 판독 상자가 남아, 다음에 연
+        문서 위에 앞 문서의 판독값이 얹혔다. 저장 핸들러는 앞 문서의 id 를
+        쥐고 있어 [저장] 이 **앞 문서에** 저장됐다.
+        """
+        text = self._text()
+        i = text.index('window.closeEditPanel = function()')
+        block = text[i:i + 900]
+        self.assertIn(".doc-expand-row').forEach(el => el.remove())", block)
+
+    def test_칸들이_가로로_늘어선다(self):
+        text = self._text()
+        self.assertIn('doc-panel-grid', text)
+        self.assertIn('repeat(auto-fit, minmax(min(100%, 260px), 1fr))', text)
+
+    def test_접기_단추가_펼친_영역_안에_있다(self):
+        """닫으려고 저쪽 끝의 X 를 찾아가게 하지 않는다."""
+        text = self._text()
+        i = text.index('bi-chevron-up')
+        self.assertIn('closeEditPanel()', text[max(0, i - 300):i])

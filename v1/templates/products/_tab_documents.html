@@ -299,27 +299,18 @@
     
     </div><!-- /메인 컨텐츠 영역 -->
     
-    <!-- 우측 수정 패널 (목차 패널 스타일) -->
-    <div id="doc-edit-panel" class="border-start bg-white doc-edit-collapsed"
-         style="flex-shrink: 0; transition: width 0.25s ease, min-width 0.25s ease; overflow: hidden;">
-        <div class="overflow-y-auto custom-scrollbar p-3" 
-             style="max-height: calc(100vh - 250px); height: 100%;">
-            
-            <div class="d-flex justify-content-between align-items-center mb-2 sticky-top bg-white pt-2" style="top: -12px; z-index: 5;">
-                <h6 class="fw-bold text-muted small text-uppercase mb-0">문서 정보</h6>
-                <button type="button" class="btn btn-light border v2-btn-icon" onclick="closeEditPanel()" aria-label="닫기">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-            
-            <div id="edit-panel-content">
-                <div class="text-center text-muted py-5">
-                    <i class="bi bi-pencil-square" style="font-size: 48px; opacity: 0.3;"></i>
-                    <p class="mt-3 small">문서를 선택하여 수정하세요</p>
-                </div>
-            </div>
-        </div>
-    </div><!-- /우측 수정 패널 -->
+    {% comment %}
+      문서 정보는 **그 행 아래에 펼친다.**
+
+      예전에는 오른쪽에 280px 패널이 상시 붙어 있었다. 담는 것은 일곱 칸뿐인데
+      화면 폭의 4분의 1을 먹었고, 문서를 누르면 시선이 저쪽 끝으로 튀었다.
+      게다가 판(version) 목록은 행 아래에 펼쳐지므로, 정보와 이력을 같이 보려면
+      눈이 좌우로 오갔다.
+
+      행 아래로 옮기면 가로로 넓어져 일곱 칸이 세 줄에 들어가고, 판 목록과
+      한자리에서 만난다. 껍데기는 JS 가 만든다(ensureDocExpander) — 표 안에
+      끼워 넣는 <tr> 이라 템플릿에 미리 적어 둘 자리가 없다.
+    {% endcomment %}
     
 </div>
 
@@ -859,20 +850,26 @@ async function submitImportCompanyDoc() {
         background-color: rgba(0,0,0,0.2);
     }
     
-    /* 우측 수정 패널 */
-    /* 패널 닫힌 상태: 너비 0 → 표를 덮지 않음 */
-    .doc-edit-collapsed {
-        width: 0 !important;
-        min-width: 0 !important;
-        border-left: none !important;
+    /* 행 아래로 펼치는 문서 정보 */
+    .document-row.is-open > td { background: var(--ez-surface-2, #f8f9fa); }
+    .doc-expand-row > td {
         padding: 0 !important;
+        background: var(--ez-surface-2, #f8f9fa);
+        border-bottom: 2px solid var(--ez-border, #dadce0);
     }
-    /* 패널 열린 상태 */
-    #doc-edit-panel:not(.doc-edit-collapsed) {
-        width: 280px;
-        min-width: 280px;
-        overflow-y: auto;
+    #doc-edit-panel {
+        padding: 14px 16px 12px;
     }
+    /* 일곱 칸을 가로로 늘어놓는다. 좁으면 저절로 줄이 준다 —
+       min() 이라 400px 화면에서도 가로 스크롤이 생기지 않는다. */
+    #doc-edit-panel .doc-panel-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+        gap: 8px 20px;
+        align-items: start;
+    }
+    /* 설명은 넓게 쓴다 — 여러 줄짜리라 한 칸에 가두면 답답하다 */
+    #doc-edit-panel .doc-panel-grid > .doc-field-wide { grid-column: 1 / -1; }
     #doc-edit-panel .form-label {
         margin-bottom: 6px;
     }
@@ -897,20 +894,19 @@ async function submitImportCompanyDoc() {
        ------------------------------------------------------------- */
     #doc-edit-panel .doc-panel-actions {
         display: flex;
-        gap: 4px;
+        gap: 6px;
+        flex-wrap: wrap;
     }
     #doc-edit-panel .doc-panel-actions > .btn {
-        flex: 1 1 auto;
-        min-width: 0;
-        padding-left: 6px;
-        padding-right: 6px;
+        padding-left: 10px;
+        padding-right: 10px;
     }
 
     /* 항목명 + 입력칸을 한 줄에. 항목명 폭을 고정해야 입력칸의 왼쪽 모서리가
        세로로 한 줄로 선다 — 제각각이면 오히려 어수선하다. */
     #doc-edit-panel .doc-field {
         display: grid;
-        grid-template-columns: 58px 1fr;
+        grid-template-columns: 66px 1fr;
         align-items: center;
         column-gap: 8px;
     }
@@ -1098,22 +1094,8 @@ async function submitImportCompanyDoc() {
         }
     }
     
-    @media (max-height: 700px) {
-        /* 바 높이는 여기서 더 줄이지 않는다. 기본이 이미 44px 라 52px 로 두면
-           낮은 화면에서 오히려 커진다. */
-        #doc-edit-panel .overflow-y-auto {
-            max-height: calc(100vh - 250px) !important;
-        }
-    }
-
-    /* 반응형 너비 조절 */
+    /* 좁은 화면 */
     @media (max-width: 991px) {
-        /* 모바일에서도 flex flow 안에서 width 애니메이션으로 처리 (표 덮지 않음) */
-        #doc-edit-panel:not(.doc-edit-collapsed) {
-            width: 260px;
-            min-width: 260px;
-        }
-
         .compact-doc-table .col-uploader,
         .compact-doc-table th.col-uploader {
             display: none; /* 좁은 화면에서 등록자 컬럼 숨김 */
@@ -2002,12 +1984,46 @@ async function submitImportCompanyDoc() {
         }
     }
 
+    /*
+     * 문서 정보를 담을 <tr> 을 그 행 **바로 아래**에 만든다.
+     *
+     * **한 번에 하나만 펼친다.** 여럿을 펼쳐 두면 목록이 금세 길어져서, 정작
+     * "무슨 문서를 갖고 있는가" 를 훑을 수가 없다. 판(version) 펼침이 이미
+     * 같은 규칙으로 돌고 있으므로 사용자가 배울 것도 없다.
+     */
+    function ensureDocExpander(row) {
+        document.querySelectorAll('.doc-expand-row').forEach(el => el.remove());
+
+        const tr = document.createElement('tr');
+        tr.className = 'doc-expand-row';
+        const cols = row.children.length || 7;
+        tr.innerHTML = `<td colspan="${cols}">
+            <div id="doc-edit-panel"><div id="edit-panel-content"></div></div>
+        </td>`;
+        row.insertAdjacentElement('afterend', tr);
+        return tr;
+    }
+
     window.openEditPanel = function(docId) {
         const doc = documentData[docId];
         if (!doc) {
             showSnackbar('문서 정보를 찾을 수 없습니다.', 'error');
             return;
         }
+
+        const row = document.querySelector(`.document-row[data-doc-id="${docId}"]`);
+        if (!row) return;
+
+        /* 펼친 문서를 다시 누르면 접는다. 여는 것과 닫는 것이 같은 자리에
+         * 있어야 한다 — 닫으려고 저쪽 끝의 X 를 찾아가게 하지 않는다. */
+        if (row.nextElementSibling?.classList.contains('doc-expand-row')) {
+            window.closeEditPanel();
+            return;
+        }
+        ensureDocExpander(row);
+        document.querySelectorAll('.document-row.is-open')
+            .forEach(el => el.classList.remove('is-open'));
+        row.classList.add('is-open');
 
         /* 앞 문서의 성적서 판독 상자를 먼저 걷어낸다.
          *
@@ -2045,8 +2061,14 @@ async function submitImportCompanyDoc() {
             <input type="hidden" id="edit-doc-type-id" value="${doc.typeId}">
             <input type="hidden" id="edit-doc-type-name" value="${doc.typeName || ''}">
             
-            <div class="fw-bold text-dark text-truncate mb-2" title="${doc.filename}">
-                <i class="bi bi-file-earmark me-1"></i>${doc.filename}
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="fw-bold text-dark text-truncate flex-grow-1" title="${doc.filename}">
+                    <i class="bi bi-file-earmark me-1"></i>${doc.filename}
+                </div>
+                <button type="button" class="btn btn-light border v2-btn-icon"
+                        onclick="closeEditPanel()" aria-label="접기" title="접기">
+                    <i class="bi bi-chevron-up"></i>
+                </button>
             </div>
 
             <div class="doc-panel-actions mb-2">
@@ -2092,6 +2114,7 @@ async function submitImportCompanyDoc() {
 
             <hr class="doc-panel-rule">
 
+            <div class="doc-panel-grid">
             <div class="doc-field mb-2">
                 <label class="form-label" for="edit-doc-type">문서 구분</label>
                 <select class="form-select form-select-sm" id="edit-doc-type">
@@ -2106,6 +2129,7 @@ async function submitImportCompanyDoc() {
                 <input type="date" class="form-control form-control-sm" id="edit-issue-date" value="${doc.issueDate || ''}">
             </div>
 
+            <div class="doc-field-cell">
             <div class="doc-field mb-1">
                 <label class="form-label" for="edit-expiry-date">유효기간</label>
                 <input type="date" class="form-control form-control-sm" id="edit-expiry-date" value="${doc.expiryDate || ''}">
@@ -2118,6 +2142,7 @@ async function submitImportCompanyDoc() {
                 <button type="button" class="btn btn-outline-secondary v2-btn-sm" onclick="setExpiryByYears(2)">+2년</button>
                 <button type="button" class="btn btn-outline-success v2-btn-sm" onclick="clearExpiry()">무기한</button>
             </div>
+            </div>
 
             <div class="form-check form-switch mb-2">
                 <input class="form-check-input" type="checkbox" id="edit-notification-enabled" ${doc.expiryNotificationEnabled ? 'checked' : ''}>
@@ -2126,12 +2151,13 @@ async function submitImportCompanyDoc() {
                 </label>
             </div>
 
-            <div class="doc-field doc-field-top mb-2">
+            <div class="doc-field doc-field-top doc-field-wide mb-2">
                 <label class="form-label" for="edit-description">설명</label>
                 <textarea class="form-control form-control-sm" id="edit-description" rows="2" placeholder="문서 설명...">${doc.description || ''}</textarea>
             </div>
+            </div>
 
-            <div class="doc-panel-foot mt-2 pt-2 border-top text-muted">
+            <div class="doc-panel-foot mt-2 pt-2 border-top text-muted d-flex flex-wrap gap-1 align-items-center">
                 <i class="bi bi-person me-1"></i>${doc.uploadedBy}
                 <span class="mx-1">·</span>${doc.uploadedDate}
                 <span class="mx-1">·</span>${(doc.fileSize / 1024 / 1024).toFixed(2)} MB
@@ -2139,31 +2165,20 @@ async function submitImportCompanyDoc() {
         `;
         
         document.getElementById('edit-panel-content').innerHTML = panelContent;
-        
-        const panel = document.getElementById('doc-edit-panel');
-        
-        // 패널 표시 (flex width 기반)
-        panel.classList.remove('doc-edit-collapsed');
     };
     
     // 문서 수정 패널 닫기
     window.closeEditPanel = function() {
-        const panel = document.getElementById('doc-edit-panel');
-
-        /* 성적서 판독 상자는 패널의 첫 자식으로 붙는다 — 패널을 닫으면
-         * 같이 걷어낸다. 남겨 두면 다음에 연 문서의 패널에 앞 문서의
-         * 판독값이 그대로 얹힌다. */
-        document.getElementById('specNutritionResult')?.remove();
-
-        // 패널 숨기기 (flex width 기반)
-        panel.classList.add('doc-edit-collapsed');
-
-        document.getElementById('edit-panel-content').innerHTML = `
-            <div class="text-center text-muted py-5">
-                <i class="bi bi-pencil-square" style="font-size: 48px; opacity: 0.3;"></i>
-                <p class="mt-3 small">문서를 선택하여 수정하세요</p>
-            </div>
-        `;
+        /* 껍데기째 걷어낸다.
+         *
+         * 예전에는 패널을 폭 0 으로 접어 두고 안쪽만 비웠다. 그래서 성적서
+         * 판독 상자(#specNutritionResult)가 남아 다음에 연 문서 위에 앞 문서의
+         * 판독값이 얹히는 일이 있었다 — 저장 핸들러는 클로저로 앞 문서의 id 를
+         * 쥐고 있어 [저장] 을 누르면 **앞 문서에** 저장됐다. 통째로 지우면
+         * 그런 찌꺼기가 남을 자리가 없다. */
+        document.querySelectorAll('.doc-expand-row').forEach(el => el.remove());
+        document.querySelectorAll('.document-row.is-open')
+            .forEach(el => el.classList.remove('is-open'));
     };
 
     // 문서 정보 업데이트 제출
