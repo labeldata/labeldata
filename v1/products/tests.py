@@ -13487,3 +13487,54 @@ class 창이_다_닫힌_뒤에_다음_장을_연다(TestCase):
         self.assertNotIn(
             "bootstrap.Modal.getOrCreateInstance(modalEl).hide();\n"
             "                nextInIngredientQueue();", docs)
+
+
+class 고른_사진을_한_장씩_뺄_수_있다(TestCase):
+    """
+    첫 장의 이름만 적고 [X] 하나가 전부를 지웠다. 다섯 장 중 한 장이 잘못
+    골라졌으면 **다섯 장을 다시 고르는 수밖에** 없었다 — 파일 고르기 창에서
+    여러 장을 집는 일이 쉬운 일이 아닌데도.
+
+    같은 이름이 이미 있다고 알려 주기까지 하면서 뺄 수는 없게 해 두면,
+    그 알림은 알려 주기만 하고 할 일은 주지 않는 셈이다.
+    """
+
+    def _js(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                ).read_text(encoding='utf-8')
+
+    def test_장마다_한_줄씩_그린다(self):
+        js = self._js()
+        i = js.index('function renderSelectedList()')
+        block = js[i:i + 1600]
+        self.assertIn('selectedFiles.map', block)
+        self.assertIn('data-drop', block)
+
+    def test_중복인_장을_목록에서도_짚어_준다(self):
+        js = self._js()
+        i = js.index('function renderSelectedList()')
+        self.assertIn('중복', js[i:i + 1600])
+
+    def test_한_장만_뺀다(self):
+        js = self._js()
+        i = js.index('function dropSelectedFile(')
+        block = js[i:i + 700]
+        self.assertIn('selectedFiles.filter((f, i) => i !== index)', block)
+
+    def test_다_빼면_처음으로_돌아간다(self):
+        """마지막 한 장까지 빼고 나면 파일 칸이 남아 있으면 안 된다."""
+        js = self._js()
+        i = js.index('function dropSelectedFile(')
+        block = js[i:i + 700]
+        self.assertIn('if (!selectedFiles.length)', block)
+        self.assertIn("input.value = ''", block)
+
+    def test_한_장일_때는_목록을_그리지_않는다(self):
+        """한 장짜리에 목록은 줄만 늘린다."""
+        js = self._js()
+        i = js.index('function renderSelectedList()')
+        self.assertIn('if (selectedFiles.length < 2)', js[i:i + 500])

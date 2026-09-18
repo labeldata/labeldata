@@ -58,6 +58,7 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
 function resetUploadForm() {
     selectedFiles = [];
     warnDuplicateNames([]);   // 앞서 연 창의 경고가 남지 않게
+    renderSelectedList();
     selectedFile = null;
     document.getElementById('smart-upload-form').reset();
     document.getElementById('selected-file-info').style.display = 'none';
@@ -131,6 +132,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedFiles = [];
             fileInput.value = '';
             warnDuplicateNames([]);
+            renderSelectedList();
             document.getElementById('selected-file-info').style.display = 'none';
         });
     }
@@ -284,6 +286,79 @@ function existingFilenames() {
     }
 }
 
+/*
+ * 고른 것이 여럿이면 **장마다 한 줄씩** 그리고, 각각 뺄 수 있게 한다.
+ *
+ * 예전에는 첫 장의 이름만 적고 [X] 하나가 전부를 지웠다. 다섯 장 중 한 장이
+ * 잘못 골라졌으면 다섯 장을 다시 고르는 수밖에 없었다 — 파일 고르기 창에서
+ * 여러 장을 집는 일이 쉬운 일이 아닌데도.
+ */
+function renderSelectedList() {
+    const box = document.getElementById('selected-file-list');
+    const single = document.getElementById('selected-file-info');
+    if (!box) return;
+
+    if (selectedFiles.length < 2) {
+        box.hidden = true;
+        box.innerHTML = '';
+        if (single) single.style.display = selectedFiles.length ? 'block' : 'none';
+        return;
+    }
+
+    const have = existingFilenames();
+    box.hidden = false;
+    box.innerHTML = selectedFiles.map((f, i) => {
+        const dup = have.indexOf((f.name || '').toLowerCase()) !== -1;
+        return '<div class="d-flex align-items-center gap-2 py-1 border-bottom">'
+             + '<i class="bi bi-image text-info"></i>'
+             + '<span class="flex-grow-1 text-truncate" title="' + f.name + '">'
+             + f.name + (dup ? ' <span class="badge bg-warning text-dark">중복</span>' : '')
+             + '</span>'
+             + '<span class="text-muted small flex-shrink-0">' + formatFileSize(f.size) + '</span>'
+             + '<button type="button" class="btn btn-sm btn-light border flex-shrink-0"'
+             + ' data-drop="' + i + '" title="이 장 빼기">&times;</button>'
+             + '</div>';
+    }).join('');
+
+    box.querySelectorAll('[data-drop]').forEach(btn => {
+        btn.addEventListener('click', function () {
+            dropSelectedFile(Number(this.dataset.drop));
+        });
+    });
+}
+
+/* 한 장을 뺀다. 마지막 한 장까지 빼면 처음으로 돌아간다. */
+function dropSelectedFile(index) {
+    selectedFiles = selectedFiles.filter((f, i) => i !== index);
+    selectedFile = selectedFiles[0] || null;
+
+    if (!selectedFiles.length) {
+        const input = document.getElementById('document-upload-input');
+        if (input) input.value = '';
+        const single = document.getElementById('selected-file-info');
+        if (single) single.style.display = 'none';
+    }
+    refreshSelectedSummary();
+    warnDuplicateNames(selectedFiles);
+    renderSelectedList();
+}
+
+/* 파일 칸의 이름·크기 요약. 한 장이면 그 장, 여럿이면 장수를 적는다. */
+function refreshSelectedSummary() {
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    if (!fileName || !fileSize || !selectedFiles.length) return;
+
+    if (selectedFiles.length === 1) {
+        fileName.textContent = selectedFiles[0].name;
+        fileSize.textContent = formatFileSize(selectedFiles[0].size);
+        return;
+    }
+    fileName.textContent = selectedFiles[0].name + ' 외 ' + (selectedFiles.length - 1) + '장';
+    fileSize.textContent = '모두 ' + selectedFiles.length + '장 · '
+        + formatFileSize(selectedFiles.reduce((sum, f) => sum + f.size, 0));
+}
+
 function warnDuplicateNames(files) {
     const hint = document.getElementById('upload-duplicate-hint');
     if (!hint) return;
@@ -337,16 +412,8 @@ function handleFilesSelect(fileList) {
     handleFileSelect(good[0]);        // 첫 장으로 칸을 채우고
     selectedFiles = good;             // 나머지는 여기 담아 둔다
     warnDuplicateNames(good);
-
-    const fileName = document.getElementById('file-name');
-    if (fileName) {
-        fileName.textContent = good[0].name + ' 외 ' + (good.length - 1) + '장';
-    }
-    const fileSize = document.getElementById('file-size');
-    if (fileSize) {
-        fileSize.textContent = '모두 ' + good.length + '장 · '
-            + formatFileSize(good.reduce((sum, f) => sum + f.size, 0));
-    }
+    refreshSelectedSummary();
+    renderSelectedList();
 }
 
 function handleFileSelect(file) {
@@ -357,6 +424,7 @@ function handleFileSelect(file) {
     selectedFile = file;
     selectedFiles = [file];
     warnDuplicateNames([file]);
+    renderSelectedList();
     
     // 파일 정보 표시
     const fileName = document.getElementById('file-name');
