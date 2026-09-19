@@ -151,7 +151,50 @@ class MyIngredient(models.Model):
     def save(self, *args, **kwargs):
         """search_name이 비어 있을 경우, 기본값으로 id 사용"""
         super().save(*args, **kwargs)
-  
+
+    def replace_photo(self, name, content):
+        """
+        표시사항 사진을 갈아 끼운다. **옛 파일은 지운다.**
+
+        사진은 판(version)이 없다 — 돌아갈 일이 없고, 두면 저장 공간만 는다.
+        새 것을 먼저 쓰고 나서 옛 것을 지운다. 순서를 바꾸면 새 것을 못 쓴 날
+        둘 다 없다. 옛 것을 못 지워도 새 사진은 붙는다. 저장은 부르는 쪽이 한다.
+
+        세 가지를 조심한다.
+          · 이름을 다듬는다. 점이 많은 이름('a.b.c.d….jpg')은 저장소가 뒤쪽을
+            전부 확장자로 보아 뿌리를 빈 것으로 줄이고, 그러면 자리를 못 찾아
+            SuspiciousFileOperation 이 난다.
+          · 같은 파일을 보는 다른 원료가 있으면 두다. 복사한 원료(bulk_copy)는
+            파일 이름을 그대로 물려받는다 — 지우면 그쪽 사진이 깨진다.
+          · 트랜잭션 안이면 **커밋 뒤에** 지운다. 되돌려지면 DB 는 옛 이름을
+            가리키는데 그때 옛 파일이 없으면 사진이 깨진다. 트랜잭션 밖이면 바로 돈다.
+        """
+        import logging
+        import os
+        import re
+
+        from django.db import transaction
+
+        root, ext = os.path.splitext(os.path.basename(name or ''))
+        name = (re.sub(r'[^\w\-]+', '_', root)[:40] or 'photo') + ext.lower()
+
+        old = self.label_photo.name if self.label_photo else ''
+        self.label_photo.save(name, content, save=False)
+        if not old or old == self.label_photo.name:
+            return
+        if type(self).objects.filter(label_photo=old).exclude(pk=self.pk).exists():
+            return
+        storage = self.label_photo.storage
+
+        def _delete_old():
+            try:
+                storage.delete(old)
+            except OSError:
+                logging.getLogger(__name__).warning(
+                    '옛 원료 사진을 지우지 못했다: %s', old, exc_info=True)
+
+        transaction.on_commit(_delete_old)
+
 class MyLabel(models.Model):
     # 표시사항 모델
     user_id = models.ForeignKey(User, related_name="user_label", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")

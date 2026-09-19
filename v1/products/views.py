@@ -6827,50 +6827,85 @@ def document_ai_review_save(request, document_id):
     return JsonResponse({'success': True, 'saved': len(extracted)})
  
  
-def register_ingredient_bom(user, label, fields):
+def register_ingredient_bom(user, label, fields, *, link_to=None, force_new=False):
     """
     원료 한 건을 BOM 에 넣는다. 사진에서 왔든 품목보고번호에서 왔든 규칙은 같다.
 
-    같은 원료를 두 번 만들지 않는다 - 이름이 비슷하면(RapidFuzz) 기존 "내 원료"
-    에 붙이고, 없을 때만 만든다. 같은 원료가 이 제품 BOM 에 이미 있으면 행을
-    늘리지 않고 값을 갱신한다.
+    어느 원료에 붙일지는 셋 중 하나다.
+      · link_to  — 화면에서 사람이 고른 기존 원료 번호. 그 원료에 붙인다.
+      · force_new — 사람이 "그래도 새로 만든다" 고 골랐다. 비슷한 것이 있어도,
+                    같은 정보가 있어도 새 원료를 만든다. 중복은 나중에 정리한다.
+      · 둘 다 없음 — 예전 규칙. 이름이 비슷하면(RapidFuzz 90점) 기존 원료에 붙이고
+                    없을 때만 만든다. 품목보고번호로 넣는 길이 이것을 쓴다.
+    같은 원료가 이 제품 BOM 에 이미 있으면 행을 늘리지 않고 값을 갱신한다.
 
     배합비는 넣지 않는다. 그 원료가 완제품에서 몇 %인지는 원료 봉지에도
     품목보고 정보에도 없다. BOM 화면에서 사람이 넣는다.
 
     Returns: (bom, 만들었는지, 기존 원료에 붙었는지, 유사도, 후보 목록)
+    Raises: IngredientQuotaExceeded, IngredientLinkNotFound
     """
     from v1.bom.models import ProductBOM
+    from v1.label.models import MyIngredient
     from v1.label.services.ingredient_matching import (
-        IngredientQuotaExceeded, get_or_create_my_ingredient, load_pool,
-        match_my_ingredient,
+        IngredientLinkNotFound, IngredientQuotaExceeded, clean_report_no,
+        fit_to_model, get_or_create_my_ingredient, load_pool, match_my_ingredient,
     )
 
     name = (fields.get('ingredient_name') or '').strip()
-    pool = load_pool(user)
-    ingredient, score, candidates = match_my_ingredient(user, name, pool=pool)
-    matched = ingredient is not None
+    # 사진에서 읽은 품목보고번호는 '제…호' 나 번호 둘이 붙어 오기도 한다. 칸(16자)에
+    # 맞는 꼴만 남긴다 — 원료와 BOM 행이 같은 값을 본다.
+    fields = dict(fields, report_no=clean_report_no(fields.get('report_no')))
+    new_values = dict(
+        prdlst_nm=name,
+        prdlst_report_no=fields.get('report_no') or '',
+        prdlst_dcnm=fields.get('food_type') or '',
+        ingredient_display_name=name,
+        allergens=fields.get('allergens') or '',
+        bssh_nm=fields.get('manufacturer') or '',
+        rawmtrl_nm=fields.get('sub_ingredients') or '',
+        delete_YN='N',
+    )
 
-    if not matched:
+    score, candidates = 0, []
+    if link_to:
+        ingredient = MyIngredient.objects.filter(
+            pk=link_to, user_id=user, delete_YN='N').first()
+        if ingredient is None:
+            raise IngredientLinkNotFound('연결할 원료를 찾지 못했습니다. 다시 골라 주세요.')
+        matched, score = True, 100
+    elif force_new:
         # 한도에 걸리면 여기서 IngredientQuotaExceeded 가 올라간다.
-        # 부르는 쪽이 몇 종을 못 넣었는지 사용자에게 말해야 한다.
         ingredient, _created = get_or_create_my_ingredient(
-            user,
-            prdlst_nm=name,
-            prdlst_report_no=fields.get('report_no') or '',
-            prdlst_dcnm=fields.get('food_type') or '',
-            ingredient_display_name=name,
-            allergens=fields.get('allergens') or '',
-            bssh_nm=fields.get('manufacturer') or '',
-            rawmtrl_nm=fields.get('sub_ingredients') or '',
-            delete_YN='N',
-        )
+            user, allow_duplicate=True, **new_values)
+        matched = False
+    else:
+        ingredient, score, candidates = match_my_ingredient(
+            user, name, pool=load_pool(user))
+        matched = ingredient is not None
+        if not matched:
+            # 부르는 쪽이 몇 종을 못 넣었는지 사용자에게 말해야 한다.
+            ingredient, _created = get_or_create_my_ingredient(user, **new_values)
 
     # 원재료 표시명에는 **읽어낸 원재료명과 함량**을 넣는다. 이 원료가 완제품에
     # 쓰이면 표시 문구가 "표고버섯볶음(새송이버섯 57.64%, ...)" 로 나가야 한다.
     # 원료명을 그대로 복사하면 BOM 표의 앞 두 칸이 똑같아 "원재료명을 못 읽었다"
     # 로 보이고, 정작 읽은 값은 표에 컬럼이 없는 sub_ingredients 에만 남는다.
     printed = (fields.get('sub_ingredients') or '').strip()
+
+    # **칸 길이에 맞춘다.** MySQL 은 긴 값을 거절해 500 이 났다 — 제조사 칸에
+    # 주소가 딸려 오는 사진이 그랬다. SQLite 는 봐주므로 테스트에선 안 보인다.
+    values = fit_to_model(ProductBOM, {
+        'ingredient_name': name,
+        'raw_material_name': printed or name,
+        'food_type': fields.get('food_type') or '',
+        'sub_ingredients': printed,
+        'allergens': fields.get('allergens') or '',
+        'allergen': fields.get('allergens') or '',
+        'origin': fields.get('origin') or '',
+        'manufacturer': fields.get('manufacturer') or '',
+        'report_no': fields.get('report_no') or '',
+    })
 
     bom = ProductBOM.objects.filter(
         parent_label=label, source_ingredient=ingredient, active_yn=True).first()
@@ -6879,32 +6914,19 @@ def register_ingredient_bom(user, label, fields):
         bom = ProductBOM.objects.create(
             parent_label=label,
             created_by=user,
-            ingredient_name=name,
-            raw_material_name=printed or name,
-            food_type=fields.get('food_type') or '',
-            sub_ingredients=printed,
-            allergens=fields.get('allergens') or '',
-            allergen=fields.get('allergens') or '',
-            origin=fields.get('origin') or '',
-            manufacturer=fields.get('manufacturer') or '',
-            report_no=fields.get('report_no') or '',
             source_ingredient=ingredient,
             sort_order=ProductBOM.objects.filter(
                 parent_label=label, active_yn=True).count(),
             active_yn=True,
+            **values,
         )
         created = True
     else:
-        # 다시 읽은 경우. 행을 새로 만들지 않고 값을 갱신한다.
-        bom.ingredient_name = name
-        bom.raw_material_name = printed or name
-        bom.food_type = fields.get('food_type') or bom.food_type
-        bom.sub_ingredients = printed or bom.sub_ingredients
-        bom.allergens = fields.get('allergens') or bom.allergens
-        bom.allergen = fields.get('allergens') or bom.allergen
-        bom.origin = fields.get('origin') or bom.origin
-        bom.manufacturer = fields.get('manufacturer') or bom.manufacturer
-        bom.report_no = fields.get('report_no') or bom.report_no
+        # 다시 읽은 경우. 행을 새로 만들지 않고 값을 갱신한다. 이름 두 칸은 늘
+        # 새 값으로, 나머지는 읽힌 것이 있을 때만 — 빈 값으로 덮지 않는다.
+        for key, value in values.items():
+            if key in ('ingredient_name', 'raw_material_name') or value:
+                setattr(bom, key, value)
         bom.save()
 
     return bom, created, matched, score, candidates
@@ -7750,6 +7772,33 @@ def rawmtrl_to_bom_apply(request, label_id):
     return JsonResponse(payload)
 
 
+def _move_photo_to_ingredient(doc, ingredient, fields):
+    """
+    문서함의 사진을 원료로 옮기고 읽은 값을 함께 둔다.
+
+    **파일을 못 옮겨도 등록은 끝낸다.** 사람은 값을 이미 확인했고 원료도 BOM 도
+    그 값으로 서야 한다. 사진 한 장 때문에 그 일을 되돌리면 사용자는 방금 고친
+    값을 처음부터 다시 넣어야 한다. 사진은 다시 올리면 되지만 손으로 고친 값은
+    그렇지 않다. 이름이 칸보다 길면 SuspiciousFileOperation 이 난다 — 그것도
+    같은 부류다.
+    """
+    import os
+
+    from django.core.exceptions import SuspiciousFileOperation
+
+    try:
+        if doc.file:
+            # 이미 사진이 있으면 갈아 끼운다(옛 파일은 지운다) — 방금 사람이
+            # 확인한 것이 최신이다.
+            ingredient.replace_photo(os.path.basename(doc.file.name), doc.file)
+    except (OSError, ValueError, SuspiciousFileOperation):
+        logger.warning('원료 사진을 옮기지 못했다 (document=%s)',
+                       doc.pk, exc_info=True)
+
+    ingredient.label_photo_fields = fields
+    ingredient.save(update_fields=['label_photo', 'label_photo_fields'])
+
+
 @login_required
 @require_POST
 def document_ingredient_photo_to_bom(request, document_id):
@@ -7771,13 +7820,11 @@ def document_ingredient_photo_to_bom(request, document_id):
     """
     from django.db import transaction
 
-    from v1.bom.models import ProductBOM
     from v1.label.services.ingredient_matching import (
         # **이 이름이 빠져 있었다.** 아래 `except IngredientQuotaExceeded` 가
         # 이름을 몰라, 한도에 걸리는 순간 친절한 429 대신 NameError 가 났다.
         # 예외가 안 나는 동안에는 드러나지 않는 종류의 구멍이다.
-        IngredientQuotaExceeded,
-        get_or_create_my_ingredient, load_pool, match_my_ingredient,
+        IngredientLinkNotFound, IngredientQuotaExceeded,
     )
     from v1.products.services.ingredient_photo import (
         parse_ingredient_photo, read_document_image,
@@ -7795,16 +7842,22 @@ def document_ingredient_photo_to_bom(request, document_id):
             payload = json.loads(request.body)
         except (ValueError, TypeError):
             payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
 
     # 화면에서 고친 값이 오면 그것을 쓴다. 없으면 사진을 다시 읽는다.
     fields = payload.get('fields')
+    if not isinstance(fields, dict):
+        fields = None
     if not fields:
         ocr_data, error = read_document_image(doc)
         if error:
             return JsonResponse({'success': False, 'error': error}, status=400)
         fields = parse_ingredient_photo(ocr_data)
+    # 화면에서 온 값은 문자열로 통일한다 — 숫자·None 이 와도 .strip() 이 터지지 않게
+    fields = {k: ('' if v is None else str(v)) for k, v in fields.items()}
 
-    name = (fields.get('ingredient_name') or '').strip()
+    name = fields.get('ingredient_name', '').strip()
     if not name:
         return JsonResponse({
             'success': False,
@@ -7813,11 +7866,20 @@ def document_ingredient_photo_to_bom(request, document_id):
 
     label = doc.label
 
+    # 어느 원료에 붙일지는 화면에서 사람이 골랐다 — 기존 원료 번호이거나 "새로".
+    # 둘 다 없으면(예전 화면) 이름이 비슷한 것에 붙이는 옛 규칙이다.
+    link_to = payload.get('link_to')
+    try:
+        link_to = int(link_to) if link_to else None
+    except (TypeError, ValueError):
+        link_to = None
+    force_new = bool(payload.get('force_new'))
+
     try:
         with transaction.atomic():
             # 등록 규칙은 품목보고번호 경로와 같다 - register_ingredient_bom 한 곳에 있다.
             bom, created, matched, score, candidates = register_ingredient_bom(
-                request.user, label, fields)
+                request.user, label, fields, link_to=link_to, force_new=force_new)
 
             # **사진은 원료로 옮긴다. 문서함에는 남기지 않는다.**
             #
@@ -7831,33 +7893,24 @@ def document_ingredient_photo_to_bom(request, document_id):
             # 눕힌다(삭제 규칙은 이 저장소 어디서나 active_yn=False 다).
             ingredient = bom.source_ingredient
             if ingredient is not None:
-                import os
-
-                try:
-                    if doc.file:
-                        # 이미 사진이 있으면 덮는다 — 방금 사람이 확인한 것이
-                        # 최신이다.
-                        ingredient.label_photo.save(
-                            os.path.basename(doc.file.name), doc.file,
-                            save=False)
-                except (OSError, ValueError):
-                    # **파일을 못 옮겨도 등록은 끝낸다.**
-                    #
-                    # 사람은 값을 이미 확인했고 원료도 BOM 도 그 값으로 서야
-                    # 한다. 사진 한 장 때문에 그 일을 되돌리면, 사용자는 방금
-                    # 고친 값을 처음부터 다시 넣어야 한다. 사진은 다시 올리면
-                    # 되지만 손으로 고친 값은 그렇지 않다.
-                    logger.warning('원료 사진을 옮기지 못했다 (document=%s)',
-                                   doc.pk, exc_info=True)
-
-                ingredient.label_photo_fields = fields
-                ingredient.save(
-                    update_fields=['label_photo', 'label_photo_fields'])
+                _move_photo_to_ingredient(doc, ingredient, fields)
 
             doc.active_yn = False
             doc.save(update_fields=['active_yn'])
     except IngredientQuotaExceeded as exc:
         return JsonResponse({'success': False, 'error': str(exc)}, status=429)
+    except IngredientLinkNotFound as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+    except Exception:
+        # HTML 500 이 가면 화면은 "Unexpected token '<'" 만 보여 준다 — 무엇이
+        # 잘못됐는지 아무도 모른다. 원인은 로그로, 사람에게는 읽을 말을.
+        logger.exception('[원료 사진 BOM 등록 실패] document=%s user=%s',
+                         doc.pk, request.user.pk)
+        return JsonResponse({
+            'success': False,
+            'error': '등록하지 못했습니다. 잠시 후 다시 시도해 주세요. '
+                     '계속 그러면 관리자에게 알려 주세요.',
+        }, status=500)
 
     log_activity(request, 'document', 'ingredient_photo_to_bom', document_id)
     return JsonResponse({
@@ -7882,7 +7935,9 @@ def document_ingredient_photo_preview(request, document_id):
     등록 전에 사람이 확인할 수 있어야 한다 - OCR 은 틀리고, 틀린 원료가 BOM 에
     들어가면 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
     """
-    from v1.label.services.ingredient_matching import match_my_ingredient
+    from v1.label.services.ingredient_matching import (
+        load_pool, match_my_ingredient, suggest_my_ingredients,
+    )
     from v1.products.services.ingredient_photo import (
         parse_ingredient_photo, read_document_image,
     )
@@ -7898,16 +7953,21 @@ def document_ingredient_photo_preview(request, document_id):
         return JsonResponse({'success': False, 'error': error}, status=400)
 
     fields = parse_ingredient_photo(ocr_data)
-    ingredient, score, candidates = match_my_ingredient(
-        request.user, fields.get('ingredient_name') or '')
+    name = fields.get('ingredient_name') or ''
+    pool = load_pool(request.user)
+    ingredient, score, candidates = match_my_ingredient(request.user, name, pool=pool)
 
     return JsonResponse({
         'success': True,
         'fields': fields,
+        # matched_* 는 "기본으로 어느 쪽을 골라 둘지" 다. 정하는 것은 화면의 사람이다.
         'matched_existing': ingredient is not None,
+        'matched_id': ingredient.my_ingredient_id if ingredient else None,
         'matched_name': ingredient.prdlst_nm if ingredient else '',
         'match_score': score,
         'candidates': candidates,
+        # 번호가 있는 후보 — 화면이 "이 원료에 연결 / 새로 등록" 을 고르게 한다
+        'suggestions': suggest_my_ingredients(request.user, name, pool=pool),
     })
 
 

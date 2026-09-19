@@ -23,6 +23,54 @@ from rapidfuzz import fuzz, process
 
 from v1.label.models import MyIngredient
 
+# 품목보고번호로 볼 꼴 — 8자리 이상 숫자, 뒤에 '-1' 같은 가지가 붙기도 한다
+_REPORT_NO = re.compile(r'\d{8,}(?:-\d+)?')
+
+
+def fit_to_model(model, values):
+    """
+    CharField 의 max_length 에 맞게 자른다.
+
+    **MySQL 은 칸보다 긴 값을 거절한다**(DataError). SQLite 는 봐주기 때문에
+    테스트에서는 보이지 않다가 운영에서 500 이 났다. 사진에서 읽은 값은
+    길이를 모른다 — 제조사 칸에 주소가 딸려 오고, 원재료명이 한 문단이다.
+    TextField 는 DB 에서 길이를 재지 않으므로 손대지 않는다.
+    """
+    from django.core.exceptions import FieldDoesNotExist
+    from django.db import models as dj_models
+
+    out = {}
+    for key, value in values.items():
+        try:
+            field = model._meta.get_field(key)
+        except FieldDoesNotExist:
+            out[key] = value
+            continue
+        limit = getattr(field, 'max_length', None)
+        if (isinstance(value, str) and limit
+                and isinstance(field, dj_models.CharField)
+                and not isinstance(field, dj_models.TextField)
+                and len(value) > limit):
+            value = value[:limit]
+        out[key] = value
+    return out
+
+
+def clean_report_no(text):
+    """
+    품목보고번호 칸(16자)에 들어갈 꼴만 남긴다.
+
+    사진에서는 '제2020012345678호' 처럼 앞뒤가 붙거나 번호 둘이 나란히
+    읽히기도 한다. 그대로 넣으면 MySQL 이 거절한다. 짧으면 그대로 두고(사람이
+    적은 값은 건드리지 않는다), 길면 번호 꼴인 첫 덩이만 쓴다.
+    """
+    text = ('' if text is None else str(text)).strip()
+    if len(text) <= 16:
+        return text
+    found = _REPORT_NO.search(text)
+    return (found.group(0) if found else text)[:16]
+
+
 # 이 점수 이상이면 같은 원료로 본다. 100 점 만점.
 # 90 은 "정제소금" vs "정제 소금" 같은 표기 흔들림은 묶고,
 # "대두유" vs "대두단백" 같은 다른 원료는 가르는 선이다.
@@ -110,8 +158,12 @@ class IngredientQuotaExceeded(Exception):
     """원료를 새로 만들어야 하는데 등록 한도에 닿았다."""
 
 
+class IngredientLinkNotFound(Exception):
+    """화면이 고른 '기존 원료' 번호가 이 사용자의 살아 있는 원료가 아니다."""
+
+
 def get_or_create_my_ingredient(user, *, prdlst_nm, prdlst_report_no, prdlst_dcnm,
-                                **defaults):
+                                allow_duplicate=False, **defaults):
     """
     같은 원료를 두 번 만들지 않는다.
 
@@ -131,19 +183,26 @@ def get_or_create_my_ingredient(user, *, prdlst_nm, prdlst_report_no, prdlst_dcn
     각 뷰에 검사를 흩어 놓으면 한 곳이 빠지고, 실제로 빠져 있었다.
     이미 있는 원료를 쓰는 경우에는 만드는 것이 아니므로 한도를 보지 않는다.
 
+    **allow_duplicate** — 사람이 "그래도 새로 만든다" 고 고른 경우다. 사진으로
+    올리는 사람은 같은 이름의 다른 회사 것을 새로 넣으려는 때가 있다. 그때는
+    같은 키가 있어도 하나 더 만든다. 중복은 나중에 원료 관리에서 정리한다.
+
     Returns: (ingredient, created)
     Raises: IngredientQuotaExceeded — 새로 만들어야 하는데 한도에 닿았을 때
     """
-    lookup = dict(
+    # 다섯 길이 전부 여기를 지나므로 칸 길이도 여기서 맞춘다 (MySQL 은 긴 값을
+    # 거절한다). 사람이 적은 값은 칸보다 짧아 그대로다.
+    lookup = fit_to_model(MyIngredient, dict(
         user_id=user,
         prdlst_nm=prdlst_nm or '',
-        prdlst_report_no=prdlst_report_no or '',
+        prdlst_report_no=clean_report_no(prdlst_report_no),
         prdlst_dcnm=prdlst_dcnm or '',
         delete_YN='N',
-    )
-    found = MyIngredient.objects.filter(**lookup).first()
-    if found is not None:
-        return found, False
+    ))
+    if not allow_duplicate:
+        found = MyIngredient.objects.filter(**lookup).first()
+        if found is not None:
+            return found, False
 
     from v1.common import quota
 
@@ -152,7 +211,51 @@ def get_or_create_my_ingredient(user, *, prdlst_nm, prdlst_report_no, prdlst_dcn
         raise IngredientQuotaExceeded(info.get('message')
                                       or '원료 등록 한도에 닿았습니다.')
 
-    return MyIngredient.objects.get_or_create(**lookup, defaults=defaults)
+    values = fit_to_model(MyIngredient, defaults)
+    if allow_duplicate:
+        # 키(lookup)가 defaults 에도 들어 있을 수 있다(delete_YN) — 키가 이긴다
+        return MyIngredient.objects.create(**{**values, **lookup}), True
+    return MyIngredient.objects.get_or_create(**lookup, defaults=values)
+
+
+def suggest_my_ingredients(user, name, *, pool=None, limit=5, floor=60):
+    """
+    비슷한 기존 원료를 **추천**한다 — 정하지 않는다.
+
+    match_my_ingredient 는 90점이 넘으면 말없이 그 원료에 붙였다. 그런데 사진으로
+    올리는 사람은 "같은 이름이지만 다른 회사 것" 을 새로 넣으려는 때가 있고,
+    반대로 80점짜리가 사실은 같은 원료인 때도 있다. 그래서 후보를 **번호와
+    함께** 돌려주고, 붙일지 새로 만들지는 화면에서 사람이 고른다.
+
+    같은 정규화 이름에 원료가 여럿(제조사가 다른 같은 이름)이면 전부 후보다 —
+    그 가운데 고르는 것이 이 함수를 두는 까닭이다.
+
+    Returns: [{'id', 'name', 'score', 'manufacturer', 'report_no', 'food_type'}]
+             점수 높은 순, limit 개까지
+    """
+    key = normalize_name(name)
+    if not key:
+        return []
+    if pool is None:
+        pool = load_pool(user)
+    if not pool:
+        return []
+
+    best = process.extract(key, list(pool.keys()), scorer=fuzz.WRatio, limit=limit)
+    out = []
+    for pool_key, score, _ in best:
+        if score < floor:
+            continue
+        for ing in pool[pool_key]:
+            out.append({
+                'id': ing.my_ingredient_id,
+                'name': ing.prdlst_nm or '',
+                'score': int(score),
+                'manufacturer': ing.bssh_nm or '',
+                'report_no': ing.prdlst_report_no or '',
+                'food_type': ing.prdlst_dcnm or '',
+            })
+    return out[:limit]
 
 
 def match_my_ingredient(user, name, *, threshold=MATCH_THRESHOLD, pool=None):

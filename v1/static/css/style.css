@@ -1815,8 +1815,14 @@ select.form-control.select2-date-option {
 .imgcrop-scroll .imgcrop-img { max-height: none; display: block; }
 .imgcrop-scroll .imgcrop-wrap { display: inline-block; }
 
+/* 사진 → BOM: 붙일 원료 고르기 */
+.ing-link-opt { cursor: pointer; margin: 2px 0; }
+.ing-link-opt input { margin-right: 4px; vertical-align: -1px; }
+
 /* 원료 관리 — 목록 자리에 띄우는 사진 */
-.ing-photo-pane { padding: 8px 10px; }
+/* 목록 패널(overflow:hidden 의 세로 flex)의 한 칸이다 — 이 칸이 스크롤을 맡아야
+   긴 사진 아래의 단추 줄이 잘리지 않는다 */
+.ing-photo-pane { padding: 8px 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .ing-photo-pane-head {
     position: sticky; top: 0; z-index: 2;
     background: #fff; padding-bottom: 6px;
@@ -1851,6 +1857,9 @@ select.form-control.select2-date-option {
     color: var(--ez-gray-400, #bdc1c6); font-size: 28px;
 }
 #ingPhotoCrop .imgcrop-scroll { max-height: 45vh; }
+/* 왼쪽 패널로 옮겨 온 무대 — 폼 안보다 자리가 넉넉하다 */
+.ing-photo-pane #ingPhotoCrop .imgcrop-scroll { max-height: min(70vh, calc(100vh - 380px)); }
+#ingPhotoStage.in-pane { margin-top: 0 !important; }
 .ph-table td { vertical-align: middle; }
 .ph-table tr.ph-keep .form-control { background: var(--ez-gray-100, #f1f3f4); }
 .ph-table tr.ph-fill .form-control { border-color: var(--ez-success, #1e8e3e); }

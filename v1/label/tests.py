@@ -21606,6 +21606,124 @@ class 원료_관리에서_사진을_붙이고_폼의_빈_칸만_채운다(TestCa
         self.assertTrue(self.ing.label_photo)
         self.assertEqual(self.ing.label_photo_fields, {'manufacturer': '크래프트'})
 
+    def test_사진을_바꾸면_옛_파일은_지운다(self):
+        import os
+
+        from django.core.files.base import ContentFile
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.ing.label_photo.save('old.jpg', ContentFile(b'old'), save=True)
+        old_path = self.ing.label_photo.path
+        # 옛 파일은 커밋 뒤에 지운다 — TestCase 는 트랜잭션 안이라 직접 돌린다
+        with self.captureOnCommitCallbacks(execute=True):
+            res = self.client.post(
+                reverse('label:my_ingredient_photo_attach', args=[self.ing.my_ingredient_id]),
+                {'file': SimpleUploadedFile('new.jpg', b'\xff\xd8new', content_type='image/jpeg')})
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.ing.refresh_from_db()
+        self.assertFalse(os.path.exists(old_path))
+        self.assertTrue(os.path.exists(self.ing.label_photo.path))
+
+    def test_복사한_원료와_같은_파일이면_지우지_않는다(self):
+        """bulk_copy 는 파일 이름을 그대로 물려준다. 한쪽을 바꿔도 다른 쪽 사진은 살아야 한다."""
+        import os
+
+        from django.core.files.base import ContentFile
+
+        self.ing.label_photo.save('shared.jpg', ContentFile(b'shared'), save=True)
+        twin = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='크림치즈(복사)', delete_YN='N',
+            label_photo=self.ing.label_photo.name)
+        shared_path = self.ing.label_photo.path
+        with self.captureOnCommitCallbacks(execute=True):
+            twin.replace_photo('new.jpg', ContentFile(b'new'))
+        twin.save(update_fields=['label_photo'])
+        self.assertTrue(os.path.exists(shared_path))
+
+    def test_되돌려지면_옛_파일은_남는다(self):
+        """트랜잭션이 되돌려지면 DB 는 옛 이름을 가리킨다 — 그때 옛 파일이 없으면 사진이 깨진다."""
+        import os
+
+        from django.core.files.base import ContentFile
+        from django.db import transaction
+
+        self.ing.label_photo.save('old.jpg', ContentFile(b'old'), save=True)
+        old_path = self.ing.label_photo.path
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            try:
+                with transaction.atomic():
+                    self.ing.replace_photo('new.jpg', ContentFile(b'new'))
+                    self.ing.save(update_fields=['label_photo'])
+                    raise RuntimeError('커밋 직전에 터짐')
+            except RuntimeError:
+                pass
+        self.assertEqual(callbacks, [])          # 되돌려졌으니 지우기는 돌지 않는다
+        self.assertTrue(os.path.exists(old_path))
+
+    def test_이름이_길거나_점이_많아도_붙는다(self):
+        """점이 많은 이름은 저장소가 뒤쪽을 전부 확장자로 보아 자리를 못 찾았다(SuspiciousFileOperation)."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        name = 'photo.2026.09.19.final.version.2.copy.of.copy.edited.rotated.cropped.scan.v3.jpg'
+        res = self.client.post(
+            reverse('label:my_ingredient_photo_attach', args=[self.ing.my_ingredient_id]),
+            {'file': SimpleUploadedFile(name, b'\xff\xd8x', content_type='image/jpeg')})
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.ing.refresh_from_db()
+        self.assertTrue(self.ing.label_photo.name.endswith('.jpg'))
+        self.assertLess(len(self.ing.label_photo.name), 100)
+
+    def test_고른_사진은_왼쪽_패널에서_자른다(self):
+        """
+        폼 안에 두면 오른쪽 아래에 작게 뜨고 스크롤이 생겨 잘 보이지 않았다.
+        왼쪽 패널로 옮겨 크게 쓰고, 보던 사진은 닫는다. 끝나면 그 자리에
+        방금 사진이 뜬다. 패널을 닫으면 무대는 폼 제자리로 돌아간다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        js = (base / 'static/js/label/my_ingredient_detail_partial.js').read_text(encoding='utf-8')
+        i = js.index('function initLabelPhoto()')
+        block = js[i:i + 9000]
+        self.assertIn('window.mountIngredientPhotoStage(stage,', block)
+        self.assertIn('window.IngredientPhoto.unmountStage = resetStage;', block)
+        self.assertIn('function finishStage(url)', block)
+        self.assertIn("getElementById('ingPhotoCancel').onclick = leaveStage;", block)
+        self.assertEqual(block.count('finishStage(shownUrl);'), 2)     # 저장만 · 읽어서 채우기
+
+        tpl = (base / 'templates/label/my_ingredient_list_combined.html').read_text(encoding='utf-8')
+        self.assertIn('window.mountIngredientPhotoStage = function (el, name)', tpl)
+        i = tpl.index('function closeIngredientPhotoPane()')
+        self.assertIn('window.IngredientPhoto.unmountStage()', tpl[i:i + 900])
+        # 다른 원료를 열면 앞 원료의 사진(이나 무대)은 닫힌다
+        i = tpl.index('function loadIngredientDetail(container, html)')
+        self.assertIn('window.closeIngredientPhotoPane()', tpl[i:i + 500])
+
+        css = (base / 'static/css/style.css').read_text(encoding='utf-8')
+        # 패널이 스크롤을 맡고, 무대 높이는 단추 줄을 남긴다
+        self.assertIn('.ing-photo-pane { padding: 8px 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }', css)
+        self.assertIn('.ing-photo-pane #ingPhotoCrop .imgcrop-scroll { max-height: min(70vh, calc(100vh - 380px)); }', css)
+
+        # 늦게 온 PDF 결과는 버린다 · 다른 폼이 오면 들고 있던 사진은 버린다
+        self.assertIn('var my = ++gen;', block)
+        self.assertIn('if (my !== gen) return;', block)
+        self.assertIn("row.dataset.bound = '1';", block)
+        self.assertIn('pendingPhoto = null;', block[:block.index('var fileInput')])
+        # 단독 상세 페이지에서도 켠다
+        self.assertIn('initLabelPhoto(); // 단독 상세 페이지에서도', js)
+        # 저장 뒤 붙이기는 방금 만든 원료에만, 끝난 뒤에 움직인다
+        self.assertIn('data.created && data.ingredient_id', js)
+        self.assertIn('photoDone.then(function () { setTimeout(() => {', js)
+        i = js.index('window.IngredientPhoto.afterSave = function')
+        self.assertIn("return fetch('/label/my-ingredient/'", js[i:i + 900])
+        # 사진 보기가 무대를 지우지 않는다 · 폼에서 누른 Esc 는 무대를 허물지 않는다
+        i = tpl.index('window.showIngredientPhotoInList = function')
+        self.assertIn('window.IngredientPhoto.unmountStage()', tpl[i:i + 600])
+        i = tpl.index("if (e.key !== 'Escape' || e.defaultPrevented) return;")
+        self.assertIn("stage.classList.contains('in-pane') && detail && detail.contains(e.target)", tpl[i:i + 500])
+
     def test_사진_파일만_받는다(self):
         res = self._read(name='label.pdf')
         self.assertEqual(res.status_code, 400)
@@ -21747,9 +21865,10 @@ class 원료_관리에서_사진을_붙이고_폼의_빈_칸만_채운다(TestCa
                ).read_text(encoding='utf-8')
         self.assertIn('id="ingPhotoPaneClose"', tpl)
         i = tpl.index('function closeIngredientPhotoPane()')
-        block = tpl[i:i + 900]
+        block = tpl[i:i + 1300]
         self.assertIn("getElementById('ingPhotoPaneClose').addEventListener('click', closeIngredientPhotoPane)", block)
-        self.assertIn("if (e.key === 'Escape') closeIngredientPhotoPane();", block)
+        self.assertIn("if (e.key !== 'Escape' || e.defaultPrevented) return;", block)
+        self.assertIn('closeIngredientPhotoPane();' + chr(10) + '    });', block)
 
 
 class PDF_는_첫_쪽을_그림으로_바꿔_사진처럼_다룬다(TestCase):

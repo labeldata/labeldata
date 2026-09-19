@@ -637,13 +637,115 @@ class IngredientPhotoToBomTests(TestCase):
             original_filename='탈지분유.jpg',
         )
 
-    def _apply(self, **fields):
+    def _apply(self, _extra=None, **fields):
         payload = {'ingredient_name': '탈지분유', 'food_type': '유가공품'}
         payload.update(fields)
+        data = {'fields': payload}
+        data.update(_extra or {})
         url = reverse('products:document_ingredient_photo_to_bom',
                       kwargs={'document_id': self.doc.pk})
-        return self.client.post(url, data=json.dumps({'fields': payload}),
+        return self.client.post(url, data=json.dumps(data),
                                 content_type='application/json')
+
+    def _existing(self, **over):
+        from v1.label.models import MyIngredient
+
+        values = dict(user_id=self.user, prdlst_nm='탈지분유', prdlst_report_no='',
+                      prdlst_dcnm='유가공품', delete_YN='N')
+        values.update(over)
+        return MyIngredient.objects.create(**values)
+
+    # ── 붙일 원료는 사람이 고른다 ───────────────────────────────────────
+    def test_새로_등록을_고르면_같은_정보가_있어도_새_원료를_만든다(self):
+        """같은 이름의 다른 회사 것을 넣으려는 때가 있다. 중복은 나중에 정리한다."""
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyIngredient
+
+        old = self._existing()
+        res = self._apply({'force_new': True})
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        body = res.json()
+        self.assertTrue(body['created'])
+        self.assertFalse(body['matched_existing'])
+        self.assertEqual(MyIngredient.objects.filter(
+            user_id=self.user, prdlst_nm='탈지분유').count(), 2)
+        bom = ProductBOM.objects.get(parent_label=self.label)
+        self.assertNotEqual(bom.source_ingredient_id, old.my_ingredient_id)
+
+    def test_고른_기존_원료에_연결한다(self):
+        """80점짜리가 사실은 같은 원료일 수 있다 — 사람이 고르면 그리로."""
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyIngredient
+
+        target = self._existing(prdlst_nm='탈지분유(A사)', bssh_nm='A사')
+        res = self._apply({'link_to': target.my_ingredient_id}, ingredient_name='탈지 분유')
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        self.assertTrue(res.json()['matched_existing'])
+        bom = ProductBOM.objects.get(parent_label=self.label)
+        self.assertEqual(bom.source_ingredient_id, target.my_ingredient_id)
+        self.assertEqual(MyIngredient.objects.filter(user_id=self.user).count(), 1)
+
+    def test_남의_원료에는_연결하지_못한다(self):
+        from v1.label.models import MyIngredient
+
+        other = User.objects.create_user(username='other', password='x')
+        theirs = MyIngredient.objects.create(
+            user_id=other, prdlst_nm='탈지분유', prdlst_report_no='',
+            prdlst_dcnm='', delete_YN='N')
+        res = self._apply({'link_to': theirs.my_ingredient_id})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('찾지 못했습니다', res.json()['error'])
+
+    def test_고르지_않으면_예전_규칙대로_비슷한_것에_붙는다(self):
+        """품목보고번호로 넣는 길과 옛 화면은 아무것도 보내지 않는다."""
+        old = self._existing()
+        body = self._apply().json()
+        self.assertTrue(body['matched_existing'])
+        from v1.bom.models import ProductBOM
+        self.assertEqual(ProductBOM.objects.get(parent_label=self.label).source_ingredient_id,
+                         old.my_ingredient_id)
+
+    def test_미리보기가_번호_있는_후보를_준다(self):
+        from unittest import mock
+
+        a = self._existing(bssh_nm='A사')
+        b = self._existing(bssh_nm='B사', prdlst_report_no='2020012345678')
+        ocr = {'prdlst_nm': '탈지분유', 'prdlst_dcnm': '유가공품', 'rawmtrl_nm': '우유'}
+        with mock.patch('v1.products.services.ingredient_photo.read_document_image',
+                        return_value=(ocr, '')):
+            res = self.client.get(reverse('products:document_ingredient_photo_preview',
+                                          kwargs={'document_id': self.doc.pk}))
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        body = res.json()
+        self.assertTrue(body['matched_existing'])
+        self.assertIn(body['matched_id'], (a.my_ingredient_id, b.my_ingredient_id))
+        ids = {sg['id'] for sg in body['suggestions']}
+        self.assertEqual(ids, {a.my_ingredient_id, b.my_ingredient_id})
+        by_id = {sg['id']: sg for sg in body['suggestions']}
+        self.assertEqual(by_id[b.my_ingredient_id]['manufacturer'], 'B사')
+        self.assertEqual(by_id[b.my_ingredient_id]['report_no'], '2020012345678')
+        self.assertEqual(by_id[a.my_ingredient_id]['score'], 100)
+
+    def test_화면은_후보를_라디오로_보이고_고른_것을_보낸다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        docs = (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                ).read_text(encoding='utf-8')
+        i = docs.index('const suggestions = body.suggestions || [];')
+        block = docs[i:i + 2200]
+        self.assertIn('name="ingLink"', block)
+        self.assertIn('기존 원료에 연결:', block)
+        self.assertIn('새 원료로 등록', block)
+        # 기본값은 서버의 판단 — 90점 이상이면 연결, 아니면 새로
+        self.assertIn("body.matched_id === sg.id ? ' checked' : ''", block)
+        self.assertIn("value=\"new\"${body.matched_existing ? '' : ' checked'}", block)
+        i = docs.index('async function applyIngredientPhoto(docId)')
+        block = docs[i:i + 1500]
+        self.assertIn('payload.force_new = true;', block)
+        self.assertIn('payload.link_to = Number(chosen.value);', block)
+        self.assertIn('body: JSON.stringify(payload)', block)
 
     def test_BOM_에_원료가_추가된다(self):
         from v1.bom.models import ProductBOM
@@ -692,6 +794,105 @@ class IngredientPhotoToBomTests(TestCase):
     def test_원료명이_없으면_400(self):
         res = self._apply(ingredient_name='')
         self.assertEqual(res.status_code, 400)
+
+    def test_칸보다_긴_값은_칸에_맞게_잘라_넣는다(self):
+        """
+        MySQL 은 칸보다 긴 값을 거절한다(DataError). SQLite 는 봐주기 때문에
+        여기서는 길이만 잰다. 사진에서 읽은 값은 길이를 모른다 — 제조사 칸에
+        주소가 딸려 오고, 품목보고번호가 '제…호' 로 감싸여 온다.
+        """
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyIngredient
+
+        res = self._apply(manufacturer='크래프트하인즈코리아 ' * 20,
+                          report_no='제2020012345678호, 2020012345679',
+                          food_type='치즈가공품 ' * 30)
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        bom = ProductBOM.objects.get(parent_label=self.label)
+        self.assertEqual(len(bom.manufacturer), 200)
+        self.assertEqual(len(bom.food_type), 100)
+        self.assertEqual(bom.report_no, '2020012345678')
+        ing = MyIngredient.objects.get(user_id=self.user, prdlst_nm='탈지분유')
+        self.assertEqual(ing.prdlst_report_no, '2020012345678')
+        self.assertEqual(len(ing.bssh_nm), 100)
+        self.assertEqual(len(ing.prdlst_dcnm), 100)
+
+    def test_뜻밖의_오류는_JSON_으로_돌아온다(self):
+        """HTML 500 이 가면 화면은 "Unexpected token '<'" 만 보여 준다."""
+        from unittest import mock
+
+        with mock.patch('v1.products.views.register_ingredient_bom',
+                        side_effect=RuntimeError('터짐')):
+            with self.assertLogs('django', level='ERROR'):     # views.py 의 logger 이름
+                res = self._apply()
+        self.assertEqual(res.status_code, 500)
+        body = res.json()
+        self.assertFalse(body['success'])
+        self.assertIn('등록하지 못했습니다', body['error'])
+        self.assertNotIn('터짐', body['error'])     # 예외 원문은 로그로만
+
+    def test_사진_파일이_정말로_원료로_옮겨진다(self):
+        """예전 테스트는 문서에 파일이 없어 복사 갈래가 한 번도 돌지 않았다."""
+        import os
+        import tempfile
+
+        from django.core.files.base import ContentFile
+        from django.test import override_settings
+
+        from v1.label.models import MyIngredient
+
+        with override_settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            self.doc.file.save('탈지분유_잘라낸것.jpg', ContentFile(b'\xff\xd8jpg'), save=True)
+            res = self._apply()
+            self.assertEqual(res.status_code, 200, res.content[:300])
+            ing = MyIngredient.objects.get(user_id=self.user, prdlst_nm='탈지분유')
+            self.assertTrue(ing.label_photo.name.startswith('ingredient_photos/'))
+            self.assertTrue(os.path.exists(ing.label_photo.path))
+            with ing.label_photo.open('rb') as fh:
+                self.assertEqual(fh.read(), b'\xff\xd8jpg')
+
+    def test_원료에_사진이_있었으면_옛_파일은_지운다(self):
+        """사진은 판이 없다 — 방금 확인한 것이 최신이고, 옛 것을 두면 저장 공간만 는다."""
+        import os
+        import tempfile
+
+        from django.core.files.base import ContentFile
+        from django.test import override_settings
+
+        from v1.label.models import MyIngredient
+
+        with override_settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            ing = MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm='탈지분유', prdlst_report_no='',
+                prdlst_dcnm='', delete_YN='N')
+            ing.label_photo.save('old.jpg', ContentFile(b'old'), save=True)
+            old_path = ing.label_photo.path
+            self.doc.file.save('new.jpg', ContentFile(b'new'), save=True)
+            # 옛 파일은 커밋 뒤에 지운다 — TestCase 는 트랜잭션 안이라 직접 돌린다
+            with self.captureOnCommitCallbacks(execute=True):
+                res = self._apply()
+            self.assertEqual(res.status_code, 200, res.content[:300])
+            ing.refresh_from_db()
+            self.assertFalse(os.path.exists(old_path))
+            self.assertTrue(os.path.exists(ing.label_photo.path))
+
+    def test_이상한_JSON_도_HTML_500_이_아니다(self):
+        """목록·문자열·숫자가 와도 .get()/.strip() 이 터지지 않는다."""
+        from unittest import mock
+
+        url = reverse('products:document_ingredient_photo_to_bom',
+                      kwargs={'document_id': self.doc.pk})
+        ocr = {'prdlst_nm': '탈지분유', 'prdlst_dcnm': '유가공품'}
+        with mock.patch('v1.products.services.ingredient_photo.read_document_image',
+                        return_value=(ocr, '')):
+            for body in ('[]', '"x"', '{"fields": ["a"]}', '{"fields": "abc"}'):
+                res = self.client.post(url, data=body, content_type='application/json')
+                self.assertEqual(res.status_code, 200, (body, res.content[:200]))
+                self.assertEqual(res['Content-Type'].split(';')[0], 'application/json')
+        res = self.client.post(url, data='{"fields": {"ingredient_name": 5, "report_no": null}}',
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        self.assertEqual(res.json()['ingredient_name'], '5')
 
     def test_등록하면_사진은_원료로_가고_문서는_눕는다(self):
         """

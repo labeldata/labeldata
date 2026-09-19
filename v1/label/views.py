@@ -6005,8 +6005,8 @@ def _photo_or_error(request):
 
 
 def _attach_photo(ingredient, upload, fields=None):
-    """사진(과 읽은 값)을 원료에 붙인다. 이미 있으면 덮는다 — 방금 것이 최신이다."""
-    ingredient.label_photo.save(upload.name, upload, save=False)
+    """사진(과 읽은 값)을 원료에 붙인다. 이미 있으면 덮고 옛 파일은 지운다 — 방금 것이 최신이다."""
+    ingredient.replace_photo(upload.name, upload)
     changed = ['label_photo']
     if fields is not None:
         ingredient.label_photo_fields = fields

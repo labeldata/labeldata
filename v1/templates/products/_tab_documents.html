@@ -2246,15 +2246,34 @@ async function submitImportCompanyDoc() {
             </div>`;
         }).join('');
 
+        /* **비슷한 원료는 추천하되, 정하는 것은 사람이다.**
+         *
+         * 예전에는 90점이 넘으면 말없이 기존 원료에 붙였다. 그런데 같은 이름의
+         * 다른 회사 것을 새로 넣으려는 때가 있고, 반대로 80점짜리가 같은 원료인
+         * 때도 있다. 후보를 늘어놓고 [기존 원료에 연결] / [새 원료로 등록] 을
+         * 고르게 한다. 기본값은 서버의 판단(90점 이상이면 연결)이다. 같은 정보라도
+         * 새로 만들 수 있다 — 중복은 나중에 원료 관리에서 정리한다. */
         let matchNote = '';
-        if (body.matched_existing) {
-            matchNote = `<div class="alert alert-success py-2 px-3 mb-3" style="font-size:12px;">
-                이미 등록된 원료 <strong>${escapeAttr(body.matched_name)}</strong> 에 연결합니다
-                (유사도 ${body.match_score}). 새 원료를 만들지 않습니다.</div>`;
-        } else if ((body.candidates || []).length) {
-            matchNote = `<div class="alert alert-warning py-2 px-3 mb-3" style="font-size:12px;">
-                비슷한 원료가 있습니다: ${escapeAttr(body.candidates.join(', '))} (유사도 ${body.match_score}).
-                같은 원료라면 원료명을 그 이름과 똑같이 고쳐 주세요.</div>`;
+        const suggestions = body.suggestions || [];
+        if (suggestions.length) {
+            const opts = suggestions.map(sg => {
+                const meta = [sg.manufacturer, sg.food_type, sg.report_no].filter(Boolean).join(' · ');
+                return `
+                <label class="d-block ing-link-opt">
+                    <input type="radio" name="ingLink" value="${sg.id}"${body.matched_id === sg.id ? ' checked' : ''}>
+                    기존 원료에 연결: <strong>${escapeAttr(sg.name)}</strong>
+                    <span class="text-muted">${meta ? escapeAttr(meta) + ' · ' : ''}유사도 ${sg.score}</span>
+                </label>`;
+            }).join('');
+            matchNote = `<div class="alert ${body.matched_existing ? 'alert-success' : 'alert-warning'} py-2 px-3 mb-3" style="font-size:12px;">
+                <div class="mb-1"><strong>비슷한 원료가 이미 있습니다.</strong> 어느 쪽으로 등록할까요?</div>
+                ${opts}
+                <label class="d-block ing-link-opt">
+                    <input type="radio" name="ingLink" value="new"${body.matched_existing ? '' : ' checked'}>
+                    새 원료로 등록
+                    <span class="text-muted">(정보가 같아도 만듭니다 — 중복은 나중에 원료 관리에서 정리)</span>
+                </label>
+            </div>`;
         }
 
         const modalEl = document.getElementById('ingredientPhotoModal');
@@ -2310,6 +2329,15 @@ async function submitImportCompanyDoc() {
             return;
         }
 
+        /* 사람이 고른 쪽 — 기존 원료 번호이거나 "새로". 추천이 없었으면 보내지
+           않는다(서버의 옛 규칙대로). */
+        const payload = { fields };
+        const chosen = modalEl.querySelector('input[name="ingLink"]:checked');
+        if (chosen) {
+            if (chosen.value === 'new') payload.force_new = true;
+            else payload.link_to = Number(chosen.value);
+        }
+
         const btn = modalEl.querySelector('#ingredientPhotoApply');
         btn.disabled = true;
         try {
@@ -2319,7 +2347,7 @@ async function submitImportCompanyDoc() {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': ingredientCsrf()
                 },
-                body: JSON.stringify({ fields })
+                body: JSON.stringify(payload)
             });
             const body = await res.json();
             if (!res.ok || !body.success) {

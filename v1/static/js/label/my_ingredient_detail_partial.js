@@ -688,10 +688,14 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
             if (idField && !idField.value && data.ingredient_id) {
                 idField.value = data.ingredient_id;
             }
-            /* 새 원료에 사진을 먼저 읽어 두었으면 이제 붙일 번호가 생겼다 */
-            if (window.IngredientPhoto && data.ingredient_id) {
-                window.IngredientPhoto.afterSave(data.ingredient_id);
-            }
+            /* 새 원료에 사진을 먼저 읽어 두었으면 이제 붙일 번호가 생겼다.
+               **방금 만든** 원료에만 붙인다 — 고친 원료에 붙이면 엉뚱한 사진이
+               그 원료의 사진을 밀어낸다. 붙이기가 끝난 뒤에 목록으로 움직인다;
+               V2 화면은 저장 뒤 주소를 바꾸는데, 그 전에 움직이면 올리던 것이
+               끊긴다. */
+            var photoDone = (window.IngredientPhoto && data.created && data.ingredient_id)
+                ? window.IngredientPhoto.afterSave(data.ingredient_id)
+                : Promise.resolve(true);
 
             // 저장 성공 버튼 피드백
             if (saveBtn) {
@@ -727,7 +731,7 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
                물으면 안 된다 — 응답이 알려 준 값으로 판정한다. */
             var wasNew = !!(data.ingredient_id && data.created);
 
-            setTimeout(() => {
+            photoDone.then(function () { setTimeout(() => {
                 // 신규 등록된 원료의 페이지 계산 및 이동
                 if (wasNew) {
                     // 신규 등록의 경우 해당 원료가 있는 페이지 계산
@@ -747,7 +751,7 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
                 // 저장 성공 후 변경 감지 플래그 해제
                 if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
                 if (typeof window.setIngredientDirty === 'function') window.setIngredientDirty(false);
-            }, 300);
+            }, 300); });
         } else {
             // 저장 실패 버튼 피드백
             if (saveBtn) {
@@ -1001,6 +1005,9 @@ function initLabelPhoto() {
     var row = document.getElementById('ingPhotoRow');
     if (!row || row.dataset.bound) return;
     row.dataset.bound = '1';
+    /* 다른 폼이 들어왔다 — 앞 폼(새 원료)에서 들고 있던 사진은 버린다. 남겨 두면
+       다음에 저장하는 엉뚱한 원료에 붙는다. */
+    pendingPhoto = null;
 
     var fileInput = document.getElementById('ingPhotoFile');
     var stage = document.getElementById('ingPhotoStage');
@@ -1009,6 +1016,58 @@ function initLabelPhoto() {
     var hint = document.getElementById('ingPhotoHint');
     var picked = null;
     var crop = null;
+    var gen = 0;    // 고르기 세대 — 무대를 비우면 올라간다. 늦게 온 PDF 결과는 버린다.
+
+    /* ── 자르기 무대는 어디에 서나 ──────────────────────────────────────
+       무대(#ingPhotoStage)는 폼 안에서 태어난다. 그런데 폼 안에 두면 오른쪽
+       아래에 작게 뜨고 스크롤이 생겨 잘 보이지 않았다. 왼쪽 패널이 있는
+       화면(원료 관리)에서는 그리로 옮겨 크게 쓴다 — 보던 사진은 닫힌다,
+       새 사진을 고르는 중이니까. 상세가 혼자 열린 화면에는 패널이 없어
+       제자리에 선다. 돌아올 자리를 기억해 둔다. */
+    var stageHome = stage.parentNode;
+    var stageNext = stage.nextSibling;
+
+    function paneAvailable() {
+        return typeof window.mountIngredientPhotoStage === 'function';
+    }
+    function mountStage() {
+        if (!paneAvailable()) return;
+        window.mountIngredientPhotoStage(stage,
+            '사진 바꾸기 · ' + (formValue('prdlst_nm') || '새 원료'));
+        stage.classList.add('in-pane');
+    }
+    /* 무대를 비우고 폼 안 제자리로 돌려놓는다. 패널을 닫는 쪽(목록으로·✕·Esc)도
+       이것을 부른다 — 지워 버리면 다음 사진을 고를 곳이 없다. */
+    function resetStage() {
+        gen++;
+        picked = null; crop = null;
+        fileInput.value = '';
+        stage.hidden = true;
+        stage.classList.remove('in-pane');
+        cropHost.innerHTML = '';
+        if (stage.parentNode !== stageHome && stageHome && stageHome.isConnected) {
+            stageHome.insertBefore(stage,
+                (stageNext && stageNext.parentNode === stageHome) ? stageNext : null);
+        }
+    }
+    /* 그만두기 — 패널을 썼다면 닫는다 */
+    function leaveStage() {
+        var wasInPane = stage.classList.contains('in-pane');
+        resetStage();
+        if (wasInPane && typeof window.closeIngredientPhotoPane === 'function') {
+            window.closeIngredientPhotoPane();
+        }
+    }
+    /* 끝내기 — 패널을 썼다면 그 자리에 방금 사진을 띄운다 */
+    function finishStage(url) {
+        var wasInPane = stage.classList.contains('in-pane');
+        resetStage();
+        if (!wasInPane) return;
+        if (url) openPhotoBeside(url);
+        else if (typeof window.closeIngredientPhotoPane === 'function') window.closeIngredientPhotoPane();
+    }
+    window.IngredientPhoto = window.IngredientPhoto || {};
+    window.IngredientPhoto.unmountStage = resetStage;
 
     row.addEventListener('click', function (ev) {
         var btn = ev.target.closest('.ing-photo-btn');
@@ -1021,20 +1080,22 @@ function initLabelPhoto() {
         var chosen = this.files && this.files[0];
         if (!chosen) return;
         clearSuggestions();
+        mountStage();
         stage.hidden = false;
         cropHost.innerHTML = '<div class="text-muted small py-3">사진을 여는 중…</div>';
         /* PDF 면 서버가 첫 쪽을 그림으로 바꿔 준다. 그 뒤로는 사진과 같다. */
+        var my = ++gen;
         var ready = (window.imageCrop && window.imageCrop.toImageFile)
             ? window.imageCrop.toImageFile(chosen, getCookie('csrftoken'))
             : Promise.resolve(chosen);
         ready.then(function (file) {
+            if (my !== gen) return;      // 그 사이 취소했거나 다른 사진을 골랐다
             picked = file;
             crop = window.imageCrop ? window.imageCrop.attach(cropHost, picked) : null;
             hint.innerHTML = PHOTO_PICK_HINT;
         }).catch(function (err) {
-            picked = null;
-            stage.hidden = true;
-            cropHost.innerHTML = '';
+            if (my !== gen) return;
+            leaveStage();
             showSnackbar((err && err.message) || 'PDF 를 열지 못했습니다.', 'error');
         });
     };
@@ -1046,12 +1107,7 @@ function initLabelPhoto() {
         if (crop) crop.clear();
         hint.innerHTML = '사진 전체를 씁니다.';
     };
-    document.getElementById('ingPhotoCancel').onclick = function () {
-        picked = null; crop = null;
-        fileInput.value = '';
-        stage.hidden = true;
-        cropHost.innerHTML = '';
-    };
+    document.getElementById('ingPhotoCancel').onclick = leaveStage;
 
     /* 값을 다 적어 둔 원료라면 사진만 남기면 된다 — 판독은 시간과 몫을 쓴다.
        저장된 원료면 지금 붙이고, 새 원료면 저장 뒤에 붙는다. */
@@ -1066,10 +1122,12 @@ function initLabelPhoto() {
 
             var ingredientId = (document.getElementById('my_ingredient_id') || {}).value
                 || row.dataset.ingredientId || '';
+            var shownUrl = '';
             if (!ingredientId) {
                 pendingPhoto = { file: file, fields: {} };
+                shownUrl = URL.createObjectURL(file);
                 var cur0 = document.getElementById('ingPhotoCurrent');
-                if (cur0) cur0.innerHTML = '<img src="' + URL.createObjectURL(file)
+                if (cur0) cur0.innerHTML = '<img src="' + shownUrl
                     + '" alt="저장하면 붙습니다" class="ing-photo" title="저장하면 붙습니다">';
                 showSnackbar('저장하면 사진이 붙습니다.', 'info');
             } else {
@@ -1083,10 +1141,11 @@ function initLabelPhoto() {
                     showSnackbar(body.error || '사진을 붙이지 못했습니다.', 'error');
                     return;
                 }
+                shownUrl = body.photo_url;
                 showPhotoCurrent(body.photo_url);
                 showSnackbar('사진을 붙였습니다.', 'info');
             }
-            stage.hidden = true;
+            finishStage(shownUrl);
         } catch (err) {
             console.error(err);
             showSnackbar('사진을 붙이는 중 오류가 발생했습니다.', 'error');
@@ -1124,20 +1183,22 @@ function initLabelPhoto() {
                 showSnackbar(body.error || '사진을 읽지 못했습니다.', 'error');
                 return;
             }
+            var shownUrl = '';
             if (ingredientId) {
                 pendingPhoto = null;
+                shownUrl = body.photo_url;
                 showPhotoCurrent(body.photo_url);
             } else {
                 pendingPhoto = { file: file, fields: body.fields || {} };
                 /* 아직 붙지 않은 사진임을 미리보기로 보여 준다 */
+                shownUrl = URL.createObjectURL(file);
                 var cur = document.getElementById('ingPhotoCurrent');
                 if (cur) {
-                    var tmp = URL.createObjectURL(file);
-                    cur.innerHTML = '<img src="' + tmp + '" alt="저장하면 붙습니다" class="ing-photo" title="저장하면 붙습니다">';
+                    cur.innerHTML = '<img src="' + shownUrl + '" alt="저장하면 붙습니다" class="ing-photo" title="저장하면 붙습니다">';
                 }
             }
             renderSuggestions(body.fields || {});
-            stage.hidden = true;
+            finishStage(shownUrl);
         } catch (err) {
             console.error(err);
             showSnackbar('사진 판독 중 오류가 발생했습니다.', 'error');
@@ -1256,20 +1317,25 @@ document.addEventListener('click', function (ev) {
 /* 새 원료를 저장한 뒤 — 들고 있던 사진을 그 번호에 붙인다. */
 window.IngredientPhoto = window.IngredientPhoto || {};
 window.IngredientPhoto.afterSave = function (ingredientId) {
-    if (!pendingPhoto || !ingredientId) return;
+    if (!pendingPhoto || !ingredientId) return Promise.resolve(true);
     var held = pendingPhoto;
     pendingPhoto = null;
     var fd = new FormData();
     fd.append('file', held.file);
     fd.append('fields', JSON.stringify(held.fields || {}));
-    fetch('/label/my-ingredient/' + ingredientId + '/photo/', {
+    /* 늘 끝나는 약속을 돌려준다 — 부르는 쪽이 끝난 뒤에 화면을 움직이게 */
+    return fetch('/label/my-ingredient/' + ingredientId + '/photo/', {
         method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd
     }).then(function (r) { return r.json(); })
       .then(function (body) {
-          if (body && body.success) showPhotoCurrent(body.photo_url);
-          else showSnackbar('사진을 붙이지 못했습니다. 다시 올려 주세요.', 'warning');
+          if (body && body.success) { showPhotoCurrent(body.photo_url); return true; }
+          showSnackbar('사진을 붙이지 못했습니다. 다시 올려 주세요.', 'warning');
+          return false;
       })
-      .catch(function () { showSnackbar('사진을 붙이지 못했습니다. 다시 올려 주세요.', 'warning'); });
+      .catch(function () {
+          showSnackbar('사진을 붙이지 못했습니다. 다시 올려 주세요.', 'warning');
+          return false;
+      });
 };
 
 // AJAX 재로드 시 재초기화 진입점
@@ -1536,6 +1602,7 @@ onReady(function() {
     }
     
     initFoodTypeSelect();
+    initLabelPhoto(); // 단독 상세 페이지에서도 사진 기능을 켠다 (row.dataset.bound 가 두 번 묶임을 막는다)
     setupFoodCategoryChangeEvent();
     toggleReportNoRow(); // 초기 품목보고번호 행 표시/숨김
     initAllergyGmoButtonEvents(); // 알레르기/GMO 버튼 초기화

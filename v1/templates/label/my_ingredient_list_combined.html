@@ -817,6 +817,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 인라인 JS스크립트(json_script 제외)를 실행한 후 reinit() 호출
     function loadIngredientDetail(container, html) {
         unwideForDetail();
+        /* 앞 원료의 사진(이나 자르기 무대)이 왼쪽에 남아 있으면 닫는다 — 이제
+           다른 원료를 보는 중이다. 무대는 제자리로 돌아간 뒤에 폼이 갈린다. */
+        if (typeof window.closeIngredientPhotoPane === 'function') window.closeIngredientPhotoPane();
         container.innerHTML = html;
         // application/json 타입 제외한 인라인 스크립트만 실행
         container.querySelectorAll('script:not([src]):not([type])').forEach(function(old) {
@@ -836,6 +839,10 @@ document.addEventListener('DOMContentLoaded', function() {
         var body = document.getElementById('ingPhotoPaneBody');
         var wrap = document.getElementById('ingListWrap');
         if (!pane || !body || !wrap || !url) return;
+        /* 무대가 와 있으면 먼저 폼 제자리로 돌려보낸다 — 지우면 고르던 자르기가 사라진다 */
+        if (window.IngredientPhoto && typeof window.IngredientPhoto.unmountStage === 'function') {
+            window.IngredientPhoto.unmountStage();
+        }
         body.innerHTML = '';
         var el = (typeof window.photoViewerElement === 'function')
             ? window.photoViewerElement(url, name) : null;
@@ -846,9 +853,28 @@ document.addEventListener('DOMContentLoaded', function() {
         pane.hidden = false;
         unwideForDetail();      // 넓게 펴 둔 목록이면 오른쪽 폼이 보이게 좁힌다
     };
+    /* 자르기 무대를 왼쪽에 띄운다. 보던 사진은 닫힌다 — 새 사진을 고르는 중이다.
+       무대는 상세 폼의 것(#ingPhotoStage)이라 여기서는 자리만 내준다. */
+    window.mountIngredientPhotoStage = function (el, name) {
+        var pane = document.getElementById('ingPhotoPane');
+        var body = document.getElementById('ingPhotoPaneBody');
+        var wrap = document.getElementById('ingListWrap');
+        if (!pane || !body || !wrap || !el) return false;
+        body.innerHTML = '';
+        body.appendChild(el);
+        document.getElementById('ingPhotoPaneName').textContent = name || '';
+        wrap.hidden = true;
+        pane.hidden = false;
+        unwideForDetail();
+        return true;
+    };
     function closeIngredientPhotoPane() {
         var pane = document.getElementById('ingPhotoPane');
         if (!pane || pane.hidden) return;
+        /* 무대가 와 있으면 폼 제자리로 돌려보낸다 — 지우면 다음 사진을 고를 곳이 없다 */
+        if (window.IngredientPhoto && typeof window.IngredientPhoto.unmountStage === 'function') {
+            window.IngredientPhoto.unmountStage();
+        }
         pane.hidden = true;
         document.getElementById('ingListWrap').hidden = false;
         document.getElementById('ingPhotoPaneBody').innerHTML = '';
@@ -857,7 +883,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('ingPhotoPaneBack').addEventListener('click', closeIngredientPhotoPane);
     document.getElementById('ingPhotoPaneClose').addEventListener('click', closeIngredientPhotoPane);
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeIngredientPhotoPane();
+        if (e.key !== 'Escape' || e.defaultPrevented) return;   // select2·모달이 이미 받은 Esc
+        /* 자르는 중에 오른쪽 폼에서 누른 Esc 는 폼 것이다 — 무대를 허물지 않는다 */
+        var stage = document.getElementById('ingPhotoStage');
+        var detail = document.getElementById('detailContent');
+        if (stage && stage.classList.contains('in-pane') && detail && detail.contains(e.target)) return;
+        closeIngredientPhotoPane();
     });
 
     /* `?ingredient_id=` 로 들어오면 그 원료를 펼친 채로 연다.
