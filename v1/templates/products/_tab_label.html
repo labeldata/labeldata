@@ -188,10 +188,25 @@
                     showSnackbar(why, 'warning');
                     return;
                 }
-                if (typeof window.applyRawmtrlDisplayFrom !== 'function') return;
+                var text2 = document.getElementById('ltRawmtrlNoteText');
+                if (typeof window.applyRawmtrlDisplayFrom !== 'function') {
+                    /* 조용히 돌아가면 "눌러도 아무 일도 없다" 가 된다 */
+                    if (text2) text2.textContent = '만들지 못했습니다 — 기본정보 탭이 아직 준비되지 않았습니다. 새로고침 후 다시 시도하세요.';
+                    return;
+                }
                 window.applyRawmtrlDisplayFrom(data);
-                if (typeof window.flushBasicInfo === 'function') window.flushBasicInfo();
-                ltCheckRawmtrl();
+                /* 성공도 **이 줄에서** 말한다. 칸은 다른 탭에 있어 바뀐 것이 안 보인다. */
+                var note = document.getElementById('ltRawmtrlNote');
+                if (note) { note.classList.remove('alert-warning'); note.classList.add('alert-success'); }
+                if (text2) text2.textContent = '원재료명을 만들어 기본정보 탭에 넣었습니다 (원료 ' + data.count + '개). 저장합니다.';
+                btn.hidden = true;
+                if (typeof window.saveBasicInfo === 'function') window.saveBasicInfo();
+                else if (typeof window.flushBasicInfo === 'function') window.flushBasicInfo();
+                setTimeout(function () {
+                    ltCheckRawmtrl();
+                    if (note) { note.classList.remove('alert-success'); note.classList.add('alert-warning'); }
+                    btn.hidden = false;
+                }, 4000);
             } catch (e) {
                 showSnackbar('문구를 만들지 못했습니다.', 'error');
             } finally {

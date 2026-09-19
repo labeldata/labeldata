@@ -14653,6 +14653,13 @@ class 클릭을_줄인다(TestCase):
         self.assertIn('id="ltRawmtrlBuild"', tab)
         i = tab.index('function ltLoad()')
         self.assertIn('ltCheckRawmtrl();', tab[i:i + 120])
+        # 성공·실패·준비 안 됨 — 세 길 모두 그 줄에 말한다. 조용한 return 은 없다.
+        i = tab.index("getElementById('ltRawmtrlBuild')")
+        block = tab[i:i + 2600]
+        self.assertIn("'만들지 못했습니다 — ' + why", block)
+        self.assertIn('기본정보 탭이 아직 준비되지 않았습니다', block)
+        self.assertIn('원재료명을 만들어 기본정보 탭에 넣었습니다', block)
+        self.assertIn('window.saveBasicInfo()', block)
         ocr = self._read('static/js/products/basic_info_ocr.js')
         self.assertIn("label: '배합 탭으로'", ocr)
         self.assertIn("button[data-bs-target=\"#tab-bom\"]", ocr)
