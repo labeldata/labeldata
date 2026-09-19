@@ -1815,6 +1815,11 @@ select.form-control.select2-date-option {
 .imgcrop-scroll .imgcrop-img { max-height: none; display: block; }
 .imgcrop-scroll .imgcrop-wrap { display: inline-block; }
 
+/* 올리기 창 파일 목록 — 줄을 눌러 그 장으로 */
+.smart-file-row { cursor: pointer; }
+.smart-file-row:hover { background: var(--ez-gray-50, #f8f9fa); }
+.smart-file-row.is-current { background: var(--ez-primary-bg, #e8f0fe); font-weight: 600; }
+
 /* 사진 → BOM: 붙일 원료 고르기 */
 .ing-link-opt { cursor: pointer; margin: 2px 0; }
 .ing-link-opt input { margin-right: 4px; vertical-align: -1px; }

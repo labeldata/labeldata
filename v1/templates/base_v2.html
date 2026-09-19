@@ -227,6 +227,8 @@
     {% endcomment %}
     <div id="v2Snackbar" aria-live="polite">
       <span id="v2SnackbarMsg"></span>
+      {# 다음 할 일이 하나뿐일 때 그 단추. 없으면 숨는다 #}
+      <button id="v2SnackbarAct" hidden></button>
       <button onclick="hideSnackbar()">닫기</button>
     </div>
     {% comment %}
@@ -335,20 +337,38 @@
       let _t = null;
       {# 화면이 서버와 같은 파일 크기 한도를 쓴다 #}
       window.MAX_UPLOAD_MB = {{ MAX_UPLOAD_MB|default:30 }};
-      window.showSnackbar = function(message, type) {
-        /* type: 'success'|'error'|'warning'|'info' */
+      window.showSnackbar = function(message, type, action) {
+        /* type: 'success'|'error'|'warning'|'info'
+           action: {label, onClick} — 다음 할 일이 하나뿐일 때 그 단추를 함께 띄운다.
+           예: "원재료명 표시가 배합표와 다릅니다 [BOM 값으로 바꾸기]". 단추가 있으면
+           읽고 누를 시간을 더 준다. */
         var el  = document.getElementById('v2Snackbar');
         var msg = document.getElementById('v2SnackbarMsg');
+        var act = document.getElementById('v2SnackbarAct');
         if (!el || !msg) return;
         if (_t) { clearTimeout(_t); _t = null; }
         el.classList.remove('snack-show','snack-error','snack-warning','snack-info');
         msg.textContent = message;
+        if (act) {
+          if (action && action.label) {
+            act.textContent = action.label;
+            act.hidden = false;
+            act.onclick = function () {
+              window.hideSnackbar();
+              try { if (typeof action.onClick === 'function') action.onClick(); } catch (e) { console.error(e); }
+            };
+          } else {
+            act.hidden = true;
+            act.onclick = null;
+          }
+        }
         if (type === 'error')        el.classList.add('snack-error');
         else if (type === 'warning') el.classList.add('snack-warning');
         else if (type === 'info')    el.classList.add('snack-info');
         void el.offsetWidth;
         el.classList.add('snack-show');
-        var dur = (type === 'error' || type === 'warning') ? 6000 : 4000;
+        var dur = (action && action.label) ? 10000
+                : (type === 'error' || type === 'warning') ? 6000 : 4000;
         _t = setTimeout(window.hideSnackbar, dur);
       };
       /* ── 저장했다는 말은 **눈에 닿는 자리**에서 한다 ──────────────

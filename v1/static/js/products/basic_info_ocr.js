@@ -1873,17 +1873,22 @@
     // (탭을 옮기면 product_detail.html 이 자동으로 저장하지만, 무슨 일이
     //  일어나는지는 사용자가 알고 있어야 한다.)
     status(filled
-      ? filled + '개 항목을 채웠습니다. 저장해야 검증에 반영됩니다.'
+      ? filled + '개 항목을 채우고 저장합니다.'
       : '채운 항목이 없습니다.');
-    if (filled && typeof window.showSnackbar === 'function') {
-      window.showSnackbar(filled + '개 항목을 채웠습니다. 저장해 주세요.', 'info');
-    }
 
     // 영양성분·분리배출은 이 탭에 칸이 없어 서버가 바로 저장한다.
     // 창이 닫히기 전에 값을 읽어야 하므로 여기서 부른다.
     applyExtras();
     applyDerived();
     recordCorrections();
+
+    /* **기본정보도 바로 저장한다.** 영양·분리배출·BOM 행은 이미 즉시 저장되는데
+       기본정보만 남겨 두면 "저장" 의 뜻이 세 갈래가 되고, 잊고 검증 탭으로
+       가면 "비어 있습니다" 가 났다. 틀린 값이면 고쳐서 다시 저장하면 된다.
+       (change 이벤트가 위에서 돌아 바뀐 칸을 알고 있다 — 한 박자 뒤에 부른다.) */
+    if (filled && typeof window.flushBasicInfo === 'function') {
+      setTimeout(function () { window.flushBasicInfo(); }, 0);
+    }
 
     // 원재료명을 채웠으면 그 안의 원료들을 BOM 행으로 만들 수 있다.
     // 한 줄짜리 문자열로 두면 배합비 순서 검사·알레르기 수집·표시 문구가
@@ -2041,7 +2046,14 @@
         if (body.message) said = body.message + ' ' + said;
         status(said);
         if (typeof window.showSnackbar === 'function') {
-          window.showSnackbar(said, body.over_quota ? 'warning' : 'info');
+          /* 다음 할 일은 배합 탭에서 함량을 넣는 것 — 단추 하나로 간다 */
+          window.showSnackbar(said, body.over_quota ? 'warning' : 'info', {
+            label: '배합 탭으로',
+            onClick: function () {
+              var t = document.querySelector('button[data-bs-target="#tab-bom"]');
+              if (t && window.bootstrap) bootstrap.Tab.getOrCreateInstance(t).show();
+            }
+          });
         }
       })
       .catch(function (err) {

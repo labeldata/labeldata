@@ -14584,3 +14584,81 @@ class 클릭_감사에서_나온_버그를_고친다(TestCase):
         self.assertIn("sessionStorage.removeItem('returnToTab')", block)
         docs = self._read('templates/products/_tab_documents.html')
         self.assertIn('window.ingredientQueueActive = function () { return ingQueueTotal > 0; };', docs)
+
+
+class 클릭을_줄인다(TestCase):
+    """클릭 감사 뒤 사용자가 고른 것들 — A 절충·B 대안·C 절충·D 절충·E·G."""
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_A_이름이_똑같은_원료만_창_없이_연결한다(self):
+        docs = self._read('templates/products/_tab_documents.html')
+        i = docs.index('if (queued && body.matched_existing && body.matched_id')
+        block = docs[i:i + 500]
+        self.assertIn('Number(body.match_score) >= 100', block)      # 90점대는 창으로
+        self.assertIn('autoLinkIngredientPhoto(docId, body, at)', block)
+        i = docs.index('async function autoLinkIngredientPhoto(docId, body, at)')
+        self.assertIn('link_to: body.matched_id', docs[i:i + 700])
+
+    def test_B_목록_줄을_눌러_그_장으로_가고_자른_장은_표시된다(self):
+        up = self._read('static/js/smart_upload.js')
+        i = up.index('function renderSelectedList()')
+        block = up[i:i + 2600]
+        self.assertIn('data-goto=', block)
+        self.assertIn('bi-check-circle-fill text-success', block)
+        self.assertIn("(current ? ' is-current' : '')", block)
+        self.assertIn('previewAt = to;', block)
+        i = up.index("stage.addEventListener('cropchange'")
+        self.assertIn('renderSelectedList();', up[i:i + 400])
+
+    def test_C_값이_바뀌면_옛_번호는_회색이고_다시_검증을_권한다(self):
+        js = self._read('static/js/label/label_preview.js')
+        self.assertIn('function markValidationStale()', js)
+        self.assertIn("snapshot = JSON.stringify(window.checkedFields || null)", js)
+        i = js.index("if (e.data.type === 'previewCheckedFields') {")
+        self.assertIn('markValidationStale()', js[i:i + 700])
+        self.assertIn("(_validationStale ? ' pv-issue-stale' : '')", js)
+        # 자동으로 다시 돌리지 않는다
+        i = js.index('function markValidationStale()')
+        self.assertNotIn('runValidation(', js[i:i + 1200])
+        css = self._read('static/css/label_preview.css')
+        self.assertIn('.pv-issue-badge.pv-issue-stale', css)
+
+    def test_D_배합표_저장_뒤_원재료명이_다르면_단추_하나로_맞춘다(self):
+        detail = self._read('templates/products/product_detail.html')
+        self.assertIn('async function offerRawmtrlSync()', detail)
+        i = detail.index("if (event.data.type === 'bomSaved')")
+        self.assertIn('offerRawmtrlSync();', detail[i:i + 400])
+        i = detail.index('async function offerRawmtrlSync()')
+        block = detail[i:i + 1600]
+        self.assertIn("'/rawmtrl-display/'", block)
+        self.assertIn("label: 'BOM 값으로 바꾸기'", block)
+        self.assertIn('window.applyRawmtrlDisplayFrom(data)', block)
+        self.assertIn('flushBasicInfo();', block)
+        basic = self._read('templates/products/_tab_basic_info.html')
+        self.assertIn('window.applyRawmtrlDisplayFrom = function (data)', basic)
+        # 스낵바가 단추를 받는다
+        base = self._read('templates/base_v2.html')
+        self.assertIn('window.showSnackbar = function(message, type, action)', base)
+        self.assertIn('id="v2SnackbarAct"', base)
+
+    def test_E_검증_탭에서_원재료명을_만들고_BOM_등록_뒤_배합_탭으로(self):
+        tab = self._read('templates/products/_tab_label.html')
+        self.assertIn('id="ltRawmtrlNote"', tab)
+        self.assertIn('id="ltRawmtrlBuild"', tab)
+        i = tab.index('function ltLoad()')
+        self.assertIn('ltCheckRawmtrl();', tab[i:i + 120])
+        ocr = self._read('static/js/products/basic_info_ocr.js')
+        self.assertIn("label: '배합 탭으로'", ocr)
+        self.assertIn("button[data-bs-target=\"#tab-bom\"]", ocr)
+
+    def test_G_사진에서_채우면_바로_저장한다(self):
+        ocr = self._read('static/js/products/basic_info_ocr.js')
+        i = ocr.index('recordCorrections();')
+        self.assertIn('window.flushBasicInfo();', ocr[i:i + 600])
+        self.assertIn('개 항목을 채우고 저장합니다.', ocr)

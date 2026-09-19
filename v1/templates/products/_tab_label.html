@@ -121,6 +121,12 @@
       </div>
     </div>
     {% endif %}
+    {# 원재료명 표시가 비어 있으면 검증은 그것부터 지적한다. 기본정보 탭으로 돌아가지 않고 여기서 만든다. #}
+    <div id="ltRawmtrlNote" class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-center gap-2 flex-wrap" style="font-size:13px;" hidden>
+        <i class="bi bi-exclamation-triangle"></i>
+        <span class="flex-grow-1">원재료명 표시가 비어 있습니다. 배합표로 만들 수 있습니다.</span>
+        <button type="button" class="btn btn-primary v2-btn-sm" id="ltRawmtrlBuild"><i class="bi bi-stars"></i>BOM에서 만들기</button>
+    </div>
     <div id="lt-loading">
         <div class="spinner-border text-primary" style="width:1.8rem;height:1.8rem;" role="status"></div>
         <span>표시사항 미리보기를 불러오는 중...</span>
@@ -157,7 +163,40 @@
 
     /* iframe 즉시 표시 후 API 데이터는 백그라운드로 로드
        (requestPreviewData postMessage 응답에 사용) */
+    /* 원재료명 표시가 비어 있으면 위에 한 줄 — 기본정보 탭을 오가지 않는다.
+       칸은 같은 화면(기본정보 탭)에 있으므로 값은 거기서 읽는다. */
+    function ltCheckRawmtrl() {
+        var note = document.getElementById('ltRawmtrlNote');
+        var field = document.getElementById('field-rawmtrl-nm');
+        if (!note || !field) return;
+        note.hidden = !!(field.value || '').trim();
+    }
+    (function () {
+        var btn = document.getElementById('ltRawmtrlBuild');
+        if (!btn) return;
+        btn.addEventListener('click', async function () {
+            btn.disabled = true;
+            try {
+                var res = await fetch('/label/' + LABEL_ID + '/rawmtrl-display/', { credentials: 'same-origin' });
+                var data = await res.json();
+                if (!res.ok || !data.success || !data.count) {
+                    showSnackbar((data && data.message) || '배합표에 원료가 없습니다. 배합 탭에서 먼저 넣어 주세요.', 'warning');
+                    return;
+                }
+                if (typeof window.applyRawmtrlDisplayFrom !== 'function') return;
+                window.applyRawmtrlDisplayFrom(data);
+                if (typeof window.flushBasicInfo === 'function') window.flushBasicInfo();
+                ltCheckRawmtrl();
+            } catch (e) {
+                showSnackbar('문구를 만들지 못했습니다.', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    })();
+
     function ltLoad() {
+        ltCheckRawmtrl();
         if (_loaded) return;
         _loaded = true;
         showFrame();  // 즉시 iframe 표시

@@ -61,6 +61,8 @@
 }
 
 #v2SnackbarMsg { flex: 1; }
+/* 할 일 단추는 닫기보다 눈에 띄어야 한다 */
+#v2SnackbarAct { color: #ffd54f !important; text-decoration: underline; text-underline-offset: 2px; }
 
 #v2Snackbar button {
     background: none;

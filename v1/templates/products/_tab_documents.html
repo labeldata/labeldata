@@ -2268,6 +2268,21 @@ async function submitImportCompanyDoc() {
             if (window.hideSearchBusy) window.hideSearchBusy();
         }
 
+        /* **이름이 똑같은 원료는 확인 없이 연결한다 — 줄을 섰을 때만.**
+         *
+         * 열 장을 올리면 절반은 거래처에서 늘 받던 원료다. 그 장마다 창을
+         * 열고 [등록하고 다음] 을 누르는 것이 클릭의 대부분이었다. 정규화한
+         * 이름이 기존 원료와 **완전히 같으면(100점)** 창 없이 그 원료에 붙인다.
+         * 90점대는 비슷할 뿐이라 — OCR 이 틀리게 읽은 이름이 우연히 닮은
+         * 원료에 붙을 수 있다 — 창을 띄우고 사람이 고른다. 한 장짜리는
+         * 어차피 창 하나이므로 그대로 보여 준다. */
+        if (queued && body.matched_existing && body.matched_id
+                && Number(body.match_score) >= 100
+                && ((body.fields || {}).ingredient_name || '').trim()) {
+            const linked = await autoLinkIngredientPhoto(docId, body, at);
+            if (linked) { nextInIngredientQueue(); return; }
+        }
+
         const f = body.fields || {};
         // 항목명과 값을 한 줄에 둔다. 원재료명만 길어서 여러 줄로 두고, 나머지는
         // 한 줄이면 충분하다 - 전부 같은 크기로 두면 짧은 값에도 넓은 칸이 붙는다.
@@ -2359,6 +2374,25 @@ async function submitImportCompanyDoc() {
 
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     };
+
+    /* 100점 짜리를 창 없이 붙인다. 실패하면 false — 그 장은 창으로 간다. */
+    async function autoLinkIngredientPhoto(docId, body, at) {
+        try {
+            const res = await fetch(`/products/documents/${docId}/ingredient-photo/apply/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': ingredientCsrf() },
+                body: JSON.stringify({ fields: body.fields, link_to: body.matched_id })
+            });
+            const out = await res.json();
+            if (!res.ok || !out.success) return false;
+            showSnackbar(`'${body.matched_name}' 은 등록된 원료와 이름이 같아 자동으로 연결했습니다 `
+                         + `(${at} / ${ingQueueTotal}).`, 'info');
+            return true;
+        } catch (err) {
+            console.error(err);
+            return false;
+        }
+    }
 
     async function applyIngredientPhoto(docId) {
         const modalEl = document.getElementById('ingredientPhotoModal');

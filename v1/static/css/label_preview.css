@@ -1106,6 +1106,9 @@ tbody.layout-vertical tr td {
 }
 
 .pv-exporting .pv-issue-badge { display: none !important; }
+/* 검증한 뒤 값이 바뀐 결과 — 번호는 남되 회색이다 */
+.pv-issue-badge.pv-issue-stale { background: #9e9e9e; opacity: .75; }
+.lt-vbtn.is-stale { box-shadow: 0 0 0 3px rgba(230, 81, 0, .35); }
 
 /* 지적 줄로 데려갔을 때 잠깐 드러낸다 */
 .pv-row-flash > th,

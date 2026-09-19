@@ -345,10 +345,18 @@ function renderSelectedList() {
 
     const have = existingFilenames();
     box.hidden = false;
+    /* 줄을 누르면 그 장이 아래 자르기 칸에 뜬다 — ‹› 만으로 열 장을 오가면
+       한 장에 한 번씩 눌러야 했다. 잘라 둔 장은 ✓ 로 표시해, 어디까지 했는지
+       목록에서 보인다. 지금 보는 줄은 굵게. */
     box.innerHTML = selectedFiles.map((f, i) => {
         const dup = have.indexOf((f.name || '').toLowerCase()) !== -1;
-        return '<div class="d-flex align-items-center gap-2 py-1 border-bottom">'
-             + '<i class="bi bi-image text-info"></i>'
+        const cropped = !!cropRects[i];
+        const current = i === previewAt;
+        return '<div class="d-flex align-items-center gap-2 py-1 border-bottom smart-file-row'
+             + (current ? ' is-current' : '') + '" data-goto="' + i + '" title="누르면 이 장을 봅니다">'
+             + (cropped
+                 ? '<i class="bi bi-check-circle-fill text-success" title="잘라 둠"></i>'
+                 : '<i class="bi bi-image text-info"></i>')
              + '<span class="flex-grow-1 text-truncate" title="' + f.name + '">'
              + f.name + (dup ? ' <span class="badge bg-warning text-dark">중복</span>' : '')
              + '</span>'
@@ -359,8 +367,18 @@ function renderSelectedList() {
     }).join('');
 
     box.querySelectorAll('[data-drop]').forEach(btn => {
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', function (ev) {
+            ev.stopPropagation();
             dropSelectedFile(Number(this.dataset.drop));
+        });
+    });
+    box.querySelectorAll('[data-goto]').forEach(row => {
+        row.addEventListener('click', function () {
+            const to = Number(this.dataset.goto);
+            if (to === previewAt) return;
+            previewAt = to;
+            renderSelectedList();
+            renderUploadPreview();
         });
     });
 }
@@ -602,6 +620,7 @@ function renderUploadPreview() {
         bar.querySelectorAll('[data-step]').forEach(btn => {
             btn.addEventListener('click', function () {
                 previewAt += Number(this.dataset.step);
+                renderSelectedList();       // 굵은 줄이 따라온다
                 renderUploadPreview();
             });
         });
@@ -634,6 +653,7 @@ function renderUploadPreview() {
             const r = cropHandle && cropHandle.getRect();
             if (r) cropRects[previewAt] = r; else delete cropRects[previewAt];
             markCropState(tools);
+            renderSelectedList();       // 목록의 ✓ 가 따라온다
         });
         markCropState(tools);
         return;

@@ -1683,6 +1683,12 @@ window.goToBomTabForRawmtrl = function () {
     _rawmtrlHint('BOM 을 고친 뒤 기본 정보 탭으로 돌아와 다시 만드세요.');
 };
 
+/* 다른 곳(배합표 저장 뒤 스낵바·검증 탭)이 이미 만들어 둔 문구를 넣을 때 */
+window.applyRawmtrlDisplayFrom = function (data) {
+    _rawmtrlBuilt = data;
+    window.applyRawmtrlDisplay();
+};
+
 window.applyRawmtrlDisplay = function () {
     var target = document.getElementById('field-rawmtrl-nm');
     if (!target || _rawmtrlBuilt === null) return;

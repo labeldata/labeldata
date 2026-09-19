@@ -3196,7 +3196,7 @@ function markValidationOnTable(categories) {
             const head = row.tagName === 'TH' ? row : row.querySelector('th');
             if (!head || head.querySelector('.pv-issue-badge')) return;
             const badge = document.createElement('span');
-            badge.className = 'pv-issue-badge pv-issue-badge-link';
+            badge.className = 'pv-issue-badge pv-issue-badge-link' + (_validationStale ? ' pv-issue-stale' : '');
             badge.textContent = numbers.join(',');
             badge.title = numbers.length > 1
                 ? '이 줄에 지적이 ' + numbers.length + '건 있습니다. 누르면 내용을 봅니다'
@@ -3227,6 +3227,30 @@ function jumpToTableRow(field) {
 
 /* 지금 화면에 떠 있는 검증 결과. 표의 번호 배지를 눌렀을 때 다시 연다. */
 let _lastValidation = null;
+/* 검증 뒤에 값이 바뀌었는가. 자동으로 다시 돌리지는 않는다 — 탭을 오갈 때마다
+   서버를 부르면 느리고 검증 이력이 뒤섞인다. 대신 옛 번호를 회색으로 바꾸고
+   [1차 검증 실행] 을 눈에 띄게 한다. */
+let _validationStale = false;
+
+function markValidationStale() {
+    if (_validationStale) return;
+    _validationStale = true;
+    document.querySelectorAll('#previewContent .pv-issue-badge').forEach(function (el) {
+        el.classList.add('pv-issue-stale');
+    });
+    const btn = document.getElementById('ltFirstBtn');
+    if (btn) btn.classList.add('is-stale');
+    const meta = document.getElementById('ltFirstMeta');
+    if (meta) meta.textContent = '값이 바뀌었습니다 — 다시 검증해 주세요';
+    const pane = document.getElementById('ltFirstResult');
+    if (pane && !pane.hidden && !pane.querySelector('.lt-vrstale')) {
+        const note = document.createElement('div');
+        note.className = 'lt-vrstale';
+        note.textContent = '검증한 뒤에 값이 바뀌었습니다. 아래 번호는 옛 결과입니다 — 다시 검증해 주세요.';
+        const body = pane.querySelector('.lt-vrbody');
+        if (body) pane.insertBefore(note, body);
+    }
+}
 
 /*
  * 검증 결과 창.
@@ -3247,8 +3271,14 @@ function showValidationResult(result, useAi) {
     // 지적에 번호를 매기고 표 위에 얹는다. 목록만 보여 주면 "어느 줄 이야기인지"
     // 를 잇는 일이 사람 몫이 된다 — 열일곱 줄을 눈으로 훑으며 대조해야 했다.
     const categories = numberValidationIssues(result.categories || []);
+    _validationStale = false;
+    const firstBtn = document.getElementById('ltFirstBtn');
+    if (firstBtn) firstBtn.classList.remove('is-stale');
     markValidationOnTable(categories);
-    _lastValidation = { result: result, useAi: useAi, categories: categories };
+    /* 검증한 순간의 값. 뒤에 다른 값이 오면 결과가 옛것임을 안다. */
+    let snapshot = '';
+    try { snapshot = JSON.stringify(window.checkedFields || null); } catch (e) {}
+    _lastValidation = { result: result, useAi: useAi, categories: categories, snapshot: snapshot };
 
     saveValidationCache(result, useAi);
 
@@ -3567,6 +3597,12 @@ window.addEventListener('message', function(e) {
         /* 표시하기로 고른 항목. 미리보기·내보내기가 함께 읽는다
            (`checkedFields.prdlst_nm` 등). 부모 화면이 정본을 갖고 있다. */
         window.checkedFields = e.data.checked;
+        /* 검증한 뒤에 다른 값이 왔다 — 결과는 이제 옛것이다 */
+        if (_lastValidation && _lastValidation.snapshot) {
+            let now = '';
+            try { now = JSON.stringify(e.data.checked || null); } catch (err) {}
+            if (now && now !== _lastValidation.snapshot) markValidationStale();
+        }
         
         // 원재료명 정보 로깅
         if (window.checkedFields.ingredient_info) {
