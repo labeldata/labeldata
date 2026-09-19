@@ -611,7 +611,7 @@ function renderUploadPreview() {
     if (isPhoto) {
         const stage = document.createElement('div');
         slot.appendChild(stage);
-        cropHandle = window.imageCrop.attach(stage, file);
+        cropHandle = window.imageCrop.attach(stage, file, cropRects[previewAt] || null);
 
         const tools = document.createElement('div');
         tools.className = 'd-flex align-items-center gap-2 mt-1 flex-wrap';

@@ -126,7 +126,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                           표시 순서는 배합비 내림차순입니다.</span></li>
                 <li><b>④</b> 기본정보로 보냅니다
                     <span>요약을 펴서 <b>기본정보로 복사</b>를 누르면 표시사항의
-                          원재료명 칸으로 들어갑니다. 저장은 <b>저장하기</b>로.</span></li>
+                          원재료명 칸으로 들어갑니다. 저장은 상단 <b>저장</b> 단추로.</span></li>
             </ol>
         </div>
     </div>
@@ -136,7 +136,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             <div class="d-flex justify-content-between align-items-center mb-2 px-1">
                 <div class="small text-muted">
                     <i class="bi bi-info-circle me-1"></i>
-                    더블클릭으로 수정 &middot; 우클릭으로 행 추가·삭제·되돌리기 &middot;
+                    칸을 고르고 바로 입력(Enter 로 다음 줄) &middot; 우클릭으로 행 추가·삭제·되돌리기 &middot;
                     머리글을 끌어 칸 순서를 바꿀 수 있습니다
                 </div>
                 <div class="d-flex align-items-center gap-2 ms-3 text-nowrap">
@@ -2064,9 +2064,15 @@ body.in-iframe .bom-page-header { display: none !important; }
                 // 서버 데이터가 없으면 임시저장 데이터 복원 시도
                 if (!loadDraftIfExists()) {
                     hot.loadData(Array.from({ length: 15 }, () => ({})));
+                    resetBomEdited();
+                } else {
+                    markBomEdited();        // 임시저장은 아직 서버에 없는 값이다
                 }
             } else {
                 hot.loadData(data);
+                /* 방금 서버에서 읽은 표는 고친 것이 없다. 이 표시를 안 내리면
+                   탭을 옮길 때마다 같은 표를 다시 저장했다(전 행 재생성). */
+                resetBomEdited();
             }
             /* 비고에 담긴 항목을 칸으로 세운다.
                **읽기 전용이다** — 값은 비고 한 칸에 저장되므로, 여기서 고치면
@@ -2075,9 +2081,31 @@ body.in-iframe .bom-page-header { display: none !important; }
             hot.render();
             syncSheetSummaryType();
             calculateTotal();  // 내부에서 generateBomSummary 호출
+            focusFirstEmptyRatio();
         } catch (error) {
             console.error('BOM 데이터 로드 실패:', error);
         }
+    }
+
+    /* 사진으로 넣은 줄은 배합비가 비어 있다. 다시 그린 뒤 첫 빈 칸을 골라 두면
+       칸을 찾아 누르지 않고 바로 칠 수 있다. 빈 칸이 없으면 아무것도 고르지 않는다. */
+    function focusFirstEmptyRatio() {
+        {% if not can_edit %}return;{% endif %}
+        try {
+            const rows = hot.getSourceData();
+            const physicalCol = hot.propToCol('mixing_ratio');
+            const col = hot.toVisualColumn(physicalCol);
+            if (col === null || col === undefined || col < 0) return;
+            for (let i = 0; i < rows.length; i++) {
+                const r = rows[i];
+                if (!r || !r.ingredient_name) continue;
+                if (r.mixing_ratio === null || r.mixing_ratio === undefined || r.mixing_ratio === '') {
+                    const row = hot.toVisualRow(i);
+                    if (row !== null && row !== undefined) hot.selectCell(row, col);
+                    return;
+                }
+            }
+        } catch (e) { /* 고르기는 편의다 — 실패해도 표는 그대로다 */ }
     }
 
     async function loadLabelData(labelId) {
@@ -2351,7 +2379,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             } else if (before === after) {
                 showSnackbar('이미 배합비 순입니다.', 'info');
             } else {
-                showSnackbar('배합비가 큰 것부터로 놓았습니다. [저장하기] 를 눌러야 남습니다.',
+                showSnackbar('배합비가 큰 것부터로 놓았습니다. ' + SAVE_BTN_NAME + ' 을 눌러야 남습니다.',
                              'success');
             }
         }
@@ -3020,7 +3048,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             row => row && (row.ingredient_name || row.raw_material_name)).length;
         if (ask && filled && !confirm(
                 `배합비 ${filled}줄을 모두 지웁니다.\n\n`
-                + '저장하기를 누르기 전에는 서버에 저장된 배합비가 그대로 남아 있습니다.')) {
+                + SAVE_BTN_NAME + ' 을 누르기 전에는 서버에 저장된 배합비가 그대로 남아 있습니다.')) {
             return;
         }
         currentRowIndex = null;
@@ -3031,7 +3059,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         calculateTotal();
         scheduleDraftSave();
         showSnackbar(
-            filled ? `${filled}줄을 비웠습니다. 저장하기를 눌러야 반영됩니다.`
+            filled ? `${filled}줄을 비웠습니다. ${SAVE_BTN_NAME} 을 눌러야 반영됩니다.`
                    : '표가 이미 비어 있습니다.',
             filled ? 'success' : 'warning');
     }
@@ -3074,6 +3102,13 @@ body.in-iframe .bom-page-header { display: none !important; }
         bomEdited = true;
     }
     window.markBomEdited = markBomEdited;
+    function resetBomEdited() {
+        bomEdited = false;
+    }
+
+    /* iframe 안에서는 머리글(저장하기 단추)이 감춰지고 부모의 상단 [저장] 이 그
+       일을 한다. 안내 문구가 없는 단추를 가리키면 사람이 찾다 만다. */
+    const SAVE_BTN_NAME = document.body.classList.contains('in-iframe') ? '상단 [저장]' : '[저장하기]';
 
     /* 부모가 탭을 떠나며 부른다. 고친 적이 없으면 아무것도 하지 않는다. */
     window.saveIfEdited = function () {
@@ -3121,7 +3156,10 @@ body.in-iframe .bom-page-header { display: none !important; }
                     const rowGmo = pick(row.gmo, metadata.gmo);
                     const itemData = {
                         ingredient_name: row.ingredient_name,
-                        mixing_ratio: row.mixing_ratio || null,
+                        /* `|| null` 이었다 — 0 을 치면 빈 칸이 됐다. 0% 는 값이다
+                           (표에 있으나 배합에 안 들어간 것을 그렇게 적는다). */
+                        mixing_ratio: (row.mixing_ratio === '' || row.mixing_ratio === undefined
+                                       || row.mixing_ratio === null) ? null : row.mixing_ratio,
                         origin: metadata.origin || '',
                         allergen: rowAllergens,
                         raw_material_name: row.raw_material_name || '',

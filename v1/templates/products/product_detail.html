@@ -1210,7 +1210,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // 서버는 예전 값을 보고 "비어 있습니다" 라고 답한다.
             // 플로팅 저장 바를 없앤 뒤로는 저장하라는 안내도 눈에 띄지 않는다.
             if (leavingId === '#tab-info' && hasUnsavedChanges) {
-                flushBasicInfo();
+                /* 검증·확정은 whenSavesSettled 로 저장을 기다린다. 여기에 넣지
+                   않으면 기본정보 저장만 그 목록 밖이라 저장 전 값으로 검증됐다. */
+                trackPendingSave(flushBasicInfo());
             }
             /*
               BOM·영양성분은 iframe 이 자기 서버 호출로 저장한다. 예전에는
@@ -1386,6 +1388,24 @@ window.addEventListener('message', function (e) {
      * 대신 **일이 끝나면 배합표로 돌아오게** 표시를 남긴다 — 사진을 올린 것은
      * 배합표를 채우려던 것이지 문서함을 보려던 것이 아니다. */
     try { sessionStorage.setItem('returnToTab', 'bom'); } catch (e) {}
+    /* 올리지 않고 창을 닫으면 표시를 지운다. 남겨 두면 나중에 문서함에서 올린
+       줄이 끝날 때 문서함 대신 배합표만 다시 그려 목록이 옛것으로 남는다.
+       줄이 섰는지는 이 창의 hidden 뒤에 판독 창이 서는 순서라, 한 박자 뒤에 본다. */
+    (function () {
+        const m = document.getElementById('smartUploadModal');
+        if (!m) return;
+        m.addEventListener('hidden.bs.modal', function once() {
+            m.removeEventListener('hidden.bs.modal', once);
+            setTimeout(function () {
+                const active = typeof window.ingredientQueueActive === 'function'
+                    && window.ingredientQueueActive();
+                if (active) return;
+                try {
+                    if (sessionStorage.getItem('returnToTab') === 'bom') sessionStorage.removeItem('returnToTab');
+                } catch (e) {}
+            }, 0);
+        });
+    })();
 
     /* 구분 번호는 화면이 이미 들고 있다 — 서버가 옵션마다 내려준 그 표시다.
        여기서 코드 이름을 또 적으면 두 곳이 어긋날 자리가 생긴다. */
@@ -2642,8 +2662,9 @@ window.addEventListener('message', function(event) {
 
     // BOM 저장 완료
     if (event.data.type === 'bomSaved') {
-        showSaved(event.data.message || '저장했습니다');
-        showSaveStatusMsg();
+        /* 서버 문구(몇 줄·역동기화 몇 건)를 그대로 보인다. 예전에는 뒤이어 부른
+           showSaveStatusMsg() 가 '저장했습니다' 로 덮어써 아무도 못 봤다. */
+        showSaveStatusMsg(event.data.message || '저장했습니다');
         // ── localStorage 동기화 알림 저장 ──
         try {
             const d = event.data;

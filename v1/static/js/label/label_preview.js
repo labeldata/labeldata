@@ -2955,7 +2955,11 @@ function runAiValidation() {
 }
 
 function runRuleOnlyValidation() {
-    runValidation(false, 'ruleValidationBtn', '검증 중...');
+    /* 탭에 끼워 넣은 화면은 자기 단추(ruleValidationBtn)를 지우고 검증 탭의
+       [1차 검증 실행](ltFirstBtn)이 부른다. 잠글 단추도 그것이어야 두 번 눌러
+       두 번 돌지 않는다. */
+    const btnId = document.getElementById('ltFirstBtn') ? 'ltFirstBtn' : 'ruleValidationBtn';
+    runValidation(false, btnId, '검증 중...');
 }
 
 async function runValidation(useAi, btnId, loadingText) {
@@ -2965,6 +2969,16 @@ async function runValidation(useAi, btnId, loadingText) {
         alert('라벨 정보를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
         return;
     }
+
+    /* 부모(제품 화면)가 다른 탭의 값을 아직 저장하는 중이면 그것부터 끝낸다.
+       검증은 **저장된 값**을 읽는다 — 기다리지 않으면 방금 친 값을 두고
+       "비어 있습니다" 가 나온다. */
+    try {
+        if (window.parent && window.parent !== window
+                && typeof window.parent.whenSavesSettled === 'function') {
+            await window.parent.whenSavesSettled();
+        }
+    } catch (e) { /* 다른 출처면 못 본다 — 그냥 간다 */ }
 
     // 검증을 돌렸다는 사실을 서버에 남긴다 (누가 언제 검증했나)
     try {

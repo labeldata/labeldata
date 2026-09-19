@@ -3613,7 +3613,7 @@ class 표의_칸이_반쪽이었다(TestCase):
         되살아났다. 빈 값과 값 없음을 구분해야 한다(pick).
         """
         head = self.html.index('const rowAllergens =')
-        block = self.html[head:head + 1400]
+        block = self.html[head:head + 1700]
         self.assertIn('pick(row.allergens', block)
         self.assertIn('allergens: rowAllergens,', block)
         self.assertIn('gmo: rowGmo,', block)
@@ -4497,7 +4497,7 @@ class BOM을_통째로_지운다(TestCase):
     def test_저장_전에는_서버_자료가_그대로다(self):
         """지우는 것은 화면뿐이다. 그 말을 해 주지 않으면 겁이 난다."""
         head = self.bom.index('function clearAllRows(options)')
-        self.assertIn('저장하기를 누르기 전에는', self.bom[head:head + 1600])
+        self.assertIn("SAVE_BTN_NAME + ' 을 누르기 전에는", self.bom[head:head + 1600])
 
 
 class 걷어도_되는_것과_아닌_것(TestCase):
@@ -13628,7 +13628,7 @@ class 올린_사진을_줄_세워_확인한다(TestCase):
         block = js[i:i + 700]
         self.assertIn('return;', block)          # 새로고침으로 내려가지 않는다
         docs = self._docs()
-        j = docs.index('if (ingNeedsReload)')
+        j = docs.index('function finishIngredientQueue()')
         block = docs[j:j + 1400]
         self.assertIn('window.location.reload()', block)
         # 배합 탭에서 시작했으면 배합표 iframe 만 다시 그린다 — 첫 탭이
@@ -14173,21 +14173,21 @@ class 배합표에서_바로_사진으로_한_줄_만든다(TestCase):
         """배합표에서 누른 사람은 이미 무엇을 올릴지 정했다."""
         detail = self._detail()
         i = detail.index("e.data.type !== 'openIngredientUpload'")
-        block = detail[i:i + 1200]
+        block = detail[i:i + 2400]
         self.assertIn('window.openUploadModal(null,', block)
 
     def test_구분_번호를_화면에서_읽는다(self):
         """여기서 코드 이름을 또 적으면 두 곳이 어긋날 자리가 생긴다."""
         detail = self._detail()
         i = detail.index("e.data.type !== 'openIngredientUpload'")
-        block = detail[i:i + 1200]
+        block = detail[i:i + 2400]
         self.assertIn("o.dataset.multiple === '1'", block)
         self.assertNotIn('INGREDIENT_LABEL', block)
 
     def test_못_찾으면_말한다(self):
         detail = self._detail()
         i = detail.index("e.data.type !== 'openIngredientUpload'")
-        block = detail[i:i + 1200]
+        block = detail[i:i + 2400]
         self.assertIn('찾지 못했습니다', block)
 
 
@@ -14502,3 +14502,85 @@ class 슬롯_없이_구분만_넘겨도_그_구분으로_연다(TestCase):
         js = self._js()
         i = js.index('function openUploadModal(')
         self.assertIn('backBtn.hidden = !!docTypeId', js[i:i + 3200])
+
+
+class 클릭_감사에서_나온_버그를_고친다(TestCase):
+    """
+    코드에서 클릭 수를 세다가 나온 것들. 클릭은 안 늘리지만 사람을 헤매게 하던
+    자리다. 화면 시험이 없으므로 원본을 읽어 그 자리가 있는지 본다.
+    """
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_판독_창을_사람이_닫으면_줄이_조용히_멈추지_않는다(self):
+        docs = self._read('templates/products/_tab_documents.html')
+        i = docs.index('function closeThenNext(modalEl)')
+        self.assertIn('ingAdvancing = true;', docs[i:i + 400])
+        i = docs.index("el.addEventListener('hidden.bs.modal', function () {")
+        block = docs[i:i + 400]
+        self.assertIn('if (ingAdvancing) return;', block)
+        self.assertIn('abandonIngredientQueue();', block)
+        i = docs.index('function abandonIngredientQueue()')
+        self.assertIn('finishIngredientQueue();', docs[i:i + 600])
+        self.assertIn('문서함에 「판독 전」으로 남아 있습니다', docs[i:i + 600])
+
+    def test_버리기는_한_번만_간다(self):
+        docs = self._read('templates/products/_tab_documents.html')
+        i = docs.index('async function discardAndNext(docId, modalEl)')
+        block = docs[i:i + 500]
+        self.assertIn('if (ingDiscarding) return;', block)
+        self.assertIn('skipBtn.disabled = true;', block)
+        i = docs.index('function nextInIngredientQueue()')
+        self.assertIn('ingDiscarding = false;', docs[i:i + 200])
+
+    def test_배합표는_서버에서_읽은_뒤_고친_표시를_내리고_빈_배합비를_고른다(self):
+        bom = self._read('templates/products/bom_detail.html')
+        i = bom.index('hot.loadData(data);')
+        self.assertIn('resetBomEdited();', bom[i:i + 300])
+        self.assertIn('function focusFirstEmptyRatio()', bom)
+        self.assertIn("hot.propToCol('mixing_ratio')", bom)
+        # 0% 는 값이다
+        self.assertIn("mixing_ratio: (row.mixing_ratio === '' || row.mixing_ratio === undefined", bom)
+        self.assertNotIn('mixing_ratio: row.mixing_ratio || null', bom)
+        # 안내가 실제 동작을 말한다
+        self.assertIn('칸을 고르고 바로 입력', bom)
+        self.assertNotIn('더블클릭으로 수정', bom)
+        # iframe 안에서는 없는 단추를 가리키지 않는다
+        self.assertIn("const SAVE_BTN_NAME = document.body.classList.contains('in-iframe')", bom)
+        self.assertNotIn('[저장하기] 를 눌러야 남습니다', bom)
+
+    def test_기본정보_자동저장도_검증이_기다린다(self):
+        detail = self._read('templates/products/product_detail.html')
+        self.assertIn('trackPendingSave(flushBasicInfo());', detail)
+        self.assertIn("showSaveStatusMsg(event.data.message || '저장했습니다');", detail)
+        js = self._read('static/js/label/label_preview.js')
+        self.assertIn("document.getElementById('ltFirstBtn') ? 'ltFirstBtn' : 'ruleValidationBtn'", js)
+        i = js.index('async function runValidation(useAi, btnId, loadingText)')
+        self.assertIn('await window.parent.whenSavesSettled();', js[i:i + 900])
+
+    def test_사진_불러오기의_안_보이던_말들(self):
+        js = self._read('static/js/products/basic_info_ocr.js')
+        self.assertIn('시간당 판독 한도(30회)', js)
+        self.assertIn('if (body.message) said = body.message', js)
+        self.assertIn("basisInput.closest('.modal.show')", js)
+
+    def test_장을_오가도_잡아_둔_네모가_남는다(self):
+        crop = self._read('static/js/image_crop.js')
+        self.assertIn('function attach(host, file, initial)', crop)
+        self.assertIn('initial.w / displayScale', crop)
+        up = self._read('static/js/smart_upload.js')
+        self.assertIn('window.imageCrop.attach(stage, file, cropRects[previewAt] || null)', up)
+
+    def test_올리지_않고_닫으면_배합표_표시를_지운다(self):
+        detail = self._read('templates/products/product_detail.html')
+        i = detail.index("e.data.type !== 'openIngredientUpload'")
+        block = detail[i:i + 2400]
+        self.assertIn('window.ingredientQueueActive()', block)
+        self.assertIn("sessionStorage.removeItem('returnToTab')", block)
+        docs = self._read('templates/products/_tab_documents.html')
+        self.assertIn('window.ingredientQueueActive = function () { return ingQueueTotal > 0; };', docs)

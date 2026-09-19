@@ -1781,11 +1781,18 @@
            사용자는 값이 들어간 줄 알고 넘어가고, 나중에 검증에서 "열량이 맞지
            않습니다" 만 본다. 무엇을 어떻게 고쳐야 하는지 여기서 말한다. */
         if (r.nutrition_basis_unknown) {
-          status(r.nutrition_basis_warning || '표의 기준량을 읽지 못했습니다.');
+          var warn = r.nutrition_basis_warning || '표의 기준량을 읽지 못했습니다.';
+          status(warn);
+          /* 이 응답이 올 때 창은 이미 닫혀 있다 — 창 안의 칸에 초점을 줘 봐야
+             아무도 못 본다. 보이는 곳(스낵바)에 말한다. 창이 아직 열려 있으면
+             그 칸으로 간다. */
           var basisInput = document.getElementById('ocrNutritionBasis');
-          if (basisInput) {
+          var modalOpen = basisInput && basisInput.closest('.modal.show');
+          if (modalOpen) {
             basisInput.focus();
             if (basisInput.select) basisInput.select();
+          } else if (typeof window.showSnackbar === 'function') {
+            window.showSnackbar(warn, 'warning');
           }
           return;
         }
@@ -2026,9 +2033,16 @@
         if (typeof window.reloadBomIframe === 'function') {
           window.reloadBomIframe();
         }
-        status('원료 ' + body.total + '개를 BOM에 등록했습니다 '
+        /* 한도에 걸려 못 넣은 종이 있으면 서버가 message 로 말한다. 창은 이미
+           닫혔으므로 status 줄은 안 보인다 — 스낵바로 띄운다. */
+        var said = '원료 ' + body.total + '개를 BOM에 등록했습니다 '
              + '(새로 만든 원료 ' + body.created + '개, 기존 원료 연결 '
-             + body.matched_existing + '개). BOM 탭에서 확인하세요.');
+             + body.matched_existing + '개). BOM 탭에서 확인하세요.';
+        if (body.message) said = body.message + ' ' + said;
+        status(said);
+        if (typeof window.showSnackbar === 'function') {
+          window.showSnackbar(said, body.over_quota ? 'warning' : 'info');
+        }
       })
       .catch(function (err) {
         console.error(err);
@@ -2131,7 +2145,8 @@
               throw new Error('로그인이 풀렸습니다. 새로고침 후 다시 시도하세요.');
             }
             var hint = '';
-            if (res.status === 403) hint = ' 로그인이 풀렸을 수 있습니다. 새로고침 후 다시 시도하세요.';
+            // 403 은 대개 시간당 판독 한도(30회)다 — 로그인이 풀린 것과 다르다
+            if (res.status === 403) hint = ' 시간당 판독 한도(30회)를 넘었거나 로그인이 풀렸을 수 있습니다. 잠시 뒤 다시 시도하세요.';
             else if (res.status === 413) hint = ' 사진 용량이 너무 큽니다.';
             else if (res.status === 502 || res.status === 504) hint = ' 서버 응답이 너무 늦었습니다.';
             else if (res.status >= 500) hint = ' 서버 오류입니다.';

@@ -29,8 +29,9 @@
  *
  * 쓰는 법
  * ───────
- *     var handle = window.imageCrop.attach(hostEl, file);
+ *     var handle = window.imageCrop.attach(hostEl, file, initialRect);
  *     handle.getRect();                  // {x, y, w, h, deg} · 없으면 null
+ *     // initialRect: 앞서 getRect() 로 받아 둔 것. 여러 장을 오갈 때 되살린다.
  *     window.imageCrop.apply(file, rect) // -> Promise<File>
  */
 (function () {
@@ -72,7 +73,7 @@
         return canvas;
     }
 
-    function attach(host, file) {
+    function attach(host, file, initial) {
         if (!host) return null;
         host.innerHTML = '';
         host.classList.add('imgcrop');
@@ -211,8 +212,18 @@
             applyZoom();
         }, { passive: false });
 
-        loadImage(file).then(function (img) { source = img; render(); })
-                       .catch(function () { host.textContent = '사진을 읽지 못했습니다.'; });
+        loadImage(file).then(function (img) {
+            source = img;
+            /* 앞서 잡아 둔 네모(원본 픽셀·각도)가 있으면 그대로 되살린다 —
+               열 장을 오가며 고른 것이 장을 바꿀 때마다 사라졌다. */
+            if (initial && initial.deg) deg = ((initial.deg % 360) + 360) % 360;
+            render();
+            if (initial && initial.w && initial.h) {
+                rect = { x: initial.x / displayScale, y: initial.y / displayScale,
+                         w: initial.w / displayScale, h: initial.h / displayScale };
+                paint();
+            }
+        }).catch(function () { host.textContent = '사진을 읽지 못했습니다.'; });
 
         return {
             /* 돌린 원본의 픽셀 좌표로 돌려준다. deg 를 함께 주어 apply 가 같은
