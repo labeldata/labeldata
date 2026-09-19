@@ -124,7 +124,7 @@
     {# 원재료명 표시가 비어 있으면 검증은 그것부터 지적한다. 기본정보 탭으로 돌아가지 않고 여기서 만든다. #}
     <div id="ltRawmtrlNote" class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-center gap-2 flex-wrap" style="font-size:13px;" hidden>
         <i class="bi bi-exclamation-triangle"></i>
-        <span class="flex-grow-1">원재료명 표시가 비어 있습니다. 배합표로 만들 수 있습니다.</span>
+        <span class="flex-grow-1" id="ltRawmtrlNoteText">인쇄용 원재료명(기본정보 탭의 원재료명 칸)이 비어 있습니다. 배합표로 만들 수 있습니다.</span>
         <button type="button" class="btn btn-primary v2-btn-sm" id="ltRawmtrlBuild"><i class="bi bi-stars"></i>BOM에서 만들기</button>
     </div>
     <div id="lt-loading">
@@ -180,7 +180,12 @@
                 var res = await fetch('/label/' + LABEL_ID + '/rawmtrl-display/', { credentials: 'same-origin' });
                 var data = await res.json();
                 if (!res.ok || !data.success || !data.count) {
-                    showSnackbar((data && data.message) || '배합표에 원료가 없습니다. 배합 탭에서 먼저 넣어 주세요.', 'warning');
+                    /* 까닭은 **이 줄에** 적는다. 스낵바는 화면 맨 아래라 단추 옆에서
+                       기다리는 사람은 못 본다 — "눌러도 아무 일도 없다" 로 읽혔다. */
+                    var why = (data && data.message) || '배합표에 원료가 없습니다. 배합 탭에서 먼저 넣어 주세요.';
+                    var text = document.getElementById('ltRawmtrlNoteText');
+                    if (text) text.textContent = '만들지 못했습니다 — ' + why;
+                    showSnackbar(why, 'warning');
                     return;
                 }
                 if (typeof window.applyRawmtrlDisplayFrom !== 'function') return;

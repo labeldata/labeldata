@@ -3270,6 +3270,38 @@ class RawmtrlDisplayGeneratorTests(TestCase):
         res = self.client.get(f'/label/{self.label.my_label_id}/rawmtrl-display/')
         self.assertEqual(res.status_code, 404)
 
+    # ── 못 만들 때는 까닭을 말한다 ────────────────────────────────────────
+    def _bom_row(self, name, ingredient=None, ratio=None):
+        from v1.bom.models import ProductBOM
+
+        return ProductBOM.objects.create(
+            parent_label=self.label, created_by=self.user, ingredient_name=name,
+            source_ingredient=ingredient, usage_ratio=ratio, sort_order=0, active_yn=True)
+
+    def test_배합표가_비어_있으면_그렇다고_말한다(self):
+        status, body = self._generate()
+        self.assertEqual(status, 400)
+        self.assertIn('배합표가 비어 있습니다', body['message'])
+        self.assertEqual(body['bom_rows'], 0)
+
+    def test_손으로_친_행만_있으면_연결하라고_말한다(self):
+        """'연결된 원재료가 없습니다' 는 배합표에 열 줄 있는 사람에게 영문 모를 말이었다."""
+        self._bom_row('설탕'); self._bom_row('밀가루')
+        status, body = self._generate()
+        self.assertEqual(status, 400)
+        self.assertIn('배합표 2행 가운데', body['message'])
+        self.assertIn('연결된 행이 없습니다', body['message'])
+        self.assertEqual((body['bom_rows'], body['linked_rows']), (2, 0))
+
+    def test_연결된_행이_있는데_관계가_없으면_스스로_잇는다(self):
+        """연결 기능이 생기기 전에 저장한 배합표. 저장을 다시 하지 않아도 만들어진다."""
+        ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm='밀가루', delete_YN='N')
+        self._bom_row('밀가루', ingredient=ing, ratio='60')
+        status, body = self._generate()
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body['count'], 1)
+        self.assertIn('밀가루', body['text'])
+
 
 class IngredientTextParseTests(TestCase):
     """

@@ -4017,9 +4017,33 @@ def generate_rawmtrl_display(request, label_id):
     result = build_display_text(label)
 
     if not result['count']:
+        # **왜 못 만드는지 말한다.** "연결된 원재료가 없습니다" 만으로는 배합표에
+        # 원료가 열 줄 있는 사람이 영문을 모른다. 문구는 배합표의 **'내 원료'에
+        # 연결된 행**(LabelIngredientRelation)으로 만드는데, 손으로 친 행은 연결이
+        # 없고, 연결 기능이 생기기 전에 저장한 배합표는 아직 이어지지 않았다.
+        # 뒤엣것은 여기서 스스로 잇고 한 번 더 만들어 본다.
+        from v1.bom.models import ProductBOM
+        from v1.bom.services import sync_relations_from_bom
+
+        rows = ProductBOM.objects.filter(parent_label=label, active_yn=True)
+        total = rows.count()
+        linked = rows.filter(source_ingredient__isnull=False).count()
+        if linked:
+            sync_relations_from_bom(label)
+            result = build_display_text(label)
+
+    if not result['count']:
+        if not total:
+            message = '배합표가 비어 있습니다. 배합 탭에서 원료를 먼저 넣어 주세요.'
+        else:
+            message = (f'배합표 {total}행 가운데 「내 원료」에 연결된 행이 없습니다. '
+                       '배합 탭에서 원료명을 목록에서 고르면 연결됩니다 '
+                       '(사진으로 넣은 원료는 저절로 연결됩니다).')
         return JsonResponse({
             'success': False,
-            'message': '연결된 원재료가 없습니다. 원재료를 먼저 입력하세요.',
+            'message': message,
+            'bom_rows': total,
+            'linked_rows': linked,
         }, status=400)
 
     return JsonResponse({
