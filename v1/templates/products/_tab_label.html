@@ -122,7 +122,8 @@
     </div>
     {% endif %}
     {# 원재료명 표시가 비어 있으면 검증은 그것부터 지적한다. 기본정보 탭으로 돌아가지 않고 여기서 만든다. #}
-    <div id="ltRawmtrlNote" class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-center gap-2 flex-wrap" style="font-size:13px;" hidden>
+    {# d-flex 를 쓰지 않는다 — display:flex!important 가 hidden 을 이겨 줄이 영영 안 사라졌다. 보이기는 JS 가 style 로 정한다 #}
+    <div id="ltRawmtrlNote" class="alert alert-warning py-2 px-3 mb-2 align-items-center gap-2 flex-wrap" style="font-size:13px; display:none;">
         <i class="bi bi-exclamation-triangle"></i>
         <span class="flex-grow-1" id="ltRawmtrlNoteText">인쇄용 원재료명(기본정보 탭의 원재료명 칸)이 비어 있습니다. 배합표로 만들 수 있습니다.</span>
         <button type="button" class="btn btn-primary v2-btn-sm" id="ltRawmtrlBuild"><i class="bi bi-stars"></i>BOM에서 만들기</button>
@@ -169,7 +170,7 @@
         var note = document.getElementById('ltRawmtrlNote');
         var field = document.getElementById('field-rawmtrl-nm');
         if (!note || !field) return;
-        note.hidden = !!(field.value || '').trim();
+        note.style.display = (field.value || '').trim() ? 'none' : 'flex';
     }
     (function () {
         var btn = document.getElementById('ltRawmtrlBuild');
@@ -199,14 +200,15 @@
                 var note = document.getElementById('ltRawmtrlNote');
                 if (note) { note.classList.remove('alert-warning'); note.classList.add('alert-success'); }
                 if (text2) text2.textContent = '원재료명을 만들어 기본정보 탭에 넣었습니다 (원료 ' + data.count + '개). 저장합니다.';
-                btn.hidden = true;
+                btn.style.display = 'none';
                 if (typeof window.saveBasicInfo === 'function') window.saveBasicInfo();
                 else if (typeof window.flushBasicInfo === 'function') window.flushBasicInfo();
+                /* 할 일이 끝났으니 줄도 접는다 — 읽을 시간만 주고 */
                 setTimeout(function () {
+                    if (note) { note.style.display = 'none'; note.classList.remove('alert-success'); note.classList.add('alert-warning'); }
+                    btn.style.display = '';
                     ltCheckRawmtrl();
-                    if (note) { note.classList.remove('alert-success'); note.classList.add('alert-warning'); }
-                    btn.hidden = false;
-                }, 4000);
+                }, 2500);
             } catch (e) {
                 showSnackbar('문구를 만들지 못했습니다.', 'error');
             } finally {

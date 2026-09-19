@@ -14660,6 +14660,10 @@ class 클릭을_줄인다(TestCase):
         self.assertIn('기본정보 탭이 아직 준비되지 않았습니다', block)
         self.assertIn('원재료명을 만들어 기본정보 탭에 넣었습니다', block)
         self.assertIn('window.saveBasicInfo()', block)
+        # d-flex(!important) 가 hidden 을 이겨 줄이 안 사라졌다 — 보이기는 style 로
+        i = tab.index('id="ltRawmtrlNote"')
+        self.assertNotIn('d-flex', tab[i:i + 200])
+        self.assertIn("note.style.display = (field.value || '').trim() ? 'none' : 'flex';", tab)
         ocr = self._read('static/js/products/basic_info_ocr.js')
         self.assertIn("label: '배합 탭으로'", ocr)
         self.assertIn("button[data-bs-target=\"#tab-bom\"]", ocr)
