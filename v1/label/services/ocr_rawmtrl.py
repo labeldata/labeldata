@@ -92,11 +92,24 @@ def _name(text):
     return _BRACKET_NAMES.get(text, '괄호')
 
 
+# 문제 난 글자 앞뒤로 이만큼을 함께 보여 준다. "698번째 글자" 만으로는 긴
+# 원재료명에서 그 자리를 찾을 수 없다 — 사람은 글자를 세지 않고 낱말을 찾는다.
+_NEAR = 14
+
+
+def _near(value, index):
+    """그 글자를 »«로 감싼 앞뒤 토막. '…밀가루[밀:미국산»)«, 정제수…' 꼴."""
+    head = value[max(0, index - _NEAR):index]
+    tail = value[index + 1:index + 1 + _NEAR]
+    return ('…' if index - _NEAR > 0 else '') + head + '»' + value[index] + '«' + tail         + ('…' if index + 1 + _NEAR < len(value) else '')
+
+
 def bracket_problems(text):
     """
     괄호 짝을 검사한다. 문제가 없으면 빈 목록.
 
-    Returns: ['…' …]  사람이 읽을 문장들
+    Returns: ['…' …]  사람이 읽을 문장들. 자리는 번호와 함께 **앞뒤 글자**로
+    말한다 — 원재료명은 수백 자라 번호만으로는 못 찾는다.
     """
     value = str(text or '')
     stack = []
@@ -110,17 +123,20 @@ def bracket_problems(text):
             continue
         if not stack:
             problems.append(
-                '%d번째 글자에서 열린 적 없는 "%s" 가 닫힙니다.' % (index + 1, char))
+                '%d번째 글자에서 열린 적 없는 "%s" 가 닫힙니다: "%s"'
+                % (index + 1, char, _near(value, index)))
             continue
         opened, at = stack.pop()
         if PAIRS[opened] != char:
             problems.append(
-                '%d번째 글자의 "%s" 를 "%s" 로 닫았습니다 — %s 와 %s 를 혼동한 것으로 보입니다.'
-                % (at + 1, opened, char, _name(opened), _name(CLOSERS[char])))
+                '%d번째 글자의 "%s" 를 "%s" 로 닫았습니다 — %s 와 %s 를 혼동한 것으로 보입니다. '
+                '연 곳: "%s", 닫은 곳: "%s"'
+                % (at + 1, opened, char, _name(opened), _name(CLOSERS[char]),
+                   _near(value, at), _near(value, index)))
 
     for opened, at in stack:
         problems.append(
-            '%d번째 글자의 "%s" 가 닫히지 않았습니다.' % (at + 1, opened))
+            '%d번째 글자의 "%s" 가 닫히지 않았습니다: "%s"' % (at + 1, opened, _near(value, at)))
     return problems
 
 

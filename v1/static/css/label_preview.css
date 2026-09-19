@@ -1161,7 +1161,12 @@ tbody.layout-vertical tr td {
     font-size: inherit;
     font-weight: 700;
     word-break: keep-all;
-    white-space: nowrap;
+    /* nowrap 이었다 — 알레르기가 일곱 가지면 한 줄이 칸보다 길어 표 밖으로
+       튀어나갔다(가로 10cm 라벨). 쉼표에서 접히게 둔다; 칸 너비를 넘지 않는다. */
+    white-space: normal;
+    max-width: 100%;
+    box-sizing: border-box;
+    vertical-align: top;
 }
 
 /* ==================== 줄별 도구 ====================

@@ -4500,6 +4500,21 @@ class RawmtrlBracketTests(TestCase):
 
         self.assertEqual(len(bracket_problems('정제소금 국산)')), 1)
 
+    def test_자리를_번호가_아니라_앞뒤_글자로_말한다(self):
+        """'698번째 글자' 는 수백 자짜리 원재료명에서 찾을 수 없다. 낱말을 보여 준다."""
+        from v1.label.services.ocr_rawmtrl import bracket_problems
+
+        text = '정제수, ' * 40 + '초콜릿(혼합형), 과자[밀가루, 설탕, 과당1 코코아분말, 정제소금(국산]'
+        problems = bracket_problems(text)
+        self.assertEqual(len(problems), 2)
+        # 혼동(']' 가 '(' 를 닫았다): 연 곳과 닫은 곳을 둘 다 보여 준다
+        self.assertIn('연 곳: "…', problems[0])
+        self.assertIn('정제소금»(«국산]', problems[0])
+        self.assertIn('국산»]«', problems[0])
+        # 안 닫힘('[' 가 남았다): 그 자리, 앞뒤가 잘렸으면 … 로
+        self.assertIn('과자»[«밀가루', problems[1])
+        self.assertTrue(problems[1].endswith('…"'))
+
     def test_괄호_안의_쉼표로_가르지_않는다(self):
         """복합원재료가 통째로 부서진다."""
         from v1.label.services.ocr_rawmtrl import split_top_level
@@ -22053,3 +22068,19 @@ class 배합비_합계는_권고로_말한다(TestCase):
         self.assertIn(vs.check_bom_ratio_total, vs._CHECKS)
         self.assertIn('bom_ratio_total', vs._ADVISORY_CATEGORIES)
         self.assertEqual(_CATEGORY_LABELS['bom_ratio_total'], '배합비 합계')
+
+
+class 알레르기_박스는_칸_안에서_접힌다(TestCase):
+    """nowrap 이라 알레르기가 일곱 가지면 표 밖으로 튀어나갔다(가로 10cm 라벨)."""
+
+    def test_줄바꿈을_막지_않고_칸_너비를_넘지_않는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        css = (Path(dj.BASE_DIR) / 'static/css/label_preview.css').read_text(encoding='utf-8')
+        i = css.index('.pv-allergen-box {')
+        block = css[i:css.index('}', i)]
+        self.assertIn('white-space: normal;', block)
+        self.assertIn('max-width: 100%;', block)
+        self.assertNotIn('nowrap;', block)
