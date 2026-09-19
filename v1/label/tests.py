@@ -22005,3 +22005,51 @@ class 자르기에_회전과_확대가_있다(TestCase):
         """돌린 뒤의 좌표는 돌리기 전 네모와 다른 자리다."""
         crop = self._crop()
         self.assertIn("case 'rot-right': deg = (deg + 90) % 360;  rect = null;", crop)
+
+
+class 배합비_합계는_권고로_말한다(TestCase):
+    """배합표는 합계를 빨갛게 보여 줄 뿐 저장할 때 아무 말도 안 했다. 검증이 한 번 더 말한다 — 막지는 않는다."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='ratio', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='합계')
+
+    def _rows(self, *ratios):
+        from v1.bom.models import ProductBOM
+
+        for i, r in enumerate(ratios):
+            ProductBOM.objects.create(parent_label=self.label, created_by=self.user,
+                                      ingredient_name=f'원료{i}', usage_ratio=r,
+                                      sort_order=i, active_yn=True)
+
+    def _run(self):
+        from v1.label.services.validation_service import check_bom_ratio_total
+
+        return check_bom_ratio_total(self.label)
+
+    def test_100_이면_말이_없다(self):
+        self._rows('60', '39.995', '0.005')
+        self.assertEqual(self._run(), [])
+
+    def test_배합비를_하나도_안_넣었으면_볼_것이_없다(self):
+        self._rows(None, None)
+        self.assertEqual(self._run(), [])
+
+    def test_100_이_아니면_권고로_말하고_빈_칸_수도_센다(self):
+        self._rows('60', '25', None)
+        issues = self._run()
+        self.assertEqual(len(issues), 1)
+        issue = issues[0]
+        self.assertEqual(issue['category'], 'bom_ratio_total')
+        self.assertTrue(issue['advisory'])            # 확정을 막지 않는다
+        self.assertIn('85%', issue['message'])
+        self.assertIn('1건', issue['message'])
+        self.assertEqual(issue['fields'], [])
+
+    def test_검증_목록에_들어_있고_이름이_있다(self):
+        from v1.label.services import validation_service as vs
+        from v1.label.services.ai_validation_service import _CATEGORY_LABELS
+
+        self.assertIn(vs.check_bom_ratio_total, vs._CHECKS)
+        self.assertIn('bom_ratio_total', vs._ADVISORY_CATEGORIES)
+        self.assertEqual(_CATEGORY_LABELS['bom_ratio_total'], '배합비 합계')

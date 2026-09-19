@@ -674,6 +674,12 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                             title="BOM 의 배합비 순서·첨가물 표시명·복합원재료 괄호·알레르기 문구를 규정대로 조립합니다">
                         <i class="bi bi-stars"></i>BOM에서 만들기
                     </button>
+                    {# 반대 방향 — 이 칸의 문구를 원료별로 쪼개 배합표 행으로. 사진 판독 뒤 [나중에] 를 눌렀어도 여기서 다시 연다 #}
+                    <button type="button" class="btn btn-light border v2-btn-sm"
+                            id="splitRawmtrlBtn" onclick="splitRawmtrlToBom()"
+                            title="이 칸의 원재료명 문구를 원료별로 나눠 배합표 행으로 만듭니다. 이미 있는 원료는 행을 늘리지 않고 갱신합니다.">
+                        <i class="bi bi-diagram-3"></i>BOM 행으로 나누기
+                    </button>
                     <span id="buildRawmtrlHint" class="rawmtrl-hint" style="display:none;"></span>
                 </div>
 
@@ -1727,6 +1733,16 @@ window.applyRawmtrlDisplay = function () {
    문구이고, 손으로 다듬어 둔 것이 있을 수 있다. 무엇이 어떻게 달라지는지
    나란히 놓고 사용자가 정한다. 저장도 저장 단추로 따로 한다.
  */
+/* 원재료명 문구 → 배합표 행. 판독 창의 [BOM에 등록] 과 같은 창(rawmtrlBomModal)을
+   연다 — 규칙도 같다(이미 있는 원료는 갱신, 기존 행을 비우는 것은 체크로). */
+window.splitRawmtrlToBom = function () {
+    var target = document.getElementById('field-rawmtrl-nm');
+    var text = target ? (target.value || '').trim() : '';
+    if (!text) { showSnackbar('원재료명 표시가 비어 있습니다. 먼저 적거나 사진에서 읽어 주세요.', 'warning'); return; }
+    if (typeof window.offerBomSplit !== 'function') { showSnackbar('나누기 기능을 불러오지 못했습니다. 새로고침 후 다시 시도하세요.', 'error'); return; }
+    window.offerBomSplit(text, { notify: true });
+};
+
 window.buildRawmtrlDisplay = async function () {
     var target = document.getElementById('field-rawmtrl-nm');
     var btn = document.getElementById('buildRawmtrlBtn');

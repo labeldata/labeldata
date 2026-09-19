@@ -196,7 +196,7 @@ _ISSUE_FIELDS = {
 #
 # 둘 다 규정 검증 결과에는 그대로 나온다 — 사람이 검수에서 짚는 항목들이다.
 _ADVISORY_CATEGORIES = frozenset({'exchange_notice', 'origin_emphasis',
-                                  'calorie_macros_advice'})
+                                  'calorie_macros_advice', 'bom_ratio_total'})
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -849,6 +849,43 @@ def check_ingredient_order_by_ratio(label) -> list[dict]:
             '문구의 순서를 바꾸거나, BOM 에서 다시 생성하세요.',
         ))
     return issues
+
+
+def check_bom_ratio_total(label) -> list[dict]:
+    """
+    배합비 합계가 100% 인지 본다. **권고**다 — 물·손실분을 적지 않는 배합이
+    있어 막지 않는다.
+
+    배합표 화면은 합계가 100 이 아니면 숫자를 빨갛게 보여 줄 뿐, 저장할 때
+    아무 말도 하지 않는다. 색만으로는 지나친다. 여기서 한 번 더 말한다.
+    배합비를 하나도 안 넣었으면 볼 것이 없다(배합표를 안 쓰는 제품이다).
+    """
+    try:
+        from v1.bom.models import ProductBOM
+        ratios = list(ProductBOM.objects
+                      .filter(parent_label=label, active_yn=True)
+                      .values_list('usage_ratio', flat=True))
+    except Exception:
+        logger.exception('배합비 합계 검사: 배합표를 읽지 못했다 (label=%s)',
+                         getattr(label, 'pk', None))
+        return []
+
+    filled = [float(r) for r in ratios if r is not None]
+    if not filled:
+        return []
+    total = round(sum(filled), 3)
+    if abs(total - 100.0) <= 0.01:
+        return []
+    blank = len(ratios) - len(filled)
+    message = f'배합비 합계가 {total:g}% 입니다 (100% 가 아닙니다).'
+    if blank:
+        message += f' 배합비가 비어 있는 원료가 {blank}건 있습니다.'
+    return [_issue(
+        'bom_ratio_total', message,
+        '배합 탭에서 배합비를 확인하세요. 물·손실분을 적지 않는 배합이면 '
+        '그대로 두어도 됩니다 — 확정을 막지 않습니다.',
+        fields=(), advisory=True,
+    )]
 
 
 def check_content_weight(label) -> list[dict]:
@@ -2581,6 +2618,7 @@ _CHECKS = [
     check_required_fields,
     check_calorie_consistency,
     check_ingredient_order_by_ratio,   # 비어 있는 것부터 — 나머지 검사는 값이 있을 때만 본다
+    check_bom_ratio_total,             # 권고 — 합계가 100 이 아니면 말만 한다
     check_content_weight,
     check_farm_seafood_content,
     check_forbidden_phrases,

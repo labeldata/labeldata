@@ -204,9 +204,9 @@
                 case 'reset':     deg = 0; zoom = 0; rect = null; render(); changed(); break;
             }
         });
-        /* 휠로도 키운다 — 확대는 늘 그렇게 되기를 기대한다 */
+        /* 휠을 굴리면 키운다 — 사진 위에서 휠은 확대로 읽는 사람이 대부분이다.
+           Ctrl 을 같이 누르라는 것은 아무도 모른다. 스크롤은 막대로 한다. */
         scroller.addEventListener('wheel', function (ev) {
-            if (!ev.ctrlKey && !ev.metaKey) return;
             ev.preventDefault();
             zoom = clamp(zoom + (ev.deltaY < 0 ? 1 : -1), 0, ZOOM_STEPS.length - 1);
             applyZoom();

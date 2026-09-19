@@ -548,10 +548,10 @@
           }
         };
 
-        // 휠은 Ctrl(맥은 ⌘)과 함께일 때만 배율을 바꾼다. 그냥 굴리면 스테이지가
-        // 스크롤돼야 한다 - 확대한 상태에서 사진을 훑는 것이 그 방법이다.
+        // 휠을 굴리면 배율이 바뀐다 — 사진 위에서 휠은 확대로 읽는 사람이
+        // 대부분이다(Ctrl 을 같이 누르라는 것은 아무도 모른다). 확대한 채로
+        // 훑는 것은 스크롤막대나 끌기로 한다.
         canvas.onwheel = function (e) {
-          if (!e.ctrlKey && !e.metaKey) return;
           e.preventDefault();
           zoomTo(zoom * (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP), e.clientX, e.clientY);
         };

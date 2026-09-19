@@ -970,6 +970,20 @@ body.in-iframe .bom-page-header { display: none !important; }
 
     /* 표가 차지할 높이. 위에 있는 것(머리띠·도구 줄·요약)이 얼마든 그 아래를
        화면 끝까지 쓴다. 아래쪽에 조금 남겨 두는 것은 가로 스크롤막대 자리다. */
+    /* 고른 칸이 표의 보이는 곳 밖이면 그리로 스크롤한다.
+       Enter 로 아래 줄로 내려가는데 표가 따라오지 않아, 화면 아래로 사라진
+       줄에 값을 치는 일이 있었다. */
+    function followSelection(row, col) {
+        try {
+            if (!hot || row === null || row === undefined || row < 0) return;
+            const td = hot.getCell(row, col, true);
+            const box = hot.rootElement.getBoundingClientRect();
+            if (!td) { hot.scrollViewportTo(row); return; }
+            const r = td.getBoundingClientRect();
+            if (r.bottom > box.bottom - 4 || r.top < box.top + 30) hot.scrollViewportTo(row);
+        } catch (e) { /* 따라가기는 편의다 */ }
+    }
+
     function gridHeight() {
         var box = document.getElementById('bom-grid');
         if (!box) return 480;
@@ -1076,6 +1090,7 @@ body.in-iframe .bom-page-header { display: none !important; }
              * 곁판 하나 못 그린 것이 표를 통째로 못 쓰게 만들 이유가 없다.
              */
             afterSelectionEnd: function(row, col) {
+                followSelection(row, col);
                 try {
                     // 이전 행의 context panel 데이터를 먼저 저장
                     if (currentRowIndex !== null && currentRowIndex !== row) {

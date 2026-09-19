@@ -48,6 +48,7 @@ _CATEGORY_LABELS = {
     'origin_missing': '원산지 표시',
     'additive_display_name': '식품첨가물 표시명',
     'ingredient_order': '원재료 표시 순서',
+    'bom_ratio_total': '배합비 합계',
     'name_ingredient_match': '제품명-원재료 일치성 (AI)',
     # 아래는 이름이 빠져 있어 화면에 "content_weight_basis" 처럼 영어 키가
     # 그대로 찍히고 있었다. 검사가 늘 때마다 여기도 함께 늘어야 한다 —

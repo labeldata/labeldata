@@ -14662,3 +14662,39 @@ class 클릭을_줄인다(TestCase):
         i = ocr.index('recordCorrections();')
         self.assertIn('window.flushBasicInfo();', ocr[i:i + 600])
         self.assertIn('개 항목을 채우고 저장합니다.', ocr)
+
+
+class 실측_뒤_고친_것(TestCase):
+    """J-2 휠 확대 · J-5 표가 선택을 따라감 · I 원재료명 → BOM 행 단추."""
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_휠만_굴려도_확대된다(self):
+        crop = self._read('static/js/products/photo_cropper.js')
+        i = crop.index('canvas.onwheel = function (e) {')
+        self.assertNotIn('ctrlKey', crop[i:i + 200])
+        ic = self._read('static/js/image_crop.js')
+        i = ic.index("scroller.addEventListener('wheel'")
+        self.assertNotIn('ctrlKey', ic[i:i + 200])
+
+    def test_표가_고른_칸을_따라_스크롤한다(self):
+        bom = self._read('templates/products/bom_detail.html')
+        self.assertIn('function followSelection(row, col)', bom)
+        i = bom.index('afterSelectionEnd: function(row, col) {')
+        self.assertIn('followSelection(row, col);', bom[i:i + 120])
+        self.assertIn('hot.scrollViewportTo(row)', bom)
+
+    def test_원재료명_칸_옆에서_BOM_행으로_나눈다(self):
+        basic = self._read('templates/products/_tab_basic_info.html')
+        self.assertIn('id="splitRawmtrlBtn"', basic)
+        self.assertIn('window.splitRawmtrlToBom = function ()', basic)
+        self.assertIn("window.offerBomSplit(text, { notify: true })", basic)
+        ocr = self._read('static/js/products/basic_info_ocr.js')
+        self.assertIn('window.offerBomSplit = offerBomSplit;', ocr)
+        self.assertIn('function offerBomSplit(text, opts)', ocr)
+        self.assertIn('원재료명에서 원료를 찾지 못했습니다.', ocr)

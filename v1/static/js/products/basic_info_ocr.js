@@ -1908,9 +1908,12 @@
     return m ? m[1] : '';
   }
 
-  function offerBomSplit(text) {
+  /* opts.notify — 사람이 단추로 불렀을 때. 못 찾으면 그렇다고 말한다(판독 뒤
+     저절로 뜨는 길에서는 조용히 넘어간다 — 그때는 원재료명이 없는 것이 흔하다). */
+  function offerBomSplit(text, opts) {
     var id = labelId();
     if (!id) return;
+    var notify = !!(opts && opts.notify);
 
     fetch('/products/labels/' + id + '/rawmtrl-to-bom/preview/', {
       method: 'POST',
@@ -1919,11 +1922,24 @@
     })
       .then(function (res) { return res.json().catch(function () { return null; }); })
       .then(function (body) {
-        if (!body || !body.success || !body.rows.length) return;
+        if (!body || !body.success || !body.rows.length) {
+          if (notify && typeof window.showSnackbar === 'function') {
+            window.showSnackbar((body && body.error) || '원재료명에서 원료를 찾지 못했습니다.', 'warning');
+          }
+          return;
+        }
         showBomModal(id, body);
       })
-      .catch(function (err) { console.error(err); });
+      .catch(function (err) {
+        console.error(err);
+        if (notify && typeof window.showSnackbar === 'function') {
+          window.showSnackbar('원재료명을 나누지 못했습니다.', 'error');
+        }
+      });
   }
+  /* 기본정보 탭의 [BOM 행으로 나누기] 가 부른다 — [나중에] 를 누른 뒤 다시
+     여는 길이 없어 같은 사진을 또 판독해야 했다. 판독 없이 지금 칸의 문구를 쪼갠다. */
+  window.offerBomSplit = offerBomSplit;
 
   function showBomModal(id, body) {
     var modalEl = ensureBomModal();
