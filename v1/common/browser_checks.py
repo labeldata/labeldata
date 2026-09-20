@@ -248,7 +248,7 @@ class 도움말이_틀_안을_가리킨다(StaticLiveServerTestCase):
             })()""")
             got = json.loads(raw)
             self.assertIn('title', got, got)
-            self.assertEqual(got['title'], '표 — 엑셀처럼 칩니다', got)     # 지금 보는 탭의 첫 걸음
+            self.assertEqual(got['title'], '표 — 엑셀처럼 바로 칩니다', got)     # 지금 보는 탭의 첫 걸음
             sx, sy, sw, sh = got['spot']; gx, gy, gw, gh = got['grid']
             # 강조 테두리(padding 6)가 표를 감싼다
             self.assertLessEqual(abs(sx - (gx - 6)), 3, got)

@@ -145,10 +145,11 @@
                 <input type="text" id="compact-doc-search" class="form-control border-start-0 ps-0" placeholder="파일명 검색...">
             </div>
             {% if can_upload_documents %}
-            <button class="btn btn-outline-secondary v2-btn" onclick="openImportFromCompanyModal()" title="고정 서류 관리에서 불러오기">
-                <i class="bi bi-folder-symlink"></i> 불러오기
+            {# 기본 정보의 '불러오기'(번호·사진)와 이름이 같아 헷갈렸다 — 하는 일로 부른다 #}
+            <button class="btn btn-outline-secondary v2-btn" id="docImportBtn" onclick="openImportFromCompanyModal()" title="내 정보의 고정 서류(사업자등록증 등)를 이 제품에 연결합니다 — 다시 올리지 않습니다">
+                <i class="bi bi-folder-symlink"></i> 고정 서류 가져오기
             </button>
-            <button class="btn btn-primary v2-btn" onclick="openUploadModal(null, null, null)">
+            <button class="btn btn-primary v2-btn" id="docUploadBtn" onclick="openUploadModal(null, null, null)">
                 <i class="bi bi-plus-lg"></i> 업로드
             </button>
             {% endif %}

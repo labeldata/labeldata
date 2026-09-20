@@ -58,7 +58,8 @@
               저장하는 건지도 애매했다. 다른 액션과 같은 줄, 공유 왼쪽으로 옮긴다.
             {% endcomment %}
             {% if can_edit %}
-            <button class="btn btn-outline-primary v2-btn" type="button" onclick="saveProductInfo()">
+            {# 어느 탭의 무엇을 저장하는지 글자와 title 로 말한다 — 탭이 바뀌면 아래 sync 가 고친다 #}
+            <button class="btn btn-outline-primary v2-btn" type="button" id="headerSaveBtn" onclick="saveProductInfo()" title="기본 정보 저장">
                 <i class="bi bi-cloud-arrow-up"></i>
                 <span>저장</span>
             </button>
@@ -164,6 +165,8 @@
 
             <!-- 상태 전이 버튼 (역할·현재 상태에 따라 표시) -->
             <span id="status-action-btns" class="d-flex align-items-center gap-1">
+            {# 이 단추들이 무엇인지 — 열세 가지 이름이 한 자리에 번갈아 뜨므로 한마디 붙인다 #}
+            {% if available_actions %}<span class="small text-muted me-1">다음 단계 →</span>{% endif %}
             {% if product_status == 'DRAFT' %}
                 {% if 'requesting' in available_actions %}
                 <button class="btn v2-btn-sm btn-outline-primary me-1" type="button" onclick="requestStatusChange('REQUESTING')">
@@ -1816,8 +1819,10 @@ function goToShareTab() {
  * 담당자가 없는 단계를 건너뛸 때 토스트 메시지를 먼저 보여주고 상태를 변경합니다.
  */
 function skipWithToast(newStatus, message) {
-    showSnackbar(message, 'info');
-    setTimeout(function() { changeStatus(newStatus); }, 900);
+    /* 토스트만 띄우고 0.9초 뒤에 넘어갔다 — 단계를 건너뛰는 일인데 되돌릴 틈이 없었다.
+       한 번 묻는다. */
+    if (!confirm(message + '\n\n이대로 건너뛸까요?')) return;
+    changeStatus(newStatus);
 }
 
 async function changeStatus(newStatus, overrideReason, acknowledged, rejectReason) {
@@ -4203,10 +4208,34 @@ function getCookie(name) {
         return frame && frame.contentWindow;
     }
 
+    /* [저장] 은 지금 열린 탭의 것을 저장한다(saveProductInfo). 그 사실을 단추가
+       말하지 않아 "무엇이 저장되는 거지" 가 됐다. 탭마다 글자와 title 을 바꾸고,
+       바로 저장되는 탭(문서함·권한)에서는 잠근다. */
+    var SAVE_LABEL = {
+        '#tab-info': '기본 정보 저장', '#tab-bom': 'BOM 저장',
+        '#tab-nutrition': '영양성분 저장', '#tab-label': '표 설정 저장'
+    };
+    function syncSave(target) {
+        var btn = document.getElementById('headerSaveBtn');
+        if (!btn) return;
+        var label = SAVE_LABEL[target];
+        var span = btn.querySelector('span');
+        if (label) {
+            btn.disabled = false;
+            btn.title = label;
+            if (span) span.textContent = label.replace(' 저장', '') === label ? '저장' : label;
+        } else {
+            btn.disabled = true;
+            btn.title = '이 탭은 바로 저장됩니다';
+            if (span) span.textContent = '저장';
+        }
+    }
+
     function sync() {
         var active = document.querySelector('#workspaceTab .nav-link.active');
         var target = active && active.getAttribute('data-bs-target');
         wrap.style.display = (target === '#tab-label') ? '' : 'none';
+        syncSave(target);
     }
 
     document.addEventListener('shown.bs.tab', sync);
@@ -4264,105 +4293,183 @@ function getCookie(name) {
 {% endcomment %}
 <div class="ezc-steps" data-coach-scope="detail" data-coach-key="product-detail" hidden
      data-coach-offer="1"
-     data-coach-offer-text="처음이신가요? 탭마다 여기서 무엇을 하는지 짚어 드립니다.">
-  <div data-tab="tab-info" data-sel="#workspaceTab" data-title="이 넷은 탭이 아니라 순서입니다">
-    <strong>기본 정보 → BOM → 영양성분 → 검증</strong> 순으로 진행하면 됩니다. 완료된 단계는 번호가 체크로 바뀝니다 —
-    합격 판정이 아니라 진행 상황을 보여 주는 표시입니다.
+     data-coach-offer-text="처음이신가요? 지금 보는 탭에서 무엇을 하는지 짚어 드립니다.">
+  {# ── 기본 정보 (tab-info) ─────────────────────────────────────────────── #}
+  <div data-tab="tab-info" data-sel="#workspaceTab" data-title="위쪽 네 탭은 작업 순서입니다">
+    <strong>기본 정보 → BOM → 영양성분 → 검증</strong> 순서로 진행하시면 됩니다. 마친 단계는 번호가 체크로
+    바뀌지만, 합격 판정이 아니라 어디까지 왔는지 보여 주는 표시입니다.
   </div>
-  <div data-tab="tab-info" data-sel="#field-prdlst-report-no" data-title="번호가 있으면 여러 칸이 한 번에 채워집니다">
-    <i>[번호검증]</i> 으로 식품안전나라에 해당 번호가 있는지 조회하고, 이미 등록된 제품이면 <i>[복사하기]</i> 로
-    <strong>제품명·식품유형·원재료명·제조사·용기포장재질</strong> 이 들어옵니다.
-    없어도 됩니다 — 수입 제품은 이 번호가 없는 것이 정상이라 검증도 지적하지 않습니다.
+  {% if can_edit %}
+  <div data-tab="tab-info" data-sel="#headerSaveBtn" data-title="저장은 지금 열린 탭의 내용을 저장합니다">
+    기본 정보 탭에서는 이 화면의 칸들을, BOM·영양성분·검증 탭에서는 그 탭의 내용을 저장합니다.
+    기본 정보는 다른 탭으로 옮길 때 자동으로 저장되지만, 창을 닫기 전에는 한 번 눌러 주세요.
   </div>
+  {% endif %}
+  <div data-tab="tab-info" data-sel="#status-action-btns" data-title="오른쪽 단추가 제품을 다음 단계로 넘깁니다">
+    지금 상태에서 갈 수 있는 다음 단계만 단추로 나옵니다. 담당자가 없는 단계는 건너뛰기 단추가 대신 뜨니,
+    검토·승인을 거치려면 먼저 권한 설정에서 <strong>검토자·승인자</strong>를 정해 주세요.
+  </div>
+  {% if can_edit %}
+  <div data-tab="tab-info" data-sel="#basicInfoOcrBtn" data-title="번호나 사진으로 한 번에 채울 수 있습니다">
+    품목보고번호를 조회하거나 표시사항 사진·PDF 를 올리면 제품명·식품유형·원재료명이 한 번에 들어옵니다.
+    읽은 값은 확인 창에서 고른 것만 반영됩니다.
+  </div>
+  {% endif %}
   <div data-tab="tab-info" data-sel="#field-food-type" data-title="소분류가 검증의 기준입니다">
-    표시사항 검증은 이 값으로 <strong>해당 유형의 의무 표시사항</strong>과 금지 문구를 판단합니다.
-    비어 있으면 그 검사가 통째로 빠집니다 — <strong>통과한 것이 아니라 안 본 것</strong>입니다.
-    아래 <i>식품유형 (표시용)</i> 은 라벨에 인쇄되는 값이라 부기가 붙어 다를 수 있습니다.
+    표시사항 검증은 이 소분류로 그 유형의 의무 표시사항과 금지 문구를 판단합니다.
+    비어 있으면 그 검사는 통과가 아니라 <strong>건너뛴 것</strong>이니 꼭 골라 주세요.
   </div>
-  <div data-tab="tab-info" data-sel="#field-rawmtrl-nm" data-title="여기 적힌 글자가 라벨에 인쇄됩니다">
-    참고용 칸이 아니라 <strong>인쇄되는 값</strong>입니다. 원료관리에 <i>원재료 표시명</i> 을 등록한 원료는
-    그 글자가 그대로 들어옵니다. 자동 생성한 뒤 직접 수정해도 그대로 유지됩니다.
-  </div>
-  <div data-tab="tab-info" data-sel="#buildRawmtrlBtn" data-title="원재료명은 배합비가 있어야 자동 생성됩니다">
-    <strong>BOM 탭에 원료와 배합비를 넣어야</strong> 이 버튼이 동작합니다. 누르면 배합비 순서·첨가물 표시명·
-    복합원재료 괄호·알레르기 문구가 규정대로 붙습니다. 생성한 문구는 현재 값과 나란히 보여 주고,
-    <i>[적용]</i> 을 눌러야 들어갑니다.
+  <div data-tab="tab-info" data-sel="#buildRawmtrlBtn" data-title="원재료명은 배합표에서 만들어 옵니다">
+    위 칸의 글자는 <strong>라벨에 그대로 인쇄되는 값</strong>이며, BOM 탭에 원료와 배합비를 넣은 뒤 이 단추를 누르면
+    배합비 순서·첨가물 표시명·알레르기 문구를 규정대로 조립해 줍니다. 만든 문구는 지금 값과 나란히 보여 주고,
+    <i>[이 값으로 바꾸기]</i> 를 눌러야 들어갑니다.
   </div>
   <div data-tab="tab-info" data-sel=".allergen-panel-root" data-title="알레르기는 추천일 뿐입니다">
-    원재료명에서 찾고 원료관리에 골라 둔 것도 모으지만 <strong>이름만으로 찾아낸 비율은 58%</strong> 입니다.
-    향료·제제는 이름만으로 판별할 수 없습니다. 반드시 직접 확인하세요.
+    원재료명과 원료 관리에 골라 둔 정보에서 알레르기 성분을 찾아 추천합니다.
+    향료·제제는 이름만으로 판별할 수 없으니 반드시 직접 확인해 주세요.
   </div>
-  <div data-tab="tab-info" data-sel="#display-items-panel" data-title="체크한 것만 인쇄되고 검증됩니다">
-    식품유형을 고르면 자동으로 맞춰집니다. <strong>*</strong> 는 그 유형에서 의무, <strong>!</strong> 는
-    켜 두었는데 아직 비어 있다는 뜻입니다. 항목 이름을 누르면 입력 칸으로 바로 이동합니다.
+  <div data-tab="tab-info" data-sel="#display-items-panel" data-title="체크한 항목만 인쇄되고 검증됩니다">
+    식품유형을 고르면 인쇄·검증할 항목이 자동으로 맞춰집니다. <strong>*</strong> 는 의무 항목, <strong>!</strong> 는
+    켜 두었는데 아직 비어 있다는 뜻이고, 이름을 누르면 그 입력 칸으로 바로 이동합니다.
   </div>
-  {# 배합 탭 — 틀(iframe) 안을 가리킨다(data-frame). 지금 보는 탭의 걸음이 앞에 선다. #}
-  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#bom-grid" data-title="표 — 엑셀처럼 칩니다">
-    칸을 고르고 바로 입력하고 <strong>Enter</strong> 로 다음 줄로 갑니다. 쓰던 배합표는 <strong>머리글째 복사해
-    붙여넣으면(Ctrl+V)</strong> 열 순서가 달라도 제자리를 찾아가고 행이 모자라면 자동으로 추가됩니다. 우클릭으로 줄을 더하거나 지웁니다.
-  </div>
-  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#total-ratio-display" data-title="총 배합비 — 100% 가 되는지">
-    원재료명 순서·알레르기·영양성분 계산이 전부 <strong>배합비(%)</strong> 에서 나옵니다.
-    합계가 100 이 아니면 빨갛게 보이고, 검증에서도 권고로 한 번 더 말합니다.
-  </div>
-  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#bomPhotoRegisterBtn" data-title="사진으로 등록 — 봉지 사진 여러 장을 한 번에">
-    원료 표시사항 사진을 올리면 읽어서 줄을 만듭니다. 이름이 같은 원료는 저절로 연결되고,
-    비슷한 것은 <strong>기존 원료에 연결할지 새로 만들지</strong> 고르게 합니다.
-  </div>
-  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#bom-summary-panel" data-title="원재료 요약 — 표를 고칠 때마다 다시 만들어집니다">
-    라벨에 들어갈 <strong>원재료명 문구·알레르기·영양성분 계산 가능 여부</strong>가 여기 모입니다.
-    접어 두어도 첫 줄에 원료 수와 알레르기는 남습니다.
-  </div>
-  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#sheet-summary-type" data-title="표시명 기준 — 요약에 무엇을 적을지">
-    <strong>식품유형</strong>이면 '정제소금' 처럼 유형 이름을, <strong>원재료명</strong>이면 원재료 표시명을 씁니다.
-    한 번 누르면 모든 줄에 걸리고, 한 줄만 다르게 하려면 그 줄의 ✎ 에서 고릅니다.
-  </div>
-  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel=".bom-cornerbtn" data-title="칸 고르기 — 안 쓰는 칸은 감춥니다">
-    표 왼쪽 위 모서리의 이 단추로 보일 칸을 고릅니다. <strong>값은 지워지지 않고</strong> 다시 켜면 돌아오며,
-    고른 것은 계정에 남습니다.
-  </div>
-  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel=".bom-rowbtn" data-title="줄 단추 — 상세와 사진">
-    ✎ 는 알레르기·GMO·영양성분처럼 <strong>목록에서 고르는 값</strong>을 그 줄 아래에 펼치고,
-    📷 는 이 줄을 만든 사진을 열어 값과 나란히 견주게 합니다.
+
+  {# ── 배합 (tab-bom) — 틀(iframe) 안을 가리킨다 ──────────────────────── #}
+  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#bom-grid" data-title="표 — 엑셀처럼 바로 칩니다">
+    원료명 칸에 이름을 치면 등록된 원료가 자동완성되고, 줄 추가·삭제·되돌리기는 <strong>우클릭 메뉴</strong>에 있습니다.
+    쓰던 엑셀 배합표는 <strong>머리글째 복사해 붙여넣으면(Ctrl+V)</strong> 열 순서가 달라도 제자리에 들어가고
+    행이 모자라면 자동으로 추가됩니다.
   </div>
   <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel=".bom-right-panel" data-title="원료 보관함 — 등록해 둔 원료를 끌어다 놓습니다">
-    원료 관리에 한 번 적어 둔 원료는 여기서 검색해 표로 끌어다 놓습니다. 접으면 표가 그만큼 넓어집니다.
+    원료 관리에 등록한 원료를 검색해 표로 끌어다 놓거나 <i>[추가]</i> 를 누르면 표시명·알레르기·제조사까지 함께 들어옵니다.
+    원료를 다 넣은 뒤에는 오른쪽 위 화살표로 접어 표를 넓게 쓰세요.
   </div>
-  <div data-tab="tab-nutrition" data-sel="[data-bs-target=&quot;#tab-nutrition&quot;]" data-title="영양성분 — 원료에서 계산해 줍니다">
-    <i>[계산하기]</i> 를 누르면 <strong>원료 100g 당 값 × 배합비</strong> 로 산출합니다. 열량은 원료 열량을 더하지 않고
-    탄수·단백·지방으로 다시 계산합니다 — 규정이 그렇게 정의합니다.
-    <strong>배합비가 작아 표시값에 영향을 주지 않는 원료는 비어 있어도 됩니다</strong> — 영향을 주는 원료만 확인을 요청합니다.
+  {% if can_edit %}
+  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#bomPhotoRegisterBtn" data-title="사진으로 등록 — 원료 봉지 사진으로 줄을 만듭니다">
+    원료 표시사항 사진을 올리면 판독해 이 표에 줄을 더하고, 이름이 같은 원료는 저절로 연결됩니다.
+    사진에서 온 줄은 왼쪽 번호 옆에 그림 단추가 붙어 언제든 원본 사진과 값을 나란히 견줄 수 있습니다.
   </div>
-  <div data-tab="tab-nutrition" data-sel="[data-bs-target=&quot;#tab-nutrition&quot;]" data-title="영양성분 — 안 넣어도 되는 제품이 많습니다">
-    표시 대상이 아니면 건너뛰어도 됩니다. <strong>성적서가 있으면 그 값을 그대로 넣는 것이 맞습니다</strong> —
-    시험성적서의 값이 계산값보다 우선합니다. 100g 당 값이 등록된 원료가 <strong>4%</strong> 뿐이라,
-    계산 기능을 쓰려면 원료부터 등록해야 합니다.
+  {% endif %}
+  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel=".bom-rowbtn:not(.bom-photobtn)" data-title="✎ — 목록에서 고르는 값은 여기서">
+    알레르기·GMO 처럼 <strong>목록에서 골라야 하는 값</strong>과 이 줄만의 표시명 기준, 영양성분 상태를 그 줄 바로 아래에 펼칩니다.
+    표의 알레르기·GMO 칸을 눌러도 같은 창이 열립니다.
   </div>
-  <div data-tab="tab-label" data-sel="[data-bs-target=&quot;#tab-label&quot;]" data-title="검증 ① 먼저 표를 인쇄될 모양으로 맞춥니다">
-    <strong>표 설정</strong>에서 가로 크기·글꼴·글자 크기·자간·줄간격을 정합니다(세로는 자동입니다).
-    <strong>항목 순서</strong>는 드래그로 바꾸고 눈 아이콘으로 숨기며, <strong>텍스트 변환</strong>과
-    <strong>분리배출마크</strong>도 여기서 정합니다. <strong>저장하지 않고 나가면 그대로 사라집니다.</strong>
+  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel=".bom-cornerbtn" data-title="칸 고르기 — 안 쓰는 칸은 감춥니다">
+    표에 보일 칸을 고릅니다 — 원료명과 배합비는 늘 보이고, 감춘 칸의 값은 지워지지 않아 다시 켜면 돌아옵니다.
+    <i>[적용]</i> 을 누르면 고치던 것을 저장한 뒤 표를 다시 그립니다.
   </div>
-  <div data-tab="tab-label" data-sel="[data-bs-target=&quot;#tab-label&quot;]" data-title="검증 ② 1차는 문구를 봅니다">
-    지금 채운 값이 규정 항목과 맞는지 대조합니다. <strong>지적된 줄에는 번호가 붙고, 누르면 수정할 칸으로 바로 이동합니다</strong> —
-    어디가 잘못됐는지 찾아다닐 필요가 없습니다.
+  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#total-ratio-display" data-title="총 배합비 — 100% 가 되어야 합니다">
+    원재료명 순서·알레르기·영양성분 계산이 모두 <strong>배합비(%)</strong> 에서 나옵니다.
+    합계가 100 이 아니면 빨갛게 보이니 표를 마무리하기 전에 맞춰 주세요.
   </div>
-  <div data-tab="tab-label" data-sel="[data-bs-target=&quot;#tab-label&quot;]" data-title="검증 ③ 2차는 인쇄될 그림을 봅니다">
-    디자인 시안을 올리면 <strong>한 줄씩 대조</strong>해 확정된 값과 다른 부분을 표시합니다.
-    1차를 통과해도 시안에 잘못 반영되는 경우가 있어 둘은 별개의 검사입니다.
-    한 번 올린 시안은 문서함에 남아, 다음에는 <strong>올려 둔 시안으로 다시 검증</strong>할 수 있습니다.
+  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#bom-summary-panel" data-title="원재료 요약 — 표를 고칠 때마다 다시 만들어집니다">
+    라벨에 들어갈 <strong>원재료명 문구·알레르기·GMO</strong> 와 영양성분 계산 가능 여부가 탭으로 모이며,
+    영양성분 값 자체는 영양성분 탭에서 계산합니다. 위 <i>[표시명 기준]</i> 으로 요약에 식품유형을 적을지
+    원재료명을 적을지 한 번에 바꿀 수 있습니다.
   </div>
-  <div data-tab="tab-label" data-sel="[data-bs-target=&quot;#tab-label&quot;]" data-title="검증 ④ 내보내기는 여기서 나옵니다">
-    <strong>PDF</strong> 는 한글표시사항과 영양정보 표가 <strong>한 장</strong>으로 출력되고, 출력과 동시에
-    <strong>문서함에도 등록</strong>됩니다. 글자 복사·워드·디자인 의뢰서도 같은 자리에 있습니다.
+  <div data-tab="tab-bom" data-frame="#bomEditorFrame" data-sel="#bsum-pane-rawmtrl" data-title="기본정보로 복사 — 요약 문구를 표시사항으로 보냅니다">
+    <i>[기본정보로 복사]</i> 를 누르면 이 문구가 기본 정보의 원재료명 칸에 들어가고 그 탭이 열립니다.
+    표의 줄 순서를 요약과 같게 맞추려면 <i>[배합비 순 정렬]</i> 을 누르세요.
   </div>
-  <div data-tab="tab-docs" data-sel="[data-bs-target=&quot;#tab-docs&quot;]" data-title="문서함 — 근거를 붙여 두는 자리">
-    원료 규격서·시험성적서·포장지 시안처럼 <strong>표시값의 근거가 되는 서류</strong>를 모읍니다.
-    유효기간을 입력해 두면 만료가 다가올 때 제품 목록에서 알려 줍니다.
+
+  {# ── 영양성분 (tab-nutrition) — 틀 안 ───────────────────────────────── #}
+  <div data-tab="tab-nutrition" data-frame="#nutritionEditorFrame" data-sel=".cfg-group" data-title="① 제품 규격 — 표를 그리는 분모입니다">
+    <strong>단위량 × 포장개수</strong> 가 총 내용량이 되고, 표는 이 값으로 그려집니다.
+    라벨의 총 내용량을 그대로 넣어 주세요 — 비어 있으면 100 g 당으로 그려집니다.
   </div>
-  <div data-tab="tab-share" data-sel="[data-bs-target=&quot;#tab-share&quot;]" data-title="권한 설정 — 누가 무엇까지 할 수 있는지">
-    담당자를 역할 칸으로 드래그해 지정합니다. <strong>검토자·승인자를 정해 두지 않으면</strong> 상태가 그 단계를
-    건너뛰게 됩니다. 뷰어는 회원이 아니어도 링크로 열람할 수 있고, 나머지 역할은 회원이어야 합니다.
+  <div data-tab="tab-nutrition" data-frame="#nutritionEditorFrame" data-sel=".cfg-srcbtns" data-title="② 값의 출처 — 먼저 고르세요">
+    <strong>공인기관 성적서</strong>를 고르면 문서함의 성적서를 읽어 오는 단추가, <strong>이론치 계산</strong>을 고르면
+    원료 100 g 당 값 × <strong>배합비</strong>로 계산하는 단추가 나타납니다. 성적서가 있으면 그 값이 우선이고,
+    배합비가 작아 표시값에 영향을 주지 않는 원료는 비어 있어도 계산됩니다.
+  </div>
+  <div data-tab="tab-nutrition" data-frame="#nutritionEditorFrame" data-sel=".cfg-srcbtns" data-title="이론치는 오차를 얹어 인쇄합니다">
+    이론치 계산을 고르면 <strong>허용오차(기본 15%)</strong> 가 나타나고, 입력값에 그만큼 얹은 값이 「인쇄될 값」이 됩니다 —
+    실측값이 표시량의 120% 미만이어야 한다는 규정 때문입니다. 무엇으로 냈는지는 <i>근거</i> 칸에 남습니다.
+  </div>
+  <div data-tab="tab-nutrition" data-frame="#nutritionEditorFrame" data-sel="#grid-container" data-title="표 — 입력값 칸만 채우면 됩니다">
+    <strong>입력값 (100 g 당)</strong> 과 단위만 고칠 수 있고, 인쇄될 값과 강조표시 판정은 자동으로 채워집니다.
+    <strong>*</strong> 가 붙은 아홉 가지는 의무 표시 항목이고, 인쇄될 값 옆의 <strong>←</strong> 는 오차가 반영된 칸이라는 표시입니다.
+  </div>
+  <div data-tab="tab-nutrition" data-frame="#nutritionEditorFrame" data-sel=".preview-controls" data-title="스타일·표시기준 — 라벨에 인쇄되는 모양">
+    <strong>기본형/병행표시</strong> 와 표시기준(총내용량당·단위내용량당·100g당)을 고르면 미리보기와 「인쇄될 값」이 그 기준으로 바뀝니다.
+    함께 저장되어 검증 탭의 표도 같은 설정으로 그려집니다.
+  </div>
+  <div data-tab="tab-nutrition" data-frame="#nutritionEditorFrame" data-sel=".hieng-box" data-title="③ 고열량·저영양 판정">
+    간식용·식사대용을 고르면 왼쪽 ① 의 <strong>섭취참고량</strong> 기준으로 판정해 색으로 보여 줍니다.
+    판정이 필요한 제품에서만 고르고, 아니면 「판정 안 함」으로 두면 됩니다.
+  </div>
+  <div data-tab="tab-nutrition" data-frame="#nutritionEditorFrame" data-sel=".nutrition-pdf-note" data-title="저장과 인쇄">
+    이 화면에는 저장 단추가 없습니다 — 위쪽 <i>[저장]</i> 을 누르거나 다른 탭으로 옮기면 고친 것이 저장됩니다.
+    표는 검증 탭에서 한글표시사항과 한 장으로 인쇄되며, 기본 정보의 표시 항목에서 영양성분 체크가 꺼져 있으면 인쇄되지 않습니다.
+  </div>
+
+  {# ── 검증 (tab-label) — 틀 안 ───────────────────────────────────────── #}
+  <div data-tab="tab-label" data-frame="#lt-preview-frame" data-sel=".preview-tab--verify" data-title="검증은 두 단계로 진행합니다">
+    <strong>1 표시문구</strong> 는 지금 채운 값이 규정에 맞는지, <strong>2 디자인시안</strong> 은 디자인 파일이 그 문구와 같은지 확인합니다.
+    왼쪽 판에서 순서대로 진행하시면 됩니다.
+  </div>
+  <div data-tab="tab-label" data-frame="#lt-preview-frame" data-sel="#ltFirstBtn" data-title="1차 검증은 문구를 봅니다">
+    누르면 누락 항목·글자 크기·원산지 표시를 확인해 <strong>지적된 줄에는 번호가 붙고</strong>, 누르면 고칠 칸으로 이동합니다.
+    값을 고치면 '다시 검증해 주세요' 가 뜨니 고친 뒤 한 번 더 눌러 주세요.
+  </div>
+  <div data-tab="tab-label" data-frame="#lt-preview-frame" data-sel="#previewContent" data-title="표의 번호를 누르면 고칠 칸으로 이동합니다">
+    지적 번호와 <i>[수정하러 가기]</i> 는 값이 있는 탭의 입력칸으로 바로 이동합니다.
+    줄 옆 <strong>눈 아이콘</strong>은 기본 정보의 '표시 항목' 체크와 같은 스위치라 끄면 인쇄와 검증에서 함께 빠집니다.
+  </div>
+  <div data-tab="tab-label" data-frame="#lt-preview-frame" data-sel="#ltVTab2" data-title="2차 검증은 시안을 봅니다">
+    디자인에서 받은 포장지 시안(PDF·이미지)을 올리면 1차에서 확정한 문구와 <strong>한 줄씩 대조</strong>합니다.
+    한 번 올린 시안은 문서함에 남아 다음에는 <strong>올려 둔 시안으로 다시 검증</strong>할 수 있습니다.
+  </div>
+  <div data-tab="tab-label" data-frame="#lt-preview-frame" data-sel=".preview-tab[data-tab=&quot;table-settings&quot;]" data-title="표 설정은 인쇄될 크기와 글꼴입니다">
+    가로 크기·글꼴·글자 크기·자간·줄간격을 정하면 세로는 자동으로 계산됩니다.
+    바꾼 설정은 <strong>화면 위쪽 [저장]</strong> 을 눌러야 남습니다.
+  </div>
+  <div data-tab="tab-label" data-frame="#lt-preview-frame" data-sel=".preview-tab[data-tab=&quot;field-order&quot;]" data-title="항목 순서는 끌어서 바꾸고 눈 아이콘으로 숨깁니다">
+    항목을 드래그해 순서를 바꾸고, 눈 아이콘을 끄면 인쇄와 검증에서 모두 빠집니다.
+    <i>[2단배치]</i> 는 표를 두 단으로 나눠 넓은 라벨에 맞춥니다.
+  </div>
+  <div data-tab="tab-label" data-frame="#lt-preview-frame" data-sel=".preview-tab[data-tab=&quot;recycling-mark&quot;]" data-title="분리배출마크는 포장재에 맞게 고릅니다">
+    마크를 고르고 <i>[마크 추가]</i> 를 누르면 표 아래에 붙습니다. 복합재질이면 '몸체(종이)/뚜껑(PP)' 처럼 재질을 적어 두세요.
+  </div>
+  <div data-tab="tab-label" data-sel="#headerExportBtn" data-title="내보내기는 이 탭에서만 보입니다">
+    <strong>PDF</strong> 는 한글표시사항과 영양정보 표가 <strong>한 장</strong>으로 나오고 <strong>문서함에도 등록</strong>됩니다.
+    디자이너에게 글자를 넘길 때는 <i>[글자 복사]</i> 나 <i>[워드]</i> 를 쓰세요 — PDF 는 글자를 선택할 수 없습니다.
+  </div>
+
+  {# ── 문서함 (tab-docs) ───────────────────────────────────────────────── #}
+  <div data-tab="tab-docs" data-sel=".doc-status-bar" data-title="필수 서류 중 무엇이 비었는지 한 줄로 보입니다">
+    이 제품에 갖춰야 할 서류가 칩으로 늘어서고, 비었거나 만료된 것만 색으로 표시됩니다.
+    빈 칩을 누르면 바로 그 서류를 올릴 수 있고, <i>[관리]</i> 에서 어떤 서류를 필수로 둘지 정합니다.
+  </div>
+  {% if can_upload_documents %}
+  <div data-tab="tab-docs" data-sel="#docUploadBtn" data-title="업로드로 서류를 올리고 유효기간을 정합니다">
+    무엇을 올리는지 먼저 고른 뒤 파일과 유효기간을 정합니다. 유효기간을 넣어 두면 만료가 다가올 때 담당자에게 알림이 가니,
+    성적서처럼 기한이 있는 서류는 꼭 적어 주세요.
+  </div>
+  <div data-tab="tab-docs" data-sel="#docImportBtn" data-title="고정 서류 가져오기는 다시 올리지 않고 연결합니다">
+    내 정보의 고정 서류 관리에 올려 둔 사업자등록증·영업허가증 같은 서류를 이 제품 문서로 연결합니다.
+    제품마다 같은 파일을 다시 올리지 않으셔도 됩니다.
+  </div>
+  {% endif %}
+  <div data-tab="tab-docs" data-sel="#compact-doc-body" data-title="문서를 누르면 그 아래에 정보가 펼쳐집니다">
+    행을 누르면 바로 아래에 구분·발행일·유효기간을 고치는 칸과 <i>[다운로드]</i>·<i>[업로드]</i>(새 버전)가 나옵니다.
+    성적서면 값을 읽어 영양성분에 넣는 단추도 여기에 있습니다.
+  </div>
+
+  {# ── 권한 설정 (tab-share) ────────────────────────────────────────────── #}
+  <div data-tab="tab-share" data-sel=".workflow-dropzones" data-title="역할 칸에 사람을 끌어다 놓습니다">
+    왼쪽 팀 멤버 카드를 단계 칸으로 끌어 놓으면 그 역할이 되고, 팔레트로 되돌리면 공유가 해제됩니다.
+    옮긴 것은 아래 띠의 <i>[권한 부여]</i> 를 눌러야 한 번에 적용되고, 그때 담당자에게 알림이 갑니다.
+    <strong>검토자·승인자</strong>를 정해 두지 않으면 상태가 그 단계를 건너뜁니다.
+  </div>
+  {% if user_role == 'OWNER' or user_role == 'EDITOR' %}
+  <div data-tab="tab-share" data-sel="#permInviteBtn" data-title="새 사람은 이메일로 초대합니다">
+    아직 멤버가 아닌 사람은 여기서 이메일과 역할을 적어 초대합니다. 뷰어는 회원이 아니어도 링크로 볼 수 있고,
+    나머지 역할은 가입·로그인 뒤에 권한이 적용됩니다.
+  </div>
+  {% endif %}
+  <div data-tab="tab-share" data-sel=".person-detail-panel" data-title="멤버를 누르면 오른쪽에서 이름·회사·역할을 고칩니다">
+    카드를 누르면 오른쪽에 이름·회사명·역할과 '문서함 전체 보기' 설정이 나옵니다.
+    협력업체는 전체 보기가 꺼진 채 시작해 본인이 올린 서류만 보게 되고, 여기서 저장한 것은 바로 적용됩니다.
   </div>
 </div>
 {% endblock %}

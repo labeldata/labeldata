@@ -287,13 +287,14 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
 {% endcomment %}
 <div class="d-flex align-items-center gap-2 mb-3 px-1 flex-wrap ocr-fill-bar">
     <i class="bi bi-magic text-primary"></i>
-    <span class="fw-semibold" style="font-size:13px;">불러오기</span>
+    {# 문서함의 '불러오기'(고정 서류 연결)와 이름이 같아 헷갈렸다 — 하는 일로 부른다 #}
+    <span class="fw-semibold" style="font-size:13px;">번호·사진으로 채우기</span>
     <span class="text-muted" style="font-size:12px;">
-        표시사항 사진이나 품목보고번호로 제품 정보와 원료를 한 번에 채웁니다
+        품목보고번호를 조회하거나 표시사항 사진·PDF 를 읽어 제품 정보와 원료를 한 번에 채웁니다
     </span>
     <button type="button" class="btn btn-outline-primary v2-btn-sm ms-auto"
             id="basicInfoOcrBtn" onclick="openImportModal()">
-        <i class="bi bi-box-arrow-in-down"></i>불러오기
+        <i class="bi bi-magic"></i>번호·사진으로 채우기
     </button>
     <span id="basicInfoOcrStatus" class="text-muted" style="font-size:12px;"></span>
 </div>

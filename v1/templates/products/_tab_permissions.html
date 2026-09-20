@@ -16,7 +16,7 @@
                 <div class="fw-bold mb-3 pw-md">
                     <i class="bi bi-people me-1"></i>팀 멤버
                 </div>
-                <button class="btn btn-primary v2-btn w-100 mb-3" type="button" onclick="openQuickInvite()" style="{% if user_role != 'OWNER' and user_role != 'EDITOR' %}display:none;{% endif %}">
+                <button class="btn btn-primary v2-btn w-100 mb-3" type="button" id="permInviteBtn" onclick="openQuickInvite()" style="{% if user_role != 'OWNER' and user_role != 'EDITOR' %}display:none;{% endif %}">
                     <i class="bi bi-person-plus"></i>새 사람 초대
                 </button>
                 <div class="mb-3">

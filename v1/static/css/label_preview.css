@@ -1953,3 +1953,6 @@ tbody.layout-vertical tr td {
 .lt-vdocs .doc-have { color: #188038; }
 .lt-vdocs .doc-miss { color: #b06000; }
 .lt-vdocs .doc-gives { color: var(--ez-gray-600, #80868b); font-size: 11px; }
+
+/* 탭 안에서만 — 저장 단추가 바깥에 있다는 한 줄 */
+.preview-save-hint { font-size: 11.5px; color: var(--ez-gray-700, #5f6368); padding: 4px 10px 2px; }

@@ -857,7 +857,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         function refresh() {
             const dirty = changed();
             applyBtn.disabled = !dirty;
-            note.textContent = dirty ? '적용하면 표를 다시 그립니다' : '';
+            note.textContent = dirty ? '적용하면 저장하고 표를 다시 그립니다' : '';
         }
 
         box.addEventListener('change', function (e) {
@@ -891,12 +891,15 @@ body.in-iframe .bom-page-header { display: none !important; }
             if (!changed()) return;
             applyBtn.disabled = true;
             note.textContent = '적용하는 중…';
-            fetch('/common/grid-order/', {
+            /* 적용은 새로고침이다 — 고치던 표를 먼저 저장하지 않으면 그대로 날아갔다 */
+            var saved = (typeof window.saveIfEdited === 'function')
+                ? Promise.resolve(window.saveIfEdited()).catch(function () {}) : Promise.resolve();
+            saved.then(function () { return fetch('/common/grid-order/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-CSRFToken': getCsrfToken() },
                 body: JSON.stringify({ screen: 'bom_grid', hidden: picked() })
-            }).then(function (res) {
+            }); }).then(function (res) {
                 if (!res.ok) throw new Error(res.status);
                 window.location.reload();
             }).catch(function (err) {

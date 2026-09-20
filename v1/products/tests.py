@@ -5041,7 +5041,8 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         self.product = (base / 'products/product_detail.html').read_text(encoding='utf-8')
         self.basic = (base / 'products/_tab_basic_info.html').read_text(encoding='utf-8')
         self.frames = ''.join((base / rel).read_text(encoding='utf-8') for rel in (
-            'products/bom_detail.html', 'products/nutrition_editor.html', 'label/label_preview.html'))
+            'products/bom_detail.html', 'products/nutrition_editor.html', 'label/label_preview.html',
+            'products/_tab_documents.html', 'products/_tab_permissions.html'))
         self.ingredient = (base / 'label/my_ingredient_detail_partial.html'
                            ).read_text(encoding='utf-8')
 
@@ -5067,7 +5068,7 @@ class 코치마크는_그_화면만_짚는다(TestCase):
 
         sels = self._steps(self.product)
         self.assertGreaterEqual(len(sels), 12, '제품 상세: 탭마다 한 걸음은 있어야 한다')
-        self.assertLessEqual(len(sels), 30, '제품 상세: 이보다 길면 탭 설명이 아니다 (지금 보는 탭부터 보인다)')
+        self.assertLessEqual(len(sels), 40, '제품 상세: 이보다 길면 탭 설명이 아니다 (지금 보는 탭부터 보인다)')
 
     def test_문구는_엔진이_아니라_화면에_있다(self):
         """
@@ -5088,13 +5089,15 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         self.assertIn('if (!shown(now)) return;', self.engine)
         self.assertIn('r.width > 0 && r.height > 0', self.engine)
         # 새 원료에 없는 그 칸이 실제로 걸음에 들어 있다 — 건너뛰기가 도는 자리
-        self.assertIn('#ingNutrition', self._steps(self.ingredient))
+        self.assertIn('#ingNutritionHead', self._steps(self.ingredient))   # 접힌 details 안(#ingNutrition)은 크기 0 이라 머리를 가리킨다
 
     def test_가리키는_것이_실제로_그_화면에_있다(self):
         """
         선택자가 틀리면 걸음이 조용히 사라진다 — 건너뛰기와 구별이 안 된다.
         그래서 여기서 대조한다.
         """
+        import re
+
         from v1.products.views import _WORKFLOW_STEPS
         tabs = {'#' + tab for tab, _name, _hint in _WORKFLOW_STEPS}
 
@@ -5108,9 +5111,16 @@ class 코치마크는_그_화면만_짚는다(TestCase):
                     or ('data-bs-target="%s"' % target) in self.product,
                     sel)
                 continue
-            mark = ('id="%s"' % sel[1:]) if sel.startswith('#') else ('class="%s' % sel[1:])
+            # '.preview-tab[data-tab=…]' · '.bom-rowbtn:not(…)' 은 첫 조각으로 본다
+            head_sel = re.split(r'[\[:\s]', sel)[0]
             # data-frame 걸음은 틀(iframe) 안을 가리킨다 — 그 틀의 템플릿도 본다
-            self.assertTrue(mark in self.product or mark in self.basic or mark in self.frames, sel)
+            haystack = self.product + self.basic + self.frames
+            if head_sel.startswith('#'):
+                self.assertIn('id="%s"' % head_sel[1:], haystack, sel)
+            else:
+                # class 는 낱말로 맞춘다 — 'preview-tab preview-tab--verify' 처럼 여럿일 수 있다
+                self.assertIsNotNone(
+                    re.search(r'class="(?:[^"]*\s)?%s(?:\s|")' % re.escape(head_sel[1:]), haystack), sel)
 
         for sel in self._steps(self.ingredient):
             self.assertIn('id="%s"' % sel[1:], self.ingredient, sel)
@@ -5263,6 +5273,7 @@ class 코치마크는_화면마다_제_것을_짚는다(TestCase):
     화면들 = {
         '제품 상세': ('products/product_detail.html',
                    ('products/product_detail.html', 'products/_tab_basic_info.html',
+                    'products/_tab_documents.html', 'products/_tab_permissions.html',
                     # data-frame 걸음이 가리키는 틀(iframe)들
                     'products/bom_detail.html', 'products/nutrition_editor.html',
                     'label/label_preview.html')),
@@ -5317,6 +5328,7 @@ class 코치마크는_화면마다_제_것을_짚는다(TestCase):
         그래서 class 값을 공백으로 갈라 낱말로 맞춘다.
         """
         import re
+        sel = re.split(r'[\[:\s]', sel)[0] if sel[0] in '#.' else sel   # '.a[b=c]' · '.a:not(.b)' 은 첫 조각
         if sel.startswith('#'):
             return ('id="%s"' % sel[1:]) in html
         if sel.startswith('.'):
@@ -14829,9 +14841,77 @@ class 칸_고르기는_표_모서리에_있고_도움말은_틀_안을_가리킨
     def test_배합_탭_걸음은_표_안의_자리를_가리킨다(self):
         detail = self._read('templates/products/product_detail.html')
         for sel in ('#bom-grid', '#total-ratio-display', '#bomPhotoRegisterBtn', '#bom-summary-panel',
-                    '#sheet-summary-type', '.bom-cornerbtn', '.bom-rowbtn', '.bom-right-panel'):
+                    '#bsum-pane-rawmtrl', '.bom-cornerbtn', '.bom-rowbtn:not(.bom-photobtn)', '.bom-right-panel'):
             self.assertIn(f'data-frame="#bomEditorFrame" data-sel="{sel}"', detail)
         bom = self._read('templates/products/bom_detail.html')
         for anchor in ('id="bom-grid"', 'id="total-ratio-display"', 'id="bomPhotoRegisterBtn"',
                        'id="bom-summary-panel"', 'id="sheet-summary-type"', 'bom-right-panel'):
             self.assertIn(anchor, bom)
+
+
+class 화면_중심_도움말과_단추_이름(TestCase):
+    """검토(2026-09-20)에서 확인된 것들 — 걸음은 그 자리를 가리키고, 단추는 하는 일로 부른다."""
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_탭마다_틀_안을_가리키는_걸음이_있다(self):
+        detail = self._read('templates/products/product_detail.html')
+        for frame, sel in (('#nutritionEditorFrame', '.cfg-srcbtns'), ('#nutritionEditorFrame', '#grid-container'),
+                           ('#lt-preview-frame', '#ltFirstBtn'), ('#lt-preview-frame', '#ltVTab2'),
+                           ('#bomEditorFrame', '#bom-grid')):
+            self.assertIn(f'data-frame="{frame}" data-sel="{sel}"', detail)
+        for sel in ('#headerSaveBtn', '#status-action-btns', '.doc-status-bar', '#docUploadBtn', '#docImportBtn',
+                    '.workflow-dropzones', '#permInviteBtn', '.person-detail-panel', '#headerExportBtn'):
+            self.assertIn(f'data-sel="{sel}"', detail)
+        # 가리키는 id 가 실제로 있다
+        self.assertIn('id="headerSaveBtn"', detail)
+        self.assertIn('id="docUploadBtn"', self._read('templates/products/_tab_documents.html'))
+        self.assertIn('id="docImportBtn"', self._read('templates/products/_tab_documents.html'))
+        self.assertIn('id="permInviteBtn"', self._read('templates/products/_tab_permissions.html'))
+
+    def test_저장_단추는_어느_탭의_것을_저장하는지_말한다(self):
+        detail = self._read('templates/products/product_detail.html')
+        self.assertIn("'#tab-info': '기본 정보 저장', '#tab-bom': 'BOM 저장'", detail)
+        self.assertIn("btn.title = '이 탭은 바로 저장됩니다';", detail)
+        self.assertIn('syncSave(target);', detail)
+        # 건너뛰기는 한 번 묻는다
+        i = detail.index('function skipWithToast(newStatus, message)')
+        self.assertIn("if (!confirm(message + '\\n\\n이대로 건너뛸까요?')) return;", detail[i:i + 400])
+        self.assertIn('다음 단계 →', detail)
+
+    def test_불러오기_둘은_하는_일로_부른다(self):
+        basic = self._read('templates/products/_tab_basic_info.html')
+        self.assertIn('번호·사진으로 채우기', basic)
+        docs = self._read('templates/products/_tab_documents.html')
+        self.assertIn('고정 서류 가져오기', docs)
+        self.assertIn('번호·사진으로 채우기', self._read('static/js/products/import_modal.js'))
+
+    def test_칸_적용_전에_표를_저장한다(self):
+        bom = self._read('templates/products/bom_detail.html')
+        i = bom.index("applyBtn.addEventListener('click'")
+        block = bom[i:i + 900]
+        self.assertIn('window.saveIfEdited()', block)
+        self.assertIn("saved.then(function () { return fetch('/common/grid-order/'", block)
+        self.assertIn('적용하면 저장하고 표를 다시 그립니다', bom)
+
+    def test_검증_탭에는_저장_단추가_바깥에_있다고_말한다(self):
+        prev = self._read('templates/label/label_preview.html')
+        self.assertIn('class="preview-save-hint"', prev)
+        i = prev.index('class="preview-save-hint"')
+        self.assertIn('{% if request.GET.in_tab %}', prev[i - 300:i])
+
+    def test_엔진은_같은_갈래의_묶음을_모두_잇고_검증_서브탭을_먼저_연다(self):
+        eng = self._read('templates/includes/_coachmark.html')
+        self.assertIn('function holders(scope)', eng)
+        self.assertIn('var roots = holders(scope);', eng)
+        self.assertIn("querySelector('.preview-tab--verify')", eng)
+        lst = self._read('templates/label/my_ingredient_list_combined.html')
+        self.assertIn('data-sel=".ing-viewctl"', lst)
+        part = self._read('templates/label/my_ingredient_detail_partial.html')
+        self.assertIn('id="ingNutritionHead"', part)
+        self.assertIn('data-sel="#ingPhotoRow"', part)

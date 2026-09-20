@@ -104,7 +104,7 @@
       + '    <div class="modal-content">'
       + '      <div class="modal-header">'
       + '        <h5 class="modal-title" style="font-size:16px;">'
-      + '          <i class="bi bi-box-arrow-in-down me-2 text-primary"></i>불러오기'
+      + '          <i class="bi bi-magic me-2 text-primary"></i>번호·사진으로 채우기'
       + '        </h5>'
       + '        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>'
       + '      </div>'

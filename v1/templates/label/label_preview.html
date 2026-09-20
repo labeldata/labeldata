@@ -181,6 +181,10 @@
           <i class="fas fa-undo"></i>
         </button>
       </div>
+      {% if request.GET.in_tab %}
+      {# 탭에 끼워지면 이 화면의 저장 단추는 걷히고 바깥의 [저장] 이 그 일을 한다 — 그 사실을 여기서 말한다 #}
+      <div class="preview-save-hint"><i class="bi bi-info-circle me-1"></i>표 설정·항목 순서·분리배출마크는 화면 위쪽 <b>[저장]</b> 을 눌러야 남습니다.</div>
+      {% endif %}
       
       {% if request.GET.in_tab %}
       <!-- 검증 탭 -->
