@@ -864,3 +864,12 @@ html.v2-max .bom-right-panel { max-height: 100vh; }
 .handsontable td.bom-note-cell.area {
     background: var(--ez-gray-100, #f1f3f4);
 }
+
+/* 줄 사진 창 — 왼쪽 사진, 오른쪽 그 줄의 값. 창이 표를 덮으므로 값을 옆에 둔다 */
+.bom-rowphoto-pair { display: flex; gap: 16px; align-items: flex-start; }
+.bom-rowphoto-side { flex: 1 1 55%; min-width: 0; max-height: 70vh; overflow: auto; }
+.bom-rowphoto-side img { max-width: 100%; display: block; margin: 0 auto; }
+.bom-rowphoto-values { flex: 1 1 45%; min-width: 260px; display: flex; flex-direction: column; gap: 6px; }
+.bom-rowphoto-row label { display: block; font-size: 11px; color: var(--ez-gray-700, #5f6368); margin-bottom: 2px; }
+.bom-rowphoto-subs { white-space: pre-wrap; line-height: 1.4; }
+@media (max-width: 900px) { .bom-rowphoto-pair { flex-direction: column; } }

@@ -120,8 +120,8 @@
     });
 
     if (noRatio.length) {
-      out.push('<div class="bom-nut-warn">배합비를 넣어야 판정할 수 있습니다 ('
-        + noRatio.length + '건)</div>');
+      out.push('<span class="bom-nut-warn">배합비를 넣어야 판정할 수 있습니다 ('
+        + noRatio.length + '건)</span>');
     }
 
     if (todo.length) {
@@ -156,7 +156,7 @@
     }
 
     (d.warnings || []).forEach(function (w) {
-      out.push('<div class="bom-nut-warn">' + esc(w) + '</div>');
+      out.push('<span class="bom-nut-warn">' + esc(w) + '</span>');
     });
 
     out.push('<button type="button" class="btn v2-btn-sm btn-light border"'

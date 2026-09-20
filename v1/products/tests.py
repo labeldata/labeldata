@@ -14739,3 +14739,49 @@ class 배합_탭_머리는_한_줄이다(TestCase):
         self.assertLess(self.html.index('class="bom-summary-help"'), self.html.index('id="bsum-tabs"'))
         self.assertGreater(self.html.index('class="bom-summary-help"'), body)
         self.assertIn('.bom-summary-tools {', self.css)
+
+
+class 줄_사진_창은_값을_옆에_놓는다(TestCase):
+    """"표의 값과 견줘 보세요" 라고 해 놓고 창이 표를 덮고 있었다."""
+
+    def test_사진_옆에_그_줄의_값이_있고_고치면_표에_들어간다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        i = bom.index('function showRowPhoto(visualRow)')
+        block = bom[i:i + 5000]
+        self.assertIn("['raw_material_name', '원재료 표시명']", block)
+        self.assertIn("['mixing_ratio',      '배합비(%)']", block)
+        self.assertIn('class="bom-rowphoto-pair"', block)
+        self.assertIn("hot.setDataAtRowProp(visualRow, this.dataset.prop, v)", block)
+        self.assertNotIn('표의 값과 견줘 보세요.</div>', block)
+        css = (Path(dj.BASE_DIR) / 'static/css/bom.css').read_text(encoding='utf-8')
+        self.assertIn('.bom-rowphoto-pair { display: flex;', css)
+
+
+class 배합표_줄_높이와_영양성분_요약(TestCase):
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_칸이_바뀌면_줄_높이를_다시_잰다(self):
+        """칸을 감추면 본문 줄은 커지는데 번호 판은 옛 높이 — 내려갈수록 번호가 밀렸다."""
+        bom = self._read('templates/products/bom_detail.html')
+        self.assertIn('function remeasureRows()', bom)
+        self.assertIn("hot.getPlugin('autoRowSize')", bom)
+        self.assertIn("hot.addHook('afterUpdateSettings', function () { setTimeout(remeasureRows, 0); });", bom)
+        self.assertIn('document.fonts.ready.then(remeasureRows)', bom)
+
+    def test_영양성분_요약은_스크롤_없이_가로로_흐른다(self):
+        bom = self._read('templates/products/bom_detail.html')
+        self.assertIn('#bom-summary-nutrition { max-height: none; overflow: visible; display: flex; flex-wrap: wrap;', bom)
+        nut = self._read('templates/products/_bom_nutrition_summary.html')
+        i = nut.index('function render(d) {')
+        block = nut[i:nut.index("slot.addEventListener('click'", i)]   # 요약 판만 — 고르기 상자는 따로다
+        self.assertNotIn('<div class="bom-nut-warn">', block)
+        self.assertIn('<span class="bom-nut-warn">', block)
