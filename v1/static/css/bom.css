@@ -497,7 +497,7 @@ body.in-iframe .bom-main-column {
 .bom-summary-tools .vr { height: 18px; align-self: center; }
 /* 펼쳤을 때 맨 위의 사용법 한 줄 */
 .bom-summary-help {
-    font-size: 11.5px; color: var(--ez-gray-600, #5f6368);
+    font-size: 11.5px; color: var(--ez-gray-700, #5f6368);
     padding: 2px 0 6px; border-bottom: 1px dashed var(--ez-info-border, #c5d9f9);
     margin-bottom: 6px;
 }
