@@ -168,5 +168,26 @@ class 배합표를_그려_본다(StaticLiveServerTestCase):
                 self.assertGreater(len(got['master']), 5, got)
                 self.assertEqual(got['master'], got['left'],
                                  f'scrollTop={scroll}: 본문 줄과 번호 판 줄의 위치가 다르다')
+
+            # 칸 고르기 단추는 표 왼쪽 위 모서리 안에 있고, 누르면 판이 열린다
+            corner = chrome.js("""(function(){
+                const all = [...document.querySelectorAll('.bom-cornerbtn')];
+                if (!all.length) return 'NO BUTTON';
+                // '.bom-cornerbtn' 자신도 corner 를 품은 이름이라, 겹침판 이름으로 고른다
+                const CORNER = '.ht_clone_top_left_corner, .ht_clone_top_inline_start_corner';
+                const btn = all.find(b => b.closest(CORNER)) || all[0];
+                const th = btn.closest('th');
+                const panel = document.getElementById('bom-col-picker');
+                const before = panel.hidden;
+                btn.click();
+                return JSON.stringify({inCorner: !!(th && th.closest(CORNER)),
+                                       before: before, after: panel.hidden,
+                                       items: panel.querySelectorAll('input[data-col]').length});
+            })()""")
+            self.assertNotEqual(corner, 'NO BUTTON', '모서리 단추가 없다')
+            c = json.loads(corner)
+            self.assertTrue(c['inCorner'], c)
+            self.assertTrue(c['before'] and not c['after'], c)
+            self.assertGreater(c['items'], 5, c)
         finally:
             chrome.close()

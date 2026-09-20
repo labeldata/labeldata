@@ -31,6 +31,14 @@ body.in-iframe .bom-page-header { display: none !important; }
   /* ── 행 머리의 '입력' 단추 ─────────────────────────────────────
      상세 창을 여는 길이 알레르기·GMO 칸뿐이라 모르는 사람에게는 없는
      기능이었다. 줄마다 눈에 보이는 자리를 둔다. */
+  /* 표 왼쪽 위 모서리의 칸 고르기 단추와 그 판 */
+  .bom-cornerbtn { border: none; background: none; padding: 0 4px; color: var(--ez-gray-700);
+                   cursor: pointer; line-height: 1; font-size: 13px; }
+  .bom-cornerbtn:hover { color: var(--ez-info); }
+  .bom-col-panel { position: absolute; left: 0; top: 30px; z-index: 260; min-width: 200px;
+                   padding: 6px 0; background: #fff; border: 1px solid var(--ez-gray-300);
+                   border-radius: var(--ez-radius-md, 8px); box-shadow: 0 6px 18px rgba(60, 64, 67, .22); }
+  .bom-col-panel .dropdown-item { padding: 4px 12px; font-size: 12.5px; }
   .bom-rowno  { display: inline-block; min-width: 16px; text-align: right;
                 color: var(--ez-gray-700); font-size: 11px; }
   .bom-rowbtn { border: none; background: none; padding: 0 2px; margin-left: 3px;
@@ -165,7 +173,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                     </span>
                     <span class="bom-summary-tools" onclick="event.preventDefault()">
                         {% if can_edit %}
-                        <button class="btn btn-outline-primary v2-btn-sm" onclick="openIngredientPhotoUpload()"
+                        <button class="btn btn-outline-primary v2-btn-sm" id="bomPhotoRegisterBtn" onclick="openIngredientPhotoUpload()"
                                 title="원료 표시사항 사진을 올려 판독하고 이 표에 줄을 더합니다">
                             <i class="bi bi-camera"></i> 사진으로 등록
                         </button>
@@ -182,15 +190,6 @@ body.in-iframe .bom-page-header { display: none !important; }
                                     title="요약에 식품유형을 적습니다. 예) 정제소금 → 정제소금">식품유형</button>
                             <button type="button" class="v2-seg-btn" data-value="원재료명"
                                     title="요약에 원재료 표시명을 적습니다">원재료명</button>
-                        </span>
-                        {# 안 보는 칸은 감춘다 — 지우는 것이 아니다. 고른 것은 계정에 남는다 #}
-                        <span class="dropdown">
-                            <button type="button" class="btn btn-light border v2-btn-sm dropdown-toggle"
-                                    data-bs-toggle="dropdown" data-bs-auto-close="outside"
-                                    title="표에 어느 칸을 보일지 고릅니다">
-                                <i class="bi bi-layout-three-columns"></i> 칸
-                            </button>
-                            <div class="dropdown-menu p-2" id="bom-col-picker" style="min-width:180px;"></div>
                         </span>
                         <span class="small text-muted">총 배합비</span>
                         <span id="total-ratio-display" class="fw-semibold text-primary">0.000%</span>
@@ -290,6 +289,13 @@ body.in-iframe .bom-page-header { display: none !important; }
               어려운 것**만 둔다 — 알레르기·GMO 처럼 목록에서 골라야 하는 것.
             {% endcomment %}
             <div class="bom-grid-card shadow-sm" id="bom-grid-card">
+                {% comment %}
+                  칸 고르기 — 표 **왼쪽 위 모서리**의 단추(afterGetColHeader 가 col -1 에
+                  심는다)가 이 판을 연다. 요약 줄에 두었더니 단추가 하나 더 늘어 무엇이
+                  무엇인지 흐려졌다. 칸을 고르는 단추는 칸 머리 옆이 제자리다.
+                  안 보는 칸은 감춘다 — 지우는 것이 아니다. 고른 것은 계정에 남는다.
+                {% endcomment %}
+                <div id="bom-col-picker" class="bom-col-panel" hidden></div>
                 <div id="bom-grid" class="hot-container"></div>
                 <div class="bom-rowdetail" id="bom-rowdetail">
                     <div class="bom-rowdetail-head">
@@ -858,10 +864,19 @@ body.in-iframe .bom-page-header { display: none !important; }
             if (e.target.closest('input[data-col]')) refresh();
         });
 
-        /* 드롭다운 안을 눌러도 닫히지 않게 한다 — 여러 개를 고르는 자리다 */
+        /* 판 안을 눌러도 닫히지 않게 한다 — 여러 개를 고르는 자리다 */
         box.addEventListener('click', function (e) {
             if (e.target.closest('#bom-col-apply, #bom-col-cancel')) return;
             e.stopPropagation();
+        });
+        /* 모서리 단추가 판을 연다. 밖을 누르거나 Esc 면 닫는다. */
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.bom-cornerbtn');
+            if (btn) { e.preventDefault(); box.hidden = !box.hidden; return; }
+            if (!box.hidden && !e.target.closest('#bom-col-picker')) box.hidden = true;
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !box.hidden) box.hidden = true;
         });
 
         cancelBtn.addEventListener('click', function () {
@@ -1045,6 +1060,15 @@ body.in-iframe .bom-page-header { display: none !important; }
             },
             rowHeaderWidth: 76,
             colHeaders: SHOWN_HEADERS,
+            /* 표 왼쪽 위 모서리 칸(col === -1)에 칸 고르기 단추를 심는다.
+               머리글은 그릴 때마다 새로 만들어지므로 매번 심되, 이미 있으면 둔다. */
+            afterGetColHeader: function (col, TH) {
+                if (col !== -1 || !TH || TH.querySelector('.bom-cornerbtn')) return;
+                /* id 를 달지 않는다 — 본체 표와 겹침판(clone) 둘 다 모서리 칸을 그려
+                   같은 id 가 둘이 된다. class 로 찾는다. */
+                TH.innerHTML = '<button type="button" class="bom-cornerbtn"'
+                    + ' title="표에 보일 칸 고르기"><i class="bi bi-layout-three-columns"></i></button>';
+            },
             manualRowMove: CAN_EDIT,
             manualColumnResize: true,
             /* 칸을 끌어다 옮길 수 있게. 붙여넣기가 열 순서를 따라가는 데도

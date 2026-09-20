@@ -5040,6 +5040,8 @@ class 코치마크는_그_화면만_짚는다(TestCase):
         self.engine = (base / 'includes/_coachmark.html').read_text(encoding='utf-8')
         self.product = (base / 'products/product_detail.html').read_text(encoding='utf-8')
         self.basic = (base / 'products/_tab_basic_info.html').read_text(encoding='utf-8')
+        self.frames = ''.join((base / rel).read_text(encoding='utf-8') for rel in (
+            'products/bom_detail.html', 'products/nutrition_editor.html', 'label/label_preview.html'))
         self.ingredient = (base / 'label/my_ingredient_detail_partial.html'
                            ).read_text(encoding='utf-8')
 
@@ -5065,7 +5067,7 @@ class 코치마크는_그_화면만_짚는다(TestCase):
 
         sels = self._steps(self.product)
         self.assertGreaterEqual(len(sels), 12, '제품 상세: 탭마다 한 걸음은 있어야 한다')
-        self.assertLessEqual(len(sels), 20, '제품 상세: 이보다 길면 탭 설명이 아니다')
+        self.assertLessEqual(len(sels), 30, '제품 상세: 이보다 길면 탭 설명이 아니다 (지금 보는 탭부터 보인다)')
 
     def test_문구는_엔진이_아니라_화면에_있다(self):
         """
@@ -5107,7 +5109,8 @@ class 코치마크는_그_화면만_짚는다(TestCase):
                     sel)
                 continue
             mark = ('id="%s"' % sel[1:]) if sel.startswith('#') else ('class="%s' % sel[1:])
-            self.assertTrue(mark in self.product or mark in self.basic, sel)
+            # data-frame 걸음은 틀(iframe) 안을 가리킨다 — 그 틀의 템플릿도 본다
+            self.assertTrue(mark in self.product or mark in self.basic or mark in self.frames, sel)
 
         for sel in self._steps(self.ingredient):
             self.assertIn('id="%s"' % sel[1:], self.ingredient, sel)
@@ -5259,7 +5262,10 @@ class 코치마크는_화면마다_제_것을_짚는다(TestCase):
     # 제품 상세만 둘을 본다 — 기본 정보 탭은 include 로 들어오는 딴 파일이다.
     화면들 = {
         '제품 상세': ('products/product_detail.html',
-                   ('products/product_detail.html', 'products/_tab_basic_info.html')),
+                   ('products/product_detail.html', 'products/_tab_basic_info.html',
+                    # data-frame 걸음이 가리키는 틀(iframe)들
+                    'products/bom_detail.html', 'products/nutrition_editor.html',
+                    'label/label_preview.html')),
         '원료 상세': ('label/my_ingredient_detail_partial.html',
                    ('label/my_ingredient_detail_partial.html',)),
         '원료 관리': ('label/my_ingredient_list_combined.html',
@@ -14727,7 +14733,7 @@ class 배합_탭_머리는_한_줄이다(TestCase):
         head = self.html.index('<summary class="bom-summary-head">')
         tail = self.html.index('</summary>', head)
         line = self.html[head:tail]
-        for needle in ('id="sheet-summary-type"', 'id="bom-col-picker"', 'id="total-ratio-display"',
+        for needle in ('id="sheet-summary-type"', 'id="total-ratio-display"',
                        'openIngredientPhotoUpload()', 'class="bom-summary-tools" onclick="event.preventDefault()"'):
             self.assertIn(needle, line)
         # 위에 따로 있던 줄은 없다
@@ -14788,3 +14794,44 @@ class 배합표_줄_높이와_영양성분_요약(TestCase):
         block = nut[i:nut.index("slot.addEventListener('click'", i)]   # 요약 판만 — 고르기 상자는 따로다
         self.assertNotIn('<div class="bom-nut-warn">', block)
         self.assertIn('<span class="bom-nut-warn">', block)
+
+
+class 칸_고르기는_표_모서리에_있고_도움말은_틀_안을_가리킨다(TestCase):
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_칸_고르기_단추는_모서리에_심고_요약_줄에는_없다(self):
+        bom = self._read('templates/products/bom_detail.html')
+        self.assertIn('afterGetColHeader: function (col, TH) {', bom)
+        self.assertIn('class="bom-cornerbtn"', bom)
+        self.assertNotIn('id="bom-corner-cols"', bom)      # 본체와 겹침판에 같은 id 가 둘 생긴다
+        self.assertIn('<div id="bom-col-picker" class="bom-col-panel" hidden></div>', bom)
+        self.assertNotIn('data-bs-toggle="dropdown" data-bs-auto-close="outside"', bom)
+        head = bom.index('<summary class="bom-summary-head">')
+        self.assertNotIn('bom-col-picker', bom[head:bom.index('</summary>', head)])
+        css = self._read('static/css/bom.css')
+        self.assertIn('.bom-grid-card { position: relative; }', css)
+
+    def test_도움말_엔진이_틀_안을_찾고_지금_탭부터_말한다(self):
+        eng = self._read('templates/includes/_coachmark.html')
+        self.assertIn("frame: node.getAttribute('data-frame') || ''", eng)
+        self.assertIn('function rectOf(step, el)', eng)
+        self.assertIn('root = f ? f.contentDocument : null;', eng)
+        self.assertIn('function currentTabFirst(list)', eng)
+        self.assertIn("steps = currentTabFirst(steps);", eng)
+        # 틀이 늦게 실리면 기다린다
+        self.assertIn('else if (step.frame && retries < 10) {', eng)
+
+    def test_배합_탭_걸음은_표_안의_자리를_가리킨다(self):
+        detail = self._read('templates/products/product_detail.html')
+        for sel in ('#bom-grid', '#total-ratio-display', '#bomPhotoRegisterBtn', '#bom-summary-panel',
+                    '#sheet-summary-type', '.bom-cornerbtn', '.bom-rowbtn', '.bom-right-panel'):
+            self.assertIn(f'data-frame="#bomEditorFrame" data-sel="{sel}"', detail)
+        bom = self._read('templates/products/bom_detail.html')
+        for anchor in ('id="bom-grid"', 'id="total-ratio-display"', 'id="bomPhotoRegisterBtn"',
+                       'id="bom-summary-panel"', 'id="sheet-summary-type"', 'bom-right-panel'):
+            self.assertIn(anchor, bom)
