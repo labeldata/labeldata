@@ -489,6 +489,18 @@ body.in-iframe .bom-main-column {
     text-overflow: ellipsis;
 }
 .bom-summary[open] .bom-summary-peek { visibility: hidden; }
+/* 요약 줄 오른쪽의 단추들 — 접혀 있어도 늘 보인다 */
+.bom-summary-tools {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    margin-left: auto; white-space: nowrap; cursor: default;
+}
+.bom-summary-tools .vr { height: 18px; align-self: center; }
+/* 펼쳤을 때 맨 위의 사용법 한 줄 */
+.bom-summary-help {
+    font-size: 11.5px; color: var(--ez-gray-600, #5f6368);
+    padding: 2px 0 6px; border-bottom: 1px dashed var(--ez-info-border, #c5d9f9);
+    margin-bottom: 6px;
+}
 .bom-summary-toggle { flex-shrink: 0; color: var(--ez-gray-500, #9aa0a6); font-size: 11px; }
 .bom-summary[open] .bom-summary-toggle .bi { transform: rotate(180deg); }
 

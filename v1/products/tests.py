@@ -14709,3 +14709,33 @@ class 실측_뒤_고친_것(TestCase):
         self.assertIn('window.offerBomSplit = offerBomSplit;', ocr)
         self.assertIn('function offerBomSplit(text, opts)', ocr)
         self.assertIn('원재료명에서 원료를 찾지 못했습니다.', ocr)
+
+
+class 배합_탭_머리는_한_줄이다(TestCase):
+    """안내 문장·표시명 기준·칸·총 배합비·사진 단추가 요약 줄 하나에 산다."""
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_단추들이_요약_줄_안에_있다(self):
+        head = self.html.index('<summary class="bom-summary-head">')
+        tail = self.html.index('</summary>', head)
+        line = self.html[head:tail]
+        for needle in ('id="sheet-summary-type"', 'id="bom-col-picker"', 'id="total-ratio-display"',
+                       'openIngredientPhotoUpload()', 'class="bom-summary-tools" onclick="event.preventDefault()"'):
+            self.assertIn(needle, line)
+        # 위에 따로 있던 줄은 없다
+        self.assertNotIn('d-flex justify-content-between align-items-center mb-2 px-1', self.html)
+
+    def test_안내_문장은_펼쳤을_때_맨_위와_아이콘에_있다(self):
+        self.assertEqual(self.html.count('칸을 고르고 바로 입력(Enter 로 다음 줄)'), 2)
+        body = self.html.index('<div class="bom-summary-body">')
+        self.assertLess(self.html.index('class="bom-summary-help"'), self.html.index('id="bsum-tabs"'))
+        self.assertGreater(self.html.index('class="bom-summary-help"'), body)
+        self.assertIn('.bom-summary-tools {', self.css)

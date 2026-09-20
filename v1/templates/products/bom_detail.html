@@ -133,67 +133,22 @@ body.in-iframe .bom-page-header { display: none !important; }
 
     <div class="bom-workspace">
         <div class="bom-main-column pe-lg-3">
-            <div class="d-flex justify-content-between align-items-center mb-2 px-1">
-                <div class="small text-muted">
-                    <i class="bi bi-info-circle me-1"></i>
-                    칸을 고르고 바로 입력(Enter 로 다음 줄) &middot; 우클릭으로 행 추가·삭제·되돌리기 &middot;
-                    머리글을 끌어 칸 순서를 바꿀 수 있습니다
-                </div>
-                <div class="d-flex align-items-center gap-2 ms-3 text-nowrap">
-                    {% comment %}
-                      **머리글에 두었더니 아무도 못 봤다.**
-
-                      제품 화면 안에서는 배합표가 iframe 으로 들어오고, 그때
-                      `body.in-iframe .bom-page-header` 가 머리글을 통째로
-                      감춘다. 배합 탭에서 쓰라고 만든 단추가 배합 탭에서만
-                      안 보였다.
-
-                      늘 보이는 이 줄로 옮긴다. 배합표를 채우는 사람의 눈이
-                      머무는 자리이기도 하다.
-                    {% endcomment %}
-                    {% if can_edit %}
-                    <button class="btn btn-outline-primary v2-btn-sm" onclick="openIngredientPhotoUpload()"
-                            title="원료 표시사항 사진을 올려 판독하고 이 표에 줄을 더합니다">
-                        <i class="bi bi-camera"></i> 사진으로 등록
-                    </button>
-                    <div class="vr"></div>
-                    {% endif %}
-                    {% comment %}
-                      표시명 기준은 원료마다 따로 두지만, 한 배합비 안에서는
-                      대개 하나로 간다. 줄을 고를 때마다 상세를 열어 다시
-                      누르게 하지 않는다 — 위에서 한 번 누르면 모든 줄에 넣는다.
-                      그 줄만 다르게 하려면 상세에서 다시 고른다.
-                    {% endcomment %}
-                    <span class="small text-muted" title="요약에 원료 이름 대신 무엇을 적을지 정합니다. 모든 줄에 함께 걸립니다.">표시명 기준:</span>
-                    <div class="v2-seg" id="sheet-summary-type">
-                        <button type="button" class="v2-seg-btn is-on" data-value="식품유형"
-                                title="요약에 식품유형을 적습니다. 예) 정제소금 → 정제소금">식품유형</button>
-                        <button type="button" class="v2-seg-btn" data-value="원재료명"
-                                title="요약에 원재료 표시명을 적습니다">원재료명</button>
-                    </div>
-                    {% comment %}
-                      안 보는 칸이 자리를 차지하면 정작 봐야 할 칸이 좁아진다.
-                      **지우는 것이 아니라 감추는 것이다** — 값은 그대로 있고
-                      다시 켜면 돌아온다. 고른 것은 계정에 남는다.
-                    {% endcomment %}
-                    <div class="dropdown ms-2">
-                        <button type="button" class="btn btn-light border v2-btn-sm dropdown-toggle"
-                                data-bs-toggle="dropdown" data-bs-auto-close="outside"
-                                title="표에 어느 칸을 보일지 고릅니다">
-                            <i class="bi bi-layout-three-columns"></i> 칸
-                        </button>
-                        <div class="dropdown-menu p-2" id="bom-col-picker" style="min-width:180px;"></div>
-                    </div>
-                    <span class="small text-muted ms-2">총 배합비:</span>
-                    <span id="total-ratio-display" class="fw-semibold text-primary">0.000%</span>
-                </div>
-            </div>
             {% comment %}
               요약은 이 화면의 결과물이다. 표를 고치는 내내 보여야 하는데
               표 아래에 있어서 스크롤해야 보였다 — 알레르기를 하나 넣고
               요약이 어떻게 바뀌는지 보려면 매번 내려갔다 올라와야 했다.
 
               한 줄로 접어 위에 둔다. 자세히 볼 때만 편다.
+            {% endcomment %}
+            {% comment %}
+              **머리는 한 줄이다.** 예전에는 안내 문장·표시명 기준·칸·총 배합비가
+              한 줄, 그 아래 요약이 또 한 줄이었다. 두 줄이 표 위에서 높이를
+              먹었고, 같은 자리의 것들이 두 곳에 나뉘어 있었다. 요약 줄 오른쪽에
+              단추들을 두고, 안내 문장은 펼쳤을 때 맨 위에 둔다(ⓘ 에도 같은 말).
+
+              단추 칸의 클릭은 preventDefault 로 막는다 — summary 안의 클릭은
+              접기·펴기로 읽히기 때문이다. stopPropagation 은 쓰지 않는다:
+              드롭다운(칸 고르기)은 document 에서 듣는다.
             {% endcomment %}
             <details class="bom-summary is-stuck" id="bom-summary-panel" open>
                 <summary class="bom-summary-head">
@@ -202,6 +157,39 @@ body.in-iframe .bom-page-header { display: none !important; }
                     </span>
                     <span class="bom-summary-peek" id="bom-summary-peek">
                         BOM에 원료를 넣으면 여기에 만들어집니다.
+                    </span>
+                    <span class="bom-summary-tools" onclick="event.preventDefault()">
+                        {% if can_edit %}
+                        <button class="btn btn-outline-primary v2-btn-sm" onclick="openIngredientPhotoUpload()"
+                                title="원료 표시사항 사진을 올려 판독하고 이 표에 줄을 더합니다">
+                            <i class="bi bi-camera"></i> 사진으로 등록
+                        </button>
+                        <span class="vr"></span>
+                        {% endif %}
+                        {% comment %}
+                          표시명 기준은 원료마다 따로 두지만, 한 배합비 안에서는
+                          대개 하나로 간다. 여기서 한 번 누르면 모든 줄에 넣는다.
+                          그 줄만 다르게 하려면 상세에서 다시 고른다.
+                        {% endcomment %}
+                        <span class="small text-muted" title="요약에 원료 이름 대신 무엇을 적을지 정합니다. 모든 줄에 함께 걸립니다.">표시명 기준</span>
+                        <span class="v2-seg" id="sheet-summary-type">
+                            <button type="button" class="v2-seg-btn is-on" data-value="식품유형"
+                                    title="요약에 식품유형을 적습니다. 예) 정제소금 → 정제소금">식품유형</button>
+                            <button type="button" class="v2-seg-btn" data-value="원재료명"
+                                    title="요약에 원재료 표시명을 적습니다">원재료명</button>
+                        </span>
+                        {# 안 보는 칸은 감춘다 — 지우는 것이 아니다. 고른 것은 계정에 남는다 #}
+                        <span class="dropdown">
+                            <button type="button" class="btn btn-light border v2-btn-sm dropdown-toggle"
+                                    data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                                    title="표에 어느 칸을 보일지 고릅니다">
+                                <i class="bi bi-layout-three-columns"></i> 칸
+                            </button>
+                            <div class="dropdown-menu p-2" id="bom-col-picker" style="min-width:180px;"></div>
+                        </span>
+                        <span class="small text-muted">총 배합비</span>
+                        <span id="total-ratio-display" class="fw-semibold text-primary">0.000%</span>
+                        <i class="bi bi-info-circle text-muted" title="칸을 고르고 바로 입력(Enter 로 다음 줄) · 우클릭으로 행 추가·삭제·되돌리기 · 머리글을 끌어 칸 순서를 바꿀 수 있습니다"></i>
                     </span>
                     <span class="bom-summary-toggle"><i class="bi bi-chevron-down"></i></span>
                 </summary>
@@ -219,6 +207,11 @@ body.in-iframe .bom-page-header { display: none !important; }
                   탭에 적는다 — 열어 보지 않고도 아는 것이 낫다.
                 {% endcomment %}
                 <div class="bom-summary-body">
+                    <div class="bom-summary-help">
+                        <i class="bi bi-info-circle me-1"></i>
+                        칸을 고르고 바로 입력(Enter 로 다음 줄) &middot; 우클릭으로 행 추가·삭제·되돌리기 &middot;
+                        머리글을 끌어 칸 순서를 바꿀 수 있습니다
+                    </div>
                     <div class="bsum-tabs" id="bsum-tabs" role="tablist"></div>
 
                     <div class="bsum-pane" id="bsum-pane-rawmtrl" hidden>
