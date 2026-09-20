@@ -644,6 +644,9 @@ class SharePermission(models.Model):
     내부 팀(EDITOR·REVIEWER·APPROVER)에는 맞는 설계다. **바깥 사람에게는
     아니다.** can_view_all_documents 가 그 경계다.
     """
+    # DB 에 남는 값과 그 옛 이름. **화면에 쓰지 않는다** — 이름을 여기서 고치면
+    # choices 가 바뀌어 마이그레이션이 생기는데, 운영에서 그것이 막혀 있다.
+    # 사람이 읽는 이름은 아래 ROLE_NAMES 한 곳에서 온다(role_label 도 그것을 쓴다).
     ROLE_CHOICES = [
         ('VIEWER', '단순 조회'),
         ('UPLOADER', '자료 제출'),
@@ -651,6 +654,33 @@ class SharePermission(models.Model):
         ('REVIEWER', '검토자'),
         ('APPROVER', '승인자'),
     ]
+
+    # ── 화면에 적히는 이름은 여기 하나뿐이다 ────────────────────────────
+    #
+    # 같은 역할을 여섯 자리에서 여섯 가지로 불렀다 — 초대 창은 '공동 편집
+    # (팀원)', 카드 칩은 '편집', 대기 띠는 '공동 편집', 드롭존은 '공동 작성자',
+    # 빠른 초대는 '편집자 - 자료 입력 및 수정'. 사용자는 그것이 같은 것인지
+    # 알 수 없고, 우리도 어느 이름이 맞는지 말할 수 없었다.
+    #
+    # 전부 **사람**으로 부른다(…자/…어). 무엇을 하는지가 아니라 어느 자리에
+    # 앉히는지를 고르는 화면이기 때문이다. 흔히 누가 그 자리에 오는지는
+    # 이름이 아니라 곁말(ROLE_HINTS)로 둔다 — 협력업체가 아닌 자료 제출자도
+    # 있다.
+    ROLE_NAMES = {
+        'OWNER':    '소유자',
+        'EDITOR':   '공동 작성자',
+        'UPLOADER': '자료 제출자',
+        'REVIEWER': '검토자',
+        'APPROVER': '승인자',
+        'VIEWER':   '뷰어',
+    }
+    ROLE_HINTS = {
+        'EDITOR':   '팀원 — 제품 정보를 함께 고칩니다',
+        'UPLOADER': '협력업체 — 자료만 올립니다',
+        'REVIEWER': '팀장·QA — 검토하고 넘깁니다',
+        'APPROVER': '책임자 — 최종 승인합니다',
+        'VIEWER':   '읽기 전용 — 회원이 아니어도 됩니다',
+    }
     ROLE_DEFAULTS = {
         'VIEWER': {
             'can_view': True,
@@ -757,7 +787,7 @@ class SharePermission(models.Model):
 
     @property
     def role_label(self):
-        return dict(self.ROLE_CHOICES).get(self.role_code, self.role_code)
+        return self.ROLE_NAMES.get(self.role_code, self.role_code)
 
     @property
     def role_summary(self):

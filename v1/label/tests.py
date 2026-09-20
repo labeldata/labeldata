@@ -10431,7 +10431,9 @@ class 화면에_그린_표와_저장이_같아야_한다(TestCase):
 
     def test_고르는_자리가_있다(self):
         self.assertIn('id="use_tolerance"', self.editor)
-        self.assertIn('적용값 사용', self.editor)
+        # '적용값' 은 무엇에 적용된다는 것인지 말하지 않았다 — 라벨에 인쇄될 값이다
+        self.assertIn('인쇄될 값에 오차 반영', self.editor)
+        self.assertNotIn('적용값 사용', self.editor)
         self.assertIn('function useApplied', self.editor)
 
     def test_미리보기도_같은_값으로_그린다(self):
@@ -10517,7 +10519,7 @@ class 설정을_성격별로_묶는다(TestCase):
         self.assertIn('class="cfg-why"', self.editor)
         # 짧은 설명은 **그 칸의 title** 에 붙는다. 화면에 늘어놓으면 표가
         # 밀려나고, 그러면 정작 아무도 안 읽는다.
-        self.assertIn('title="켜면 적용값이 표와 저장에 쓰입니다', self.editor)
+        self.assertIn('title="켜면 오차를 얹은 값이 인쇄됩니다', self.editor)
         # 긴 규정 설명은 묶음 이름 옆 물음표에만 둔다
         head = self.editor.index('function refreshApplied')
         self.assertNotIn('트랜스지방·콜레스테롤·나트륨만 올리고',
@@ -21824,16 +21826,26 @@ class 원료_관리에서_사진을_붙이고_폼의_빈_칸만_채운다(TestCa
         self.assertIn('{% if ingredient.label_photo %}', tpl)
         self.assertIn('class="ing-thumb"', tpl)
 
-    def test_엑셀_단추는_엑셀이라고_적는다(self):
-        """'업로드·다운로드' 만으로는 사진인지 엑셀인지 알 수 없었다."""
+    def test_엑셀은_한_메뉴로_묶고_차이를_적는다(self):
+        """
+        '업로드·다운로드' 만으로는 사진인지 엑셀인지 알 수 없었다. 이름을 고치고
+        나니 이번에는 '엑셀' 로 시작하는 단추가 셋이 되어, 붙여넣기와 올리기가
+        무엇이 다른지(확인 창이 있고 없고) 이름만으로는 갈리지 않았다.
+        """
         from pathlib import Path
 
         from django.conf import settings as dj
 
         page = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_list_combined.html'
                 ).read_text(encoding='utf-8')
-        self.assertIn('엑셀 내려받기', page)
-        self.assertIn('엑셀 올리기', page)
+        self.assertIn('id="excelBtn"', page)
+        head = page.index('id="excelBtn"')
+        block = page[head:head + 1600]
+        self.assertIn('>엑셀', block)
+        for item in ('id="pasteBtn"', 'id="uploadBtn"', 'id="downloadBtn"'):
+            self.assertIn(item, block)          # 처리기가 잡는 id 는 그대로다
+        self.assertIn('등록 전에 몇 건인지 확인합니다', block)
+        self.assertIn('확인 없이 바로 등록됩니다', block)
 
     def test_주소로_원료를_펼친_채_연다(self):
         """배합표의 [원료 관리로 이동] 이 이 주소로 보낸다. 예전에는 아무도 읽지 않았다."""
@@ -22116,3 +22128,18 @@ class 알레르기_박스는_칸_안에서_접힌다(TestCase):
         self.assertIn('white-space: normal;', block)
         self.assertIn('max-width: 100%;', block)
         self.assertNotIn('nowrap;', block)
+
+
+class 사진만_붙이기(TestCase):
+    """'저장만' 은 무엇이 저장되는지 말하지 않았다 — 붙는 것은 사진뿐이다."""
+
+    def test_단추가_하는_일로_적혀_있다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tpl = (Path(dj.BASE_DIR) / 'templates/label/my_ingredient_detail_partial.html'
+               ).read_text(encoding='utf-8')
+        self.assertIn('id="ingPhotoKeep"', tpl)
+        self.assertIn('사진만 붙이기', tpl)
+        self.assertNotIn('> 저장만<', tpl)

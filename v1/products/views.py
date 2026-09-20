@@ -1216,6 +1216,9 @@ def product_detail(request, product_id):
             {key: {'main': form['main'], 'info': form['info']}
              for key, form in display_panel.PACKAGE_FORMS.items()},
             ensure_ascii=False),
+        # 역할 이름은 모델 한 곳에서 온다 — 화면·JS 가 이것만 적는다
+        'role_names': SharePermission.ROLE_NAMES,
+        'role_hints': SharePermission.ROLE_HINTS,
     }
 
     return render(request, 'products/product_detail.html', context)

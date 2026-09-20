@@ -2633,8 +2633,7 @@ class DocumentModalsShareOneSkinTests(TestCase):
 
     def test_넷_다_같은_껍데기를_쓴다(self):
         self.assertIn('smart-upload-modal doc-modal', self.upload)
-        for html, modal in ((self.docs, 'editDocumentModal'),
-                            (self.docs, 'importCompanyDocModal'),
+        for html, modal in ((self.docs, 'importCompanyDocModal'),
                             (self.docs, 'ingredientPhotoModal'),
                             (self.detail, 'addSlotModal')):
             head = html.index('id="%s"' % modal)
@@ -14476,7 +14475,8 @@ class 사진_등록_단추가_배합_탭에서_보인다(TestCase):
     def test_늘_보이는_줄에_있다(self):
         bom = self._bom()
         i = bom.index('class="bom-workspace"')
-        self.assertIn('openIngredientPhotoUpload()', bom[i:i + 3000])
+        # 그 앞에 빈 표 안내(bom-empty-guide)가 들어와 자리가 밀렸다 — 창을 넓힌다
+        self.assertIn('openIngredientPhotoUpload()', bom[i:i + 6000])
 
     def test_고칠_수_있는_사람에게만_보인다(self):
         bom = self._bom()
@@ -14915,3 +14915,175 @@ class 화면_중심_도움말과_단추_이름(TestCase):
         part = self._read('templates/label/my_ingredient_detail_partial.html')
         self.assertIn('id="ingNutritionHead"', part)
         self.assertIn('data-sel="#ingPhotoRow"', part)
+
+
+class 역할은_한_이름으로_부른다(TestCase):
+    """
+    같은 역할을 여섯 자리에서 여섯 가지로 불렀다 — '공동 편집'·'편집'·'편집자'·
+    '공동 작성자'. 사용자는 그것이 같은 자리인지 알 수 없고, 우리도 어느 이름이
+    맞는지 말할 수 없었다. 모델 한 곳(ROLE_NAMES)에서만 온다.
+    """
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_모델이_이름의_출처다(self):
+        from v1.products.models import SharePermission
+
+        self.assertEqual(SharePermission.ROLE_NAMES['EDITOR'], '공동 작성자')
+        self.assertEqual(SharePermission.ROLE_NAMES['UPLOADER'], '자료 제출자')
+        for code in ('OWNER', 'EDITOR', 'UPLOADER', 'REVIEWER', 'APPROVER', 'VIEWER'):
+            self.assertIn(code, SharePermission.ROLE_NAMES)
+        # 화면 이름은 role_label 로 나온다 — ROLE_CHOICES(DB 용 옛 이름)가 아니다
+        perm = SharePermission(role_code='EDITOR')
+        self.assertEqual(perm.role_label, '공동 작성자')
+
+    def test_마이그레이션을_만들지_않는다(self):
+        """choices 를 고치면 AlterField 가 생긴다 — 운영에서 migrate 가 막혀 있다."""
+        from v1.products.models import SharePermission
+
+        self.assertEqual(dict(SharePermission.ROLE_CHOICES)['EDITOR'], '공동 편집')
+
+    def test_화면은_옛_이름을_적지_않는다(self):
+        perm = self._read('templates/products/_tab_permissions.html')
+        detail = self._read('templates/products/product_detail.html')
+        for gone in ('>편집</span>', '>자료제출</span>', '>검토</span>', '>승인</span>',
+                     '공동 편집 (팀원)', '편집자 - 자료 입력', '업로더 - 문서 업로드'):
+            self.assertNotIn(gone, perm + detail, gone)
+        # 대신 모델에서 읽는다
+        self.assertIn('{{ role_names.EDITOR }}', perm)
+        self.assertIn('{{ role_names.VIEWER }}', detail)
+        self.assertIn('var ROLE_NAMES = {', perm)
+        for hard in ("UPLOADER:'자료제출'", "EDITOR: '공동 편집'"):
+            self.assertNotIn(hard, perm)
+
+    def test_뷰가_이름을_내려_준다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        detail = self._read('templates/products/product_detail.html')
+        views = (Path(dj.BASE_DIR) / 'products/views.py').read_text(encoding='utf-8')
+        self.assertIn("'role_names': SharePermission.ROLE_NAMES,", views)
+        self.assertIn("'role_hints': SharePermission.ROLE_HINTS,", views)
+        self.assertIn('{{ role_hints.UPLOADER }}', detail)
+
+
+class 안_열리는_창은_남겨_두지_않는다(TestCase):
+    """
+    여는 단추가 없어진 창 넷이 남아 있었다. 안 보이니 아무도 못 찾는데, 그 안의
+    id 는 살아 있는 화면과 부딪힌다 — 문서 수정 창의 edit-doc-id 가 그랬다.
+    """
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_창도_처리기도_없다(self):
+        detail = self._read('templates/products/product_detail.html')
+        for gone in ('roleAssignModal', 'bulkAssignModal', 'notificationSettingsModal',
+                     'openRoleAssignModal', 'assignRole', 'submitBulkAssign',
+                     'currentTargetRole'):
+            self.assertNotIn(gone, detail, gone)
+        docs = self._read('templates/products/_tab_documents.html')
+        self.assertNotIn('editDocumentModal', docs)
+        # 같은 일을 하는 자리는 그대로 있다
+        self.assertIn('openQuickInvite()', detail)
+        self.assertIn('window.openEditPanel', docs)
+
+    def test_펼친_줄의_칸_이름이_겹치지_않는다(self):
+        """edit-doc-id 가 둘이면 문서 순서상 앞엣것이 읽힌다 — 하나만 남긴다."""
+        docs = self._read('templates/products/_tab_documents.html')
+        self.assertEqual(docs.count('id="edit-doc-id"'), 1)
+        self.assertEqual(docs.count('id="edit-doc-type"'), 1)
+
+
+class 머리_단추는_하는_일로_부른다(TestCase):
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_공유는_권한_설정이고_가장_진하지_않다(self):
+        detail = self._read('templates/products/product_detail.html')
+        i = detail.index('onclick="switchToShareTab()"')
+        block = detail[i - 300:i + 300]
+        self.assertIn('권한 설정', block)
+        self.assertIn('btn-outline-primary', block)
+        self.assertNotIn('<span>공유</span>', detail)
+
+    def test_댓글_단추는_댓글이라고_적는다(self):
+        detail = self._read('templates/products/product_detail.html')
+        i = detail.index('onclick="toggleWorkspaceSidebar()"')
+        block = detail[i - 300:i + 300]
+        self.assertIn('bi-chat-left-text', block)
+        self.assertIn('>댓글<', block)
+
+
+class 배합_안내는_빈_표에서만(TestCase):
+    """
+    ①~④ 순서 안내가 머리띠 안에 있어 제품 화면(iframe)에서는 통째로 감춰졌다 —
+    정작 처음 여는 사람이 못 봤다. 표 위로 옮기고 줄이 들어오면 접는다.
+    """
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_표_위에_있고_줄이_들어오면_접힌다(self):
+        bom = self._read('templates/products/bom_detail.html')
+        self.assertIn('<div class="bom-guide" id="bom-empty-guide" hidden>', bom)
+        head = bom.index('class="bom-page-header"')
+        tail = bom.index('class="bom-workspace"')
+        self.assertNotIn('bom-guide', bom[head:tail])      # 감춰지는 머리띠에는 없다
+        self.assertIn("guideEl.hidden = validRows.length > 0;", bom)
+
+    def test_틀_안에서_닿지_못하던_두_길을_함께_둔다(self):
+        bom = self._read('templates/products/bom_detail.html')
+        i = bom.index('id="bom-empty-guide"')
+        block = bom[i:i + 2200]
+        self.assertIn("{% url 'bom:bom_sheet_template' %}", block)
+        self.assertIn('data-bs-target="#loadLabelModal"', block)
+        css = self._read('static/css/bom.css')
+        self.assertIn('.bom-guide-acts {', css)
+
+
+class 영양성분은_인쇄될_값으로_말한다(TestCase):
+    """'계산값·적용값·인쇄될 값' 세 이름이 같은 것을 가리켰다."""
+
+    def _editor(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/products/nutrition_editor.html'
+                ).read_text(encoding='utf-8')
+
+    def test_오차_안내가_인쇄될_값으로_말한다(self):
+        editor = self._editor()
+        self.assertIn("'인쇄될 값 = 입력값 + '", editor)
+        self.assertIn('지금은 입력값 그대로 인쇄됩니다', editor)
+        self.assertNotIn("'지금은 계산값을 그대로 씁니다", editor)
+
+    def test_출처를_고르기_전에도_말해_준다(self):
+        editor = self._editor()
+        self.assertIn('id="sourceHint"', editor)
+        self.assertIn('출처를 고르면 값을 가져오는 단추가 나타납니다', editor)
+        i = editor.index('function bindCalcSource')
+        self.assertIn("hintEl.style.display = source.value ? 'none' : '';", editor[i:i + 2500])
+
+    def test_묶음마다_번호가_있다(self):
+        editor = self._editor()
+        self.assertIn('③ 고열량·저영양 판정', editor)

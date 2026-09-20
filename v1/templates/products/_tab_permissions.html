@@ -82,15 +82,15 @@
                             </div>
                             {% if share.permission_record %}
                                 {% if share.permission_record.role_code == 'UPLOADER' %}
-                                <span class="role-tag role-uploader">자료제출</span>
+                                <span class="role-tag role-uploader">{{ role_names.UPLOADER }}</span>
                                 {% elif share.permission_record.role_code == 'EDITOR' %}
-                                <span class="role-tag role-editor">편집</span>
+                                <span class="role-tag role-editor">{{ role_names.EDITOR }}</span>
                                 {% elif share.permission_record.role_code == 'REVIEWER' %}
-                                <span class="role-tag role-reviewer">검토</span>
+                                <span class="role-tag role-reviewer">{{ role_names.REVIEWER }}</span>
                                 {% elif share.permission_record.role_code == 'APPROVER' %}
-                                <span class="role-tag role-approver">승인</span>
+                                <span class="role-tag role-approver">{{ role_names.APPROVER }}</span>
                                 {% elif share.permission_record.role_code == 'VIEWER' %}
-                                <span class="role-tag role-viewer">뷰어</span>
+                                <span class="role-tag role-viewer">{{ role_names.VIEWER }}</span>
                                 {% endif %}
                             {% endif %}
                         </div>
@@ -115,15 +115,15 @@
                             </div>
                             {% if share.permission_record %}
                                 {% if share.permission_record.role_code == 'UPLOADER' %}
-                                <span class="role-tag role-uploader">자료제출</span>
+                                <span class="role-tag role-uploader">{{ role_names.UPLOADER }}</span>
                                 {% elif share.permission_record.role_code == 'EDITOR' %}
-                                <span class="role-tag role-editor">편집</span>
+                                <span class="role-tag role-editor">{{ role_names.EDITOR }}</span>
                                 {% elif share.permission_record.role_code == 'REVIEWER' %}
-                                <span class="role-tag role-reviewer">검토</span>
+                                <span class="role-tag role-reviewer">{{ role_names.REVIEWER }}</span>
                                 {% elif share.permission_record.role_code == 'APPROVER' %}
-                                <span class="role-tag role-approver">승인</span>
+                                <span class="role-tag role-approver">{{ role_names.APPROVER }}</span>
                                 {% elif share.permission_record.role_code == 'VIEWER' %}
-                                <span class="role-tag role-viewer">뷰어</span>
+                                <span class="role-tag role-viewer">{{ role_names.VIEWER }}</span>
                                 {% endif %}
                             {% endif %}
                         </div>
@@ -192,12 +192,12 @@
                                 <div class="person-name">{{ share.display_name }}</div>
                                 <div class="person-email">{{ share.recipient_email }}</div>
                             </div>
-                            <span class="role-tag role-editor">편집</span>
+                            <span class="role-tag role-editor">{{ role_names.EDITOR }}</span>
                         </div>
                         {% endif %}{% endfor %}
                         <div class="dropzone-placeholder{% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'EDITOR' %} d-none{% endif %}{% endfor %}">
                             <i class="bi bi-person-plus"></i>
-                            <span>공동 작성자 추가</span>
+                            <span>{{ role_names.EDITOR }} 추가</span>
                         </div>
                     </div>
                 </div>
@@ -226,12 +226,12 @@
                             <div class="person-name">{{ share.display_name }}</div>
                             <div class="person-email">{{ share.recipient_email }}</div>
                         </div>
-                        <span class="role-tag role-uploader">자료제출</span>
+                        <span class="role-tag role-uploader">{{ role_names.UPLOADER }}</span>
                     </div>
                     {% endif %}{% endfor %}
                     <div class="dropzone-placeholder{% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'UPLOADER' %} d-none{% endif %}{% endfor %}">
                         <i class="bi bi-plus-circle"></i>
-                        <span>협력업체 담당자 추가</span>
+                        <span>{{ role_names.UPLOADER }} 추가</span>
                     </div>
                 </div>
             </div>
@@ -259,12 +259,12 @@
                             <div class="person-name">{{ share.display_name }}</div>
                             <div class="person-email">{{ share.recipient_email }}</div>
                         </div>
-                        <span class="role-tag role-reviewer">검토</span>
+                        <span class="role-tag role-reviewer">{{ role_names.REVIEWER }}</span>
                     </div>
                     {% endif %}{% endfor %}
                     <div class="dropzone-placeholder{% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'REVIEWER' %} d-none{% endif %}{% endfor %}">
                         <i class="bi bi-search"></i>
-                        <span>검토자 추가</span>
+                        <span>{{ role_names.REVIEWER }} 추가</span>
                     </div>
                 </div>
             </div>
@@ -292,12 +292,12 @@
                             <div class="person-name">{{ share.display_name }}</div>
                             <div class="person-email">{{ share.recipient_email }}</div>
                         </div>
-                        <span class="role-tag role-approver">승인</span>
+                        <span class="role-tag role-approver">{{ role_names.APPROVER }}</span>
                     </div>
                     {% endif %}{% endfor %}
                     <div class="dropzone-placeholder{% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'APPROVER' %} d-none{% endif %}{% endfor %}">
                         <i class="bi bi-patch-check"></i>
-                        <span>책임자 추가</span>
+                        <span>{{ role_names.APPROVER }} 추가</span>
                     </div>
                 </div>
             </div>
@@ -324,12 +324,12 @@
                             <div class="person-name">{{ share.display_name }}</div>
                             <div class="person-email">{{ share.recipient_email }}</div>
                         </div>
-                        <span class="role-tag role-viewer">뷰어</span>
+                        <span class="role-tag role-viewer">{{ role_names.VIEWER }}</span>
                     </div>
                     {% endif %}{% endfor %}
                     <div class="dropzone-placeholder{% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'VIEWER' %} d-none{% endif %}{% endfor %}">
                         <i class="bi bi-eye"></i>
-                        <span>뷰어 추가</span>
+                        <span>{{ role_names.VIEWER }} 추가</span>
                     </div>
                 </div>
             </div>
@@ -378,11 +378,12 @@
                 <div class="mb-3">
                     <label class="form-label">역할</label>
                     <select class="form-select form-select-sm pw-sm" id="detail-role-select">
-                        <option value="UPLOADER">자료 제출 (협력업체)</option>
-                        <option value="EDITOR">공동 편집 (팀원)</option>
-                        <option value="REVIEWER">검토/QA (팀장)</option>
-                        <option value="APPROVER">최종 승인 (임원)</option>
-                        <option value="VIEWER">뷰어 (읽기 전용)</option>
+                        {# 이름은 모델(ROLE_NAMES)에서 오고, 흔히 누가 그 자리에 오는지는 곁말로 둔다 #}
+                        <option value="UPLOADER">{{ role_names.UPLOADER }} — {{ role_hints.UPLOADER }}</option>
+                        <option value="EDITOR">{{ role_names.EDITOR }} — {{ role_hints.EDITOR }}</option>
+                        <option value="REVIEWER">{{ role_names.REVIEWER }} — {{ role_hints.REVIEWER }}</option>
+                        <option value="APPROVER">{{ role_names.APPROVER }} — {{ role_hints.APPROVER }}</option>
+                        <option value="VIEWER">{{ role_names.VIEWER }} — {{ role_hints.VIEWER }}</option>
                     </select>
                     {% comment %}
                     이름만으로는 무엇을 주는지 읽히지 않는다. 특히 '공동 편집' 은
@@ -588,6 +589,14 @@
 </style>
 
 <script>
+/* 역할 이름은 모델(SharePermission.ROLE_NAMES) 한 곳에서 온다. 화면 문구와
+   JS 가 다른 이름을 쓰면 사용자는 같은 자리인지 알 수 없다. */
+var ROLE_NAMES = {
+    OWNER: '{{ role_names.OWNER }}', EDITOR: '{{ role_names.EDITOR }}',
+    UPLOADER: '{{ role_names.UPLOADER }}', REVIEWER: '{{ role_names.REVIEWER }}',
+    APPROVER: '{{ role_names.APPROVER }}', VIEWER: '{{ role_names.VIEWER }}'
+};
+
 // 현재 로그인 사용자 컨텍스트 (권한 검사용)
 var _currentUserRole  = '{{ user_role }}';
 var _currentUserEmail = '{{ request.user.email|lower }}';
@@ -808,8 +817,7 @@ function _paintRoleTag(card, role) {
            예전에는 부트스트랩 .badge 에 9px 인라인이어서, 마크업의 .role-tag
            (12px, 역할별 색) 와 생김새가 달랐다 — 끌어다 놓은 직후의 칩만
            작고 색이 다르고, 새로고침하면 바뀌었다. */
-        var labels = { UPLOADER:'자료제출', EDITOR:'편집', REVIEWER:'검토',
-                       APPROVER:'승인', VIEWER:'뷰어' };
+        var labels = ROLE_NAMES;
         var tag = document.createElement('span');
         tag.className = 'role-tag role-' + role.toLowerCase();
         tag.textContent = labels[role] || role;
@@ -912,10 +920,7 @@ function leaveDrop(event) {
  * ═══════════════════════════════════════════════════════════════════════ */
 var _pending = {};            /* key → 변경 한 건 */
 
-var _PENDING_ROLE_LABEL = {
-    UPLOADER: '자료 제출', EDITOR: '공동 편집', REVIEWER: '검토자',
-    APPROVER: '승인자', VIEWER: '단순 조회'
-};
+var _PENDING_ROLE_LABEL = ROLE_NAMES;
 
 function _pendingKey(data) {
     return data.shareId ? 'share:' + data.shareId
@@ -973,7 +978,7 @@ function _recordPending(data, toRole) {
 function _grantBlockedReason(role) {
     if (_currentUserRole === 'OWNER') return '';
     if (['VIEWER', 'UPLOADER', 'REVIEWER'].indexOf(role) !== -1) return '';
-    var label = { EDITOR: '공동 편집', APPROVER: '최종 승인' }[role] || role;
+    var label = ROLE_NAMES[role] || role;
     return label + ' 역할은 제품 소유자만 지정할 수 있습니다.';
 }
 

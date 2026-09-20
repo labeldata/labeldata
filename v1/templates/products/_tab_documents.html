@@ -422,64 +422,13 @@
     </div>
 </div>
 
-<div class="modal fade doc-modal" id="editDocumentModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div>
-                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2 text-primary"></i>문서 정보 수정</h5>
-                    <p class="modal-subtitle" id="edit-doc-filename"></p>
-                </div>
-                <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="닫기"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="edit-doc-id">
-                
-                <div class="mb-3">
-                    <label for="edit-doc-type" class="form-label">문서 구분</label>
-                    <select class="form-select" id="edit-doc-type">
-                        {% for dtype in document_types %}
-                        <option value="{{ dtype.type_id }}">{{ dtype.type_name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="row mb-3">
-                    <div class="col-6">
-                        <label for="edit-issue-date" class="form-label">발행일</label>
-                        <input type="date" class="form-control" id="edit-issue-date">
-                    </div>
-                    <div class="col-6">
-                        <label for="edit-expiry-date" class="form-label">만료일</label>
-                        <input type="date" class="form-control" id="edit-expiry-date">
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <label for="edit-description" class="form-label">설명</label>
-                    <textarea class="form-control" id="edit-description" rows="3" placeholder="문서에 대한 설명을 입력하세요..."></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light v2-btn" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-primary v2-btn" onclick="submitDocumentUpdate()">
-                    <i class="bi bi-check-lg"></i>저장
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+{% comment %}
+  여는 단추가 없어진 '문서 정보 수정' 창을 걷어냈다 — 지금은 줄을 누르면
+  그 아래에 펼쳐진다(openEditPanel). 창이 남아 있으면 그 안의 edit-doc-id ·
+  edit-doc-type 이 펼친 줄의 같은 id 와 부딪히고, 둘 중 문서 순서상 앞엣것이
+  읽힌다 — 창을 표 위로 옮기기만 해도 저장이 빈 값을 보내게 된다.
+{% endcomment %}
 
-<!-- 전체 화면 드래그 오버레이 -->
-<div id="upload-overlay" class="upload-overlay d-none">
-    <div class="overlay-content">
-        <i class="bi bi-cloud-arrow-up fs-1 mb-2"></i>
-        <div class="fw-bold">여기에 파일을 놓으세요</div>
-        <div class="small">드롭하면 업로드 모달이 열립니다</div>
-    </div>
-</div>
-
-<!-- 고정 서류 불러오기 모달 -->
 <div class="modal fade doc-modal" id="importCompanyDocModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
         <div class="modal-content">

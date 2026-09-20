@@ -844,6 +844,8 @@ html.v2-max .bom-right-panel { max-height: 100vh; }
     color: var(--ez-gray-700, #5f6368);
 }
 .bom-steps span b { font-weight: 600; color: var(--ez-gray-900, #202124); }
+/* 틀(iframe) 안에서는 머리띠가 감춰져 닿을 수 없던 두 길 */
+.bom-guide-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
 
 @media (max-width: 991px) {
     .bom-steps li { flex: 1 1 100%; }

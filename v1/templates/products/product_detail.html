@@ -46,8 +46,9 @@
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-icon btn-light rounded-circle" title="댓글 및 활동" type="button" onclick="toggleWorkspaceSidebar()">
-                <i class="bi bi-layout-sidebar-inset-reverse"></i>
+            {# 접이판 아이콘이라 무엇이 열리는지 알 수 없었다 — 하는 일로 그린다 #}
+            <button class="btn btn-light v2-btn-sm" title="댓글과 활동 기록을 옆에 폅니다" type="button" onclick="toggleWorkspaceSidebar()">
+                <i class="bi bi-chat-left-text"></i><span class="ms-1">댓글</span>
             </button>
 
             <div class="vr mx-2"></div>
@@ -93,9 +94,11 @@
                 </ul>
             </div>
 
-            <button class="btn btn-primary v2-btn" type="button" onclick="switchToShareTab()">
-                <i class="bi bi-person-plus-fill"></i>
-                <span>공유</span>
+            {# 탭을 여는 단추다 — 화면에서 가장 진한 색을 쓸 일이 아니다. 이름도 그 탭과 맞춘다 #}
+            <button class="btn btn-outline-primary v2-btn" type="button" onclick="switchToShareTab()"
+                    title="누가 어떤 역할로 이 제품을 보는지 정합니다">
+                <i class="bi bi-person-gear"></i>
+                <span>권한 설정</span>
             </button>
 
             
@@ -795,11 +798,12 @@
                         <label class="form-label fw-semibold">역할 선택</label>
                         <select class="form-select" id="inviteRole" required>
                             <option value="">역할을 선택하세요</option>
-                            <option value="VIEWER">뷰어 - 읽기 전용 (비회원도 가능)</option>
-                            <option value="UPLOADER">업로더 - 문서 업로드 (회원 필수)</option>
-                            <option value="EDITOR">편집자 - 자료 입력 및 수정 (회원 필수)</option>
-                            <option value="REVIEWER">검토자 - 검토 및 피드백 (회원 필수)</option>
-                            <option value="APPROVER">승인자 - 최종 승인 (회원 필수)</option>
+                            {# 권한 탭과 **같은 이름**을 쓴다 — 모델의 ROLE_NAMES 한 곳에서 온다 #}
+                            <option value="VIEWER">{{ role_names.VIEWER }} — {{ role_hints.VIEWER }}</option>
+                            <option value="UPLOADER">{{ role_names.UPLOADER }} — {{ role_hints.UPLOADER }} (회원 필수)</option>
+                            <option value="EDITOR">{{ role_names.EDITOR }} — {{ role_hints.EDITOR }} (회원 필수)</option>
+                            <option value="REVIEWER">{{ role_names.REVIEWER }} — {{ role_hints.REVIEWER }} (회원 필수)</option>
+                            <option value="APPROVER">{{ role_names.APPROVER }} — {{ role_hints.APPROVER }} (회원 필수)</option>
                         </select>
                     </div>
                     <div class="alert alert-warning d-flex align-items-start">
@@ -822,146 +826,13 @@
     </div>
 </div>
 
-<!-- Role Assignment Modal -->
-<div class="modal fade" id="roleAssignModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold">담당자 변경</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="small text-muted">
-                    현재 공유된 멤버 중에서<br>
-                    <strong id="targetRoleName">검토자</strong> 역할을 수행할 사람을 선택하세요.
-                </p>
-                <div class="list-group" id="roleAssignList">
-                    {% for share in shares %}
-                    <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                            type="button"
-                            onclick="assignRole('{{ share.share_id }}', '{{ share.recipient_email }}')">
-                        <div>
-                            <div class="fw-semibold sidebar-permission-name">
-                                {{ share.display_name }}
-                            </div>
-                            <div class="text-muted sidebar-permission-email">{{ share.recipient_email }}</div>
-                        </div>
-                        <span class="badge bg-secondary">
-                            {{ share.permission_record.role_code|default:'VIEWER' }}
-                        </span>
-                    </button>
-                    {% empty %}
-                    <div class="text-center text-muted py-3">
-                        <i class="bi bi-inbox"></i>
-                        <p class="mb-0 mt-2 sidebar-info-text">공유된 멤버가 없습니다.</p>
-                        <button class="btn v2-btn-sm btn-primary mt-2" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#quickInviteModal"
-                                onclick="closeRoleAssignModal()">
-                            <i class="bi bi-plus"></i> 먼저 멤버 초대하기
-                        </button>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+{% comment %}
+  여는 단추가 없어진 창 셋(역할 지정·일괄 초대·알림 설정)을 걷어냈다.
+  같은 일을 권한 탭이 한다 — 카드를 끌어다 놓고, [새 사람 초대] 로 부르고,
+  알림은 역할에 딸려 간다. 안 보이는 창이 남아 있으면 그 안의 id 가
+  살아 있는 화면과 부딪힌다.
+{% endcomment %}
 
-<!-- Bulk Assign Modal -->
-<div class="modal fade" id="bulkAssignModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content shadow-lg border-0">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title fw-bold">팀 구성 및 역할 일괄 배정</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body pt-4">
-                <form id="bulk-assign-form" onsubmit="return submitBulkAssign(event)">
-                    <p class="text-muted small mb-4">각 역할에 필요한 담당자의 이메일을 입력하세요. 입력하지 않은 역할은 건너뜁니다. (쉼표로 구분하여 여러 명 입력 가능)</p>
-                    
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small text-primary">STEP 2. 자료 제출 (협력업체)</label>
-                            <input type="text" name="emails_uploader" class="form-control bg-light border-0" placeholder="partner@email.com (쉼표로 구분)">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small text-success">STEP 3. 공동 작성 (팀원)</label>
-                            <input type="text" name="emails_editor" class="form-control bg-light border-0" placeholder="team@company.com">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small text-warning">STEP 4. 검토/QA (팀장)</label>
-                            <input type="text" name="emails_reviewer" class="form-control bg-light border-0" placeholder="manager@company.com">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold small text-danger">STEP 5. 최종 승인 (임원)</label>
-                            <input type="text" name="emails_approver" class="form-control bg-light border-0" placeholder="director@company.com">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label fw-bold small text-info">읽기 전용 뷰어 (비회원 가능)</label>
-                            <input type="text" name="emails_viewer" class="form-control bg-light border-0" placeholder="viewer@email.com (프로세스 단계와 무관)">
-                            <div class="form-text small">뷰어는 문서 조회만 가능합니다. 비회원도 초대 링크로 접근 가능</div>
-                        </div>
-                    </div>
-
-                    <div class="mt-4 text-end">
-                        <button type="button" class="btn btn-light me-2" data-bs-dismiss="modal">취소</button>
-                        <button type="submit" class="btn btn-primary px-4 fw-bold">일괄 초대 발송</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Notification Settings Modal -->
-<div class="modal fade" id="notificationSettingsModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title fw-bold">
-                    <i class="bi bi-bell me-2"></i>권한별 알림 설정
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted small mb-4">팀 멤버들에게 언제 알림을 보낼지 설정하세요.</p>
-                
-                <div class="notification-options">
-                    <div class="form-check form-switch mb-3 p-3 border rounded">
-                        <input class="form-check-input" type="checkbox" id="notif-invite" checked>
-                        <label class="form-check-label w-100" for="notif-invite">
-                            <div class="fw-bold">최초 권한 부여 알림</div>
-                            <div class="text-muted small">초대장 발송 시 이메일로 알림을 전송합니다.</div>
-                        </label>
-                    </div>
-                    
-                    <div class="form-check form-switch mb-3 p-3 border rounded">
-                        <input class="form-check-input" type="checkbox" id="notif-step-start" checked>
-                        <label class="form-check-label w-100" for="notif-step-start">
-                            <div class="fw-bold">해당 단계 시작 시 알림</div>
-                            <div class="text-muted small">내 차례가 오면 이메일 및 시스템 알림을 받습니다.</div>
-                        </label>
-                    </div>
-                    
-                    <div class="form-check form-switch mb-3 p-3 border rounded">
-                        <input class="form-check-input" type="checkbox" id="notif-complete">
-                        <label class="form-check-label w-100" for="notif-complete">
-                            <div class="fw-bold">최종 완료 시 알림</div>
-                            <div class="text-muted small">프로젝트 종료 시 모든 참여자에게 알림을 전송합니다.</div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer d-flex justify-content-end gap-2">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-primary" onclick="saveNotificationSettings()">
-                    <i class="bi bi-check-lg me-1"></i>설정 저장
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- 담당자 없음 경고 모달 -->
 <div class="modal fade" id="noAssigneeModal" tabindex="-1" aria-hidden="true">
@@ -2538,61 +2409,9 @@ async function sendQuickInvite() {
     }
 }
 
-// 역할 지정 모달
-let currentTargetRole = '';
 
-function openRoleAssignModal(role) {
-    currentTargetRole = role;
-    const roleNames = {
-        'REVIEWER': '검토자 (팀장/QA)',
-        'APPROVER': '최종 승인자 (임원)'
-    };
-    const roleName = roleNames[role] || role;
-    document.getElementById('targetRoleName').innerText = roleName;
-    
-    const modal = new bootstrap.Modal(document.getElementById('roleAssignModal'));
-    modal.show();
-}
 
-function closeRoleAssignModal() {
-    const modal = bootstrap.Modal.getInstance(document.getElementById('roleAssignModal'));
-    if (modal) {
-        modal.hide();
-    }
-}
 
-async function assignRole(shareId, email) {
-    if (!currentTargetRole) {
-        showSnackbar('역할이 선택되지 않았습니다.', 'warning');
-        return;
-    }
-
-    const updateUrl = `/v2/products/share/${shareId}/update-permission/`;
-    const formData = new FormData();
-    formData.append('role', currentTargetRole);
-
-    try {
-        const response = await fetch(updateUrl, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': CSRF_TOKEN
-            },
-            body: formData
-        });
-
-        const result = await response.json();
-        if (result.success) {
-            showSnackbar(`${email} 님을 ${currentTargetRole} 역할로 지정했습니다.`, 'success');
-            closeRoleAssignModal();
-            sessionStorage.setItem('returnToTab', 'share');
-            window.location.reload();
-        } else {
-            showSnackbar(result.error || '역할 지정에 실패했습니다.', 'error');
-        }
-    } catch (error) {
-        showSnackbar('역할 지정 중 오류가 발생했습니다.', 'error');
-    }
-}
 
 async function updateShareRole(selectElement) {
     const updateUrl = selectElement.dataset.updateUrl;
@@ -2815,83 +2634,6 @@ function createUserItemElement(user, role) {
 }
 
 // 일괄 배정 전송
-async function submitBulkAssign(e) {
-    e.preventDefault();
-    const form = e.target;
-    const btn = form.querySelector('button[type="submit"]');
-    
-    btn.disabled = true;
-    btn.innerText = "전송 중...";
-
-    // 각 역할별 이메일 수집
-    const emailsUploader = form.elements['emails_uploader'].value.trim();
-    const emailsEditor = form.elements['emails_editor'].value.trim();
-    const emailsReviewer = form.elements['emails_reviewer'].value.trim();
-    const emailsApprover = form.elements['emails_approver'].value.trim();
-    const emailsViewer = form.elements['emails_viewer'] ? form.elements['emails_viewer'].value.trim() : '';
-
-    try {
-        // 각 역할별로 개별 초대 요청
-        const invitePromises = [];
-        
-        if (emailsUploader) {
-            const emails = emailsUploader.split(',').map(e => e.trim()).filter(e => e);
-            emails.forEach(email => {
-                invitePromises.push(sendInvite(email, 'UPLOADER'));
-            });
-        }
-        
-        if (emailsEditor) {
-            const emails = emailsEditor.split(',').map(e => e.trim()).filter(e => e);
-            emails.forEach(email => {
-                invitePromises.push(sendInvite(email, 'EDITOR'));
-            });
-        }
-        
-        if (emailsReviewer) {
-            const emails = emailsReviewer.split(',').map(e => e.trim()).filter(e => e);
-            emails.forEach(email => {
-                invitePromises.push(sendInvite(email, 'REVIEWER'));
-            });
-        }
-        
-        if (emailsApprover) {
-            const emails = emailsApprover.split(',').map(e => e.trim()).filter(e => e);
-            emails.forEach(email => {
-                invitePromises.push(sendInvite(email, 'APPROVER'));
-            });
-        }
-        
-        if (emailsViewer) {
-            const emails = emailsViewer.split(',').map(e => e.trim()).filter(e => e);
-            emails.forEach(email => {
-                invitePromises.push(sendInvite(email, 'VIEWER'));
-            });
-        }
-
-        if (invitePromises.length === 0) {
-            showSnackbar('최소 1명 이상의 이메일을 입력해주세요.', 'warning');
-            btn.disabled = false;
-            btn.innerText = "일괄 초대 발송";
-            return false;
-        }
-
-        await Promise.all(invitePromises);
-        
-        showSnackbar(`팀 구성이 완료되었습니다! (${invitePromises.length}명 초대)`, 'success');
-        bootstrap.Modal.getInstance(document.getElementById('bulkAssignModal')).hide();
-        sessionStorage.setItem('returnToTab', 'share');
-        window.location.reload();
-        
-    } catch (error) {
-        showSnackbar('일괄 초대 중 오류가 발생했습니다.', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerText = "일괄 초대 발송";
-    }
-    
-    return false;
-}
 
 async function sendInvite(email, role) {
     const formData = new FormData();
