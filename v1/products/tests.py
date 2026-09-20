@@ -14776,6 +14776,9 @@ class 배합표_줄_높이와_영양성분_요약(TestCase):
         self.assertIn("hot.getPlugin('autoRowSize')", bom)
         self.assertIn("hot.addHook('afterUpdateSettings', function () { setTimeout(remeasureRows, 0); });", bom)
         self.assertIn('document.fonts.ready.then(remeasureRows)', bom)
+        # 잰 값과 실제가 어긋나면 번호 판이 밀린다 — 재지 않고 실제 높이를 쓴다
+        self.assertIn('autoRowSize: false,', bom)
+        self.assertNotIn('autoRowSize: { syncLimit', bom)
 
     def test_영양성분_요약은_스크롤_없이_가로로_흐른다(self):
         bom = self._read('templates/products/bom_detail.html')

@@ -1087,7 +1087,14 @@ body.in-iframe .bom-page-header { display: none !important; }
                맨 끝에 있어 끝까지 내려야 보였다. 높이를 주면 표 안에서
                스크롤되므로 머리글이 그 자리에 남고 가로막대도 늘 보인다. */
             height: gridHeight(),
-            autoRowSize: { syncLimit: 300 },
+            /* **autoRowSize 를 끈다.**
+               켜 두면 Walkontable 이 "실제 줄이 잰 값보다 크다" 를 표시하는
+               markOversizedRows 를 건너뛴다(외부 계산기가 있다고 본다). 그런데
+               잰 값이 실제보다 몇 px 작은 줄이 있었고(접힌 글, 글꼴), 본문
+               줄은 내용만큼 커지는데 왼쪽 번호 판은 잰 값 그대로라 내려갈수록
+               번호가 밀렸다. 끄면 본문의 실제 높이를 번호 판에 그대로 맞춘다.
+               스크롤 길이 추정이 조금 거칠어질 뿐이다. */
+            autoRowSize: false,
             readOnly: !CAN_EDIT,
             enterBeginsEditing: true,
             /*
