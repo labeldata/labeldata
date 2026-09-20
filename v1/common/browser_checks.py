@@ -191,3 +191,68 @@ class 배합표를_그려_본다(StaticLiveServerTestCase):
             self.assertGreater(c['items'], 5, c)
         finally:
             chrome.close()
+
+
+@override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
+class 도움말이_틀_안을_가리킨다(StaticLiveServerTestCase):
+    """
+    제품 상세의 배합 탭에서 [이 화면 사용법] 을 열면 첫 걸음이 **배합 탭**의
+    것이고, 강조 테두리가 iframe 안의 표(#bom-grid) 위에 놓이는지 본다.
+    문자열 시험으로는 좌표를 더하는 셈이 맞는지 알 수 없다.
+    """
+
+    def setUp(self):
+        if not chrome_path() or websocket is None:
+            self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
+
+    def test_배합_탭에서_열면_표를_가리킨다(self):
+        from django.test import Client
+
+        from v1.bom.models import ProductBOM
+        from v1.label.models import MyLabel
+
+        u = User.objects.create_user('coach', password='x')
+        c = Client(); c.force_login(u)
+        purl = c.get('/products/create/')['Location']          # 임시 제품 하나
+        lab = MyLabel.objects.filter(user_id=u).latest('my_label_id')
+        for i, name in enumerate(['설탕', '밀가루', '버터']):
+            ProductBOM.objects.create(parent_label=lab, created_by=u, ingredient_name=name,
+                                      usage_ratio=30, sort_order=i, active_yn=True)
+
+        url = f'{self.live_server_url}{purl}{"&" if "?" in purl else "?"}__as=coach'
+        chrome = Chrome(port=9334)
+        try:
+            chrome.goto(url, settle=4.0)
+            # 불러오기 창이 저절로 뜬다(새 제품) — 닫고 배합 탭으로
+            chrome.js("""(function(){
+                document.querySelectorAll('.modal.show').forEach(m => bootstrap.Modal.getOrCreateInstance(m).hide());
+                var t = document.querySelector('button[data-bs-target="#tab-bom"]');
+                if (t) bootstrap.Tab.getOrCreateInstance(t).show();
+                return 'tab';
+            })()""")
+            time.sleep(6)          # iframe 이 실리고 표가 그려질 때까지
+            raw = chrome.js("""(function(){
+                if (!window.ezCoach) return 'NO COACH';
+                window.ezCoach.start('detail');
+                return new Promise(res => setTimeout(() => {
+                    const spot = document.querySelector('.ezc-spot');
+                    const box = document.querySelector('.ezc-box');
+                    const frame = document.getElementById('bomEditorFrame');
+                    const grid = frame && frame.contentDocument && frame.contentDocument.getElementById('bom-grid');
+                    if (!spot || !box || !grid) return res(JSON.stringify({spot: !!spot, box: !!box, grid: !!grid}));
+                    const s = spot.getBoundingClientRect(), g = grid.getBoundingClientRect(), f = frame.getBoundingClientRect();
+                    res(JSON.stringify({title: (box.querySelector('b')||{}).textContent,
+                        spot: [Math.round(s.left), Math.round(s.top), Math.round(s.width), Math.round(s.height)],
+                        grid: [Math.round(g.left + f.left), Math.round(g.top + f.top), Math.round(g.width), Math.round(g.height)]}));
+                }, 1500));
+            })()""")
+            got = json.loads(raw)
+            self.assertIn('title', got, got)
+            self.assertEqual(got['title'], '표 — 엑셀처럼 칩니다', got)     # 지금 보는 탭의 첫 걸음
+            sx, sy, sw, sh = got['spot']; gx, gy, gw, gh = got['grid']
+            # 강조 테두리(padding 6)가 표를 감싼다
+            self.assertLessEqual(abs(sx - (gx - 6)), 3, got)
+            self.assertLessEqual(abs(sy - (gy - 6)), 3, got)
+            self.assertLessEqual(abs(sw - (gw + 12)), 3, got)
+        finally:
+            chrome.close()

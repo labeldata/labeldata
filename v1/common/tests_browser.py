@@ -24,7 +24,7 @@ class 브라우저_시험을_따로_돌린다(SimpleTestCase):
         root = Path(settings.BASE_DIR).parent          # manage.py 가 있는 곳
         out = subprocess.run(
             [sys.executable, 'manage.py', 'test', 'v1.common.browser_checks',
-             '--settings=v1.config.settings_test', '--noinput'],
+             '--settings=v1.config.settings_browser', '--noinput'],
             cwd=root, capture_output=True, timeout=600)
         tail = out.stderr.decode('utf-8', 'replace')[-3000:]
         self.assertEqual(out.returncode, 0, '브라우저 시험이 실패했다:\n' + tail)
