@@ -724,13 +724,20 @@
                 <span>원료 목록</span>
                 <div id="ingredient-selection-actions">
                     <span class="selection-badge"><span id="ing-selected-count">0</span>개 선택</span>
-                    <button class="act-btn" id="bulkCopyBtn" title="선택한 원료를 복사합니다">
-                        <i class="bi bi-files"></i> 복사
+                    {% comment %}
+                      '복사' 와 '내려받기' 는 이 줄에서 하는 일이 아니다.
+                      '복사' 는 클립보드로 읽히는데 실제로는 **원료를 한 벌 더
+                      만든다**(bulk-copy). '내려받기' 는 위쪽 [엑셀] 메뉴의
+                      전체 내려받기와 이름이 겹치는데 여기서는 **고른 것만**
+                      나간다. 하는 일로 부른다.
+                    {% endcomment %}
+                    <button class="act-btn" id="bulkCopyBtn" title="고른 원료를 한 벌 더 만듭니다. 이름 뒤에 _복사 가 붙고 품목보고번호는 비워집니다">
+                        <i class="bi bi-files"></i> 사본 만들기
                     </button>
-                    <button class="act-btn" id="bulkExportBtn" title="선택한 원료만 엑셀로 내려받습니다">
-                        <i class="bi bi-download"></i> 내려받기
+                    <button class="act-btn" id="bulkExportBtn" title="고른 원료만 엑셀 파일로 내려받습니다. 전체를 받으려면 위쪽 [엑셀] 메뉴를 쓰세요">
+                        <i class="bi bi-download"></i> 선택만 엑셀로
                     </button>
-                    <button class="act-btn danger" id="bulkDeleteBtn" title="선택한 원료를 삭제합니다">
+                    <button class="act-btn danger" id="bulkDeleteBtn" title="고른 원료를 지웁니다. 배합표에 쓰인 원료는 그 줄의 연결이 끊깁니다">
                         <i class="bi bi-trash"></i> 삭제
                     </button>
                     <button class="act-btn" id="bulkDismissBadgeBtn" title="선택한 원료의 BOM 업데이트 알림을 해제합니다" style="display:none;">

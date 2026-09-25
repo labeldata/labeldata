@@ -20503,7 +20503,8 @@ class 읽기만_한_방문은_저장하지_않는다(TestCase):
         """
         html = self.editor()
         at = html.index("document.addEventListener('input', markNutritionEdited);")
-        self.assertLess(html.index('✅ 그리드 데이터 로드 완료'), at)
+        # 사람에게 보이는 문구가 아니라 **코드**에 걸어 둔다 — 문구는 바뀐다
+        self.assertLess(html.index('setGridNutritionData(gridSource)'), at)
         self.assertIn('nutritionEdited = false;', html[at:at + 600])
 
     def test_부모가_그_문을_두드린다(self):
@@ -22143,3 +22144,69 @@ class 사진만_붙이기(TestCase):
         self.assertIn('id="ingPhotoKeep"', tpl)
         self.assertIn('사진만 붙이기', tpl)
         self.assertNotIn('> 저장만<', tpl)
+
+
+class 선택_동작_줄은_하는_일로_부른다(TestCase):
+    """
+    '복사' 는 클립보드로 읽히는데 실제로는 원료를 한 벌 더 만든다(bulk-copy,
+    이름 뒤에 _복사 가 붙고 품목보고번호는 비워진다). '내려받기' 는 위쪽
+    [엑셀] 메뉴의 전체 내려받기와 이름이 겹치는데 여기서는 고른 것만 나간다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.html = (Path(dj.BASE_DIR)
+                     / 'templates/label/my_ingredient_list_combined.html'
+                     ).read_text(encoding='utf-8')
+
+    def _acts(self):
+        head = self.html.index('id="ingredient-selection-actions"')
+        return self.html[head:self.html.index('</div>', self.html.index('bulkDismissBadgeBtn'))]
+
+    def test_하는_일로_부른다(self):
+        block = self._acts()
+        self.assertIn('사본 만들기', block)
+        self.assertIn('선택만 엑셀로', block)
+
+    def test_옛_이름이_남아_있지_않다(self):
+        block = self._acts()
+        self.assertNotIn('</i> 복사', block)
+        self.assertNotIn('</i> 내려받기', block)
+
+    def test_무엇이_달라지는지_곁말로_말한다(self):
+        block = self._acts()
+        self.assertIn('이름 뒤에 _복사 가 붙고 품목보고번호는 비워집니다', block)
+        self.assertIn('전체를 받으려면 위쪽 [엑셀] 메뉴를 쓰세요', block)
+
+
+class 등록_화면에는_연결_표시사항_단추가_없다(TestCase):
+    """
+    아직 저장하지 않은 원료에는 연결이 있을 수 없다. 그런데 등록 화면에도 이
+    단추가 '연결 표시사항(0품목)' 으로 떠 있었고, 처리기를 붙이는
+    updateLinkedLabelsButton 은 원료 번호가 없으면 그냥 돌아 나간다 — 눌러도
+    아무 일이 없는 단추였다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/label/my_ingredient_detail_partial.html'
+                     ).read_text(encoding='utf-8')
+        self.js = (base / 'static/js/label/my_ingredient_detail_partial.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_수정_화면에서만_그린다(self):
+        at = self.html.index('id="linkedLabelsBtn"')
+        before = self.html[:at]
+        opened = before.rindex('{% if mode != "create" %}')
+        self.assertNotIn('{% endif %}', before[opened:])
+
+    def test_번호가_없으면_감춘다(self):
+        at = self.js.index('function updateLinkedLabelsButton(my_ingredient_id) {')
+        block = self.js[at:at + 900]
+        self.assertIn('if (!my_ingredient_id) {', block)
+        self.assertIn("btn.style.display = 'none';", block)
+        # 번호가 있으면 다시 보여야 한다 — 한 번 감추면 그대로 남는다
+        self.assertIn("btn.style.display = '';", block)

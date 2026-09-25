@@ -79,18 +79,31 @@
                     <i class="bi bi-box-arrow-up"></i>
                     <span>내보내기</span>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
+{% comment %}
+                  **곁말이 미리보기에 남아 있었다.** 미리보기 도구 줄의 같은
+                  메뉴에는 항목마다 한 줄 설명이 붙어 있는데(export-note),
+                  그 줄은 탭 안에서 감춰진다 — 탭으로 쓰는 사람은 다섯 가지
+                  가운데 무엇을 고를지 이름만 보고 골라야 했다. "글자 복사"
+                  와 "텍스트 (.txt)" 는 이름으로는 갈라지지 않는다.
+                  같은 문구를 여기에도 둔다.
+                {% endcomment %}
+                <ul class="dropdown-menu dropdown-menu-end hdr-export-menu">
                     <li><button class="dropdown-item" type="button" data-export="copyText">
-                        <i class="bi bi-clipboard me-2 text-success"></i>글자 복사</button></li>
+                        <i class="bi bi-clipboard me-2 text-success"></i>글자 복사
+                        <span class="hdr-export-note">클립보드로 · 워드·엑셀에 바로 붙여넣기</span></button></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><button class="dropdown-item" type="button" data-export="pdf">
-                        <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>PDF</button></li>
+                        <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>PDF
+                        <span class="hdr-export-note">인쇄용 도안 · 문서함에도 등록</span></button></li>
                     <li><button class="dropdown-item" type="button" data-export="designRequest">
-                        <i class="bi bi-pencil-square me-2 text-warning"></i>디자인 의뢰서</button></li>
+                        <i class="bi bi-pencil-square me-2 text-warning"></i>디자인 의뢰서
+                        <span class="hdr-export-note">표시장소·규정·비고까지 · 담당자에게 그대로</span></button></li>
                     <li><button class="dropdown-item" type="button" data-export="doc">
-                        <i class="bi bi-file-earmark-word me-2 text-primary"></i>워드 (.doc)</button></li>
+                        <i class="bi bi-file-earmark-word me-2 text-primary"></i>워드 (.doc)
+                        <span class="hdr-export-note">표 그대로 열린다 · 글자를 고칠 수 있다</span></button></li>
                     <li><button class="dropdown-item" type="button" data-export="text">
-                        <i class="bi bi-file-earmark-text me-2 text-secondary"></i>텍스트 (.txt)</button></li>
+                        <i class="bi bi-file-earmark-text me-2 text-secondary"></i>텍스트 (.txt)
+                        <span class="hdr-export-note">어디에나 붙여넣을 수 있다</span></button></li>
                 </ul>
             </div>
 

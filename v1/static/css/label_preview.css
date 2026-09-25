@@ -1508,17 +1508,6 @@ tbody.layout-vertical tr td {
 
 .preview-tab:hover { color: var(--text-primary, #1f2937); }
 
-.settings-reset {
-    margin-left: auto;      /* 오른쪽 끝. 빈 div 로 밀지 않는다 */
-    flex-shrink: 0;
-    border: none;
-    padding: 6px 8px;
-    font-size: 0.85rem;
-    color: var(--text-muted, #9ca3af);
-}
-
-.settings-reset:hover { color: var(--text-primary, #1f2937); }
-
 /* 탭 머리의 안내 — 넷이 같은 모양이어야 한다 */
 .settings-hint {
     margin-bottom: 12px;
@@ -1568,6 +1557,7 @@ tbody.layout-vertical tr td {
 /* 항목 순서 탭의 단추 줄 */
 .settings-actions {
     display: flex;
+    flex-wrap: wrap;   /* 이름을 글자로 적으면서 넷이 한 줄에 안 들어간다 */
     gap: 4px;
     margin-bottom: 8px;
 }

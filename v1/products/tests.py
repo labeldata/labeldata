@@ -11285,7 +11285,8 @@ class 항목명_칸_설정이_먹는다(TestCase):
 
     def test_값을_읽는_곳은_한_곳뿐이다(self):
         # 두 곳이 되면 한쪽만 고쳐지는 날이 온다.
-        self.assertEqual(self.html.count("getElementById('labelColWidthInput')"), 1)
+        # **읽는 곳**만 센다 — 되돌리기(resetSettings)는 이 칸에 값을 넣기만 한다.
+        self.assertEqual(self.html.count("getElementById('labelColWidthInput')?.value"), 1)
 
 
 class 업로드하고_돌아올_때_기본정보가_스치지_않는다(TestCase):
@@ -15087,3 +15088,398 @@ class 영양성분은_인쇄될_값으로_말한다(TestCase):
     def test_묶음마다_번호가_있다(self):
         editor = self._editor()
         self.assertIn('③ 고열량·저영양 판정', editor)
+
+
+class 배합표는_고친_적을_빠뜨리지_않는다(TestCase):
+    """
+    `bomEdited` 가 서 있지 않으면 탭을 떠날 때 `saveIfEdited` 가 아무것도 하지
+    않는다 — 들렀다 나오기만 해도 표가 DB 를 덮는 일을 막으려고 둔 빗장이다.
+    그 빗장은 `afterChange` 하나만 세운다. 그런데 `afterChange` 는
+    `loadData`·`palette`·`syncPanel` 을 **건너뛴다** — 그 세 가지로 값을 넣는
+    다섯 자리에서는 사람이 고쳐도 빗장이 서지 않았다. 고친 것이 조용히
+    사라지는 자리다(보관함에서 끌어 넣은 줄이 가장 아프다 — 서버에 아직 없다).
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def _after(self, anchor, size=600):
+        return self.bom[self.bom.index(anchor):self.bom.index(anchor) + size]
+
+    def test_건너뛰는_길이_어디인지_그대로다(self):
+        # 이 세 가지가 바뀌면 아래 다섯 시험의 전제가 바뀐다.
+        self.assertIn("source === 'loadData' || source === 'palette' || source === 'syncPanel'",
+                      self.bom)
+
+    def test_보관함에서_끌어_넣으면_고친_것이다(self):
+        self.assertIn('markBomEdited();', self._after("}, 'palette');"))
+
+    def test_정렬은_순서가_바뀐_때만_말한다(self):
+        self.assertIn('if (before !== after) markBomEdited();', self.bom)
+
+    def test_전체_지우기는_빈_표에서는_말하지_않는다(self):
+        self.assertIn('if (filled) markBomEdited();', self.bom)
+
+    def test_표시명_기준은_전체와_한_줄_모두_말한다(self):
+        # 위에서 한 번 눌러 모든 줄에 넣는 길
+        self.assertIn('markBomEdited();',
+                      self._after("setRowProp(r, 'summary_type', value, 'syncPanel');"))
+        # 그 줄만 다르게 가는 길('이 원료만')
+        self.assertIn('markBomEdited();',
+                      self._after("setRowProp(currentRowIndex, 'summary_type', value, 'syncPanel');", 200))
+
+    def test_알레르기를_골라도_말한다(self):
+        # 알레르기 칸을 감춰 두면 표를 거치지 않아 afterChange 가 오지 않는다
+        self.assertIn('markBomEdited();', self._after("""            setRowProps(rowIndex, {
+                allergens: value,
+                allergen: value
+            });"""))
+
+    def test_고친_적이_없으면_저장하지_않는다(self):
+        # 빗장 자체는 그대로 있어야 한다 — 위 다섯이 그것을 세우는 일이다
+        self.assertIn('if (!bomEdited) return Promise.resolve({ skipped: true });', self.bom)
+
+
+class 읽기_전용에서는_고치기_단추가_없다(TestCase):
+    """
+    표는 `readOnly` 로 서지만 표 **밖**의 단추들은 그대로 있었다. 끌어 넣기·
+    전체 지우기·정렬은 `loadData` 로 표를 통째로 바꾸므로 readOnly 를 지나친다
+    — 읽기만 하라고 받은 사람이 표를 흐트러뜨릴 수 있었다.
+
+    거리로 재지 않는다. **열린 can_edit 블록 안**인지를 본다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def _in_can_edit(self, needle, nth=0):
+        at = -1
+        for _ in range(nth + 1):
+            at = self.bom.index(needle, at + 1)
+        before = self.bom[:at]
+        opened = before.rindex('{% if can_edit %}')
+        self.assertNotIn('{% endif %}', before[opened:], needle)
+
+    def test_라벨_불러오기는_고칠_수_있을_때만(self):
+        # 머리띠와 빈 표 안내 카드에 하나씩 있다 — 둘 다 표에 줄을 만든다
+        self.assertEqual(self.bom.count('data-bs-target="#loadLabelModal"'), 2)
+        self._in_can_edit('data-bs-target="#loadLabelModal"', 0)
+        self._in_can_edit('data-bs-target="#loadLabelModal"', 1)
+
+    def test_표시명_기준도_고칠_수_있을_때만(self):
+        self._in_can_edit('id="sheet-summary-type"')
+
+    def test_정렬과_기본정보로_복사도(self):
+        self._in_can_edit('onclick="sortBomByRatio()"')
+        self._in_can_edit('id="bomCopyRawmtrlBtn"')
+
+    def test_빈_표_안내의_단추도(self):
+        self._in_can_edit('class="bom-guide-acts"')
+
+    def test_정렬은_코드에서도_막는다(self):
+        # 창을 열어 두고 권한이 바뀌는 길도 있다 — 마크업만 믿지 않는다
+        at = self.bom.index('window.sortBomByRatio = function ()')
+        self.assertIn('if (!CAN_EDIT || !hot) return;', self.bom[at:at + 200])
+
+    def test_줄_상세의_고르는_단추는_눌리지_않는다(self):
+        """
+        줄 상세(알레르기·GMO·이 원료만)는 값을 **보는** 자리이기도 해서 통째로
+        감출 수 없다. 그런데 단추가 멀쩡해 보여 누르게 되고, 눌리면 켜진 모양만
+        바뀐 뒤 아무 일도 일어나지 않았다 — 처리기가 CAN_EDIT 에서 돌아 나가기
+        때문이다. 눌리지 않게 해 두면 그 자리에서 알 수 있다.
+        """
+        at = self.bom.index('if (CAN_EDIT) return;')
+        block = self.bom[at:at + 800]
+        for sel in ('.quick-allergen-btn', '#allergenToggleBtn',
+                    '.gmo-btn', '#gmoToggleBtn', '.summary-type-btn'):
+            self.assertIn(sel, block, sel)
+        self.assertIn('btn.disabled = true;', block)
+        self.assertIn('읽기 전용으로 열려 있어 고칠 수 없습니다', block)
+
+    def test_고르는_처리기도_막는다(self):
+        # 단추를 잠그는 것은 보이는 쪽이다. 처리기 쪽도 함께 막는다.
+        self.assertEqual(self.bom.count('            if (!CAN_EDIT) return;'), 2)
+        self.assertIn('if (!CAN_EDIT || currentRowIndex === null) return;', self.bom)
+
+
+class 배합_상세는_한_벌만_보여_준다(TestCase):
+    """
+    '읽기용 상세'(#context-view)는 켜는 길이 없었다 — updateContextPanel 이 두
+    갈래 모두에서 d-none 을 붙이기만 했다. 그런데 같은 값을 표·아래 폼·그 상자
+    세 군데에 적어 넣고 있었다. 표에 칸이 생긴 뒤로는 어느 것이 맞는지 알 수
+    없는 자리라, 남겨 두면 다음에 고치는 사람이 세 곳을 맞춰야 한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_죽은_상자와_그_칸들이_없다(self):
+        for gone in ('id="context-view"', 'context-view-type',
+                     'view-allergens', 'view-gmo', 'view-report-no'):
+            self.assertNotIn(gone, self.bom, gone)
+
+    def test_살아_있는_것은_그대로다(self):
+        self.assertIn('id="context-form"', self.bom)
+        self.assertIn("document.getElementById('field-allergens').value = allergenText;", self.bom)
+
+
+class 단독으로_열면_부모가_하던_일을_말한다(TestCase):
+    """
+    [사진으로 등록]·[기본정보로 복사]는 부모(제품 화면)에 postMessage 를 보내
+    일을 시킨다. 배합 화면을 단독으로 열면 부모가 자기 자신이라 받는 이가
+    없었다 — 단추는 그대로 있고 눌러도 아무 일이 없었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_한_곳에서_묻는다(self):
+        self.assertIn('function inProductScreen() {', self.bom)
+        self.assertEqual(self.bom.count('if (!inProductScreen()) {'), 2)
+
+    def test_사진으로_등록은_단독에서_감춘다(self):
+        at = self.bom.index("const btn = document.getElementById('bomPhotoRegisterBtn');")
+        self.assertIn("btn.style.display = 'none';", self.bom[at:at + 200])
+
+    def test_기본정보로_복사는_클립보드로_간다(self):
+        self.assertIn('copyRawmtrlToClipboard(window._bomSummaryRawmtrl);', self.bom)
+        self.assertIn('function copyRawmtrlToClipboard(text) {', self.bom)
+        # 어디에 붙이는지 말한다 — 담아 놓고 말하지 않으면 담은 줄 모른다
+        self.assertIn('기본정보 탭의 원재료명 칸에 붙여넣으세요', self.bom)
+        # https 가 아닌 곳에서도 빈손으로 보내지 않는다
+        self.assertIn("document.execCommand('copy')", self.bom)
+
+
+class 성적서를_읽기_전에_손질을_저장한다(TestCase):
+    """
+    성적서 값을 저장하면 `location.reload()` 로 끝난다. 그런데 영양성분 탭은
+    iframe 이고 표에 쳐 넣은 값은 아직 서버에 없다 — 새로 고치는 순간 조용히
+    사라졌다. 판독을 **시작할 때** 먼저 저장한다. 순서가 중요하다: 먼저
+    저장하고 나중에 성적서 값이 덮는다(사람이 성적서를 고른 뜻이 그것이다).
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.docs = (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_판독의_첫_줄이_저장이다(self):
+        at = self.docs.index('window.readSpecNutrition = async function (docId) {')
+        head = self.docs[at:at + 200]
+        self.assertIn('await saveNutritionEditsFirst();', head)
+        # 판독 알림보다 앞이다 — 알림 뒤면 저장을 기다리는 동안 사람이 창을 닫는다
+        self.assertLess(head.index('await saveNutritionEditsFirst();'),
+                        head.index('성적서를 판독하는 중입니다'))
+
+    def test_프레임의_빗장을_그대로_쓴다(self):
+        at = self.docs.index('async function saveNutritionEditsFirst() {')
+        block = self.docs[at:at + 700]
+        self.assertIn("document.getElementById('nutritionEditorFrame')", block)
+        self.assertIn("typeof win.saveIfEdited !== 'function'", block)
+        # 저장이 실패해도 판독은 막지 않는다 — 콘솔에 남기고 나아간다
+        self.assertIn('console.error', block)
+
+
+class 영양성분은_개발자에게_말하지_않는다(TestCase):
+    """
+    표가 그려지기 전 사용자가 보는 자리에 "페이지 상태: 로드 중", "LABEL_ID: 3",
+    "📡 API 호출 중: /products/…" 가 적혀 있었다. 라벨 번호는 사람이 할 수 있는
+    일이 하나도 없는 값이고, 오류가 나면 그 번호와 예외 문구만 남아 다음에
+    무엇을 해야 하는지 알 수 없었다.
+    """
+
+    def setUp(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        raw = (Path(dj.BASE_DIR) / 'templates/products/nutrition_editor.html'
+               ).read_text(encoding='utf-8')
+        # **주석은 걷어내고 본다.** 걷어낸 까닭을 적은 주석에 그 옛 문구가
+        # 그대로 들어 있어서다 — 남기지 않으면 다음 사람이 왜 고쳤는지 모른다.
+        self.editor = re.sub(r'{% comment %}.*?{% endcomment %}', '', raw, flags=re.S)
+
+    def test_개발자에게_하던_말이_없다(self):
+        for gone in ('LABEL_ID:', '📡', 'updateLabelIdDisplay',
+                     'labelIdDisplay', '페이지 상태'):
+            self.assertNotIn(gone, self.editor, gone)
+
+    def test_진행과_다음_손을_적는다(self):
+        self.assertIn('id="loadStatus"', self.editor)
+        self.assertIn('영양성분표를 준비하고 있습니다.', self.editor)
+        self.assertIn("updateStatus('값을 불러오고 있습니다…');", self.editor)
+        self.assertIn("updateStatus('준비되었습니다.');", self.editor)
+
+    def test_오류는_할_수_있는_일로_말하고_자세한_것은_콘솔로(self):
+        self.assertIn("updateStatus('값을 불러오지 못했습니다. 화면을 새로 고쳐 주세요.');",
+                      self.editor)
+        at = self.editor.index('if (!LABEL_ID || isNaN(LABEL_ID)) {')
+        block = self.editor[at:at + 500]
+        self.assertIn('console.error', block)
+        self.assertIn('제품 목록에서 다시 열어 주세요', block)
+        # 서버 응답 본문·예외 문구를 스낵바로 흘리지 않는다
+        self.assertNotIn("showSnackbar('영양성분 데이터 로드에 실패했습니다: ' + error.message",
+                         self.editor)
+
+
+class 조각과_1회량은_다른_값이다(TestCase):
+    """
+    병행표시의 '1조각' 은 단위내용량(낱개 하나)이고 '1회량' 은 1회 섭취참고량
+    이다. 둘을 같은 것으로 알고 고르면 표의 숫자가 통째로 틀린다 — 낱개가
+    25 g 인데 1회량이 30 g 인 제품에서 그렇다. 단추 이름만으로는 갈라지지
+    않는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.editor = (Path(dj.BASE_DIR) / 'templates/products/nutrition_editor.html'
+                       ).read_text(encoding='utf-8')
+
+    def test_한_줄로_말해_준다(self):
+        at = self.editor.index('id="parallelHint"')
+        block = self.editor[at:at + 400]
+        self.assertIn('단위내용량', block)
+        self.assertIn('1회 섭취참고량', block)
+
+    def test_병행표시를_골랐을_때만_뜬다(self):
+        at = self.editor.index('function setPreviewStyle(style) {')
+        block = self.editor[at:at + 900]
+        self.assertIn("parallelHint.hidden = (style !== 'parallel');", block)
+
+    def test_단추마다_곁말이_있다(self):
+        for value in ('unit_total', 'unit_100g', 'serving_total', 'serving_100ml'):
+            at = self.editor.index('data-parallel="%s"' % value)
+            self.assertIn('title=', self.editor[at:at + 120], value)
+
+
+class 검증_설정의_되돌리기는_제_탭에_있다(TestCase):
+    """
+    이 단추는 **표 설정 탭만** 되돌린다(가로·글꼴·글자 크기·자간·줄간격).
+    그런데 탭 줄 맨 오른쪽에 화살표 아이콘 하나로 앉아 있었다 — 여섯 번째
+    탭처럼 보이고, 이름이 없어 누르기 전에는 무엇이 초기화되는지 알 수 없었다.
+    항목 순서·분리배출마크까지 지워지는 줄 알면 아무도 누르지 않는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_탭_줄에_없다(self):
+        head = self.html.index('<div class="preview-tabs">')
+        tail = self.html.index('</div>', self.html.index('data-tab="recycling-mark"'))
+        self.assertNotIn('resetSettingsBtn', self.html[head:tail])
+
+    def test_되돌리는_값_옆에_있다(self):
+        head = self.html.index('id="table-settings-content"')
+        tail = self.html.index('</section>', head)
+        self.assertIn('id="resetSettingsBtn"', self.html[head:tail])
+
+    def test_무엇을_되돌리는지_이름과_곁말로_말한다(self):
+        at = self.html.index('id="resetSettingsBtn"')
+        block = self.html[at - 400:at + 400]
+        self.assertIn('이 탭 값 되돌리기', block)
+        self.assertIn('항목 순서와 분리배출마크는 그대로입니다', block)
+
+    def test_글꼴을_되돌려도_빈_칸이_되지_않는다(self):
+        # 기본값은 "'Noto Sans KR'" 인데 목록의 값은 ", sans-serif" 가 붙는다 —
+        # 그대로 넣으면 selectedIndex 가 -1 이 되어 글꼴 칸이 비었다.
+        at = self.html.index('function resetSettings() {')
+        block = self.html[at:at + 1600]
+        self.assertIn('o.value.indexOf(want) === 0', block)
+        self.assertIn('fontFamilySelect.options[0]', block)
+
+    def test_항목명_칸도_되돌린다(self):
+        at = self.html.index('function resetSettings() {')
+        self.assertIn("getElementById('labelColWidthInput')", self.html[at:at + 1600])
+
+
+class 모두에_걸리는_단추는_모두라고_적는다(TestCase):
+    """
+    항목 순서 탭의 동작 줄 넷은 **모든 항목에 한꺼번에** 걸리는데 이름이
+    '초기화 · 표시/숨김 · 50% · 100%' 였다. 무엇이 50% 가 되는지(글자? 표?
+    항목 너비?) 이름만으로는 알 수 없고, 아래 목록에 항목마다 있는 눈·너비
+    단추와 구별되지 않았다 — 한 줄만 고치려다 스물넷을 바꿔 놓는 자리다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                     ).read_text(encoding='utf-8')
+        self.css = (Path(dj.BASE_DIR) / 'static/css/label_preview.css'
+                    ).read_text(encoding='utf-8')
+
+    def _acts(self):
+        head = self.html.index('onclick="resetFieldOrder()"')
+        return self.html[head - 200:self.html.index('id="fieldOrderList"')]
+
+    def test_하는_일로_부른다(self):
+        block = self._acts()
+        for name in ('처음 순서로', '모두 켜기·끄기', '모두 반 칸', '모두 한 줄'):
+            self.assertIn(name, block, name)
+
+    def test_옛_이름이_남아_있지_않다(self):
+        block = self._acts()
+        for gone in ('> 표시/숨김', '> 50%', '> 100%'):
+            self.assertNotIn(gone, block, gone)
+
+    def test_넷_다_곁말이_있다(self):
+        block = self._acts()
+        self.assertEqual(block.count('title="'), 4)
+
+    def test_이름이_길어져도_넘치지_않는다(self):
+        at = self.css.index('.settings-actions {')
+        self.assertIn('flex-wrap: wrap;', self.css[at:at + 260])
+
+
+class 내보내기는_무엇이_다른지_적는다(TestCase):
+    """
+    미리보기 도구 줄의 같은 메뉴에는 항목마다 한 줄 설명이 붙어 있는데
+    (export-note) 그 줄은 탭 안에서 감춰진다 — 탭으로 쓰는 사람은 다섯 가지
+    가운데 무엇을 고를지 이름만 보고 골라야 했다. '글자 복사' 와
+    '텍스트 (.txt)' 는 이름으로는 갈라지지 않는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.detail = (base / 'templates/products/product_detail.html'
+                       ).read_text(encoding='utf-8')
+        self.preview = (base / 'templates/label/label_preview.html'
+                        ).read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_detail.css').read_text(encoding='utf-8')
+
+    def test_다섯_가지_모두_곁말이_있다(self):
+        at = self.detail.index('class="dropdown-menu dropdown-menu-end hdr-export-menu"')
+        block = self.detail[at:self.detail.index('</ul>', at)]
+        self.assertEqual(block.count('hdr-export-note'), 5)
+
+    def test_미리보기와_같은_말을_쓴다(self):
+        # 두 곳이 다른 말을 하면 같은 일을 두 가지로 설명하는 셈이다
+        for note in ('클립보드로 · 워드·엑셀에 바로 붙여넣기',
+                     '인쇄용 도안 · 문서함에도 등록',
+                     '표시장소·규정·비고까지 · 담당자에게 그대로',
+                     '표 그대로 열린다 · 글자를 고칠 수 있다',
+                     '어디에나 붙여넣을 수 있다'):
+            self.assertIn(note, self.detail, note)
+            self.assertIn(note, self.preview, note)
+
+    def test_곁말이_보이게_그려진다(self):
+        self.assertIn('.hdr-export-menu .dropdown-item .hdr-export-note', self.css)
+        self.assertIn('.hdr-export-menu .dropdown-item { white-space: normal; }', self.css)

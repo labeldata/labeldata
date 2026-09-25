@@ -601,9 +601,17 @@
             {% else %}
               <span>원료 수정</span>
             {% endif %}
+            {% comment %}
+              **아직 저장하지 않은 원료에는 연결이 있을 수 없다.** 그런데 등록
+              화면에도 이 단추가 '연결 표시사항(0품목)' 으로 떠 있었고, 처리기를
+              붙이는 updateLinkedLabelsButton 은 원료 번호가 없으면 그냥 돌아
+              나간다 — 눌러도 아무 일이 없는 단추였다. 수정 화면에서만 둔다.
+            {% endcomment %}
+            {% if mode != "create" %}
             <button type="button" class="panel-btn linked" id="linkedLabelsBtn">
                 <i class="bi bi-link-45deg"></i> 연결 표시사항(0품목)
             </button>
+            {% endif %}
         </h5>
         <div class="panel-actions">
             <button type="button" class="panel-btn" id="closeBtn">입력 초기화</button>

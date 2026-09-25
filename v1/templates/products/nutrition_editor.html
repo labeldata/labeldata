@@ -223,12 +223,27 @@
                 <div class="control-group" id="parallelDisplayTypeGroup" style="display: none;">
                     <div class="control-title">표시기준</div>
                     <div class="style-selector">
-                        <button class="style-btn active" type="button" data-parallel="unit_total">1조각/총내용량</button>
-                        <button class="style-btn" type="button" data-parallel="unit_100g">1조각/100g</button>
-                        <button class="style-btn" type="button" data-parallel="serving_total">1회량/총내용량</button>
-                        <button class="style-btn" type="button" data-parallel="serving_100ml">1회량/100ml</button>
+                        <button class="style-btn active" type="button" data-parallel="unit_total"
+                                title="낱개 하나와 총내용량을 나란히 적습니다">1조각/총내용량</button>
+                        <button class="style-btn" type="button" data-parallel="unit_100g"
+                                title="낱개 하나와 100g당을 나란히 적습니다">1조각/100g</button>
+                        <button class="style-btn" type="button" data-parallel="serving_total"
+                                title="1회 섭취참고량과 총내용량을 나란히 적습니다">1회량/총내용량</button>
+                        <button class="style-btn" type="button" data-parallel="serving_100ml"
+                                title="1회 섭취참고량과 100mL당을 나란히 적습니다">1회량/100ml</button>
                     </div>
                 </div>
+            </div>
+            {% comment %}
+              **'1조각' 과 '1회량' 은 다른 값이다.** 둘을 같은 것으로 알고
+              고르면 표의 숫자가 통째로 틀린다 — 낱개가 25 g 인데 1회량이
+              30 g 인 제품에서 그렇다. 단추 이름만으로는 갈라지지 않으니
+              여기서 한 줄로 말한다. 병행표시를 골랐을 때만 뜬다.
+            {% endcomment %}
+            <div class="cfg-hint" id="parallelHint" style="margin: 6px 0 0;" hidden>
+                <b>1조각</b> = 단위내용량 — 한 개·한 봉 같은 <b>낱개 하나</b>입니다
+                (위 「제품 규격」의 단위내용량).
+                <b>1회량</b> = <b>1회 섭취참고량</b> — 규정이 식품유형별로 정한 양입니다.
             </div>
 
             <select id="basic_display_type" class="visually-hidden" aria-hidden="true">
@@ -286,14 +301,17 @@
         <div class="preview-content">
             <div class="result-display" id="resultDisplay">
                 <div class="empty-result">
+                    {% comment %}
+                      표가 그려지기 전에 **사용자가 보는** 자리다. 전에는 "페이지
+                      상태: 로드 중", "LABEL_ID: 3" 처럼 개발자에게 하는 말이
+                      적혀 있었다 — 라벨 번호는 사람이 할 수 있는 일이 하나도
+                      없는 값이고, 오류가 나면 그 번호와 예외 문구만 남아 다음에
+                      무엇을 해야 하는지 알 수 없었다. 진행과 다음 손만 적는다.
+                      번호가 필요한 자리는 콘솔이다(console.error).
+                    {% endcomment %}
                     <div style="padding: 40px; text-align: center; color: #999;">
-                        <p style="font-size: 12px; margin-bottom: 16px;">📄 페이지 상태: 로드 중...</p>
-                        <p style="font-size: 11px; color: #ccc; margin: 0;">
-                            LABEL_ID: <code id="labelIdDisplay" style="background: #f0f0f0; padding: 2px 4px;">확인 중</code>
-                        </p>
-                        <div style="margin-top: 20px; font-size: 10px;">
-                            <p id="loadStatus" style="color: #999; margin: 4px 0;">⏳ 데이터 로드 중...</p>
-                        </div>
+                        <p style="font-size: 13px; margin-bottom: 10px;">영양성분표를 준비하고 있습니다.</p>
+                        <p id="loadStatus" style="font-size: 12px; margin: 0;">값을 불러오고 있습니다…</p>
                     </div>
                 </div>
             </div>
@@ -362,13 +380,6 @@ function updateStatus(message) {
     }
 }
 
-// LABEL_ID 표시 업데이트
-function updateLabelIdDisplay() {
-    const display = document.getElementById('labelIdDisplay');
-    if (display && LABEL_ID) {
-        display.textContent = LABEL_ID;
-    }
-}
 const ALL_NUTRIENTS = [
     // 필수 영양성분 9가지 (식약처 표준 순서)
     { field: 'calories', label: '열량', unit: 'kcal', unitOptions: ['kcal'], required: true },
@@ -638,6 +649,8 @@ function setPreviewStyle(style) {
     });
     document.getElementById('basicDisplayTypeGroup').style.display = style === 'basic' ? 'flex' : 'none';
     document.getElementById('parallelDisplayTypeGroup').style.display = style === 'parallel' ? 'flex' : 'none';
+    const parallelHint = document.getElementById('parallelHint');
+    if (parallelHint) parallelHint.hidden = (style !== 'parallel');
     calculateAndPreview();
 }
 
@@ -757,22 +770,19 @@ function createSimplePreview(nutritionData) {
 
 // 데이터 로드
 async function loadData() {
-    updateStatus('⏳ 데이터 로드 중...');
-    updateLabelIdDisplay();
+    updateStatus('값을 불러오고 있습니다…');
     
     try {
-        // LABEL_ID 확인
         if (!LABEL_ID || isNaN(LABEL_ID)) {
-            const errMsg = '라벨 ID가 유효하지 않습니다. LABEL_ID: ' + LABEL_ID;
-            updateStatus('❌ ' + errMsg);
-            throw new Error(errMsg);
+            /* 사람에게는 할 수 있는 일을 말하고, 번호는 콘솔에 남긴다 */
+            console.error('[NutritionEditor] LABEL_ID 가 숫자가 아니다:', LABEL_ID);
+            updateStatus('이 제품을 찾지 못했습니다. 제품 목록에서 다시 열어 주세요.');
+            throw new Error('영양성분을 불러오지 못했습니다');
         }
         
         const apiUrl = API_NUTRITION_LOAD_URL;
-        updateStatus(`📡 API 호출 중: ${apiUrl}`);
         
         const response = await fetch(apiUrl);
-        updateStatus(`📡 응답 받음: ${response.status}`);
         
         if (!response.ok) {
             /* 응답 본문을 error.message 에 담으면 그대로 스낵바에 뜬다 —
@@ -780,12 +790,12 @@ async function loadData() {
                본문은 콘솔로, 사람에게는 상태만. (저장 쪽은 이미 그렇게 한다) */
             const errorText = await response.text().catch(() => '');
             console.error('[NutritionEditor] loadData API 오류:', response.status, errorText);
-            updateStatus(`❌ API 오류 (${response.status})`);
+            updateStatus('값을 불러오지 못했습니다. 화면을 새로 고쳐 주세요.');
             throw new Error(`영양성분을 불러오지 못했습니다 (${response.status})`);
         }
         
         const data = await response.json();
-        updateStatus('✅ 데이터 수신 완료');
+        updateStatus('값을 받았습니다.');
         
         // 기본 설정
         document.getElementById('serving_size').value = data.serving_size || '';
@@ -818,7 +828,7 @@ async function loadData() {
             });
         }
 
-        updateStatus('✅ 기본 설정 완료');
+        updateStatus('제품 규격을 넣었습니다.');
         
         /* 그리드에 넣는 것은 **계산값**이다.
            저장 칸에는 적용값(오차를 물린 값)이 들어 있으므로, 계산값을 따로
@@ -834,7 +844,7 @@ async function loadData() {
             } catch (e) { /* 깨졌으면 저장 칸의 값으로 연다 */ }
         }
         setGridNutritionData(gridSource);
-        updateStatus('✅ 그리드 데이터 로드 완료');
+        updateStatus('표에 값을 넣었습니다.');
         setTimeout(refreshApplied, 100);
         
         // 스타일 설정 및 미리보기 계산 (데이터 로드 후 한 번만)
@@ -855,11 +865,12 @@ async function loadData() {
         // 문서까지 올려 보내지 않는다).
 
         nutritionEdited = false;   // 불러오는 동안 켜졌더라도 여기서 되돌린다
-        updateStatus('✅ 초기화 완료');
+        updateStatus('준비되었습니다.');
 
     } catch (error) {
-        updateStatus(`❌ 오류: ${error.message}`);
-        showSnackbar('영양성분 데이터 로드에 실패했습니다: ' + error.message, 'error');
+        console.error('[NutritionEditor] loadData 오류:', error);
+        updateStatus('값을 불러오지 못했습니다. 화면을 새로 고쳐 주세요.');
+        showSnackbar('영양성분을 불러오지 못했습니다. 화면을 새로 고쳐 주세요.', 'error');
     }
 }
 
@@ -1359,9 +1370,7 @@ window.addEventListener('message', function(event) {
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    // 초기 상태 표시
-    updateLabelIdDisplay();
-    updateStatus('⏳ 초기화 중...');
+    updateStatus('표를 준비하고 있습니다…');
     
     /* **단위량을 100 으로 미리 채우지 않는다.**
        라벨에 "총 내용량 133 g" 이라고 적혀 있어도 이 칸이 100 인 채로
@@ -1371,9 +1380,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     try {
         initGrid();
-        updateStatus('✅ 그리드 초기화 완료');
+        updateStatus('표를 준비했습니다.');
     } catch (error) {
-        updateStatus('❌ 그리드 초기화 오류: ' + error.message);
+        console.error('[NutritionEditor] initGrid 오류:', error);
+        updateStatus('표를 준비하지 못했습니다. 화면을 새로 고쳐 주세요.');
     }
     
     try {
@@ -1413,7 +1423,8 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
         loadData();
     } catch (error) {
-        updateStatus('❌ 데이터 로드 오류: ' + error.message);
+        console.error('[NutritionEditor] loadData 호출 오류:', error);
+        updateStatus('값을 불러오지 못했습니다. 화면을 새로 고쳐 주세요.');
     }
     setTimeout(function () {
         warnMissingServingSize();

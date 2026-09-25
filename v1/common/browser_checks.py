@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -64,8 +65,13 @@ class Chrome:
     """DevTools 로 모는 헤드리스 크롬 한 장."""
 
     def __init__(self, port=9333, size='1300,900'):
+        # **제 방을 하나 새로 쓴다.** 프로필을 안 주면 크롬은 이미 떠 있는
+        # 판(사람이 쓰던 창이든 앞 시험이 남긴 것이든)에 붙어 버린다 — 그러면
+        # 우리가 띄운 것이 아닌 창을 몰게 되고, 끝에 그것을 닫을 수도 없다.
+        self._profile = tempfile.mkdtemp(prefix='ezchrome-')
         self.proc = subprocess.Popen(
             [chrome_path(), '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
+             f'--user-data-dir={self._profile}', '--no-default-browser-check',
              f'--remote-debugging-port={port}', f'--window-size={size}', '--hide-scrollbars', 'about:blank'],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         page = None
@@ -97,9 +103,46 @@ class Chrome:
         return r.get('result', {}).get('value')
 
     def goto(self, url, settle=4.0):
+        """
+        **다 실렸는지 보고 나서 쉰다.**
+
+        예전에는 navigate 뒤에 고정으로 `settle` 초를 쉬었다. 이 화면들은
+        <head> 에서 CDN(부트스트랩·핸슨테이블)을 받는데, 그것이 느린 날에는
+        4 초가 지나도 브라우저가 아직 <head> 에 머물러 `document.body` 조차
+        없다 — 그러면 시험은 화면 탓이 아닌 일로 붉어지고, 붉은 까닭이
+        '표가 그려지지 않았다' 로 적혀 사람을 엉뚱한 곳으로 보낸다.
+
+        readyState 가 complete 가 될 때까지 본 다음, 그 뒤에 `settle` 만큼
+        쉰다(DOMContentLoaded 뒤에 도는 초기화가 있다). 빠른 날에는 예전과
+        걸리는 시간이 같다.
+        """
         self.send('Page.enable')
         self.send('Page.navigate', url=url)
+        self.wait_loaded(timeout=max(settle * 6, 30))
         time.sleep(settle)
+
+    def wait_loaded(self, timeout=30.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                if self.js('document.readyState === "complete" && !!document.body'):
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.3)
+        return False
+
+    def wait_for(self, expr, timeout=20.0):
+        """`expr` 이 참이 될 때까지 기다린다(참이 됐는지 돌려준다)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                if self.js(expr):
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.3)
+        return False
 
     def shot(self, path):
         data = self.send('Page.captureScreenshot', format='png')['data']
@@ -110,7 +153,19 @@ class Chrome:
             self.ws.close()
         except Exception:
             pass
+        # **딸린 것까지 닫는다.** 크롬은 자식 프로세스를 여럿 띄우는데
+        # `proc.kill()` 은 띄운 것 하나만 죽인다 — 남은 것들이 디버깅 포트를
+        # 붙들고 있으면 다음 시험이 붙지 못하거나, 붙은 뒤 소켓이 끊긴다
+        # (실제로 '소켓이 끊겼다' 로 붉어졌다).
+        if os.name == 'nt':
+            subprocess.run(['taskkill', '/PID', str(self.proc.pid), '/T', '/F'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.proc.kill()
+        try:
+            self.proc.wait(timeout=10)
+        except Exception:
+            pass
+        shutil.rmtree(self._profile, ignore_errors=True)
 
 
 @override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
@@ -153,18 +208,37 @@ class 배합표를_그려_본다(StaticLiveServerTestCase):
                 const holder = document.querySelector('#bom-grid .ht_master .wtHolder');
                 if (!holder) return 'NO GRID';
                 holder.scrollTop = %d;
-                return new Promise(res => setTimeout(() => {
+                /* **글꼴이 다 실린 뒤에 잰다.** 글꼴이 바뀌면 줄 높이가 바뀌고,
+                   그 사이에 재면 본문 판은 새 높이, 왼쪽 판은 옛 높이로 잡혀
+                   '번호가 어긋난다' 로 붉어진다 — 화면 탓이 아닌 붉음이다. */
+                return document.fonts.ready.then(() => new Promise(res => setTimeout(() => {
                   const top = sel => [...document.querySelectorAll(sel)].map(tr => Math.round(tr.getBoundingClientRect().top));
                   res(JSON.stringify({
                     master: top('#bom-grid .ht_master .htCore tbody tr'),
                     left: top('#bom-grid .ht_clone_left .htCore tbody tr'),
                     scrollTop: holder.scrollTop }));
-                }, 800));
+                }, 800)));
             })()"""
+            # 표가 아예 없으면 **화면 탓이 아니다.** 핸슨테이블은 CDN 에서
+            # 오는데, 그것을 못 받은 날에도 '표가 그려지지 않았다' 로 붉어져
+            # 사람을 엉뚱한 곳으로 보냈다. 받았는지 먼저 묻는다.
+            if not chrome.js("typeof Handsontable !== 'undefined'"):
+                self.skipTest('핸슨테이블 CDN 을 받지 못했다 — 이 시험은 그것이 있어야 한다')
+
             for scroll in (0, 300):
-                raw = chrome.js(geo % scroll)
-                self.assertNotEqual(raw, 'NO GRID', '표가 그려지지 않았다')
-                got = json.loads(raw)
+                #
+                # **가라앉은 값을 본다.** 글꼴·칸 너비가 늦게 실리면 본문 판이
+                # 먼저 줄고 왼쪽 판이 한 그림 뒤에 따라온다 — 그 틈에 재면
+                # 어긋난 것으로 잡힌다. 진짜 회귀는 기다려도 가라앉지 않으므로
+                # 이 되풀이가 지켜 주는 것은 그대로다.
+                got = None
+                for _ in range(6):
+                    raw = chrome.js(geo % scroll)
+                    self.assertNotEqual(raw, 'NO GRID', '표가 그려지지 않았다')
+                    got = json.loads(raw)
+                    if got['master'] == got['left']:
+                        break
+                    time.sleep(0.5)
                 self.assertGreater(len(got['master']), 5, got)
                 self.assertEqual(got['master'], got['left'],
                                  f'scrollTop={scroll}: 본문 줄과 번호 판 줄의 위치가 다르다')
@@ -230,7 +304,32 @@ class 도움말이_틀_안을_가리킨다(StaticLiveServerTestCase):
                 if (t) bootstrap.Tab.getOrCreateInstance(t).show();
                 return 'tab';
             })()""")
-            time.sleep(6)          # iframe 이 실리고 표가 그려질 때까지
+            # iframe 이 실리고 표가 그려질 때까지 — 고정 시간으로 기다리면
+            # CDN 이 느린 날 여기서 붉어진다(그리고 '표가 없다' 로 적힌다)
+            #
+            # **자리를 잡을 때까지** 본다. 칸이 생긴 것만으로는 이르다 — 탭을
+            # 막 펼친 직후에는 폭이 0 이라, 재면 강조 테두리와 표의 자리가
+            # 둘 다 0 으로 잡히고 '가리키지 못했다' 로 붉어진다.
+            ready = """(function(){
+                var f = document.getElementById('bomEditorFrame');
+                if (!f || !f.contentDocument) return false;
+                if (f.contentDocument.readyState !== 'complete') return false;
+                var g = f.contentDocument.getElementById('bom-grid');
+                if (!g) return false;
+                var r = g.getBoundingClientRect();
+                return r.width > 100 && r.height > 50;
+            })()"""
+            if not chrome.wait_for(ready, timeout=40):
+                # 핸슨테이블은 CDN 에서 온다 — 못 받은 날은 화면 탓이 아니다
+                got_hot = chrome.js("""(function(){
+                    var f = document.getElementById('bomEditorFrame');
+                    var w = f && f.contentWindow;
+                    return !!(w && typeof w.Handsontable !== 'undefined');
+                })()""")
+                if not got_hot:
+                    self.skipTest('배합표(핸슨테이블 CDN)를 받지 못했다')
+                self.fail('배합표가 자리를 잡지 못했다')
+            time.sleep(2)
             raw = chrome.js("""(function(){
                 if (!window.ezCoach) return 'NO COACH';
                 window.ezCoach.start('detail');

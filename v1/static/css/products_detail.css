@@ -1107,3 +1107,18 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
    스크립트가 Bootstrap 의 active/show 를 바로잡은 뒤 뗀다. */
 html.pv-open-docs #tab-info { display: none !important; }
 html.pv-open-docs #tab-docs { display: block !important; }
+
+/* ==================== 내보내기 메뉴의 곁말 ====================
+   미리보기 도구 줄의 같은 메뉴에는 항목마다 한 줄 설명이 붙어 있는데(그쪽
+   class 는 .export-note) 그 줄은 탭 안에서 감춰진다. 같은 문구를 헤더 메뉴에도
+   둔다 — '글자 복사' 와 '텍스트 (.txt)' 는 이름으로는 갈라지지 않는다. */
+.hdr-export-menu .dropdown-item { white-space: normal; }
+.hdr-export-menu .dropdown-item .hdr-export-note {
+  display: block;
+  padding-left: 25px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-hint, #9aa0a6);
+}
+.hdr-export-menu .dropdown-item:hover .hdr-export-note,
+.hdr-export-menu .dropdown-item:focus .hdr-export-note { color: var(--ez-gray-700, #5f6368); }

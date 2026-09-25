@@ -886,7 +886,16 @@ function updatePaginationFromServer(queryString) {
 // 연결된 표시사항(00품목) 조회 버튼 텍스트 및 이벤트 설정
 function updateLinkedLabelsButton(my_ingredient_id) {
     const btn = document.getElementById('linkedLabelsBtn');
-    if (!btn || !my_ingredient_id) return;
+    if (!btn) return;
+    /* 번호가 없으면(아직 저장하지 않은 원료) 볼 연결이 없다. 예전에는 여기서
+       그냥 돌아 나갔고 — 처리기가 붙지 않은 단추가 그대로 남아 눌러도 아무
+       일이 없었다. 등록 화면은 마크업에서 아예 빼지만, 다른 길로 불려도
+       같게 움직이도록 여기서도 감춘다. */
+    if (!my_ingredient_id) {
+        btn.style.display = 'none';
+        return;
+    }
+    btn.style.display = '';
     fetch(`/label/linked-labels-count/${my_ingredient_id}/`)
         .then(res => res.json())
         .then(data => {

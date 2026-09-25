@@ -88,9 +88,12 @@ body.in-iframe .bom-page-header { display: none !important; }
                     <span class="badge bg-secondary">BOM</span>
                 </h5>
                 <div class="vr"></div>
+                {% if can_edit %}
+                {# 표에 줄을 만들어 넣는다 — 읽기 전용에서는 넣을 데가 없다 #}
                 <button class="btn btn-outline-dark v2-btn-sm" data-bs-toggle="modal" data-bs-target="#loadLabelModal">
                     <i class="bi bi-card-text"></i> 라벨 정보 불러오기
                 </button>
+                {% endif %}
                 {# 엑셀로 관리하던 배합비를 그대로 옮겨 오는 길 #}
                 <a class="btn btn-outline-dark v2-btn-sm" href="{% url 'bom:bom_sheet_template' %}"
                    title="엑셀 양식을 받아 채운 뒤 이 표에 그대로 붙여넣으세요">
@@ -171,6 +174,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                         <span>요약을 펴서 <b>기본정보로 복사</b>를 누르면 표시사항의
                               원재료명 칸으로 들어갑니다. 저장은 상단 <b>저장</b> 단추로.</span></li>
                 </ol>
+                {% if can_edit %}
                 <div class="bom-guide-acts">
                     <a class="btn btn-light border v2-btn-sm" href="{% url 'bom:bom_sheet_template' %}"
                        title="엑셀 양식을 받아 채운 뒤 이 표에 그대로 붙여넣으세요">
@@ -182,6 +186,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                         <i class="bi bi-card-text"></i> 기존 표시사항에서 가져오기
                     </button>
                 </div>
+                {% endif %}
             </div>
             <details class="bom-summary is-stuck" id="bom-summary-panel" open>
                 <summary class="bom-summary-head">
@@ -204,6 +209,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                           대개 하나로 간다. 여기서 한 번 누르면 모든 줄에 넣는다.
                           그 줄만 다르게 하려면 상세에서 다시 고른다.
                         {% endcomment %}
+                        {% if can_edit %}
                         <span class="small text-muted" title="요약에 원료 이름 대신 무엇을 적을지 정합니다. 모든 줄에 함께 걸립니다.">표시명 기준</span>
                         <span class="v2-seg" id="sheet-summary-type">
                             <button type="button" class="v2-seg-btn is-on" data-value="식품유형"
@@ -211,6 +217,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                             <button type="button" class="v2-seg-btn" data-value="원재료명"
                                     title="요약에 원재료 표시명을 적습니다">원재료명</button>
                         </span>
+                        {% endif %}
                         <span class="small text-muted">총 배합비</span>
                         <span id="total-ratio-display" class="fw-semibold text-primary">0.000%</span>
                         <i class="bi bi-info-circle text-muted" title="칸을 고르고 바로 입력(Enter 로 다음 줄) · 우클릭으로 행 추가·삭제·되돌리기 · 머리글을 끌어 칸 순서를 바꿀 수 있습니다"></i>
@@ -257,15 +264,18 @@ body.in-iframe .bom-page-header { display: none !important; }
                           사람이 일부러 맞춰 둔 순서를 말없이 흐트러뜨리면 안
                           된다. 누를 수 있는 단추로 둔다.
                         {% endcomment %}
+                        {% if can_edit %}
                         <button type="button" class="btn btn-light border v2-btn-sm flex-shrink-0"
                                 onclick="sortBomByRatio()"
                                 title="표의 줄을 배합비가 큰 것부터로 다시 놓습니다">
                             <i class="bi bi-sort-numeric-down"></i>배합비 순 정렬
                         </button>
                         <button type="button" class="btn btn-light border v2-btn-sm flex-shrink-0"
+                                id="bomCopyRawmtrlBtn"
                                 onclick="copyRawmtrlToBasicInfo()">
                             <i class="bi bi-arrow-left-circle"></i>기본정보로 복사
                         </button>
+                        {% endif %}
                     </div>
 
                     <div class="bsum-pane" id="bsum-pane-allergens" hidden>
@@ -328,23 +338,15 @@ body.in-iframe .bom-page-header { display: none !important; }
                                     <i class="bi bi-cursor fs-1 text-muted" style="opacity: 0.3;"></i>
                                     <p class="mt-3 text-muted small">원료를 선택하면<br>상세 정보가 표시됩니다.</p>
                                 </div>
-                                <div id="context-view" class="d-none">
-                                    <div class="mb-3">
-                                        <span id="context-view-type" class="badge bg-primary">직접 입력</span>
-                                    </div>
-                                    <div class="bom-detail-item border-bottom">
-                                        <span class="bom-detail-label">알레르기 정보</span>
-                                        <span id="view-allergens" class="bom-detail-value">-</span>
-                                    </div>
-                                    <div class="bom-detail-item border-bottom">
-                                        <span class="bom-detail-label">GMO 성분</span>
-                                        <span id="view-gmo" class="bom-detail-value">-</span>
-                                    </div>
-                                    <div class="bom-detail-item">
-                                        <span class="bom-detail-label">품목보고번호</span>
-                                        <span id="view-report-no" class="bom-detail-value">-</span>
-                                    </div>
-                                </div>
+                                  {% comment %}
+                                  '읽기용 상세'(#context-view)를 걷어냈다. 켜는
+                                  길이 없었다 — updateContextPanel 이 두 갈래
+                                  모두에서 d-none 을 **붙이기만** 했다. 그런데
+                                  같은 값을 세 군데(표·아래 폼·이 상자)에 적어
+                                  넣고 있어서, 표에 칸이 생긴 뒤로는 어느 것이
+                                  맞는지 읽는 사람이 헷갈렸다. 값은 표와 아래
+                                  폼에 있다.
+                                {% endcomment %}
                                 <div id="context-form" class="d-none">
                                     {% comment %}
                                       이 창은 고른 줄 **바로 아래**에 뜬다. 길면 그만큼 표를 가린다.
@@ -1851,6 +1853,11 @@ body.in-iframe .bom-page-header { display: none !important; }
             report_no: item.report_no || '',
             manufacturer: item.manufacturer || ''
         }, 'palette');
+        /* source='palette' 는 afterChange 를 건너뛴다 — 여기서 직접 말한다.
+           보관함에서 끌어 넣은 줄은 **아직 서버에 없다.** 이 표시가 없으면
+           탭을 옮기는 순간 saveIfEdited 가 아무것도 하지 않고, 새 줄은
+           사라진다. */
+        markBomEdited();
         if (item.type === 'ingredient') {
             setRowProp(targetRow, 'source_label_id', item.ingredient_id || '');
             hydrateIngredientDetails(targetRow, item.ingredient_id);
@@ -1915,10 +1922,6 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (display) {
             display.textContent = selectedAllergens.length ? selectedAllergens.join(', ') : '';
         }
-        const viewAllergens = document.getElementById('view-allergens');
-        if (viewAllergens) {
-            viewAllergens.textContent = selectedAllergens.length ? selectedAllergens.join(', ') : '-';
-        }
         if (toggleBtn) {
             toggleBtn.textContent = selectedAllergens.length === buttons.length ? '전체해제' : '전체선택';
         }
@@ -1943,10 +1946,6 @@ body.in-iframe .bom-page-header { display: none !important; }
         const display = document.getElementById('gmoSelectedDisplay');
         if (display) {
             display.textContent = selected.length ? selected.join(', ') : '';
-        }
-        const viewGmo = document.getElementById('view-gmo');
-        if (viewGmo) {
-            viewGmo.textContent = selected.length ? selected.join(', ') : '-';
         }
         if (toggleBtn) {
             toggleBtn.textContent = selected.length === buttons.length ? '전체해제' : '전체선택';
@@ -1977,6 +1976,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
         
         const applyValue = (value) => {
+            if (!CAN_EDIT) return;
             const rowIndex = ensureCurrentRowIndex();
             if (rowIndex === null) {
                 showSnackbar('원료를 먼저 선택해 주세요.', 'warning');
@@ -1987,6 +1987,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                 allergens: value,
                 allergen: value
             });
+            /* 알레르기 칸을 감춰 두면 setRowProp 이 표를 거치지 않고 행
+               객체에 바로 쓴다 — afterChange 가 없다. 여기서 직접 말한다. */
+            markBomEdited();
             updateAllergenButtons(value);
         };
         
@@ -2032,6 +2035,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
 
         const applyValue = (value) => {
+            if (!CAN_EDIT) return;
             const rowIndex = ensureCurrentRowIndex();
             if (rowIndex === null) {
                 showSnackbar('원료를 먼저 선택해 주세요.', 'warning');
@@ -2443,7 +2447,7 @@ body.in-iframe .bom-page-header { display: none !important; }
      * 때문에, 값만 베껴 넣으면 **엉뚱한 행을 덮어쓴다.**
      */
     window.sortBomByRatio = function () {
-        if (!hot) return;
+        if (!CAN_EDIT || !hot) return;
         const rows = hot.getSourceData().slice();
         const named = rows.filter(r => r && ((r.raw_material_name || '').trim()
                                              || (r.ingredient_name || '').trim()));
@@ -2455,6 +2459,9 @@ body.in-iframe .bom-page-header { display: none !important; }
 
         hot.loadData(named.concat(blank));
         generateBomSummary();
+        /* loadData 는 afterChange 를 건너뛴다. 순서가 실제로 바뀌었을 때만
+           말한다 — 이미 배합비 순이면 고친 것이 없다. */
+        if (before !== after) markBomEdited();
 
         if (typeof showSnackbar === 'function') {
             const withRatio = named.filter(r => (parseFloat(r.mixing_ratio) || 0) > 0).length;
@@ -2622,10 +2629,19 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
     }
 
-    /* 기본정보 탭 원재료 표시명으로 복사 (postMessage) */
+    /* 기본정보 탭 원재료 표시명으로 복사 (postMessage)
+
+       **단독으로 열었을 때는 보낼 부모가 없다.** 예전에는 postMessage 가
+       자기 자신에게 가고(window.parent === window) 받는 이가 없어 아무 일도
+       일어나지 않았다. 그때는 클립보드에 담아 주고 어디에 붙이는지 말한다 —
+       사람이 하려던 일(그 문구를 원재료명 칸에 넣기)은 그대로 된다. */
     function copyRawmtrlToBasicInfo() {
         if (!window._bomSummaryRawmtrl) {
             showSnackbar('원재료 표시명 데이터가 없습니다. BOM에 원료를 입력해 주세요.', 'warning');
+            return;
+        }
+        if (!inProductScreen()) {
+            copyRawmtrlToClipboard(window._bomSummaryRawmtrl);
             return;
         }
         window.parent.postMessage({
@@ -2634,6 +2650,34 @@ body.in-iframe .bom-page-header { display: none !important; }
             allergens: window._bomSummaryAllergens || [],
             gmo:       window._bomSummaryGmo       || []
         }, '*');
+    }
+
+    function copyRawmtrlToClipboard(text) {
+        function told() {
+            showSnackbar('원재료명을 클립보드에 담았습니다. '
+                         + '기본정보 탭의 원재료명 칸에 붙여넣으세요(Ctrl+V).', 'success');
+        }
+        /* https 가 아니거나 오래된 판에서는 navigator.clipboard 가 없다.
+           그때도 빈손으로 보내지 않는다. */
+        function byTextarea() {
+            const box = document.createElement('textarea');
+            box.value = text;
+            box.style.position = 'fixed';
+            box.style.left = '-9999px';
+            document.body.appendChild(box);
+            box.select();
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            document.body.removeChild(box);
+            if (ok) { told(); return; }
+            showSnackbar('클립보드를 쓸 수 없습니다. 요약을 펴서 글자를 직접 복사해 주세요.',
+                         'warning');
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(told, byTextarea);
+            return;
+        }
+        byTextarea();
     }
 
     /* -----------------------------------------------------------------
@@ -2706,6 +2750,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 for (let r = 0; r < rows; r++) {
                     setRowProp(r, 'summary_type', value, 'syncPanel');
                 }
+                markBomEdited();   // source='syncPanel' 은 afterChange 를 건너뛴다
                 const field = document.getElementById('field-summary-type');
                 if (field) field.value = value;
                 document.querySelectorAll('.summary-type-btn').forEach(function (b) {
@@ -2988,12 +3033,45 @@ body.in-iframe .bom-page-header { display: none !important; }
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 
+    /* 사진을 올려 판독하는 창은 **제품 화면**이 가진다(문서함 탭). 이 화면을
+       단독으로 열면 부를 데가 없어 눌러도 아무 일이 없었다 — 그 자리에서
+       감추고, 그래도 불렸으면 어디로 가야 하는지 말한다. */
+    function inProductScreen() {
+        return !!(window.parent && window.parent !== window);
+    }
+
     window.openIngredientPhotoUpload = function () {
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'openIngredientUpload' },
-                                      window.location.origin);
+        if (!inProductScreen()) {
+            showSnackbar('사진으로 등록은 제품 화면의 배합 탭에서 할 수 있습니다.', 'warning');
+            return;
         }
+        window.parent.postMessage({ type: 'openIngredientUpload' },
+                                  window.location.origin);
     };
+
+    /* **읽기 전용에서는 고르는 단추를 눌리지 않게 한다.**
+
+       줄 상세(알레르기·GMO·이 원료만)는 값을 **보는** 자리이기도 해서 통째로
+       감출 수 없다. 그런데 단추는 멀쩡해 보여서 누르게 되고, 눌리면 켜진
+       모양만 바뀐 뒤 아무 일도 일어나지 않았다 — 처리기는 CAN_EDIT 에서
+       돌아 나가기 때문이다. 눌리지 않게 해 두면 그 자리에서 알 수 있다. */
+    (function () {
+        if (CAN_EDIT) return;
+        document.querySelectorAll(
+            '#allergen-quick-buttons .quick-allergen-btn, #allergenToggleBtn,'
+            + ' #gmoBtnList .gmo-btn, #gmoToggleBtn, .summary-type-btn'
+        ).forEach(function (btn) {
+            btn.disabled = true;
+            btn.title = '읽기 전용으로 열려 있어 고칠 수 없습니다';
+        });
+    })();
+
+    /* 단독으로 열었으면 부모가 가진 창(사진 판독)을 부를 수 없다 */
+    (function () {
+        if (window.parent && window.parent !== window) return;
+        const btn = document.getElementById('bomPhotoRegisterBtn');
+        if (btn) btn.style.display = 'none';
+    })();
 
     /* 상세를 저절로 펴는 칸.
        모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다. 목록에서
@@ -3003,11 +3081,9 @@ body.in-iframe .bom-page-header { display: none !important; }
     function updateContextPanel(data, rowIndex, openPanel) {
         const emptyEl = document.getElementById('context-empty');
         const formEl = document.getElementById('context-form');
-        const viewEl = document.getElementById('context-view');
         if (rowIndex === null || rowIndex === undefined) {
             emptyEl.classList.remove('d-none');
             formEl.classList.add('d-none');
-            viewEl.classList.add('d-none');
             currentRowIndex = null;
             closeRowDetail();
             return;
@@ -3031,22 +3107,9 @@ body.in-iframe .bom-page-header { display: none !important; }
 
         emptyEl.classList.add('d-none');
         formEl.classList.remove('d-none');
-        viewEl.classList.add('d-none');
 
         const rowData = data || {};
         const metadata = rowData._meta || {};
-        const sourceType = metadata.source_type || 'manual';
-
-        const viewBadge = document.getElementById('context-view-type');
-        viewBadge.textContent = mapTypeLabel(sourceType);
-        viewBadge.className = 'badge';
-        if (sourceType === 'shared') {
-            viewBadge.classList.add('bg-info');
-        } else if (sourceType === 'internal' || sourceType === 'my' || sourceType === 'ingredient') {
-            viewBadge.classList.add('bg-success');
-        } else {
-            viewBadge.classList.add('bg-secondary');
-        }
         
         /* 표에 칸이 생겼으니 표를 먼저 본다. 메타데이터는 칸이 없던 시절의
            자료를 뒤에서 받쳐 줄 뿐이다. */
@@ -3057,10 +3120,6 @@ body.in-iframe .bom-page-header { display: none !important; }
         document.getElementById('field-gmo').value = gmoText;
         document.getElementById('field-report-no').value = reportText;
         document.getElementById('field-source-label-id').value = metadata.source_label_id || '';
-
-        document.getElementById('view-allergens').textContent = allergenText || '-';
-        document.getElementById('view-gmo').textContent = gmoText || '-';
-        document.getElementById('view-report-no').textContent = reportText || '-';
 
         // 표시명 기준 버튼 상태 업데이트
         const summaryType = metadata.summary_type || '식품유형';
@@ -3098,7 +3157,6 @@ body.in-iframe .bom-page-header { display: none !important; }
                 // 알레르기 필드 직접 입력 시 버튼 상태와 뷰 업데이트
                 if (prop === 'allergens') {
                     updateAllergenButtons(el.value);
-                    document.getElementById('view-allergens').textContent = el.value || '-';
                 }
             });
         });
@@ -3119,7 +3177,7 @@ body.in-iframe .bom-page-header { display: none !important; }
 
         document.querySelectorAll('.summary-type-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (currentRowIndex === null) return;
+                if (!CAN_EDIT || currentRowIndex === null) return;
                 const value = btn.dataset.value;
                 document.getElementById('field-summary-type').value = value;
                 document.querySelectorAll('.summary-type-btn').forEach(b => {
@@ -3127,6 +3185,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                     b.classList.toggle('btn-outline-secondary', b.dataset.value !== value);
                 });
                 setRowProp(currentRowIndex, 'summary_type', value, 'syncPanel');
+                markBomEdited();   // source='syncPanel' 은 afterChange 를 건너뛴다
                 setTimeout(generateBomSummary, 50);
             });
         });
@@ -3185,6 +3244,9 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
         currentRowIndex = null;
         hot.loadData(Array.from({ length: 15 }, () => ({})));
+        /* loadData 는 afterChange 를 건너뛴다. 비운 것도 고친 것이다 — 이
+           표시가 없으면 탭을 옮겼다 돌아오면 지운 줄이 되살아난다. */
+        if (filled) markBomEdited();
         updateContextPanel(null, null);
         /* loadData 로 넣은 값은 afterChange 가 무시한다(source === 'loadData').
            합계도 요약도 여기서 직접 다시 그린다 */
