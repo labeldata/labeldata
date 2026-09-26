@@ -45,6 +45,35 @@ def chrome_path():
     return shutil.which('chrome') or shutil.which('google-chrome') or shutil.which('chromium')
 
 
+def kill_stray_chromes():
+    """
+    **우리가 띄운 헤드리스 크롬만** 닫는다.
+
+    하위 프로세스가 끊기면 그 안의 `chrome.close()` 가 돌지 않아 크롬이 남는다.
+    남은 것들이 기계를 붙들면 뒤에 오는 시험이 줄줄이 시간 초과로 붉어진다.
+
+    사람이 쓰는 크롬은 건드리지 않는다 — `--user-data-dir` 에 우리가 만든
+    임시 프로필(`ezchrome-`)이 적혀 있는 것만 고른다. 닫은 개수를 돌려준다.
+    """
+    if os.name != 'nt':
+        subprocess.run(['pkill', '-f', 'ezchrome-'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return 0
+    query = ("Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
+             "Where-Object { $_.CommandLine -like '*ezchrome-*' } | "
+             "Select-Object -ExpandProperty ProcessId")
+    try:
+        found = subprocess.run(['powershell', '-NoProfile', '-Command', query],
+                               capture_output=True, timeout=60)
+    except Exception:
+        return 0
+    pids = [w for w in found.stdout.decode('utf-8', 'replace').split() if w.isdigit()]
+    for pid in pids:
+        subprocess.run(['taskkill', '/PID', pid, '/T', '/F'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return len(pids)
+
+
 class AutoLoginForTests:
     """시험 전용 미들웨어 — `?__as=<username>` 이면 그 사용자로 로그인한다.
     크롬에 세션 쿠키를 심을 길이 없어서다. 시험 설정에서만 끼운다."""
@@ -353,5 +382,412 @@ class 도움말이_틀_안을_가리킨다(StaticLiveServerTestCase):
             self.assertLessEqual(abs(sx - (gx - 6)), 3, got)
             self.assertLessEqual(abs(sy - (gy - 6)), 3, got)
             self.assertLessEqual(abs(sw - (gw + 12)), 3, got)
+        finally:
+            chrome.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  아래 넷은 **문자열 시험이 못 보는 것**만 본다.
+#
+#  "그 자리에 markBomEdited() 가 적혀 있다" 는 원본을 읽으면 안다. 그런데
+#  정말로 빗장이 서는지는 **눌러 봐야** 안다 — 처리기가 앞에서 돌아 나가거나,
+#  다른 곳에서 bomEdited 를 되돌리거나, 단추가 가려져 눌리지 않을 수 있다.
+#  그 셋은 원본에 다 적혀 있어도 일어난다.
+# ══════════════════════════════════════════════════════════════════════════
+
+
+def _bom_rows(label, user, ratios=(3, 7, 25)):
+    from v1.bom.models import ProductBOM
+    names = ['설탕', '밀가루', '버터', '소금', '물엿']
+    for i, ratio in enumerate(ratios):
+        ProductBOM.objects.create(
+            parent_label=label, created_by=user, ingredient_name=names[i % len(names)],
+            raw_material_name=names[i % len(names)], usage_ratio=ratio,
+            sort_order=i, active_yn=True)
+
+
+@override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
+class 배합_화면에서_고친_적이_실제로_선다(StaticLiveServerTestCase):
+    """
+    `bomEdited` 가 서 있지 않으면 탭을 떠날 때 `saveIfEdited` 가 아무것도 하지
+    않는다 — 고친 것이 조용히 사라진다. 그 빗장을 `afterChange` 하나가 세우는데
+    그것은 `loadData`·`palette`·`syncPanel` 을 건너뛴다.
+
+    여기서는 **눌러 보고** `saveIfEdited()` 가 건너뛰는지 묻는다. 건너뛴다고
+    답하면 그 길에서 고친 것은 사라진다.
+    """
+
+    def setUp(self):
+        if not chrome_path() or websocket is None:
+            self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
+        self.user = User.objects.create_user('browser', password='x')
+        from v1.label.models import MyIngredient, MyLabel
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='눌러 보는 제품')
+        # 보관함에 한 줄 — [추가] 를 누르는 길이 살아 있어야 그 시험을 할 수 있다
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm='보관함 원료',
+                                    prdlst_dcnm='기타가공품', delete_YN='N')
+        # 배합비가 **올라가는** 순서다 — 정렬을 누르면 순서가 실제로 바뀐다
+        _bom_rows(self.label, self.user, ratios=(3, 7, 25))
+        self.url = (f'{self.live_server_url}/bom/label/{self.label.my_label_id}'
+                    f'/editor/?__as=browser')
+
+    # 표가 뜬 뒤여야 누를 수 있다.
+    #
+    # `hot` 은 화면 안쪽 변수다(전역이 아니다). 시험을 위해 전역을 새로 만들지
+    # 않는다 — 사람이 쓰는 길로만 몬다. 줄을 고르는 것도 칸을 실제로 누른다.
+    _READY = """(function(){
+        return !!(window.saveIfEdited && window.clearAllRows
+                  && document.querySelector('#bom-grid .ht_master .htCore tbody tr td'));
+    })()"""
+
+    # 칸을 누른다 — 핸슨테이블은 mousedown 으로 고른다
+    _PICK = """(function(){
+        var tr = document.querySelector('#bom-grid .ht_master .htCore tbody tr');
+        var td = tr && tr.querySelector('td');
+        if (!td) return 'NO CELL';
+        ['mousedown', 'mouseup', 'click'].forEach(function (t) {
+            td.dispatchEvent(new MouseEvent(t, {bubbles: true, cancelable: true,
+                                                view: window, button: 0}));
+        });
+        return 'picked';
+    })()"""
+
+    _ASK = "window.saveIfEdited().then(r => JSON.stringify({skipped: !!(r && r.skipped)}))"
+
+    def _fresh(self, chrome):
+        chrome.goto(self.url, settle=2.0)
+        if not chrome.wait_for(self._READY, timeout=30):
+            if not chrome.js("typeof Handsontable !== 'undefined'"):
+                self.skipTest('핸슨테이블 CDN 을 받지 못했다')
+            self.fail('배합표가 뜨지 않았다')
+
+    def _skipped_after(self, chrome, action):
+        self._fresh(chrome)
+        self.assertEqual(chrome.js(action + "; 'done'"), 'done', action)
+        time.sleep(0.6)
+        return json.loads(chrome.js(self._ASK))['skipped']
+
+    def test_눌러_보고_묻는다(self):
+        """
+        **한 시험으로 몰아 둔 까닭.** StaticLiveServerTestCase 는
+        TransactionTestCase 라, 시험 하나가 끝날 때마다 표를 전부 비운다. 그
+        값이 화면 한 번 여는 값보다 크다 — 갈래마다 시험을 따로 두면 같은
+        것을 보면서 걸리는 시간이 몇 배가 된다. 짚는 자리마다 문구를 단다.
+        """
+        chrome = Chrome(port=9341)
+        try:
+            # ⓪ 빗장 자체가 살아 있는가 — 아래가 뜻을 갖기 위한 전제다
+            self._fresh(chrome)
+            self.assertTrue(json.loads(chrome.js(self._ASK))['skipped'],
+                            '아무것도 안 했는데 저장하려 든다')
+            # ① 보관함에서 넣기 — 카드의 [추가] 를 실제로 누른다.
+            #    끌어 놓기는 합성 DragEvent 의 dataTransfer 가 보호 모드라
+            #    `getData` 가 빈 글자를 돌려준다 — 같은 `addItemToGrid` 로
+            #    들어가는 [추가] 단추로 본다.
+            self._fresh(chrome)
+            self.assertTrue(chrome.wait_for(
+                "!!document.querySelector('.palette-card button')", timeout=20),
+                '보관함 카드가 그려지지 않았다')
+            chrome.js("document.querySelector('.palette-card button').click(); 'done'")
+            time.sleep(0.8)
+            landed = chrome.js(
+                "[...document.querySelectorAll('#bom-grid .ht_master .htCore tbody tr')]"
+                ".map(tr => tr.innerText).join('|')")
+            self.assertIn('보관함 원료', landed, '카드를 눌렀는데 줄이 안 생겼다')
+            self.assertFalse(json.loads(chrome.js(self._ASK))['skipped'],
+                             '보관함에서 넣은 줄')
+
+            # ② 배합비 순 정렬 (지금 표는 오름차순이라 순서가 바뀐다)
+            self.assertFalse(self._skipped_after(chrome, 'window.sortBomByRatio()'), '정렬')
+
+            # ③ 표시명 기준(모든 줄에 함께)
+            basis = ("document.querySelector("
+                     "'#sheet-summary-type .v2-seg-btn[data-value=\"원재료명\"]').click()")
+            self.assertFalse(self._skipped_after(chrome, basis), '표시명 기준')
+
+            # ④ '이 원료만' — 줄을 고른 뒤라야 걸린다
+            only = (self._PICK
+                    + "; document.getElementById('summaryTypeIngredientName').click()")
+            self.assertFalse(self._skipped_after(chrome, only), '이 원료만')
+
+            # ⑤ 전체 지우기 (물어보는 창은 건너뛴다)
+            self.assertFalse(self._skipped_after(chrome, 'window.clearAllRows({ask: false})'),
+                             '전체 지우기')
+
+            # ⑥ 알레르기 고르기 — 그 칸을 감춰 두면 표를 거치지 않는다
+            allergen = (self._PICK + "; document.querySelector("
+                        "'#allergen-quick-buttons .quick-allergen-btn').click()")
+            self.assertFalse(self._skipped_after(chrome, allergen), '알레르기 고르기')
+
+            # ⑦ 바뀐 것이 없으면 말하지 않는다 — 이미 배합비 순인 표에서
+            #    정렬을 누른 것은 고친 것이 아니다
+            self._fresh(chrome)
+            chrome.js('window.sortBomByRatio()')       # 여기서 내림차순이 된다
+            time.sleep(0.6)
+            # 저장해 빗장을 내린 다음, 이미 정렬된 표에서 한 번 더 누른다
+            chrome.js(self._ASK)
+            time.sleep(1.2)
+            chrome.js('window.sortBomByRatio()')
+            time.sleep(0.6)
+            self.assertTrue(json.loads(chrome.js(self._ASK))['skipped'],
+                            '순서가 그대로인데 고친 것으로 셌다')
+
+            # ⑧ 단독으로 열면 부모가 하던 단추를 감춘다
+            got = json.loads(chrome.js("""(function(){
+                var photo = document.getElementById('bomPhotoRegisterBtn');
+                var copy = document.getElementById('bomCopyRawmtrlBtn');
+                return JSON.stringify({
+                    photoThere: !!photo,
+                    photoShown: !!(photo && photo.offsetParent !== null),
+                    copyShown: !!(copy && copy.offsetParent !== null),
+                    deadPanel: !!document.getElementById('context-view')});
+            })()"""))
+            self.assertTrue(got['photoThere'], got)
+            self.assertFalse(got['photoShown'], '단독 화면에서 [사진으로 등록]이 보인다')
+            self.assertFalse(got['deadPanel'], '죽은 상세 상자가 남아 있다')
+        finally:
+            chrome.close()
+
+
+@override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
+class 읽기_전용으로_열면_배합표를_고칠_수_없다(StaticLiveServerTestCase):
+    """
+    표는 readOnly 로 서지만 표 **밖**의 단추는 그대로였다. 불러오기·정렬·전체
+    지우기는 `loadData` 로 표를 통째로 바꾸므로 readOnly 를 지나간다.
+    """
+
+    def setUp(self):
+        if not chrome_path() or websocket is None:
+            self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
+        from v1.label.models import MyLabel
+        from v1.products.models import ProductShare, SharePermission
+
+        owner = User.objects.create_user('owner', password='x', email='owner@example.com')
+        User.objects.create_user('viewer', password='x', email='viewer@example.com')
+        label = MyLabel.objects.create(user_id=owner, my_label_name='빌려 보는 제품')
+        _bom_rows(label, owner)
+        share = ProductShare.objects.create(
+            label=label, recipient_email='viewer@example.com',
+            created_by=owner, active_yn=True)
+        SharePermission.objects.create(share=share, role_code='VIEWER',
+                                       can_edit_label=False)
+        self.url = (f'{self.live_server_url}/bom/label/{label.my_label_id}'
+                    f'/editor/?__as=viewer')
+
+    def test_고치는_단추가_없고_고르는_단추는_잠긴다(self):
+        chrome = Chrome(port=9342)
+        try:
+            chrome.goto(self.url, settle=2.0)
+            if not chrome.wait_for(
+                    "!!document.querySelector('#bom-grid .ht_master .htCore tbody tr td')",
+                    timeout=30):
+                if not chrome.js("typeof Handsontable !== 'undefined'"):
+                    self.skipTest('핸슨테이블 CDN 을 받지 못했다')
+                self.fail('배합표가 뜨지 않았다')
+
+            got = json.loads(chrome.js("""(function(){
+                var shown = sel => {
+                    var el = document.querySelector(sel);
+                    return !!(el && el.offsetParent !== null);
+                };
+                var picks = [...document.querySelectorAll(
+                    '#allergen-quick-buttons .quick-allergen-btn, #gmoBtnList .gmo-btn,'
+                    + ' .summary-type-btn, #allergenToggleBtn, #gmoToggleBtn')];
+                return JSON.stringify({
+                    load:  shown('[data-bs-target="#loadLabelModal"]'),
+                    clear: shown('[onclick="clearAllRows()"]'),
+                    sort:  shown('[onclick="sortBomByRatio()"]'),
+                    copy:  shown('#bomCopyRawmtrlBtn'),
+                    basis: shown('#sheet-summary-type'),
+                    readonlyBadge: document.body.textContent.indexOf('읽기 전용') >= 0,
+                    picks: picks.length,
+                    locked: picks.filter(b => b.disabled).length});
+            })()"""))
+            for key in ('load', 'clear', 'sort', 'copy', 'basis'):
+                self.assertFalse(got[key], f'읽기 전용인데 {key} 단추가 보인다: {got}')
+            self.assertTrue(got['readonlyBadge'], got)
+            self.assertGreater(got['picks'], 5, got)
+            self.assertEqual(got['picks'], got['locked'],
+                             f'고르는 단추가 눌린다: {got}')
+
+            # 코드로도 막혔는가 — 창을 열어 둔 채 권한이 바뀌는 길이 있다
+            grid = ("[...document.querySelectorAll('#bom-grid .ht_master .htCore tbody tr')]"
+                    ".map(tr => tr.innerText).join('|')")
+            before = chrome.js(grid)
+            chrome.js('window.sortBomByRatio(); window.clearAllRows({ask: false})')
+            time.sleep(0.8)
+            after = chrome.js(grid)
+            self.assertEqual(before, after, '읽기 전용인데 표가 바뀌었다')
+        finally:
+            chrome.close()
+
+
+@override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
+class 영양성분_화면이_사람_말로_말한다(StaticLiveServerTestCase):
+    """
+    표가 그려지기 전 사용자가 보는 자리에 "LABEL_ID: 3", "📡 API 호출 중" 이
+    적혀 있었다. 그리고 '1조각' 과 '1회량' 은 다른 값인데 그 말이 없었다.
+    """
+
+    def setUp(self):
+        if not chrome_path() or websocket is None:
+            self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
+        from v1.label.models import MyLabel
+        u = User.objects.create_user('nut', password='x')
+        label = MyLabel.objects.create(user_id=u, my_label_name='영양성분 제품')
+        self.url = (f'{self.live_server_url}/products/labels/{label.my_label_id}'
+                    f'/nutrition/?__as=nut')
+
+    def test_문구와_1조각_안내(self):
+        chrome = Chrome(port=9343)
+        try:
+            chrome.goto(self.url, settle=3.0)
+            # `#loadStatus` 는 **표가 그려지면 사라진다** — resultDisplay 를
+            # 통째로 갈아 끼우기 때문이다. 그것을 기다리면 붉어진다.
+            self.assertTrue(chrome.wait_for(
+                "!!document.getElementById('parallelHint')"
+                " && !!document.querySelector('#styleButtons [data-style=\"parallel\"]')",
+                timeout=25), '영양성분 화면이 뜨지 않았다')
+            time.sleep(2)
+            text = chrome.js('document.body.innerText')
+            for gone in ('LABEL_ID', '📡', '페이지 상태'):
+                self.assertNotIn(gone, text, f'{gone} 이 화면에 보인다')
+
+            # 병행표시를 골랐을 때만 '1조각' 안내가 뜬다
+            got = json.loads(chrome.js(r"""(function(){
+                var hint = document.getElementById('parallelHint');
+                var was = hint.hidden;
+                document.querySelector('#styleButtons [data-style="parallel"]').click();
+                var on = hint.hidden;
+                document.querySelector('#styleButtons [data-style="basic"]').click();
+                return JSON.stringify({before: was, whenParallel: on, after: hint.hidden,
+                                       text: hint.textContent.replace(/\s+/g, ' ').trim()});
+            })()"""))
+            self.assertTrue(got['before'], got)
+            self.assertFalse(got['whenParallel'], got)
+            self.assertTrue(got['after'], got)
+            self.assertIn('단위내용량', got['text'])
+            self.assertIn('1회 섭취참고량', got['text'])
+        finally:
+            chrome.close()
+
+
+@override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
+class 검증_설정_되돌리기가_정말_되돌린다(StaticLiveServerTestCase):
+    """
+    [이 탭 값 되돌리기]는 탭 줄에서 이 탭 안으로 옮겼다. 옮기며 둘이 딸려
+    나왔다 — 글꼴 기본값의 꼴이 목록 값과 달라 되돌리면 **글꼴 칸이 빈칸**이
+    됐고(selectedIndex = -1), 항목명 칸은 되돌리는 목록에 없었다. 원본을 읽어
+    서는 빈칸이 되는지 알 수 없다.
+    """
+
+    def setUp(self):
+        if not chrome_path() or websocket is None:
+            self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
+        from v1.label.models import MyLabel
+        u = User.objects.create_user('pv', password='x')
+        label = MyLabel.objects.create(user_id=u, my_label_name='미리보기 제품',
+                                       prdlst_nm='미리보기 제품')
+        self.url = (f'{self.live_server_url}/label/preview/?label_id={label.my_label_id}'
+                    f'&in_tab=1&__as=pv')
+
+    def test_되돌려도_글꼴과_항목명_칸이_비지_않는다(self):
+        chrome = Chrome(port=9344)
+        try:
+            chrome.goto(self.url, settle=3.0)
+            self.assertTrue(chrome.wait_for(
+                "!!document.getElementById('resetSettingsBtn')", timeout=20),
+                '되돌리기 단추가 없다')
+
+            got = json.loads(chrome.js(r"""(function(){
+                var btn = document.getElementById('resetSettingsBtn');
+                var pane = btn.closest('.preview-tab-content');
+                document.querySelector('.preview-tab[data-tab="table-settings"]').click();
+                var font = document.getElementById('fontFamilySelect');
+                var col = document.getElementById('labelColWidthInput');
+                font.value = "'Nanum Gothic', sans-serif";
+                col.value = '40';
+                btn.click();
+                return JSON.stringify({
+                    pane: pane && pane.id,
+                    inTabStrip: !!btn.closest('.preview-tabs'),
+                    name: btn.textContent.replace(/\s+/g, ' ').trim(),
+                    font: font.value, fontIndex: font.selectedIndex, col: col.value});
+            })()"""))
+            self.assertEqual(got['pane'], 'table-settings-content', got)
+            self.assertFalse(got['inTabStrip'], got)
+            self.assertIn('되돌리기', got['name'])
+            self.assertGreaterEqual(got['fontIndex'], 0, f'글꼴 칸이 빈칸이 됐다: {got}')
+            self.assertTrue(got['font'], got)
+            self.assertEqual(got['col'], '24', f'항목명 칸이 되돌아오지 않았다: {got}')
+
+            # 항목 순서 탭의 동작 줄 — '모두' 가 이름에 있고 넷 다 곁말이 있다
+            acts = json.loads(chrome.js(r"""(function(){
+                document.querySelector('.preview-tab[data-tab="field-order"]').click();
+                var btns = [...document.querySelectorAll('#field-order-content .settings-action')];
+                return JSON.stringify({
+                    names: btns.map(b => b.textContent.replace(/\s+/g, ' ').trim()),
+                    tips: btns.filter(b => b.title).length,
+                    shown: btns.filter(b => b.offsetParent !== null).length});
+            })()"""))
+            self.assertEqual(acts['shown'], 4, acts)
+            self.assertEqual(acts['tips'], 4, acts)
+            self.assertEqual(acts['names'],
+                             ['처음 순서로', '모두 켜기·끄기', '모두 반 칸', '모두 한 줄'], acts)
+        finally:
+            chrome.close()
+
+
+@override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
+class 원료_관리_화면의_단추가_하는_일로_불린다(StaticLiveServerTestCase):
+    """
+    등록 화면의 [연결 표시사항]은 처리기가 붙지 않는 단추였다 — 마크업에서
+    뺐지만, 그 화면이 **AJAX 로 갈아 끼우는 칸**이라 정말 없는지는 그려 봐야
+    안다. 선택 동작 줄의 이름도 함께 본다.
+    """
+
+    def setUp(self):
+        if not chrome_path() or websocket is None:
+            self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
+        from v1.label.models import MyIngredient
+        u = User.objects.create_user('ing', password='x')
+        MyIngredient.objects.create(user_id=u, prdlst_nm='시험 원료', delete_YN='N')
+        self.url = f'{self.live_server_url}/label/my-ingredient-list-combined/?__as=ing'
+
+    def test_선택_동작_줄과_등록_화면의_단추(self):
+        chrome = Chrome(port=9345)
+        try:
+            chrome.goto(self.url, settle=3.0)
+            got = json.loads(chrome.js(r"""(function(){
+                var pick = sel => document.querySelector(sel);
+                return JSON.stringify({
+                    copy: pick('#bulkCopyBtn').textContent.replace(/\s+/g, ' ').trim(),
+                    export: pick('#bulkExportBtn').textContent.replace(/\s+/g, ' ').trim(),
+                    copyTip: pick('#bulkCopyBtn').title,
+                    exportTip: pick('#bulkExportBtn').title,
+                    excelMenu: !!pick('#excelBtn')});
+            })()"""))
+            self.assertEqual(got['copy'], '사본 만들기', got)
+            self.assertEqual(got['export'], '선택만 엑셀로', got)
+            self.assertIn('_복사', got['copyTip'])
+            self.assertIn('[엑셀]', got['exportTip'])
+
+            # 등록 폼을 그려 본다 — 그 칸은 AJAX 로 갈아 끼운다
+            # 이 화면의 등록 폼은 [신규 원료]가 `detailContent` 에 실어 온다
+            # (list_combined.js 의 loadNewIngredientForm 은 여기 실리지 않는다).
+            self.assertTrue(chrome.wait_for("""(function(){
+                var btn = document.getElementById('newBtn');
+                if (!btn) return false;
+                if (!window.__askedNew) { window.__askedNew = 1; btn.click(); }
+                return !!document.querySelector('#detailContent form');
+            })()""", timeout=25), '등록 폼이 그려지지 않았다')
+            form = json.loads(chrome.js("""(function(){
+                var box = document.getElementById('detailContent');
+                return JSON.stringify({
+                    linked: !!box.querySelector('#linkedLabelsBtn'),
+                    head: (box.querySelector('h5') || {}).textContent || ''});
+            })()"""))
+            self.assertIn('등록', form['head'], form)
+            self.assertFalse(form['linked'], '등록 화면에 [연결 표시사항] 단추가 남아 있다')
         finally:
             chrome.close()

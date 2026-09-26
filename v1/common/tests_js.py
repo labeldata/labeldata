@@ -46,13 +46,26 @@ def chrome_path():
     return shutil.which('chrome') or shutil.which('google-chrome') or shutil.which('chromium')
 
 
-def run_chrome(html_path: Path, timeout=60, want_dom=False):
-    """페이지를 읽혀 window.onerror 로 잡힌 오류 문장을 돌려준다."""
+def run_chrome(html_path: Path, timeout=120, want_dom=False):
+    """
+    페이지를 읽혀 window.onerror 로 잡힌 오류 문장을 돌려준다.
+
+    **제 프로필을 새로 쓴다.** `--user-data-dir` 을 안 주면 크롬은 기본 프로필에
+    붙는데, 사람이 크롬을 띄워 두었거나 앞선 시험의 헤드리스 판이 남아 있으면
+    `--dump-dom` 이 돌아오지 않는다 — 그러면 시간 초과로 붉어지고, 붉은 문장은
+    "인라인 JS 가 문법에 안 맞다" 를 가리킨다(문법과 아무 상관이 없다).
+    실제로 브라우저 시험 뒤에 이 시험 넷이 한꺼번에 그렇게 무너졌다.
+    """
     exe = chrome_path()
+    profile = tempfile.mkdtemp(prefix='ezjs-')
     cmd = [exe, '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run',
+           f'--user-data-dir={profile}', '--no-default-browser-check',
            '--disable-extensions', '--allow-file-access-from-files', '--mute-audio',
            '--virtual-time-budget=4000', '--dump-dom', html_path.as_uri()]
-    out = subprocess.run(cmd, capture_output=True, timeout=timeout)
+    try:
+        out = subprocess.run(cmd, capture_output=True, timeout=timeout)
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
     dom = out.stdout.decode('utf-8', errors='replace')
     m = re.search(r'data-errs="([^"]*)"', dom)
     if not m:

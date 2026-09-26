@@ -14,7 +14,7 @@ from pathlib import Path
 from django.conf import settings
 from django.test import SimpleTestCase
 
-from v1.common.browser_checks import chrome_path, websocket
+from v1.common.browser_checks import chrome_path, kill_stray_chromes, websocket
 
 
 class 브라우저_시험을_따로_돌린다(SimpleTestCase):
@@ -22,10 +22,24 @@ class 브라우저_시험을_따로_돌린다(SimpleTestCase):
         if not chrome_path() or websocket is None:
             self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
         root = Path(settings.BASE_DIR).parent          # manage.py 가 있는 곳
-        out = subprocess.run(
-            [sys.executable, 'manage.py', 'test', 'v1.common.browser_checks',
-             '--settings=v1.config.settings_browser', '--noinput'],
-            cwd=root, capture_output=True, timeout=600)
+        try:
+            out = subprocess.run(
+                [sys.executable, 'manage.py', 'test', 'v1.common.browser_checks',
+                 '--settings=v1.config.settings_browser', '--noinput'],
+                # 화면 시험이 일곱 건이다(각각 크롬을 띄우고 여러 번 다시 읽는다).
+                # 600 초는 실측 바로 위라, 기계가 조금 바쁘면 여기서 끊기고
+                # **시험 내용과 무관하게** 붉어졌다.
+                cwd=root, capture_output=True, timeout=1800)
+        except subprocess.TimeoutExpired:
+            # **끊긴 자리를 치운다.** 하위 프로세스를 죽이면 그 안의
+            # `chrome.close()` 가 돌지 않아 헤드리스 크롬이 남는다. 남은 것들이
+            # 기계를 붙들면 **뒤에 오는 tests_js 가 줄줄이 시간 초과로 붉어진다**
+            # — 실제로 그렇게 다섯 건이 한꺼번에 무너졌고, 붉은 문장은 전부
+            # 엉뚱한 곳을 가리켰다.
+            kill_stray_chromes()
+            self.fail('브라우저 시험이 시간 안에 끝나지 않았다(남은 크롬은 닫았다).')
         tail = out.stderr.decode('utf-8', 'replace')[-3000:]
+        if out.returncode != 0:
+            kill_stray_chromes()
         self.assertEqual(out.returncode, 0, '브라우저 시험이 실패했다:\n' + tail)
         self.assertIn('OK', tail)
