@@ -7457,6 +7457,26 @@ def design_compare_record(request, label_id):
     diff = result.get('diff') or []
     same = int(result.get('same') or 0)
 
+    # **판독값과 검증 결과를 함께 남긴다.**
+    #
+    # 예전에는 diff 목록만 남았다. 그래서 다시 보려면 사진을 다시 읽어야 했고
+    # (시간당 판독 한도 30회, 유료), 판 사이를 견줄 수도 없었다. 값을 남겨
+    # 두면 재검증이 무료·즉시다 — 규칙을 고친 뒤 옛 시안을 다시 볼 수 있다.
+    proof_note = None
+    try:
+        reading = json.loads(request.POST.get('reading') or 'null')
+    except (ValueError, TypeError):
+        reading = None
+    if isinstance(reading, dict):
+        from v1.label.services import proof_check
+        try:
+            checks = proof_check.check_proof(label, reading)
+            proof_note = proof_check.note_for_record(
+                reading, checks, user=request.user, when=timezone.now())
+        except Exception:
+            # 기록이 못 남았다고 대조를 막지 않는다 — 결과는 이미 화면에 있다
+            logger.exception('[시안 검증] 기록용 검증 실패 (label=%s)', label.pk)
+
     # 시안을 남기는 규칙(판 잇기 · 슬롯 꽂기)은 한 벌로 둔다 —
     # 불러오기에서 읽은 사진도 같은 자리로 들어온다.
     from v1.products.services import design_proof
@@ -7480,6 +7500,9 @@ def design_compare_record(request, label_id):
                     'same_count': same,
                     'diff': diff[:40],      # 화면이 보여 줄 만큼만
                 },
+                # 시안 그 자체의 검증. 판마다 붙어 있어 "2판 2건 → 3판 0건" 을
+                # 그대로 셀 수 있다. 없으면 키를 만들지 않는다.
+                **({'proof': proof_note} if proof_note else {}),
             })
 
     ProductActivityLog.objects.create(
@@ -8112,6 +8135,48 @@ def contact_sheet_template(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="contact_template.xlsx"'
     return response
+
+
+@login_required
+@require_POST
+def proof_check_api(request, label_id):
+    """
+    시안에서 읽은 값 **그 자체**가 규정에 맞는지 본다.
+
+    대조(design_compare_grade)와 다른 일이다. 그쪽은 "내가 확정한 값과 같은가"
+    를 묻고, 이쪽은 "이 시안이 규정에 맞는가" 를 묻는다. 제품 정보가 아직 없는
+    사람에게는 뒤엣것만 뜻이 있다 — 견줄 값이 없으면 대조는 전부 '다름' 이다.
+
+    **아무것도 저장하지 않는다.** 기록은 design_compare_record 가 남긴다.
+    규칙 엔진은 0.01 초짜리라(실측) 왕복이 아깝지 않다.
+    """
+    from v1.label.services import proof_check
+    from v1.label.services.ai_validation_service import name_issues, name_unchecked
+
+    label = _resolve_editable_label(request, label_id)   # 남의 라벨이면 404
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, TypeError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'message': '읽을 수 없는 요청입니다.'},
+                            status=400)
+    data = body.get('data')
+    if not isinstance(data, dict):
+        return JsonResponse({'success': False, 'message': '형식이 올바르지 않습니다.'},
+                            status=400)
+
+    try:
+        got = proof_check.check_proof(label, data)
+    except Exception:
+        # 검증이 실패해도 판독 결과는 화면에 있다. 그것까지 못 보게 만들지 않는다.
+        logger.exception('[시안 검증] 실패 (label=%s)', label.pk)
+        return JsonResponse({'success': False,
+                             'message': '시안을 검증하지 못했습니다. 판독 결과는 아래에 있습니다.'},
+                            status=500)
+
+    got['issues'] = name_issues(got['issues'])
+    got['unchecked'] = name_unchecked(got['unchecked'])
+    got['success'] = True
+    return JsonResponse(got)
 
 
 @login_required

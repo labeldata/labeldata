@@ -35,6 +35,8 @@
   // 확인 창이 지금 들고 있는 것. 품목을 골라 **다시 대조**할 때 그대로 보낸다.
   // 판독은 한 번만 하고(돈이 나간다), 대조만 다시 한다.
   var lastData = null, lastPhoto = null, lastSnap = null;
+  // 마지막 시안 검증 결과. 기록에 함께 실어 보낸다(문서함의 그 판에 붙는다).
+  var lastChecks = null;
   var lastOcrText = '';      // 시안에서 읽은 글자 전부 (대조에서만)
 
   // OCR 항목 -> 기본 정보 탭의 입력칸 id
@@ -414,6 +416,107 @@
   //
   // 말없이 고치면 "내가 사진에서 본 글자와 다른데?" 가 된다. 무엇을 무엇으로
   // 바꿨는지 밝혀 두고, 잘못 맞췄으면 그 자리에서 되돌릴 수 있게 한다.
+  /* ── 시안 그 자체의 검증 ──────────────────────────────────────────────
+   *
+   * 지금까지 이 창은 "무엇을 읽었는가"(채우기) 와 "내 값과 다른가"(대조) 만
+   * 말했다. **읽은 값이 규정에 맞는가** 는 아무도 묻지 않았다 — 금지문구·괄호·
+   * 냉동 해동방법·품목보고번호가 그렇다. 특히 금지문구는 일괄표시면이 아니라
+   * 앞면 카피에 있어서(extra_texts) 라벨 칸에 담기지도 않는다.
+   *
+   * 판정은 서버가 한다(/proof-check/). 규칙 표를 화면에 베끼면 파이썬 쪽과
+   * 두 벌이 되고, 두 벌은 언젠가 한쪽만 고쳐진다 — 이 저장소가 여러 번 당한
+   * 실패다(design_compare_grade 주석).
+   *
+   * **못 읽은 것을 위반과 같은 칸에 두지 않는다.** 시안에 그 표시가 없는지
+   * 판독이 놓쳤는지 판독기도 모른다. 섞어 세면 사진이 흐린 날 "위반 12건" 이
+   * 뜨고, 그 다음부터 아무도 이 기능을 안 쓴다.
+   * ─────────────────────────────────────────────────────────────────── */
+  function proofChecksHtml(checks) {
+    if (!checks || !checks.success) return '';
+
+    var issues = checks.issues || [];
+    var unread = checks.unread || [];
+    var html = '';
+
+    if (issues.length) {
+      var block = issues.filter(function (i) { return !i.advisory; }).length;
+      html += '<details class="cmp-group cmp-group-proof" open>'
+        + '<summary class="cmp-group-title">'
+        + '<i class="bi bi-exclamation-triangle me-1"></i>'
+        + '시안이 규정에 어긋난 곳 ' + issues.length
+        + (block ? ' <span class="proof-block">' + block + '건은 고쳐야 합니다</span>' : '')
+        + '</summary>'
+        + issues.map(function (i) {
+            return '<div class="proof-issue' + (i.advisory ? ' is-advice' : '') + '">'
+              + '<div class="proof-issue-head">'
+              + '<span class="proof-issue-name">' + esc(i.label || i.category || '') + '</span>'
+              + (i.advisory ? '<span class="proof-tag-advice">확인 권고</span>'
+                            : '<span class="proof-tag-block">부적합</span>')
+              + (i.source === 'extra_texts'
+                  ? '<span class="proof-tag-where">시안 문구</span>' : '')
+              + '</div>'
+              + '<div class="proof-issue-msg">' + esc(i.message || '') + '</div>'
+              + (i.suggestion
+                  ? '<div class="proof-issue-fix">' + esc(i.suggestion) + '</div>' : '')
+              + '</div>';
+          }).join('')
+        + '</details>';
+    } else {
+      html += '<div class="proof-ok">'
+        + '<i class="bi bi-check-circle me-1"></i>'
+        + '읽은 값에서 규정에 어긋난 곳을 찾지 못했습니다.'
+        + '</div>';
+    }
+
+    /* 못 읽은 항목. **위반이 아니다** — 시안에 없는지 판독이 놓쳤는지 모른다. */
+    if (unread.length) {
+      html += '<details class="cmp-group cmp-group-unread">'
+        + '<summary class="cmp-group-title">'
+        + '<i class="bi bi-question-circle me-1"></i>'
+        + '시안에서 읽지 못한 표시 항목 ' + unread.length
+        + '</summary>'
+        + '<div class="proof-unread-note">'
+        + '시안에 그 표시가 <b>없는 것</b>인지 판독이 <b>놓친 것</b>인지는 판독기도'
+        + ' 알 수 없습니다. 왼쪽 사진에서 직접 확인해 주세요 —'
+        + ' 정말 없으면 규정 위반입니다.'
+        + '</div>'
+        + '<div class="proof-unread-list">'
+        + unread.map(function (u) {
+            return '<span class="proof-unread">' + esc(u.label || u.field || '') + '</span>';
+          }).join('')
+        + '</div></details>';
+    }
+    return html;
+  }
+
+  /* 서버에 묻는다. 실패해도 판독 결과는 그대로 보여 준다 — 검증을 못 했다고
+     읽은 값을 통째로 못 보게 만들지 않는다. */
+  function askProofCheck(data) {
+    var id = labelId();
+    if (!id || !data) return Promise.resolve(null);
+    return postJson('/products/labels/' + id + '/proof-check/', { data: data })
+      .catch(function (err) {
+        console.debug('시안 검증 실패', err);
+        return null;
+      });
+  }
+
+  /* 창이 뜬 뒤에 채운다. 판독이 끝나 값을 보고 있는 사람을 검증 왕복만큼
+     더 기다리게 하지 않는다. */
+  function fillProofChecks(body, data) {
+    var slot = body.querySelector('#proofChecks');
+    if (!slot) return;
+    slot.innerHTML = '<div class="proof-wait">읽은 값이 규정에 맞는지 보는 중…</div>';
+    askProofCheck(data).then(function (checks) {
+      lastChecks = checks;
+      slot.innerHTML = proofChecksHtml(checks);
+      if (checks && !checks.success) {
+        slot.innerHTML = '<div class="proof-wait">'
+          + esc(checks.message || '규정 검증을 하지 못했습니다.') + '</div>';
+      }
+    });
+  }
+
   function snapHtml(info) {
     if (!info || !info.summary) return '';
     return ''
@@ -808,8 +911,10 @@
         + '  </div>'
         + rows.join('')
         + '</div>'
+        + '<div id="proofChecks" class="proof-checks"></div>'
         + extrasHtml(data);
       window.photoViewerLayout(body, photoFile, table);
+      fillProofChecks(body, data);
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
 
       wireItemPick(body);
@@ -1280,6 +1385,7 @@
 
     var table = summary
       + advice
+      + '<div id="proofChecks" class="proof-checks"></div>'
       + apiMatchHtml(apiMatch)
       + numHtml
       + extraHtml
@@ -1288,6 +1394,7 @@
       + group(same, '같은 항목', false);
 
     window.photoViewerLayout(body, photoFile, table);
+    fillProofChecks(body, data);
 
     /* '어디서?' — 줄 아래에 그 자리를 오려 붙인다.
      *
@@ -1341,6 +1448,9 @@
     var form = new FormData();
     if (photoFile) form.append('design_file', photoFile);
     form.append('result', JSON.stringify({ diff: diff, same: sameCount }));
+    /* 판독값을 함께 남긴다 — 그러면 재검증이 무료다(사진을 다시 읽지 않는다).
+       서버가 이 값으로 검증을 한 번 더 돌려 그 판에 붙인다. */
+    if (lastData) form.append('reading', JSON.stringify(lastData));
 
     fetch('/products/labels/' + id + '/design-compare/', {
       method: 'POST',

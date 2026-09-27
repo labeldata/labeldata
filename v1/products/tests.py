@@ -15483,3 +15483,212 @@ class 내보내기는_무엇이_다른지_적는다(TestCase):
     def test_곁말이_보이게_그려진다(self):
         self.assertIn('.hdr-export-menu .dropdown-item .hdr-export-note', self.css)
         self.assertIn('.hdr-export-menu .dropdown-item { white-space: normal; }', self.css)
+
+
+class 시안_검증을_서버가_한다(TestCase):
+    """
+    판정 규칙을 화면에 베끼면 파이썬 쪽과 두 벌이 된다. 그리고 **아무것도
+    저장하지 않는다** — 기록은 사람이 결과를 보고 확인했을 때 남긴다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        self.me = User.objects.create_user(username='me@proof.com', password='pw12345!')
+        self.other = User.objects.create_user(username='you@proof.com', password='pw12345!')
+        self.label = MyLabel.objects.create(user_id=self.me, my_label_name='시안 제품')
+        self.url = reverse('products:proof_check_api', args=[self.label.pk])
+
+    def _post(self, data):
+        return self.client.post(self.url, data=json.dumps({'data': data}),
+                                content_type='application/json')
+
+    def test_읽은_값이_규정에_어긋나면_말한다(self):
+        self.client.force_login(self.me)
+        resp = self._post({
+            'prdlst_nm': {'value': '천연 초코쿠키', 'confidence': 'high'},
+            'rawmtrl_nm': {'value': '밀가루(밀:국산, 설탕', 'confidence': 'high'},
+        })
+        self.assertEqual(resp.status_code, 200)
+        got = resp.json()
+        self.assertTrue(got['success'])
+        cats = {i['category'] for i in got['issues']}
+        self.assertIn('forbidden_phrase', cats)
+        self.assertIn('rawmtrl_bracket', cats)
+        # 화면이 영어 키를 찍지 않게 이름을 붙여 보낸다
+        self.assertTrue(all(i.get('label') for i in got['issues']), got['issues'])
+
+    def test_아무것도_저장하지_않는다(self):
+        from v1.products.models import ProductDocument
+
+        self.client.force_login(self.me)
+        before = ProductDocument.objects.count()
+        self._post({'prdlst_nm': {'value': '천연 쿠키', 'confidence': 'high'}})
+        self.assertEqual(ProductDocument.objects.count(), before)
+        self.label.refresh_from_db()
+        self.assertFalse(self.label.prdlst_nm)
+
+    def test_남의_라벨은_404(self):
+        """403 은 그 id 가 있다고 알려 준다."""
+        self.client.force_login(self.other)
+        self.assertEqual(self._post({}).status_code, 404)
+
+    def test_로그인하지_않으면_못_부른다(self):
+        resp = self._post({})
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login', resp['Location'])
+
+    def test_GET_으로는_안_된다(self):
+        self.client.force_login(self.me)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_망가진_요청에도_터지지_않는다(self):
+        self.client.force_login(self.me)
+        resp = self.client.post(self.url, data='{{{', content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.post(self.url, data=json.dumps({'data': '글자'}),
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_검증이_터져도_판독을_막지_않는다(self):
+        """읽은 값은 이미 화면에 있다. 그것까지 못 보게 만들지 않는다."""
+        from unittest.mock import patch
+
+        self.client.force_login(self.me)
+        with patch('v1.label.services.proof_check.check_proof',
+                   side_effect=RuntimeError('터짐')):
+            resp = self._post({'prdlst_nm': {'value': 'A', 'confidence': 'high'}})
+        self.assertEqual(resp.status_code, 500)
+        self.assertFalse(resp.json()['success'])
+        self.assertIn('판독 결과는', resp.json()['message'])
+
+    def test_화면이_서버에_묻는다(self):
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.assertIn("'/products/labels/' + id + '/proof-check/'", js)
+        # 채우기 창과 대조 창 **둘 다**에 자리가 있어야 한다
+        self.assertEqual(js.count("id=\"proofChecks\""), 2)
+        # 함수 정의까지 세면 셋이다 — 부르는 자리만 센다
+        self.assertEqual(js.count('fillProofChecks(body, data);'), 2)
+
+
+class 시안_검증_결과가_그_판에_남는다(TestCase):
+    """
+    예전에는 diff 목록만 남았다. 그래서 다시 보려면 사진을 다시 읽어야 했고
+    (판독은 시간당 30회, 유료), 판 사이를 견줄 수도 없었다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        self.me = User.objects.create_user(username='rec@proof.com', password='pw12345!')
+        self.label = MyLabel.objects.create(user_id=self.me, my_label_name='기록 제품')
+        self.url = reverse('products:design_compare_record', args=[self.label.pk])
+        self.client.force_login(self.me)
+
+    def _post(self, reading=None):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        data = {
+            'design_file': SimpleUploadedFile('시안.png', b'\x89PNG\r\n\x1a\n' + b'0' * 40,
+                                              content_type='image/png'),
+            'result': json.dumps({'diff': [], 'same': 3}),
+        }
+        if reading is not None:
+            data['reading'] = json.dumps(reading)
+        return self.client.post(self.url, data=data)
+
+    def test_판독값과_검증결과가_함께_남는다(self):
+        from v1.products.models import ProductDocument
+
+        resp = self._post({'prdlst_nm': {'value': '천연 쿠키', 'confidence': 'high'}})
+        self.assertEqual(resp.status_code, 200)
+        doc = ProductDocument.objects.filter(label=self.label).latest('document_id')
+        proof = doc.metadata.get('proof')
+        self.assertTrue(proof, doc.metadata)
+        # 값을 남기는 것이 핵심 — 이것이 있으면 재검증이 무료다
+        self.assertEqual(proof['values']['prdlst_nm'], '천연 쿠키')
+        self.assertGreater(proof['issue_count'], 0)
+        self.assertTrue(proof['checked_at'])
+
+    def test_판독값이_없으면_키를_만들지_않는다(self):
+        """예전 화면이 보내는 요청도 그대로 돌아야 한다."""
+        from v1.products.models import ProductDocument
+
+        self.assertEqual(self._post().status_code, 200)
+        doc = ProductDocument.objects.filter(label=self.label).latest('document_id')
+        self.assertNotIn('proof', doc.metadata)
+        self.assertIn('compare', doc.metadata)     # 지금까지 남던 것은 그대로
+
+    def test_기록이_실패해도_대조를_막지_않는다(self):
+        from unittest.mock import patch
+
+        with patch('v1.label.services.proof_check.check_proof',
+                   side_effect=RuntimeError('터짐')):
+            resp = self._post({'prdlst_nm': {'value': 'A', 'confidence': 'high'}})
+        self.assertEqual(resp.status_code, 200)
+
+    def test_화면이_판독값을_함께_보낸다(self):
+        from pathlib import Path
+
+        js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        at = js.index('function recordCompare')
+        self.assertIn("form.append('reading'", js[at:at + 900])
+
+class 시안으로_시작하는_길이_있다(TestCase):
+    """
+    제품 정보가 아직 없는 사람이 하려는 일은 "빈 양식 서른 칸 채우기" 가 아니라
+    "받은 시안이 쓸 만한지 보기" 다. 그 길이 **홈 대시보드에만** 있어서, 목록에서
+    시작한 사람은 [신규 등록] 을 눌러 빈 칸으로 떨어졌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.explorer = (base / 'templates/products/product_explorer.html'
+                         ).read_text(encoding='utf-8')
+        self.home = (base / 'templates/main/home_v2_dashboard.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_목록에도_입구가_있다(self):
+        self.assertIn('시안으로 시작', self.explorer)
+        self.assertIn("{% url 'products:product_create' %}?import=1", self.explorer)
+        # 빈 양식으로 가는 길도 그대로 있어야 한다 — 시안이 없는 사람이 갇히면 안 된다
+        self.assertIn('신규 등록', self.explorer)
+
+    def test_두_길이_무엇이_다른지_적는다(self):
+        # 단추의 곁말을 본다 — 첫 번째 '시안으로 시작' 은 왜 고쳤는지 적은 주석이다
+        at = self.explorer.index('?import=1" class="v2-action-btn"')
+        self.assertIn('규정에 맞는지', self.explorer[at:at + 250])
+
+    def test_홈은_제품_정보가_없어도_된다고_말한다(self):
+        # 태그와 줄바꿈을 지우고 본다 — 문구가 <b> 로 갈려 있다
+        import re
+        flat = re.sub(r'\s+', ' ', re.sub(r'</?b>', '', self.home))
+        self.assertIn('제품 정보가 없어도 됩니다', flat)
+
+    def test_빈_제품을_먼저_만든다(self):
+        """
+        시작할 때 제품을 만든다. 중간에 브라우저를 닫아도 판독값이 남는다.
+        손 안 댄 것은 cleanup_temp_labels 가 치운다.
+        """
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        user = User.objects.create_user('starter', password='x')
+        self.client.force_login(user)
+        before = MyLabel.objects.filter(user_id=user).count()
+        resp = self.client.get(reverse('products:product_create') + '?import=1')
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(MyLabel.objects.filter(user_id=user).count(), before + 1)
+        # 판독 창이 곧바로 뜨도록 표시를 넘긴다
+        self.assertIn('import=1', resp['Location'])

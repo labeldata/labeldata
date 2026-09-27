@@ -493,6 +493,13 @@ def name_unchecked(rows: list[dict]) -> list[dict]:
             for row in rows]
 
 
+def name_issues(rows: list[dict]) -> list[dict]:
+    """지적에 화면용 이름을 붙인다 — name_unchecked 와 같은 까닭, 같은 표."""
+    return [{**row,
+             'label': _CATEGORY_LABELS.get(row.get('category'), row.get('category') or '')}
+            for row in rows]
+
+
 def group_issues_by_category(issues: list[dict]) -> list[dict]:
     """
     validate_label()/check_ingredient_order()가 내는 flat한 issue 목록을

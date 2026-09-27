@@ -2040,3 +2040,58 @@ html.v2-max .v2-max-exit { display: flex; }
 }
 .ing-cons-alt-v { color: var(--ez-gray-900, #202124); word-break: break-all; }
 @media (max-width: 600px) { .ing-cons-alt { margin-left: 0; } }
+
+/* ==================== 시안 그 자체의 규정 검증 ====================
+   판독 확인 창과 대조 창이 함께 쓴다. "무엇을 읽었는가" 아래에 "그 값이
+   규정에 맞는가" 를 둔다 — 읽은 값을 보고 나서 판정을 보는 순서다.
+
+   **부적합과 확인 권고를 색으로 가른다.** 둘을 같은 색으로 두면 근거만
+   갖추면 되는 말(YELLOW)까지 고치러 가고, 그러면 지적 전체를 안 믿게 된다. */
+.proof-checks { margin: 10px 0 4px; }
+.proof-wait { padding: 8px 10px; font-size: 12px; color: var(--text-hint, #9aa0a6); }
+
+.cmp-group-proof > .cmp-group-title { color: var(--ez-danger, #c5221f); }
+.proof-block {
+  margin-left: 4px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700;
+  background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f);
+}
+
+.proof-issue {
+  margin-bottom: 6px; padding: 7px 10px; border-radius: 8px;
+  background: #fffaf9; box-shadow: inset 3px 0 0 var(--ez-danger, #c5221f);
+}
+.proof-issue.is-advice {
+  background: var(--ez-warning-bg, #fef7e0);
+  box-shadow: inset 3px 0 0 #f0b429;
+}
+.proof-issue-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.proof-issue-name { font-size: 12px; font-weight: 700; color: var(--text-primary, #202124); }
+.proof-tag-block, .proof-tag-advice, .proof-tag-where {
+  padding: 1px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 700;
+}
+.proof-tag-block  { background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f); }
+.proof-tag-advice { background: #fef3c7; color: #8a6100; }
+.proof-tag-where  { background: var(--ez-info-bg, #e8f0fe); color: var(--v2-blue, #1a73e8); }
+.proof-issue-msg { margin-top: 3px; font-size: 12.5px; line-height: 1.55; }
+.proof-issue-fix {
+  margin-top: 3px; font-size: 11.5px; line-height: 1.5;
+  color: var(--text-secondary, #5f6368);
+}
+
+.proof-ok {
+  padding: 8px 10px; border-radius: 8px; font-size: 12.5px;
+  background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e);
+}
+
+/* 못 읽은 항목 — 위반과 같은 칸에 두지 않는다 */
+.cmp-group-unread > .cmp-group-title { color: var(--text-secondary, #5f6368); }
+.proof-unread-note {
+  margin-bottom: 5px; font-size: 11.5px; line-height: 1.55;
+  color: var(--text-secondary, #5f6368);
+}
+.proof-unread-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.proof-unread {
+  padding: 2px 8px; border-radius: 999px; font-size: 11.5px;
+  background: var(--bg-muted, #f1f3f4); color: var(--text-secondary, #5f6368);
+}

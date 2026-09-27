@@ -22210,3 +22210,195 @@ class 등록_화면에는_연결_표시사항_단추가_없다(TestCase):
         self.assertIn("btn.style.display = 'none';", block)
         # 번호가 있으면 다시 보여야 한다 — 한 번 감추면 그대로 남는다
         self.assertIn("btn.style.display = '';", block)
+
+
+class 시안_값_그_자체를_규정에_댄다(TestCase):
+    """
+    지금까지 규정 검증은 DB 에 저장된 라벨만 봤다. 시안은 읽어 놓고도 "내 값과
+    같은가" 만 물었다 — **시안에만 있는 위반은 아무도 안 봤다.** 제품 정보가
+    아직 없는 사람에게는 견줄 값이 없어 대조 자체가 뜻이 없다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        self.user = User.objects.create_user('proofer', password='x')
+        # 아직 아무것도 안 채운 제품 — 시안으로 시작한 사람의 처지
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='시안으로 시작')
+
+    def _read(self, **fields):
+        """판독기가 주는 꼴({value, confidence})로 만든다."""
+        return {k: {'value': v, 'confidence': 'high'} for k, v in fields.items()}
+
+    def _cats(self, got):
+        return sorted({i['category'] for i in got['issues']})
+
+    def test_금지문구_괄호_냉동_해동방법을_잡는다(self):
+        from v1.label.services import proof_check
+
+        got = proof_check.check_proof(self.label, self._read(
+            prdlst_nm='천연 초코쿠키',
+            prdlst_dcnm='과자',
+            rawmtrl_nm='밀가루(밀:국산, 설탕, 버터',
+            storage_method='-18℃ 이하 냉동보관',
+            cautions='개봉 후 드십시오',
+        ))
+        cats = self._cats(got)
+        for want in ('forbidden_phrase', 'rawmtrl_bracket', 'thawing_method'):
+            self.assertIn(want, cats, '%s 를 못 잡았다: %s' % (want, cats))
+        self.assertFalse(got['ok'])
+
+    def test_앞면_카피의_금지문구를_잡는다(self):
+        """
+        여기가 이 기능의 핵심이다. 금지문구는 일괄표시면이 아니라 **앞면 카피**
+        에 있고, 라벨에는 그 카피를 담는 칸이 아예 없다. 판독기가 extra_texts
+        로 모아 오는데 금지문구 표를 아는 엔진은 그 글자를 한 번도 못 봤다.
+        """
+        from v1.label.services import proof_check
+
+        data = self._read(prdlst_nm='초코쿠키', prdlst_dcnm='과자')
+        data['extra_texts'] = ['3년 연속 대상 수상', '천연 재료로만 만들었습니다']
+        got = proof_check.check_proof(self.label, data)
+
+        hits = [i for i in got['issues'] if i.get('source') == 'extra_texts']
+        self.assertTrue(hits, '앞면 문구를 안 봤다: %s' % self._cats(got))
+        self.assertIn('천연', hits[0]['message'])
+        # 어느 문구에서 나왔는지 알 수 있어야 사람이 시안에서 찾는다
+        self.assertEqual(hits[0]['text'], '천연 재료로만 만들었습니다')
+        # 수상 내역은 금지문구가 아니다 — 걸리면 안 된다
+        self.assertEqual(len(hits), 1, hits)
+
+    def test_읽지_못한_것은_위반이_아니다(self):
+        """
+        "품목보고번호가 비어 있습니다" 는 시안 검사에서 뜻이 갈린다 — 시안에
+        정말 없는지, 판독이 놓쳤는지 판독기도 모른다. 섞어 세면 사진이 흐린 날
+        "위반 12건" 이 뜨고 그 다음부터 아무도 이 기능을 안 쓴다.
+        """
+        from v1.label.services import proof_check
+
+        got = proof_check.check_proof(self.label, self._read(prdlst_nm='초코쿠키'))
+        self.assertNotIn('required_missing', self._cats(got))
+        names = {u['field'] for u in got['unread']}
+        self.assertIn('prdlst_report_no', names, got['unread'])
+        self.assertTrue(all(u.get('label') for u in got['unread']), got['unread'])
+
+    def test_DB_값을_물려받지_않는다(self):
+        """
+        시안을 보는 검사에서 **시안에 없는 것은 없는 것**이다. DB 값을 물려받으면
+        "시안에는 없는데 DB 에 있어서" 통과하는 일이 생긴다.
+        """
+        from v1.label.services import proof_check
+
+        self.label.prdlst_nm = '저장된 제품명'
+        self.label.rawmtrl_nm_display = '밀가루(밀:국산), 설탕'
+        self.label.save()
+
+        proof = proof_check.proof_label(self.label, {'prdlst_dcnm': '과자'})
+        self.assertEqual(proof.prdlst_nm, '')
+        self.assertEqual(proof.rawmtrl_nm_display, '')
+        # 원본은 그대로다
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.prdlst_nm, '저장된 제품명')
+
+    def test_시안_라벨은_저장할_수_없다(self):
+        """실수로 저장하면 사람이 확정하지 않은 값이 제품에 들어간다."""
+        from v1.label.services import proof_check
+
+        proof = proof_check.proof_label(self.label, {'prdlst_nm': '천연 쿠키'})
+        with self.assertRaises(RuntimeError):
+            proof.save()
+
+    def test_제품이_없어도_돈다(self):
+        """
+        제품 정보가 없는 상태로 쓰는 기능이다. 저장하지 않은 라벨(pk 없음)로도
+        29개 검사가 돌아야 한다 — 문서함을 보는 하나만 pk 빗장으로 막았다.
+        """
+        from v1.label.models import MyLabel
+        from v1.label.services import proof_check
+
+        blank = MyLabel(user_id=self.user)
+        self.assertIsNone(blank.pk)
+        got = proof_check.check_proof(blank, self._read(
+            prdlst_nm='천연 쿠키', rawmtrl_nm='밀가루(밀:국산, 설탕'))
+        self.assertIn('forbidden_phrase', self._cats(got))
+        self.assertIn('rawmtrl_bracket', self._cats(got))
+
+    def test_읽은_칸과_그_밖의_글을_알려_준다(self):
+        from v1.label.services import proof_check
+
+        data = self._read(prdlst_nm='초코쿠키', content_weight='100g')
+        data['extra_texts'] = ['NEW 리뉴얼', 'NEW 리뉴얼']    # 같은 문구 두 번
+        got = proof_check.check_proof(self.label, data)
+        self.assertEqual(got['read_fields'], ['content_weight', 'prdlst_nm'])
+        self.assertEqual(got['extra_texts'], ['NEW 리뉴얼'])   # 한 번만
+
+    def test_평평한_꼴도_받는다(self):
+        """저장해 둔 값으로 다시 볼 때는 {칸: 값} 으로 온다 — 사진을 다시 읽지 않는다."""
+        from v1.label.services import proof_check
+
+        got = proof_check.check_proof(self.label, {'prdlst_nm': '천연 쿠키'})
+        self.assertIn('forbidden_phrase', self._cats(got))
+
+    def test_기록에_남길_것만_추린다(self):
+        from django.utils import timezone
+
+        from v1.label.services import proof_check
+
+        data = self._read(prdlst_nm='천연 쿠키')
+        checks = proof_check.check_proof(self.label, data)
+        note = proof_check.note_for_record(data, checks, user=self.user,
+                                          when=timezone.now())
+        # 값을 남기는 것이 핵심이다 — 그래야 재검증이 무료다
+        self.assertEqual(note['values']['prdlst_nm'], '천연 쿠키')
+        self.assertTrue(note['checked_at'])
+        self.assertEqual(note['checked_by'], 'proofer')
+        self.assertGreater(note['issue_count'], 0)
+        # 화면 HTML 은 남기지 않는다
+        self.assertNotIn('<', str(note))
+
+
+class 금지문구_규칙은_한_벌이다(TestCase):
+    """
+    앞면 카피를 보는 길이 생기면서 훑기가 두 군데가 될 수 있었다. 같은 표를
+    쓰는 함수 하나로 두고 양쪽이 그것을 부른다.
+    """
+
+    def test_훑기와_지적_만들기가_함수로_나와_있다(self):
+        from v1.label.services import validation_service as vs
+
+        self.assertTrue(callable(vs.scan_forbidden))
+        self.assertTrue(callable(vs.forbidden_issue))
+
+    def test_예외_사전을_먼저_지운다(self):
+        """'천연향료' 안의 '천연' 은 세지 않는다."""
+        from v1.label.services import validation_service as vs
+
+        graded = {'GREEN': [{'keyword': '천연향료', 'match': ['천연향료'], 'note': ''}],
+                  'RED': [{'keyword': '천연', 'match': ['천연'], 'note': ''}],
+                  'YELLOW': []}
+        self.assertEqual(vs.scan_forbidden(graded, '천연향료 사용'), [])
+        self.assertTrue(vs.scan_forbidden(graded, '천연 재료'))
+
+    def test_조건부는_확정을_막지_않는다(self):
+        from v1.label.services import validation_service as vs
+
+        row = {'keyword': '무첨가', 'match': ['무첨가'], 'note': ''}
+        red = vs.forbidden_issue('RED', '천연', row, '"제품명" 항목')
+        yellow = vs.forbidden_issue('YELLOW', '무첨가', row, '"제품명" 항목')
+        self.assertFalse(red['advisory'])
+        self.assertTrue(yellow['advisory'])
+
+    def test_본문_검사가_그_함수를_쓴다(self):
+        """규칙을 두 벌로 두면 어느 날 한쪽만 고쳐진다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'label/services/validation_service.py'
+               ).read_text(encoding='utf-8')
+        at = src.index('def check_forbidden_phrases')
+        block = src[at:at + 900]
+        self.assertIn('scan_forbidden(graded, value)', block)
+        self.assertIn('forbidden_issue(', block)

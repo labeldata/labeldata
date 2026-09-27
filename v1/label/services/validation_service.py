@@ -1166,6 +1166,54 @@ def check_farm_seafood_content(label) -> list[dict]:
 #
 # **여기 없는 말은 예전처럼 지적한다.** 확실한 것만 넣는다 — "자연산" 처럼
 # 규정이 명시적으로 막은 말을 여기 넣으면 잡아야 할 것을 놓친다.
+def scan_forbidden(graded: dict, text: str) -> list[tuple[str, str, dict]]:
+    """
+    글 한 덩이에서 금지문구를 찾는다 → [(등급, 걸린 말, 표 행), …].
+
+    check_forbidden_phrases 안에 있던 그 규칙 그대로다. 함수로 뺀 까닭은
+    **시안의 그 밖 문구(extra_texts)** 를 같은 자로 봐야 해서다 — 금지문구는
+    일괄표시면이 아니라 앞면 카피에 있고, 그 글은 라벨의 어느 칸에도 없다.
+    규칙을 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+
+        GREEN   먼저 지운다 — '천연향료' 안의 '천연' 은 세지 않는다
+        RED     걸린다
+        YELLOW  걸리되 근거가 있으면 쓸 수 있는 말이다
+    """
+    scanned = text or ''
+    for row in graded.get('GREEN', ()):
+        for word in row['match']:
+            scanned = scanned.replace(word, ' ')
+
+    hits = []
+    for grade in ('RED', 'YELLOW'):
+        for row in graded.get(grade, ()):
+            hit = next((w for w in row['match']
+                        if re.search(re.escape(w), scanned, re.IGNORECASE)), None)
+            if hit:
+                hits.append((grade, hit, row))
+    return hits
+
+
+def forbidden_issue(grade: str, hit: str, row: dict, where: str,
+                    fields=(), source: str = '') -> dict:
+    """걸린 말 하나를 지적으로 만든다. where 는 "제품명" 항목 / 시안의 문구 "…" 같은 자리말."""
+    if grade == 'RED':
+        message = f'{where}에 사용 금지 문구 "{hit}"가 표시되어 있습니다.'
+        fallback = f'{where}에서 "{hit}" 문구를 삭제하세요.'
+    else:
+        message = f'{where}의 "{hit}" 는 근거가 있어야 쓸 수 있는 표현입니다.'
+        fallback = ('실증 자료를 갖추었는지 확인하세요. 갖추지 못했다면 '
+                    '문구를 빼야 합니다.')
+    issue = _issue('forbidden_phrase', message, row['note'] or fallback,
+                   fields=fields,
+                   # 조건부는 확정을 막지 않는다 — 근거가 있으면 쓸 수 있는
+                   # 말이고, 그 근거는 우리가 볼 수 없는 곳에 있다.
+                   advisory=(grade == 'YELLOW'))
+    if source:
+        issue['source'] = source
+    return issue
+
+
 def check_forbidden_phrases(label) -> list[dict]:
     """
     부당한 표시·광고에 해당하는 표현이 있는가.
@@ -1188,34 +1236,9 @@ def check_forbidden_phrases(label) -> list[dict]:
     issues = []
     for field, field_label in _FIELD_LABELS.items():
         value = getattr(label, field, '') or ''
-
-        # 써도 되는 말을 먼저 지운다. 그 안의 금지 글자는 세지 않는다.
-        scanned = value
-        for row in graded['GREEN']:
-            for word in row['match']:
-                scanned = scanned.replace(word, ' ')
-
-        for grade in ('RED', 'YELLOW'):
-            for row in graded[grade]:
-                hit = next((w for w in row['match']
-                            if re.search(re.escape(w), scanned, re.IGNORECASE)), None)
-                if not hit:
-                    continue
-                if grade == 'RED':
-                    message = (f'"{field_label}" 항목에 사용 금지 문구 "{hit}"가 '
-                               f'표시되어 있습니다.')
-                    fallback = f'"{field_label}"에서 "{hit}" 문구를 삭제하세요.'
-                else:
-                    message = (f'"{field_label}" 항목의 "{hit}" 는 근거가 있어야 '
-                               f'쓸 수 있는 표현입니다.')
-                    fallback = ('실증 자료를 갖추었는지 확인하세요. 갖추지 못했다면 '
-                                '문구를 빼야 합니다.')
-                issues.append(_issue(
-                    'forbidden_phrase', message, row['note'] or fallback,
-                    fields=(field,),
-                    # 조건부는 확정을 막지 않는다 — 근거가 있으면 쓸 수 있는
-                    # 말이고, 그 근거는 우리가 볼 수 없는 곳에 있다.
-                    advisory=(grade == 'YELLOW')))
+        for grade, hit, row in scan_forbidden(graded, value):
+            issues.append(forbidden_issue(grade, hit, row, f'"{field_label}" 항목',
+                                          fields=(field,)))
     return issues
 
 
@@ -2334,6 +2357,12 @@ def check_nutrition_label_scope(label) -> list[dict]:
 def _latest_design_document(label):
     """문서함에 들어온 가장 최근 시안. 없으면 None."""
     from v1.products.models import ProductDocument
+
+    # 시안 검사(proof_check)는 저장하지 않은 라벨로 돈다. pk 가 없으면 관계
+    # 질의가 ValueError 로 터지는데, 29개 검사 가운데 여기만 그랬다 — 나머지는
+    # 스스로 예외를 삼키고 '못 봤다' 로 떨어진다. 문서함이 없으니 시안도 없다.
+    if not getattr(label, 'pk', None):
+        return None
 
     return (ProductDocument.objects
             .filter(label=label, active_yn=True,

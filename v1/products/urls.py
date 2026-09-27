@@ -147,6 +147,10 @@ urlpatterns = [
     # 두 벌이 되고, 두 벌은 언젠가 한쪽만 고쳐진다
     path('labels/<int:label_id>/design-compare/grade/', views.design_compare_grade,
          name='design_compare_grade'),
+    # 시안에서 읽은 값 그 자체가 규정에 맞는지. 대조(grade)와 묻는 것이 다르다 —
+    # 제품 정보가 없는 사람에게는 견줄 값이 없어 대조가 전부 '다름' 이 된다
+    path('labels/<int:label_id>/proof-check/', views.proof_check_api,
+         name='proof_check_api'),
     # 마지막으로 올린 시안. 2 차 검증에서 "저장된 것으로" 를 내어 주려고 본다
     path('labels/<int:label_id>/design-compare/latest/', views.design_compare_latest,
          name='design_compare_latest'),
