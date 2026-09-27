@@ -1828,10 +1828,15 @@ class HomeUpdateStripTests(TestCase):
         html = self._html(True)
         self.assertIn('updStrip', html)
         self.assertIn('최신 업데이트', html)
-        self.assertIn('사진으로 시작하기', html)
+        # 전용 화면으로 갈라지면서 이름이 '시안 검증하기' 가 됐다 —
+        # 제품 조립 화면으로 보내던 '사진으로 시작하기' 와 하는 일이 다르다.
+        self.assertIn('시안 검증하기', html)
 
-    def test_안내가_사진으로_시작하기로_이어진다(self):
-        self.assertIn(reverse('products:product_create') + '?import=1', self._html(True))
+    def test_안내가_시안_검증_화면으로_이어진다(self):
+        html = self._html(True)
+        self.assertIn(reverse('products:proof_page_new'), html)
+        # 제품을 만드는 길도 그대로 있다 — 시안이 없는 사람이 갇히면 안 된다
+        self.assertIn(reverse('products:product_create'), html)
 
     def test_닫으면_기억한다(self):
         """같은 안내가 매번 뜨면 배너가 아니라 소음이 된다."""
@@ -15656,44 +15661,20 @@ class 시안_검증_결과가_그_판에_남는다(TestCase):
 
 class 시안으로_시작하는_길이_있다(TestCase):
     """
-    제품 정보가 아직 없는 사람이 하려는 일은 "빈 양식 서른 칸 채우기" 가 아니라
-    "받은 시안이 쓸 만한지 보기" 다. 그 길이 **홈 대시보드에만** 있어서, 목록에서
-    시작한 사람은 [신규 등록] 을 눌러 빈 칸으로 떨어졌다.
+    **이 시험은 갈라진 뒤의 뜻으로 다시 적혔다.**
+
+    앞 회차에서는 "목록에도 [시안으로 시작] 이 있는가" 를 봤다. 그런데 그 길이
+    [신규 등록] 과 **같은 주소**로 떨어져서 사용자가 두 기능을 구별하지 못했고,
+    그래서 전용 화면(`proof_page`)으로 갈랐다. 지금 지켜야 하는 것은 "입구가
+    있는가" 가 아니라 **"두 입구가 다른 곳으로 가는가"** 다 —
+    `두_입구가_다른_일을_한다` 가 그것을 본다.
+
+    여기 남기는 것은 **빈 제품을 먼저 만든다** 는 사실 하나다. 중간에 브라우저를
+    닫아도 판독값이 남아야 하고(판독은 유료다), 시안 파일을 붙일 곳이 있어야
+    한다(`ProductDocument.label` 은 null 을 받지 않는다).
     """
 
-    def setUp(self):
-        from pathlib import Path
-
-        from django.conf import settings as dj
-
-        base = Path(dj.BASE_DIR)
-        self.explorer = (base / 'templates/products/product_explorer.html'
-                         ).read_text(encoding='utf-8')
-        self.home = (base / 'templates/main/home_v2_dashboard.html'
-                     ).read_text(encoding='utf-8')
-
-    def test_목록에도_입구가_있다(self):
-        self.assertIn('시안으로 시작', self.explorer)
-        self.assertIn("{% url 'products:product_create' %}?import=1", self.explorer)
-        # 빈 양식으로 가는 길도 그대로 있어야 한다 — 시안이 없는 사람이 갇히면 안 된다
-        self.assertIn('신규 등록', self.explorer)
-
-    def test_두_길이_무엇이_다른지_적는다(self):
-        # 단추의 곁말을 본다 — 첫 번째 '시안으로 시작' 은 왜 고쳤는지 적은 주석이다
-        at = self.explorer.index('?import=1" class="v2-action-btn"')
-        self.assertIn('규정에 맞는지', self.explorer[at:at + 250])
-
-    def test_홈은_제품_정보가_없어도_된다고_말한다(self):
-        # 태그와 줄바꿈을 지우고 본다 — 문구가 <b> 로 갈려 있다
-        import re
-        flat = re.sub(r'\s+', ' ', re.sub(r'</?b>', '', self.home))
-        self.assertIn('제품 정보가 없어도 됩니다', flat)
-
     def test_빈_제품을_먼저_만든다(self):
-        """
-        시작할 때 제품을 만든다. 중간에 브라우저를 닫아도 판독값이 남는다.
-        손 안 댄 것은 cleanup_temp_labels 가 치운다.
-        """
         from django.contrib.auth.models import User
 
         from v1.label.models import MyLabel
@@ -15701,11 +15682,9 @@ class 시안으로_시작하는_길이_있다(TestCase):
         user = User.objects.create_user('starter', password='x')
         self.client.force_login(user)
         before = MyLabel.objects.filter(user_id=user).count()
-        resp = self.client.get(reverse('products:product_create') + '?import=1')
+        resp = self.client.get(reverse('products:proof_page_new'))
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(MyLabel.objects.filter(user_id=user).count(), before + 1)
-        # 판독 창이 곧바로 뜨도록 표시를 넘긴다
-        self.assertIn('import=1', resp['Location'])
 
 
 class 시안_검증_결과가_문서함에_보인다(TestCase):
@@ -15816,3 +15795,259 @@ class 시안_값으로_빈_칸을_채운다(TestCase):
         block = self.js[at:at + 500]
         self.assertIn('선택 항목 채우기', block)
         self.assertIn('applyBtn.onclick = null;', block)
+
+
+class 시안_검증은_제_화면을_갖는다(TestCase):
+    """
+    [신규 등록] 과 [시안으로 시작] 이 **같은 주소**로 떨어졌다
+    (`/products/<id>/new/`). 입구 이름만 다르고 목적지가 같으니 사용자에게는
+    중복으로 보였고, 실제로 그 말을 들었다.
+
+    더 안쪽의 문제가 셋이었다 — 결과가 확인 창 안에만 있어 닫으면 돌아갈
+    자리가 없었고(다시 보려면 유료 판독을 또 해야 했다), 창을 닫으면 탭 넷과
+    저장 단추가 있는 제품 조립 화면이었고, 시안이 붙은 제품은 자동 정리에서
+    빠져 '임시 - 제품명 - N' 이 영구히 남았다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        self.me = User.objects.create_user(username='page@proof.com', password='pw12345!')
+        self.other = User.objects.create_user(username='no@proof.com', password='pw12345!')
+        self.client.force_login(self.me)
+
+    def test_들어가면_빈_제품을_만들고_주소를_고정한다(self):
+        """새로고침·뒤로 가기로 제품이 또 만들어지면 안 된다."""
+        from v1.label.models import MyLabel
+
+        before = MyLabel.objects.filter(user_id=self.me).count()
+        resp = self.client.get(reverse('products:proof_page_new'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(MyLabel.objects.filter(user_id=self.me).count(), before + 1)
+        label = MyLabel.objects.filter(user_id=self.me).latest('my_label_id')
+        self.assertEqual(resp['Location'],
+                         reverse('products:proof_page', args=[label.my_label_id]))
+
+    def test_제품_코드도_함께_붙는다(self):
+        """[신규 등록] 과 같은 규칙을 쓴다 — 두 벌이면 한쪽만 빠뜨린다."""
+        from v1.label.models import MyLabel
+        from v1.products.models import ProductMetadata
+
+        self.client.get(reverse('products:proof_page_new'))
+        label = MyLabel.objects.filter(user_id=self.me).latest('my_label_id')
+        self.assertTrue(ProductMetadata.objects.filter(label=label).exists())
+
+    def test_제품_조립_화면이_아니다(self):
+        """탭도 저장 단추도 없다 — 여기서 하는 일은 하나다."""
+        from v1.label.models import MyLabel
+
+        label = MyLabel.objects.create(user_id=self.me, my_label_name='검증 제품')
+        html = self.client.get(
+            reverse('products:proof_page', args=[label.my_label_id])).content.decode()
+        self.assertIn('시안 검증', html)
+        # 제품 상세의 틀이 따라오면 안 된다
+        self.assertNotIn('data-bs-target="#tab-bom"', html)
+        self.assertNotIn('id="headerSaveBtn"', html)
+        # 'workspaceTab' 은 세지 않는다 — 도움말 엔진(_coachmark)이 그 이름을
+        # 코드 안에서 쓰고, 그것은 base_v2 가 모든 화면에 싣는다.
+        self.assertNotIn('id="workspaceTab"', html)
+
+    def test_올린_것이_없으면_올리는_자리를_보여_준다(self):
+        from v1.label.models import MyLabel
+
+        label = MyLabel.objects.create(user_id=self.me, my_label_name='빈 검증')
+        html = self.client.get(
+            reverse('products:proof_page', args=[label.my_label_id])).content.decode()
+        self.assertIn('아직 올린 시안이 없습니다', html)
+        self.assertIn('id="proofFile"', html)
+
+    def test_저장된_판독값으로_판독_없이_다시_그린다(self):
+        """판독은 유료다(시간당 30회). 값이 남아 있으면 다시 읽지 않는다."""
+        from v1.label.models import MyLabel
+
+        label = MyLabel.objects.create(user_id=self.me, my_label_name='다시 보기')
+        self._attach(label, {'values': {'prdlst_nm': '천연 쿠키'},
+                             'issue_count': 1, 'issue_labels': ['금지 문구']})
+        html = self.client.get(
+            reverse('products:proof_page', args=[label.my_label_id])).content.decode()
+        self.assertIn('proof-saved', html)
+        self.assertIn('proof-checks', html)
+        # 저장된 값으로 검증을 다시 돌려 화면에 실어 준다
+        self.assertIn('forbidden_phrase', html)
+
+    def test_이력을_판으로_보여_준다(self):
+        from v1.label.models import MyLabel
+
+        label = MyLabel.objects.create(user_id=self.me, my_label_name='이력 제품')
+        self._attach(label, {'values': {'prdlst_nm': 'A'}, 'issue_count': 0,
+                             'issue_labels': []})
+        html = self.client.get(
+            reverse('products:proof_page', args=[label.my_label_id])).content.decode()
+        self.assertIn('검증 이력', html)
+        self.assertIn('규정 이상 없음', html)
+
+    def test_내_값이_있으면_견주는_길을_알려_준다(self):
+        """'내 값과 같은가' 는 다른 질문이고 ④ 검증 탭이 맡는다."""
+        from v1.label.models import MyLabel
+
+        label = MyLabel.objects.create(user_id=self.me, my_label_name='있는 제품',
+                                       prdlst_nm='초코쿠키')
+        html = self.client.get(
+            reverse('products:proof_page', args=[label.my_label_id])).content.decode()
+        self.assertIn('제품 화면의 검증 탭', html)
+
+    def test_남의_제품은_404(self):
+        from v1.label.models import MyLabel
+
+        label = MyLabel.objects.create(user_id=self.other, my_label_name='남의 것')
+        resp = self.client.get(reverse('products:proof_page', args=[label.my_label_id]))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_로그인하지_않으면_못_들어간다(self):
+        self.client.logout()
+        resp = self.client.get(reverse('products:proof_page_new'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login', resp['Location'])
+
+    def _attach(self, label, proof):
+        from v1.products.models import ProductDocument
+        from v1.products.services import design_proof
+
+        return ProductDocument.objects.create(
+            label=label, document_type=design_proof.document_type(),
+            file='v2/product_documents/x.png', original_filename='시안.png',
+            file_size=10, uploaded_by=self.me, version=1,
+            metadata={'proof': proof})
+
+
+class 검증한_제품은_이름이_남는다(TestCase):
+    """
+    이 화면은 들어올 때 빈 제품을 만든다. 그런데 시안을 붙이면
+    `temp_label.is_untouched()` 가 False 가 되어(문서가 자식이다) **자동 정리
+    대상에서 빠진다** — 이름을 안 바꾸면 '임시 - 제품명 - N' 이 목록에 영구히
+    남아 쓰레기로 보인다.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        self.me = User.objects.create_user(username='rn@proof.com', password='pw12345!')
+        self.client.force_login(self.me)
+        self.label = MyLabel.objects.create(
+            user_id=self.me, my_label_name='임시 - 제품명 - 3')
+        self.url = reverse('products:proof_rename', args=[self.label.my_label_id])
+
+    def test_읽은_제품명으로_바꾼다(self):
+        resp = self.client.post(self.url, {'name': '초코쿠키'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['renamed'])
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.my_label_name, '초코쿠키')
+
+    def test_사람이_지은_이름은_덮지_않는다(self):
+        self.label.my_label_name = '내가 지은 이름'
+        self.label.save()
+        resp = self.client.post(self.url, {'name': '초코쿠키'})
+        self.assertFalse(resp.json()['renamed'])
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.my_label_name, '내가 지은 이름')
+
+    def test_이름이_없으면_400(self):
+        self.assertEqual(self.client.post(self.url, {'name': '  '}).status_code, 400)
+
+    def test_GET_으로는_안_된다(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_시안이_붙으면_자동_정리에서_빠진다(self):
+        """이 이름 바꾸기가 필요한 까닭 — 사실을 시험으로 붙들어 둔다."""
+        from v1.label.services import temp_label
+        from v1.products.models import ProductDocument
+        from v1.products.services import design_proof
+
+        self.assertTrue(temp_label.is_untouched(self.label))
+        ProductDocument.objects.create(
+            label=self.label, document_type=design_proof.document_type(),
+            file='v2/product_documents/x.png', original_filename='시안.png',
+            file_size=10, uploaded_by=self.me, version=1)
+        self.assertFalse(temp_label.is_untouched(self.label))
+
+
+class 두_입구가_다른_일을_한다(TestCase):
+    """입구 이름만 다르고 목적지가 같으면 사용자에게는 중복으로 보인다."""
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.explorer = (base / 'templates/products/product_explorer.html'
+                         ).read_text(encoding='utf-8')
+        self.home = (base / 'templates/main/home_v2_dashboard.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_목록은_전용_화면으로_보낸다(self):
+        self.assertIn("{% url 'products:proof_page_new' %}", self.explorer)
+        self.assertIn('시안 검증', self.explorer)
+        # 제품 상세로 보내던 옛 길이 남아 있으면 안 된다
+        self.assertNotIn("{% url 'products:product_create' %}?import=1", self.explorer)
+
+    def test_홈도_전용_화면으로_보낸다(self):
+        self.assertIn("{% url 'products:proof_page_new' %}", self.home)
+        self.assertNotIn("{% url 'products:product_create' %}?import=1", self.home)
+
+    def test_제품_만들기_길도_그대로_있다(self):
+        """시안이 없는 사람이 갇히면 안 된다."""
+        self.assertIn('신규 등록', self.explorer)
+        self.assertIn("{% url 'products:product_create' %}", self.home)
+
+
+class 검증_화면은_같은_기능을_쓴다(TestCase):
+    """
+    베끼면 어느 날 한쪽만 고쳐진다. 판독을 부르는 길과 결과를 그리는 함수는
+    한 곳에 있고 전용 화면이 그것을 부른다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        self.ocr = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.page = Path('v1/static/js/products/proof_page.js').read_text(encoding='utf-8')
+
+    def test_판독을_부르는_길이_한_곳이다(self):
+        self.assertIn('window.basicInfoOcrRead = function', self.ocr)
+        self.assertIn('window.basicInfoOcrRead(parts, file)', self.page)
+        # 전용 화면이 제 fetch 를 만들면 오류 문구가 두 벌이 된다
+        self.assertNotIn('/label/ocr-extract/', self.page)
+
+    def test_결과를_그리는_함수도_한_곳이다(self):
+        self.assertIn('window.proofChecksHtml = proofChecksHtml;', self.ocr)
+        self.assertIn('window.proofChecksHtml(', self.page)
+        self.assertIn('window.askProofCheck(', self.page)
+
+    def test_자르기와_사진_뷰어도_그대로_쓴다(self):
+        self.assertIn('window.cropPhoto(file)', self.page)
+        self.assertIn('window.photoViewerLayout(', self.page)
+
+    def test_읽은_값_표는_제_이름표를_쓴다(self):
+        """확인 창의 FIELD_MAP 은 기본 정보 탭의 입력칸 id 를 함께 들고 있다."""
+        self.assertIn('var NAMES = {', self.page)
+        # 주석에서 "쓰지 않는다" 고 적은 것까지 세면 안 된다 — **쓰는 꼴**만 센다
+        self.assertNotIn('FIELD_MAP[', self.page)
+        self.assertNotIn('Object.keys(FIELD_MAP)', self.page)
+
+    def test_이름을_바꿔_이력으로_남긴다(self):
+        self.assertIn("'/products/proof/' + productId + '/rename/'", self.page)
+
+    def test_판독값을_그_판에_남긴다(self):
+        """다음에 이 화면을 열 때 사진을 다시 읽지 않는다."""
+        self.assertIn("form.append('reading'", self.page)
+
+    def test_값으로_제품을_채우는_길(self):
+        from pathlib import Path
+
+        detail = Path('v1/templates/products/product_detail.html').read_text(encoding='utf-8')
+        self.assertIn('__proofValues', detail)
+        self.assertIn('window.basicInfoOcrShow(__asOcr', detail)

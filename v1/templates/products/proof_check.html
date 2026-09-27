@@ -1,0 +1,145 @@
+{% extends "base_v2.html" %}
+{% load static %}
+
+{% block title %}시안 검증{% endblock %}
+
+{% block topbar %}
+<div class="v2-topbar-title-wrapper">
+    <i class="bi bi-patch-check me-2 v2-topbar-icon"></i>
+    <span class="v2-topbar-title">시안 검증</span>
+    <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">받은 디자인 시안 한 장을 읽어, 그 값이 표시 규정에 맞는지 봅니다. 제품 정보가 없어도 됩니다</span>
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/products_common.css' %}?v={{ STATIC_BUILD_DATE }}">
+<link rel="stylesheet" href="{% static 'css/proof_check.css' %}?v={{ STATIC_BUILD_DATE }}">
+{% endblock %}
+
+{% block content %}
+{% comment %}
+  **제품 조립 화면이 아니다.**
+
+  탭(① 기본 정보 → ② BOM → …)도, 저장 단추도, 워크플로 번호도 두지 않는다.
+  여기 온 사람이 하려는 일은 하나다 — "받은 이 도안이 쓸 만한가". 제품 상세의
+  틀을 그대로 쓰면 창을 닫는 순간 "이제 제품을 만드세요" 로 읽힌다.
+
+  대신 **결과가 화면에 남는다.** 확인 창이 아니라 화면이므로 다시 열 수 있고,
+  판독값이 그 판에 남아 있어 사진을 다시 읽지 않는다(판독은 유료다).
+{% endcomment %}
+<div class="proof-page" data-product-id="{{ product_id }}">
+
+  <div class="proof-head">
+    <div class="proof-head-main">
+      <h5 class="proof-title">
+        {% if document %}
+          <i class="bi bi-file-earmark-image"></i>{{ document.original_filename }}
+          <span class="proof-ver">{{ document.version }}판</span>
+        {% else %}
+          <i class="bi bi-upload"></i>시안을 올려 검증합니다
+        {% endif %}
+      </h5>
+      <div class="proof-sub">
+        {% if document %}
+          {{ label.my_label_name }} · {{ document.uploaded_datetime|date:"Y.m.d H:i" }}
+        {% else %}
+          표시사항이 보이는 면을 올려 주세요. 여러 면이면 잘라서 나눠 올릴 수 있습니다.
+        {% endif %}
+      </div>
+    </div>
+    <div class="proof-head-acts">
+      <input type="file" id="proofFile" accept="image/*,application/pdf" hidden>
+      <button type="button" class="btn btn-primary v2-btn-sm" id="proofPickBtn">
+        <i class="bi bi-camera"></i>{% if document %}다른 시안 올리기{% else %}시안 올리기{% endif %}
+      </button>
+      <a href="{% url 'products:product_explorer' %}" class="btn btn-light border v2-btn-sm">
+        <i class="bi bi-list-ul"></i>제품 목록
+      </a>
+    </div>
+  </div>
+
+  {% csrf_token %}
+
+  {% if has_own_label %}
+  {# 내 값과 견주는 것은 **다른 질문**이다 — 그쪽은 ④ 검증 탭이 맡는다 #}
+  <div class="proof-note">
+    <i class="bi bi-info-circle me-1"></i>
+    이 제품에는 이미 표시사항이 들어 있습니다. 시안이 <b>내가 확정한 값과 같은지</b>
+    견주려면
+    <a href="{% url 'products:product_detail_new' product_id=product_id %}">제품 화면의 검증 탭</a>
+    으로 가세요. 이 화면은 <b>시안 그 자체가 규정에 맞는지</b>만 봅니다.
+  </div>
+  {% endif %}
+
+  <div class="proof-body" id="proofBody">
+    {% if not document %}
+    <div class="proof-empty">
+      <i class="bi bi-image proof-empty-icon"></i>
+      <p class="proof-empty-title">아직 올린 시안이 없습니다.</p>
+      <p class="proof-empty-desc">
+        올리면 표시사항을 읽어 <b>금지문구·괄호·냉동 주의문구·품목보고번호</b>
+        같은 것을 그 자리에서 봅니다. 읽은 값과 결과는 이 화면에 남고,
+        문서함의 <b>포장지 시안</b>에 판으로 쌓입니다.
+      </p>
+      <button type="button" class="btn btn-primary v2-btn" id="proofPickBtn2">
+        <i class="bi bi-camera"></i>시안 올리기
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="proof-foot" id="proofFoot" {% if not document %}hidden{% endif %}>
+    {% comment %}
+      다음 행동은 **하나**다. 검증해 쓸 만하다고 판단했으면 그 값이 제품의
+      시작점이 된다 — 확인 창에서 무엇을 반영할지 사람이 고른다(빈 칸만 채운다).
+    {% endcomment %}
+    <a class="btn btn-primary v2-btn" id="proofToProduct"
+       href="{% url 'products:product_detail_new' product_id=product_id %}?proof=1">
+      <i class="bi bi-box-arrow-in-right"></i>이 값으로 제품 정보 채우기
+    </a>
+    <span class="proof-foot-note">
+      읽은 값을 확인 창에 띄웁니다. <b>빈 칸만</b> 채우고 이미 적힌 값은 덮지 않습니다.
+    </span>
+  </div>
+
+  {% if versions %}
+  <details class="proof-history">
+    <summary>검증 이력 {{ versions|length }}판</summary>
+    <ol class="proof-history-list">
+      {% for ver in versions %}
+      <li>
+        <span class="proof-ver">{{ ver.version }}판</span>
+        <span class="proof-history-name" title="{{ ver.original_filename }}">{{ ver.original_filename }}</span>
+        {% with pf=ver.metadata.proof %}
+        {% if pf %}
+          {% if pf.issue_count %}
+          <span class="doc-proof-bad" title="{{ pf.issue_labels|join:", " }}">규정 {{ pf.issue_count }}건</span>
+          {% else %}
+          <span class="doc-proof-ok">규정 이상 없음</span>
+          {% endif %}
+          {% if pf.unread %}<span class="doc-proof-unread">못 읽음 {{ pf.unread|length }}</span>{% endif %}
+        {% else %}
+          <span class="doc-proof-unread">검증 기록 없음</span>
+        {% endif %}
+        {% endwith %}
+        <span class="proof-history-when">{{ ver.uploaded_datetime|date:"y.m.d H:i" }}</span>
+      </li>
+      {% endfor %}
+    </ol>
+  </details>
+  {% endif %}
+</div>
+
+{{ saved_proof|json_script:"proof-saved" }}
+{{ checks|json_script:"proof-checks" }}
+{% if document %}<div id="proof-image-url" data-url="{{ document.file.url }}" data-name="{{ document.original_filename }}" hidden></div>{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/products/photo_viewer.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/products/photo_cropper.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{# 판독을 부르는 길과 결과를 그리는 함수는 여기 있다. 베끼지 않는다 #}
+<script src="{% static 'js/products/basic_info_ocr.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/products/proof_page.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{% endblock %}

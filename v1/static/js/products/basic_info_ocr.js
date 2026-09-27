@@ -2339,7 +2339,7 @@
       });
   }
 
-  function extract(parts, sourceFile) {
+  function extract(parts, sourceFile, opts) {
     if (!Array.isArray(parts)) parts = [{ file: parts, role: 'whole' }];
     var btn = document.getElementById('basicInfoOcrBtn');
     var form = new FormData();
@@ -2405,7 +2405,22 @@
         // **기다리지 않는다** — 문서 저장이 늦거나 실패해도 판독 결과를 보는
         // 일이 막히면 안 된다. 원본을 보낸다(조각은 우리가 만든 것이다).
         saveSourcePhoto(sourceFile || parts[0].file);
+        /* **읽는 것과 보여 주는 것을 갈라 둔다.**
+         *
+         * 시안 검증 전용 화면(proof_page.js)은 확인 창이 아니라 **화면**에
+         * 그린다. 그런데 판독을 부르는 일은 같아야 한다 — 로그인 만료·한도
+         * 초과·502 를 무엇이라 말할지가 여기 다 적혀 있고, 그것을 베끼면
+         * 어느 날 한쪽만 고쳐진다.
+         *
+         * 부른 쪽이 `show: false` 를 주면 확인 창을 띄우지 않고 **읽은 것을
+         * 그대로 돌려준다.** 사진을 문서함에 남기는 일은 양쪽 모두 한다. */
+        if (opts && opts.show === false) {
+          return { data: result.data || {}, file: file,
+                   api_match: result.api_match, snap: result.snap,
+                   ocr_text: result.ocr_text || '', derived: result.derived || null };
+        }
         showModal(result.data || {}, file, result.api_match, result.snap);
+        return null;
       })
       .catch(function (err) {
         console.error(err);
@@ -2517,6 +2532,15 @@
 
   // 불러오기 모달이 부른다
   window.basicInfoOcrExtract = extract;
+  /* 시안 검증 전용 화면이 부른다 — 확인 창을 띄우지 않고 읽은 것만 받는다.
+     판독을 부르는 길은 한 곳이어야 한다(위 opts.show 주석). */
+  window.basicInfoOcrRead = function (parts, sourceFile) {
+    return extract(parts, sourceFile, { show: false });
+  };
+  /* 검증 결과를 그리는 함수. **베끼지 않는다** — 전용 화면과 확인 창이 같은
+     것을 그려야 하고, 두 벌이면 어느 날 한쪽만 고쳐진다. */
+  window.proofChecksHtml = proofChecksHtml;
+  window.askProofCheck = askProofCheck;
   /* 같은 판독을 대조로 쓴다 (import_modal.js 의 '시안 대조' 입구) */
   window.basicInfoOcrCompare = function (parts, sourceFile) {
     compareMode = true;

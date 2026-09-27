@@ -1152,9 +1152,39 @@ document.addEventListener('DOMContentLoaded', function() {
     // 이 표시가 없으면 사용자는 빈 제품 화면에 떨어져서 어느 버튼이 사진
     // 읽기인지 다시 찾아야 한다. 스크립트가 아직 안 실려 있을 수 있어
     // 준비될 때까지 잠깐 기다렸다 연다.
-    const __q = new URLSearchParams(window.location.search);
-    const __import = __q.get('import') === '1';
-    const __start = __q.get('start') === '1';
+    /* 시안 검증 화면에서 [이 값으로 제품 정보 채우기] 로 넘어왔다.
+     *
+     * 사진을 다시 읽지 않는다 — 그 판에 남아 있는 판독값을 서버가 실어 주고,
+     * 확인 창은 그 값을 받는 통로를 이미 갖고 있다(basicInfoOcrShow). 무엇을
+     * 반영할지는 확인 창에서 사람이 고른다. */
+    const __proofValues = {{ proof_values|default:'null'|safe }};
+    if (__proofValues && Object.keys(__proofValues).length) {
+        try {
+            __q.delete('proof');
+            const rest = __q.toString();
+            history.replaceState(null, '',
+                window.location.pathname + (rest ? '?' + rest : '') + window.location.hash);
+        } catch (e) { /* 주소를 못 고쳐도 창은 열어야 한다 */ }
+
+        // 판독기가 주는 꼴로 되돌린다 — 확인 창이 {value, confidence} 를 읽는다
+        const __asOcr = {};
+        Object.keys(__proofValues).forEach(function (key) {
+            __asOcr[key] = { value: __proofValues[key], confidence: 'high' };
+        });
+        let __tries = 0;
+        const __openProof = function () {
+            if (typeof window.basicInfoOcrShow === 'function') {
+                window.basicInfoOcrShow(__asOcr, null, null, null, null);
+                return;
+            }
+            if (++__tries < 40) setTimeout(__openProof, 100);
+        };
+        __openProof();
+    }
+
+    const __q2 = new URLSearchParams(window.location.search);
+    const __import = __q2.get('import') === '1';
+    const __start = __q2.get('start') === '1';
     if (__import || __start) {
         /* **표시를 주소에서 지운다 — 한 번만 여는 문이다.**
            이 화면은 문서를 올리거나 저장할 때 `location.reload()` 를 한다.
@@ -1162,9 +1192,9 @@ document.addEventListener('DOMContentLoaded', function() {
            올린 사람 눈에는 "창이 계속 튀어나온다". 뒤로 가기로 돌아와도
            마찬가지였다. */
         try {
-            __q.delete('import');
-            __q.delete('start');
-            const rest = __q.toString();
+            __q2.delete('import');
+            __q2.delete('start');
+            const rest = __q2.toString();
             history.replaceState(null, '',
                 window.location.pathname + (rest ? '?' + rest : '') + window.location.hash);
         } catch (e) { /* 주소를 못 고쳐도 창은 열어야 한다 */ }

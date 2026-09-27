@@ -20342,10 +20342,12 @@ class ImportModalOpensOnceTests(TestCase):
                                   'templates/products/product_detail.html'),
                      encoding='utf-8') as f:
             html = f.read()
-        at = html.index("__q.get('import') === '1'")
+        # 시안 검증 화면에서 넘어오는 갈래가 생기면서 `__q` 가 `__q2` 로
+        # 갈렸다(둘이 같은 주소를 서로 지우면 안 된다).
+        at = html.index("__q2.get('import') === '1'")
         block = html[at:at + 1800]
-        self.assertIn("__q.delete('import')", block)
-        self.assertIn("__q.delete('start')", block)
+        self.assertIn("__q2.delete('import')", block)
+        self.assertIn("__q2.delete('start')", block)
         self.assertIn('history.replaceState', block)
 
 

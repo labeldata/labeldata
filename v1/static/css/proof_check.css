@@ -1,0 +1,123 @@
+/*
+ * 시안 검증 전용 화면.
+ *
+ * **제품 조립 화면과 달라 보여야 한다.** 그것이 이 화면을 가른 까닭이다 —
+ * 탭도 저장 단추도 없고, 묻는 것이 하나다("이 도안이 규정에 맞는가").
+ * 지적·못 읽음 배지는 확인 창과 같은 모양을 쓴다(products_common.css) —
+ * 같은 것을 두 가지로 그리면 사용자가 다른 것으로 읽는다.
+ */
+.proof-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 18px 20px 40px;
+}
+
+/* ── 머리 ────────────────────────────────────────────────────────── */
+.proof-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--v2-border, #dadce0);
+}
+.proof-head-main { flex: 1 1 320px; min-width: 0; }
+.proof-title {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin: 0; font-size: 16px; font-weight: 700;
+  color: var(--text-primary, #202124);
+}
+.proof-sub {
+  margin-top: 3px; font-size: 12px; line-height: 1.5;
+  color: var(--text-secondary, #5f6368);
+}
+.proof-head-acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.proof-ver {
+  padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+  background: var(--ez-info-bg, #e8f0fe); color: var(--v2-blue, #1a73e8);
+}
+
+/* 내 값과 견주는 것은 다른 질문이다 — 그 길을 알려 주는 줄 */
+.proof-note {
+  margin-bottom: 14px; padding: 9px 12px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.6;
+  background: var(--ez-info-bg, #e8f0fe); color: #174ea6;
+}
+
+/* ── 아직 올린 것이 없을 때 ──────────────────────────────────────── */
+.proof-empty {
+  padding: 56px 20px; text-align: center;
+  border: 2px dashed var(--v2-border, #dadce0); border-radius: 12px;
+}
+.proof-empty-icon { font-size: 40px; color: var(--v2-border, #dadce0); }
+.proof-empty-title {
+  margin: 14px 0 6px; font-size: 14px; font-weight: 700;
+  color: var(--text-primary, #202124);
+}
+.proof-empty-desc {
+  max-width: 560px; margin: 0 auto 18px;
+  font-size: 12.5px; line-height: 1.7; color: var(--text-secondary, #5f6368);
+}
+
+/* ── 읽은 값 ─────────────────────────────────────────────────────── */
+.proof-read {
+  border: 1px solid var(--v2-border, #dadce0); border-radius: 10px;
+  overflow: hidden;
+}
+.proof-read-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; font-size: 12.5px; font-weight: 700;
+  background: var(--bg-muted, #f1f3f4); color: var(--text-primary, #202124);
+}
+.proof-read-head span { font-weight: 500; color: var(--text-secondary, #5f6368); }
+.proof-read-row {
+  display: grid; grid-template-columns: 132px minmax(0, 1fr);
+  gap: 10px; padding: 6px 12px;
+  border-top: 1px solid var(--ez-border-light, #f1f3f4);
+  font-size: 12.5px;
+}
+.proof-read-name { color: var(--text-secondary, #5f6368); }
+.proof-read-value { line-height: 1.6; word-break: break-word; }
+
+.proof-none {
+  padding: 28px 16px; text-align: center;
+  font-size: 12.5px; line-height: 1.7; color: var(--text-secondary, #5f6368);
+}
+.proof-wait-big { padding: 48px 16px; text-align: center; font-size: 13px; }
+
+/* ── 다음 행동은 하나 ────────────────────────────────────────────── */
+.proof-foot {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--v2-border, #dadce0);
+}
+.proof-foot-note {
+  font-size: 12px; line-height: 1.6; color: var(--text-secondary, #5f6368);
+}
+
+/* ── 판 이력 ─────────────────────────────────────────────────────── */
+.proof-history { margin-top: 18px; }
+.proof-history > summary {
+  font-size: 12.5px; font-weight: 700; cursor: pointer;
+  color: var(--text-secondary, #5f6368);
+}
+.proof-history-list { margin: 8px 0 0; padding: 0; list-style: none; }
+.proof-history-list li {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  padding: 6px 4px; font-size: 12px;
+  border-top: 1px solid var(--ez-border-light, #f1f3f4);
+}
+.proof-history-name {
+  flex: 1 1 200px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.proof-history-when { color: var(--text-hint, #9aa0a6); }
+
+@media (max-width: 720px) {
+  .proof-page { padding: 14px 12px 32px; }
+  .proof-read-row { grid-template-columns: 1fr; gap: 2px; }
+  .proof-read-name { font-size: 11.5px; font-weight: 600; }
+}

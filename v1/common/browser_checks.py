@@ -261,7 +261,9 @@ class 배합표를_그려_본다(StaticLiveServerTestCase):
                 # 어긋난 것으로 잡힌다. 진짜 회귀는 기다려도 가라앉지 않으므로
                 # 이 되풀이가 지켜 주는 것은 그대로다.
                 got = None
-                for _ in range(6):
+                # 열두 번(≈6 초)까지 본다. 화면 시험이 늘면서 기계가 더 바빠졌고,
+                # 여섯 번(3 초)으로는 글꼴·칸 너비가 늦게 실린 날 못 가라앉았다.
+                for _ in range(12):
                     raw = chrome.js(geo % scroll)
                     self.assertNotEqual(raw, 'NO GRID', '표가 그려지지 않았다')
                     got = json.loads(raw)
@@ -789,5 +791,110 @@ class 원료_관리_화면의_단추가_하는_일로_불린다(StaticLiveServer
             })()"""))
             self.assertIn('등록', form['head'], form)
             self.assertFalse(form['linked'], '등록 화면에 [연결 표시사항] 단추가 남아 있다')
+        finally:
+            chrome.close()
+
+
+@override_settings(MIDDLEWARE=list(_st.MIDDLEWARE) + ['v1.common.browser_checks.AutoLoginForTests'])
+class 시안_검증_화면이_제_모습으로_뜬다(StaticLiveServerTestCase):
+    """
+    화면을 가른 까닭이 "제품 조립 화면처럼 보이지 않는 것" 이라, **그려 봐야**
+    확인된다. 문자열 시험은 마크업이 그 자리에 있는지만 안다 — 스타일이 안 실려
+    글자만 쌓여 있어도 통과한다.
+    """
+
+    def setUp(self):
+        if not chrome_path() or websocket is None:
+            self.skipTest('헤드리스 크롬 또는 websocket-client 가 없다')
+        from v1.label.models import MyLabel
+        from v1.products.models import ProductDocument
+        from v1.products.services import design_proof
+
+        u = User.objects.create_user('proofer', password='x')
+        self.blank = MyLabel.objects.create(user_id=u, my_label_name='임시 - 제품명 - 1')
+        done = MyLabel.objects.create(user_id=u, my_label_name='초코쿠키')
+        ProductDocument.objects.create(
+            label=done, document_type=design_proof.document_type(),
+            file='v2/product_documents/x.png', original_filename='초코쿠키_시안.png',
+            file_size=10, uploaded_by=u, version=2,
+            metadata={'proof': {
+                'values': {'prdlst_nm': '천연 초코쿠키', 'prdlst_dcnm': '과자',
+                           'rawmtrl_nm': '밀가루(밀:국산, 설탕'},
+                'issue_count': 2, 'issue_labels': ['금지 문구', '원재료명 괄호'],
+                'unread': ['품목보고번호', '포장재질'], 'checked_at': '2026-09-27T10:00:00',
+            }})
+        self.done = done
+        self.base = self.live_server_url
+
+    def test_빈_화면은_올리는_자리를_보여_준다(self):
+        chrome = Chrome(port=9346)
+        try:
+            chrome.goto(f'{self.base}/products/proof/{self.blank.my_label_id}/?__as=proofer',
+                        settle=2.0)
+            got = json.loads(chrome.js(r"""(function(){
+                var shown = function (sel) {
+                    var el = document.querySelector(sel);
+                    return !!(el && el.offsetParent !== null);
+                };
+                return JSON.stringify({
+                    title: (document.querySelector('.proof-title') || {}).innerText || '',
+                    empty: shown('.proof-empty'),
+                    pick: shown('#proofPickBtn'),
+                    foot: shown('#proofFoot'),
+                    tabs: shown('#workspaceTab'),
+                    save: shown('#headerSaveBtn')});
+            })()"""))
+            self.assertIn('시안', got['title'], got)
+            self.assertTrue(got['empty'], got)
+            self.assertTrue(got['pick'], got)
+            # 아직 올린 것이 없으니 "제품 채우기" 는 감춘다
+            self.assertFalse(got['foot'], got)
+            # **제품 조립 화면이 아니다** — 이것이 화면을 가른 까닭이다
+            self.assertFalse(got['tabs'], got)
+            self.assertFalse(got['save'], got)
+        finally:
+            chrome.close()
+
+    def test_저장된_값을_판독_없이_그린다(self):
+        chrome = Chrome(port=9346)
+        try:
+            chrome.goto(f'{self.base}/products/proof/{self.done.my_label_id}/?__as=proofer',
+                        settle=2.0)
+            # 검증 결과가 화면에 그려질 때까지 (확인 창이 아니라 화면이다)
+            self.assertTrue(chrome.wait_for(
+                "!!document.querySelector('#proofChecks .proof-issue, #proofChecks .proof-ok')",
+                timeout=20), '검증 결과가 그려지지 않았다')
+
+            got = json.loads(chrome.js(r"""(function(){
+                var text = function (sel) {
+                    var el = document.querySelector(sel);
+                    return el ? el.innerText.replace(/\s+/g, ' ').trim() : '';
+                };
+                var rows = [...document.querySelectorAll('.proof-read-row')]
+                    .map(function (r) { return r.innerText.replace(/\s+/g, ' ').trim(); });
+                return JSON.stringify({
+                    read: rows,
+                    issues: [...document.querySelectorAll('#proofChecks .proof-issue')]
+                        .map(function (i) { return i.innerText.replace(/\s+/g, ' ').trim(); }),
+                    unread: text('.cmp-group-unread'),
+                    foot: !!document.getElementById('proofFoot')
+                          && !document.getElementById('proofFoot').hidden,
+                    /* innerText 는 **보이는 글자**다 — 접힌 <details> 안은
+                       비어 온다. 판 목록은 textContent 로 본다. */
+                    history: [...document.querySelectorAll('.proof-history-list li')]
+                        .map(function (li) { return li.textContent.replace(/\s+/g, ' ').trim(); })
+                        .join(' | ')});
+            })()"""))
+            # 읽은 값이 표로 보인다
+            self.assertTrue(any('천연 초코쿠키' in r for r in got['read']), got['read'])
+            # 규정 위반이 그 자리에 적힌다
+            joined = ' '.join(got['issues'])
+            self.assertIn('금지', joined, got['issues'])
+            self.assertIn('괄호', joined, got['issues'])
+            # 못 읽은 것은 **다른 칸**이다
+            self.assertIn('읽지 못한', got['unread'], got)
+            # 다음 행동이 하나 보인다
+            self.assertTrue(got['foot'], got)
+            self.assertIn('2판', got['history'], got['history'])
         finally:
             chrome.close()

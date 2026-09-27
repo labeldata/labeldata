@@ -16,6 +16,11 @@ urlpatterns = [
     # ==================== 제품 관리 ====================
     path('', views.product_explorer, name='product_list'),
     path('create/', views.product_create, name='product_create'),
+    # 시안 검증 전용 화면. 제품 상세와 **다른 화면**이다 — 탭도 저장 단추도 없고,
+    # 묻는 것이 하나다("이 도안이 규정에 맞는가"). 기능은 같은 것을 쓴다.
+    path('proof/', views.proof_page, name='proof_page_new'),
+    path('proof/<int:label_id>/', views.proof_page, name='proof_page'),
+    path('proof/<int:label_id>/rename/', views.proof_rename, name='proof_rename'),
     path('<int:product_id>/', views.product_detail, name='product_detail'),
     path('<int:product_id>/new/', views.product_detail_new, name='product_detail_new'),
     path('<int:product_id>/update/', views.product_update, name='product_update'),

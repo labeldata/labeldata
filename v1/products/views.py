@@ -1219,6 +1219,10 @@ def product_detail(request, product_id):
         # 역할 이름은 모델 한 곳에서 온다 — 화면·JS 가 이것만 적는다
         'role_names': SharePermission.ROLE_NAMES,
         'role_hints': SharePermission.ROLE_HINTS,
+        # 시안 검증 화면에서 [이 값으로 채우기] 로 넘어왔다면, 그 판에 남아 있는
+        # 판독값을 실어 준다. **사진을 다시 읽지 않는다**(판독은 유료다).
+        'proof_values': json.dumps(_latest_proof_values(label), ensure_ascii=False)
+                        if request.GET.get('proof') == '1' else '',
     }
 
     return render(request, 'products/product_detail.html', context)
@@ -1465,6 +1469,17 @@ def product_create(request):
     빈 제품이 쌓이는 것이 이 방식의 대가다. 손대지 않은 것은
     `manage.py cleanup_temp_labels` 가 치운다(지우지 않고 숨김 처리).
     """
+    label = _new_empty_product(request)
+    return redirect(_after_create(request, label))
+
+
+def _new_empty_product(request):
+    """
+    빈 제품 하나를 만든다 — 제품 코드·활동 로그까지.
+
+    [신규 등록] 과 시안 검증 화면이 **같은 규칙**을 써야 한다. 두 벌이면 한쪽만
+    제품 코드를 붙이거나 로그를 안 남기는 날이 온다.
+    """
     label = MyLabel.objects.create(
         user_id=request.user,
         my_label_name=next_temp_label_name(request.user),
@@ -1497,7 +1512,11 @@ def product_create(request):
     )
 
     log_activity(request, 'product', 'product_create', label.my_label_id)
+    return label
 
+
+def _after_create(request, label):
+    """[새로 만들기] 로 만든 제품을 어디로 보낼지."""
     # 홈의 "사진으로 시작" 처럼 곧바로 사진을 읽으러 온 경우, 워크스페이스가
     # 열리자마자 불러오기 창을 띄운다. 이 표시를 안 넘기면 사용자는 빈 제품
     # 화면에 떨어져서 어느 버튼이 사진 읽기인지 다시 찾아야 한다.
@@ -1514,7 +1533,128 @@ def product_create(request):
         target += '?import=1'      # 홈의 '사진으로 시작' — 곧바로 사진 칸으로
     else:
         target += '?start=1'       # 그냥 [새로 만들기] — 시작 방법을 묻는다
-    return redirect(target)
+    return target
+
+
+def _latest_proof_values(label):
+    """가장 최근 시안 판에 남아 있는 판독값. 없으면 빈 사전."""
+    from v1.products.services import design_proof
+
+    document = (ProductDocument.objects
+                .filter(label=label, active_yn=True,
+                        document_type__type_code=design_proof.TYPE_CODE)
+                .order_by('-version', '-uploaded_datetime')
+                .first())
+    if not document:
+        return {}
+    return ((document.metadata or {}).get('proof') or {}).get('values') or {}
+
+
+@login_required
+def proof_page(request, label_id=None):
+    """
+    **시안 검증 전용 화면.**
+
+    왜 제품 상세가 아니라 따로인가
+    ──────────────────────────────
+    [신규 등록] 과 [시안으로 시작] 이 **같은 주소**로 떨어졌다
+    (`/products/<id>/new/`). 입구 이름만 다르고 목적지가 같으니 사용자에게는
+    중복으로 보였고, 실제로 그런 말을 들었다.
+
+    더 안쪽의 문제가 셋이었다.
+
+      1. 검증 결과가 **확인 창 안에만** 있었다. 닫으면 돌아갈 화면이 없어서,
+         다시 보려면 사진을 다시 읽어야 했다(유료·시간당 30 회).
+      2. 창을 닫으면 탭 넷과 저장 단추가 있는 **제품 조립 화면**이다. 받은
+         도안을 보러 온 사람에게 "이제 제품을 만드세요" 라고 말하는 셈이다.
+      3. 시안이 붙은 제품은 `temp_label.is_untouched()` 가 False 라
+         (문서가 자식이다) **자동 정리되지 않는다.** 검증만 하고 버리면
+         '임시 - 제품명 - N' 이 목록에 영구히 남는다.
+
+    그래서 화면을 가른다. **기능은 그대로 쓴다** — 자르기·판독·검증·시안 저장·
+    사진 뷰어가 전부 이미 있는 것이고, 여기서는 그것들을 확인 창이 아니라
+    화면에 놓는다.
+
+    ③ 은 판독한 제품명으로 이름을 바꿔 푼다(아래 `rename_from_proof`). 그러면
+    목록에 남는 것이 쓰레기가 아니라 **"이 도안을 검증했다" 는 이력**이 된다.
+
+    제품은 **들어올 때 만든다.** 중간에 브라우저를 닫아도 판독값이 남아야
+    하고(판독은 유료다), 시안 파일을 붙일 곳이 있어야 한다
+    (`ProductDocument.label` 은 null 을 받지 않는다).
+    """
+    from v1.label.services import proof_check
+    from v1.label.services.ai_validation_service import name_issues, name_unchecked
+    from v1.products.services import design_proof
+
+    if label_id is None:
+        # 주소를 고정해 둔다 — 새로고침·뒤로 가기로 제품이 또 만들어지면 안 된다
+        label = _new_empty_product(request)
+        return redirect('products:proof_page', label_id=label.my_label_id)
+
+    label = _resolve_editable_label(request, label_id)
+
+    document = (ProductDocument.objects
+                .filter(label=label, active_yn=True,
+                        document_type__type_code=design_proof.TYPE_CODE)
+                .order_by('-version', '-uploaded_datetime')
+                .first())
+
+    # **판독 없이 다시 그린다.** 판독값이 그 판에 남아 있으므로(metadata['proof'])
+    # 화면을 다시 열 때 사진을 또 읽지 않는다 — 무료이고 즉시다.
+    saved = (document.metadata or {}).get('proof') if document else None
+    checks = None
+    if saved and saved.get('values'):
+        try:
+            got = proof_check.check_proof(label, saved['values'])
+            got['issues'] = name_issues(got['issues'])
+            got['unchecked'] = name_unchecked(got['unchecked'])
+            got['success'] = True
+            checks = got
+        except Exception:
+            logger.exception('[시안 검증] 저장된 값으로 다시 보기 실패 (label=%s)', label.pk)
+
+    # 이 제품에 이미 표시사항이 들어 있으면 "내 값과 견주기" 가 따로 있다 —
+    # 그것은 다른 질문이고 ④ 검증 탭이 맡는다. 여기서 길만 알려 준다.
+    has_own = bool((label.prdlst_nm or '').strip() or (label.rawmtrl_nm_display or '').strip())
+
+    return render(request, 'products/proof_check.html', {
+        'label': label,
+        'product_id': label.my_label_id,
+        'document': document,
+        'saved_proof': saved,
+        'checks': checks,
+        'has_own_label': has_own,
+        'versions': (ProductDocument.objects
+                     .filter(label=label, active_yn=True,
+                             document_type__type_code=design_proof.TYPE_CODE)
+                     .order_by('-version', '-uploaded_datetime')[:10]),
+    })
+
+
+@login_required
+@require_POST
+def proof_rename(request, label_id):
+    """
+    판독한 제품명으로 제품 이름을 바꾼다.
+
+    이 화면은 들어올 때 빈 제품을 만든다. 그런데 시안을 붙이면 그 제품은
+    자동 정리 대상에서 빠지므로('임시 - 제품명 - N' 인 채로 영구히 남는다),
+    **읽은 이름으로 바꿔 두어야** 목록에 쓰레기가 아니라 이력으로 남는다.
+
+    **사람이 지은 이름은 덮지 않는다** — 임시 이름일 때만 바꾼다.
+    """
+    from v1.label.services import temp_label
+
+    label = _resolve_editable_label(request, label_id)
+    name = (request.POST.get('name') or '').strip()[:100]
+    if not name:
+        return JsonResponse({'success': False, 'error': '이름이 없습니다.'}, status=400)
+    if not (label.my_label_name or '').startswith(temp_label.TEMP_PREFIX):
+        return JsonResponse({'success': True, 'renamed': False})
+
+    label.my_label_name = name
+    label.save(update_fields=['my_label_name'])
+    return JsonResponse({'success': True, 'renamed': True, 'name': name})
 
 
 @login_required
