@@ -967,7 +967,13 @@
     // 대조 창이 감춰 둔 것을 되돌린다 — 창은 한 벌이라 그대로 두면
     // 다음 "채우기" 에서 반영 단추가 사라진 채로 뜬다.
     var applyBtn = modalEl.querySelector('#basicInfoOcrApply');
-    if (applyBtn) applyBtn.style.display = '';
+    if (applyBtn) {
+      applyBtn.style.display = '';
+      /* 대조 창이 글자와 처리기를 바꿔 두었다. 창은 한 벌이라 되돌리지 않으면
+         다음 '채우기' 에서 "빈 칸을 시안 값으로" 라고 적힌 단추가 뜬다. */
+      applyBtn.innerHTML = '<i class="bi bi-check2"></i>선택 항목 채우기';
+      applyBtn.onclick = null;
+    }
     var foot = modalEl.querySelector('.modal-footer .me-auto');
     if (foot) foot.textContent = '선택한 항목만 입력됩니다. 저장은 아래 저장 버튼을 누르세요.';
     var head = modalEl.querySelector('.modal-title');
@@ -1323,7 +1329,9 @@
       + (toCheck
           ? '<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>' + toCheck
             + '건을 확인하세요.</strong> 어느 쪽이 맞는지는 원본 자료를 근거로 판단합니다 — '
-            + '이 창은 값을 고치지 않습니다.' + tally
+            /* "값을 고치지 않습니다" 는 이제 사실이 아니다 — 빈 칸을 채우는
+               단추가 이 창에 있다. **적힌 값**을 고치지 않는다고 적는다. */
+            + '이 창은 이미 적힌 값을 고치지 않습니다.' + tally
           : '<i class="bi bi-check-circle-fill me-1"></i><strong>확인할 항목이 없습니다.</strong> '
             + '시안과 표시사항이 같습니다.' + tally)
       + '</div>'
@@ -1415,12 +1423,35 @@
     }
     loadWhereImage(photoFile);
 
-    // 채우는 창이 아니다 — 반영 단추를 숨긴다
+    /* **반영 단추를 감추지 않고, 하는 일을 바꿔 단다.**
+     *
+     * 예전에는 감췄다 — 대조 창에는 체크박스 줄이 없어 applySelected 가 할 일이
+     * 없었기 때문이다. 그런데 제품 정보가 아직 없는 사람에게는 이 단추가 바로
+     * 필요한 것이다. 빈 칸만 채우는 길로 바꿔 단다.
+     *
+     * 채울 것이 없으면(모든 칸이 이미 차 있으면) 감춘다 — 눌러도 아무 일이
+     * 없는 단추를 두지 않는다. */
     var apply = modalEl.querySelector('#basicInfoOcrApply');
-    if (apply) apply.style.display = 'none';
+    var canFill = Object.keys(FIELD_MAP).some(function (field) {
+      var item = data && data[field];
+      if (!item || item.confidence === 'none' || !item.value) return false;
+      var target = document.getElementById(FIELD_MAP[field].id);
+      return !!(target && !(target.value || '').trim());
+    });
+    if (apply) {
+      apply.style.display = canFill ? '' : 'none';
+      apply.innerHTML = '<i class="bi bi-box-arrow-in-down me-1"></i>빈 칸을 시안 값으로 채우기';
+      apply.disabled = false;
+      apply.onclick = function () {
+        applyProofToEmpty(data);
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+      };
+    }
     var footNote = modalEl.querySelector('.modal-footer .me-auto');
     if (footNote) {
-      footNote.textContent = '대조만 수행하며 값은 변경되지 않습니다.';
+      footNote.textContent = canFill
+        ? '이미 적힌 값은 덮지 않습니다 — 빈 칸만 채웁니다.'
+        : '대조만 수행하며 값은 변경되지 않습니다.';
     }
     var title = modalEl.querySelector('.modal-title');
     if (title) {
@@ -2007,6 +2038,68 @@
     if (filled && rawmtrl && rawmtrl.value.trim()) {
       offerBomSplit(rawmtrl.value.trim());
     }
+  }
+
+  /* ── 시안 값으로 제품 정보 채우기 (대조 창) ───────────────────────────
+   *
+   * 대조 창에는 체크박스 줄(.ocr-row)이 없어서 반영 단추를 감춰 두었다. 그런데
+   * **제품 정보가 아직 없는 사람**에게는 그 단추가 바로 필요한 것이다 — 시안을
+   * 검증해 쓸 만하다고 판단했으면 그 값이 제품의 시작점이 된다.
+   *
+   * **빈 칸만 채운다.** 이미 적힌 값은 사람이 고른 것이라 말없이 덮지 않는다 —
+   * 원료 사진에서 쓰는 그 규칙과 같다. 덮어야 할 때는 대조 표가 어느 줄이 다른지
+   * 이미 보여 주고 있으니 사람이 그 칸에서 고친다.
+   *
+   * 채운 뒤 저장까지 한다. 저장하지 않으면 검증·확정이 **저장된 값**을 다시
+   * 읽으므로 방금 채운 항목을 두고 "비어 있습니다" 가 난다.
+   * ─────────────────────────────────────────────────────────────────── */
+  function applyProofToEmpty(data) {
+    /* 손댔다고 알린다 — '시안으로 시작' 화면은 떠날 때 손 안 댄 빈 제품을
+       지운다(pagehide 비콘). 그 판정은 서버가 **저장된 값**만 보고 한다. */
+    window.__ocrApplied = true;
+
+    var filled = 0, kept = 0;
+    Object.keys(FIELD_MAP).forEach(function (field) {
+      var item = data && data[field];
+      var value = (item && item.confidence !== 'none' && item.value)
+        ? String(item.value).trim() : '';
+      if (!value) return;
+
+      var target = document.getElementById(FIELD_MAP[field].id);
+      if (!target) return;
+      if ((target.value || '').trim()) { kept += 1; return; }   // 적힌 값은 그대로
+
+      target.value = value;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // 알레르기는 hidden input 뒤에 칩 패널이 따로 있다. 값만 넣으면 칩이
+      // 안 그려지고, 저장은 되는데 화면에는 아무것도 안 보인다.
+      if (field === 'allergens' && typeof window.setProductAllergens === 'function') {
+        window.setProductAllergens(value);
+      }
+      var box = checkboxFor(field);
+      if (box && !box.disabled) {
+        box.checked = true;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      filled += 1;
+    });
+
+    // 영양성분·분리배출은 이 탭에 칸이 없어 서버가 바로 저장한다
+    applyExtras();
+    applyDerived();
+
+    if (filled && typeof window.flushBasicInfo === 'function') {
+      setTimeout(function () { window.flushBasicInfo(); }, 0);
+    }
+    status(filled
+      ? filled + '개 빈 칸을 시안 값으로 채우고 저장합니다.'
+        + (kept ? ' 이미 적혀 있던 ' + kept + '개는 그대로 두었습니다.' : '')
+      : (kept ? '빈 칸이 없습니다. 이미 적힌 값은 덮지 않습니다 — '
+                + '고칠 것은 위 대조 표에서 확인해 기본 정보 탭에서 고쳐 주세요.'
+              : '채울 값이 없습니다.'));
+    return filled;
   }
 
   // ── 원재료명 → BOM 원료별 행 ────────────────────────────────────────────

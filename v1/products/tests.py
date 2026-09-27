@@ -2178,10 +2178,24 @@ class DesignCompareModeTests(TestCase):
         head = self.ocr.index('function drawCompare')
         return self.ocr[head:self.ocr.index(chr(10) + '  }', head)]
 
-    def test_반영_단추를_감춘다(self):
+    def test_빈_칸이_있으면_채우는_단추로_바꿔_단다(self):
+        """
+        **옛 규칙을 뒤집었다.** 전에는 이 창에서 반영 단추를 감췄다 — "시안이
+        이렇다" 와 "내 값을 바꾸겠다" 가 섞이기 때문이었다. 그 걱정은
+        **빈 칸만 채우는 것**으로 풀린다: 대조 줄에는 여전히 고칠 칸이 없고
+        (test_대조_창에는_채우기가_없다), 채우는 것은 비어 있어 애초에 대조할
+        것도 없던 칸뿐이다.
+
+        제품 정보가 아직 없는 사람에게는 이 단추가 바로 필요한 것이다 — 시안을
+        검증해 쓸 만하다고 판단했으면 그 값이 제품의 시작점이 된다.
+        """
         block = self.compare_body()
-        self.assertIn("apply.style.display = 'none'", block)
-        self.assertIn('값을 고치지 않습니다', block)
+        self.assertIn('applyProofToEmpty(data)', block)
+        self.assertIn('빈 칸을 시안 값으로 채우기', block)
+        # 채울 것이 없으면 감춘다 — 눌러도 아무 일이 없는 단추를 두지 않는다
+        self.assertIn("apply.style.display = canFill ? '' : 'none';", block)
+        # 적힌 값은 건드리지 않는다고 요약에 적는다
+        self.assertIn('이미 적힌 값을 고치지 않습니다', block)
 
     def test_채우기_창은_원래대로_돌아온다(self):
         """창이 한 벌이라, 되돌리지 않으면 다음 채우기에서 단추가 사라진다."""
@@ -15692,3 +15706,113 @@ class 시안으로_시작하는_길이_있다(TestCase):
         self.assertEqual(MyLabel.objects.filter(user_id=user).count(), before + 1)
         # 판독 창이 곧바로 뜨도록 표시를 넘긴다
         self.assertIn('import=1', resp['Location'])
+
+
+class 시안_검증_결과가_문서함에_보인다(TestCase):
+    """
+    값은 metadata['proof'] 에 쌓이는데 화면 어디에도 안 나왔다. 그러면 "그때 뭘
+    봤더라" 를 다시 세야 하고, 무엇보다 **판 사이가 안 보인다** — 2판에서 두
+    건이던 것이 3판에서 없어졌는지가 이 기능의 값 절반이다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.docs = (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_시안_줄에_결과가_적힌다(self):
+        self.assertIn('doc.metadata.proof', self.docs)
+        self.assertIn('규정 {{ pf.issue_count }}건', self.docs)
+        self.assertIn('규정 이상 없음', self.docs)
+
+    def test_판_목록에도_적힌다(self):
+        """여기가 판 사이가 보이는 자리다."""
+        self.assertIn('old.metadata.proof', self.docs)
+
+    def test_못_읽음은_지적과_다른_칸이다(self):
+        # 시안에 없는지 판독이 놓쳤는지 모르는 것을 위반과 같이 세면
+        # 사람이 지적 전체를 안 믿는다
+        self.assertIn('doc-proof-unread', self.docs)
+        self.assertIn('못 읽음 {{ pf.unread|length }}', self.docs)
+
+    def test_무엇이_걸렸는지_곁말로_말한다(self):
+        self.assertIn('pf.issue_labels|join', self.docs)
+
+    def test_서버가_그_이름을_만들어_둔다(self):
+        """템플릿에 JSON 필터를 새로 만들지 않는다 — 이름 목록을 서버가 준다."""
+        from django.contrib.auth.models import User
+        from django.utils import timezone
+
+        from v1.label.models import MyLabel
+        from v1.label.services import proof_check
+
+        user = User.objects.create_user('noter', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='이름 제품')
+        data = {'prdlst_nm': {'value': '천연 쿠키', 'confidence': 'high'}}
+        checks = proof_check.check_proof(label, data)
+        note = proof_check.note_for_record(data, checks, user=user, when=timezone.now())
+        self.assertIn('금지 문구', note['issue_labels'])
+        # 영어 키가 그대로 남아 있으면 화면에 그것이 찍힌다
+        self.assertNotIn('forbidden_phrase', note['issue_labels'])
+
+    def test_결과를_그리는_모양이_있다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        css = (Path(dj.BASE_DIR) / 'static/css/products_common.css'
+               ).read_text(encoding='utf-8')
+        for name in ('.doc-proof-bad', '.doc-proof-ok', '.doc-proof-unread'):
+            self.assertIn(name, css, name)
+
+
+class 시안_값으로_빈_칸을_채운다(TestCase):
+    """
+    대조 창은 체크박스 줄이 없어 반영 단추를 감춰 두었다. 그런데 **제품 정보가
+    아직 없는 사람**에게는 그 단추가 바로 필요한 것이다 — 시안을 검증해 쓸
+    만하다고 판단했으면 그 값이 제품의 시작점이 된다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        self.js = Path('v1/static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+
+    def test_빈_칸만_채운다(self):
+        at = self.js.index('function applyProofToEmpty')
+        block = self.js[at:at + 2200]
+        # 적힌 값은 사람이 고른 것이다 — 말없이 덮지 않는다
+        self.assertIn("if ((target.value || '').trim()) { kept += 1; return; }", block)
+        self.assertIn('이미 적힌 값은 덮지 않습니다', self.js)
+
+    def test_채운_뒤_저장한다(self):
+        """저장하지 않으면 검증·확정이 저장된 값을 읽어 "비어 있습니다" 가 난다."""
+        at = self.js.index('function applyProofToEmpty')
+        block = self.js[at:at + 2600]
+        self.assertIn('window.flushBasicInfo()', block)
+
+    def test_빈_제품이_지워지지_않게_표시한다(self):
+        """'시안으로 시작' 화면은 떠날 때 손 안 댄 빈 제품을 지운다(비콘)."""
+        at = self.js.index('function applyProofToEmpty')
+        self.assertIn('window.__ocrApplied = true;', self.js[at:at + 700])
+
+    def test_대조_창의_단추가_그_일을_한다(self):
+        at = self.js.index('var canFill = Object.keys(FIELD_MAP).some')
+        block = self.js[at:at + 900]
+        self.assertIn('applyProofToEmpty(data)', block)
+        self.assertIn('빈 칸을 시안 값으로 채우기', block)
+
+    def test_채울_것이_없으면_감춘다(self):
+        """눌러도 아무 일이 없는 단추를 두지 않는다."""
+        at = self.js.index('var canFill = Object.keys(FIELD_MAP).some')
+        self.assertIn("apply.style.display = canFill ? '' : 'none';", self.js[at:at + 900])
+
+    def test_채우기_창은_제_글자로_되돌린다(self):
+        """창은 한 벌이다 — 되돌리지 않으면 다음 채우기에서 대조 창 글자가 뜬다."""
+        at = self.js.index("applyBtn.style.display = '';")
+        block = self.js[at:at + 500]
+        self.assertIn('선택 항목 채우기', block)
+        self.assertIn('applyBtn.onclick = null;', block)

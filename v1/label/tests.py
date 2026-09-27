@@ -22402,3 +22402,112 @@ class 금지문구_규칙은_한_벌이다(TestCase):
         block = src[at:at + 900]
         self.assertIn('scan_forbidden(graded, value)', block)
         self.assertIn('forbidden_issue(', block)
+
+
+class 두_칸이_다른_말을_하면_짚는다(TestCase):
+    """
+    검수에서 되풀이 나오는 자리 — 식품유형에 "가열하여 섭취하는 냉동식품" 이라고
+    적어 놓고 보관방법은 "직사광선을 피해 실온 보관" 인 라벨이 있다. 둘 중 하나는
+    틀렸고 인쇄물에 그대로 나간다. 그런데 `_is_frozen` 은 두 칸을 OR 로 묶어
+    보므로 **모순 그 자체는 아무도 말하지 않았다.**
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+
+        from v1.label.models import MyLabel
+
+        self.user = User.objects.create_user('temp', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='온도 제품')
+
+    def _check(self, **fields):
+        from v1.label.services.validation_service import check_storage_temp_stated
+
+        for key, value in fields.items():
+            setattr(self.label, key, value)
+        return check_storage_temp_stated(self.label)
+
+    def test_냉동인데_실온_보관이면_짚는다(self):
+        got = self._check(prdlst_dcnm='빵류 [가열하여 섭취하는 냉동식품]',
+                          storage_method='직사광선을 피해 실온 보관')
+        self.assertEqual(len(got), 1, got)
+        self.assertEqual(got[0]['category'], 'storage_temp')
+        self.assertIn('냉동', got[0]['message'])
+        # 어느 칸을 고쳐야 하는지 알려 준다
+        self.assertIn('storage_method', got[0]['fields'])
+
+    def test_두_온도대가_함께_적힌_것은_정상이다(self):
+        """'-18℃ 이하 냉동보관, 해동 후 냉장 3일' 은 흔하고 맞는 표기다."""
+        self.assertEqual(
+            self._check(prdlst_dcnm='빵류 [냉동식품]',
+                        storage_method='-18℃ 이하 냉동보관, 해동 후 냉장에서 3일'), [])
+
+    def test_냉동_말이_없는_유형은_보지_않는다(self):
+        """식품유형이 온도대를 말하지 않으면 지적할 근거가 없다."""
+        self.assertEqual(self._check(prdlst_dcnm='과자', storage_method='실온 보관'), [])
+
+    def test_냉장도_같은_자로_본다(self):
+        got = self._check(prdlst_dcnm='즉석섭취식품(냉장)', storage_method='실온에 두세요')
+        self.assertEqual(len(got), 1, got)
+        self.assertIn('냉장', got[0]['message'])
+
+    def test_보관방법이_비면_여기서_말하지_않는다(self):
+        """빈 칸은 check_required_fields 가 말한다 — 두 번 말하지 않는다."""
+        self.assertEqual(self._check(prdlst_dcnm='빵류 [냉동식품]', storage_method=''), [])
+
+    def test_검사_목록과_이름표에_들어_있다(self):
+        from v1.label.services.ai_validation_service import _CATEGORY_LABELS
+        from v1.label.services.validation_service import (
+            _CHECKS, _LEGAL_BASIS, check_storage_temp_stated,
+        )
+
+        self.assertIn(check_storage_temp_stated, _CHECKS)
+        self.assertIn('storage_temp', _LEGAL_BASIS)
+        self.assertIn('storage_temp', _CATEGORY_LABELS)
+
+    def test_거꾸로는_보지_않는다(self):
+        """
+        보관방법은 냉동인데 식품유형에 부기가 없는 경우 — 유형명에 부기를 붙이라고
+        정한 자리가 유형마다 갈려서, 일률로 지적하면 멀쩡한 라벨이 무더기로 걸린다.
+        """
+        self.assertEqual(
+            self._check(prdlst_dcnm='과자', storage_method='-18℃ 이하 냉동보관'), [])
+
+
+class 한_포장지에_번호가_둘이면_짚는다(TestCase):
+    """
+    시안을 다른 제품에서 복사해 만들 때 나는 일이고, 인쇄된 뒤에는 회수 사유다.
+    """
+
+    def _conflicts(self, read, text):
+        from v1.label.services.ocr_repeats import repeated_conflicts
+
+        data = {'prdlst_report_no': {'value': read, 'confidence': 'high'}}
+        return repeated_conflicts(data, text)
+
+    def test_다른_번호가_있으면_말한다(self):
+        got = self._conflicts('20220460436160',
+                              '품목보고번호 20220460436160 … 뒷면 19990101020304')
+        self.assertIn('prdlst_report_no', got)
+        self.assertIn('19990101020304', got['prdlst_report_no'][0])
+
+    def test_바코드는_세지_않는다(self):
+        """
+        국내 바코드가 13 자리다. 그것까지 세면 **모든 포장지가** "번호가 둘" 이 된다.
+        """
+        got = self._conflicts('20220460436160',
+                              '품목보고번호 20220460436160  바코드 8801234567890')
+        self.assertEqual(got, {})
+
+    def test_같은_번호가_두_번_적힌_것은_정상이다(self):
+        got = self._conflicts('20220460436160',
+                              '20220460436160 … 다시 20220460436160')
+        self.assertEqual(got, {})
+
+    def test_읽은_번호가_없으면_말하지_않는다(self):
+        """견줄 것이 없다. 번호가 없는 것은 검증이 따로 말한다."""
+        self.assertEqual(self._conflicts('', '19990101020304'), {})
+
+    def test_하이픈이_섞인_번호도_견준다(self):
+        got = self._conflicts('20170415080-1271', '20170415080-1271 만 적혀 있다')
+        self.assertEqual(got, {})

@@ -2095,3 +2095,19 @@ html.v2-max .v2-max-exit { display: flex; }
   padding: 2px 8px; border-radius: 999px; font-size: 11.5px;
   background: var(--bg-muted, #f1f3f4); color: var(--text-secondary, #5f6368);
 }
+
+/* ==================== 문서함의 시안 판별 검증 결과 ====================
+   값은 metadata['proof'] 에 쌓이는데 화면에 아무 데도 없었다. 판 사이가
+   보여야 이력이 된다 — "2판 2건 → 3판 0건" 이 이 기능의 값 절반이다.
+
+   **못 읽음은 지적과 다른 색이다.** 시안에 없는지 판독이 놓쳤는지 모르는
+   것을 위반과 같은 색으로 두면 사람이 지적 전체를 안 믿는다. */
+.doc-proof { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.doc-proof-bad, .doc-proof-ok, .doc-proof-unread {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 6px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; white-space: nowrap;
+}
+.doc-proof-bad    { background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f); }
+.doc-proof-ok     { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
+.doc-proof-unread { background: var(--bg-muted, #f1f3f4); color: var(--text-secondary, #5f6368); }

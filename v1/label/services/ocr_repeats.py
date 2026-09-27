@@ -101,6 +101,17 @@ def _fmt_amount(pair) -> str:
     return f'{value:g} {unit}'
 
 
+# 품목보고번호로 볼 수 있는 자릿수. **13 자리를 뺀 것이 핵심이다** —
+# 국내 바코드(880…)가 13 자리라, 그것까지 세면 모든 포장지가 "번호가 둘" 이 된다.
+# 전화번호·사업자등록번호는 하이픈이 섞이거나 더 짧아 애초에 걸리지 않는다.
+_REPORT_NO_RE = re.compile(r'(?<!\d)(\d{14,16})(?!\d)')
+
+
+def report_nos_in(text: str) -> set:
+    """원문에서 품목보고번호로 볼 수 있는 숫자 덩이."""
+    return {m.group(1) for m in _REPORT_NO_RE.finditer(text or '')}
+
+
 def repeated_conflicts(data: dict, text: str) -> dict:
     """
     판독한 값과 **원문에 남은 다른 값**을 견준다.
@@ -137,6 +148,23 @@ def repeated_conflicts(data: dict, text: str) -> dict:
         notes.setdefault('content_weight', []).append(
             f'사진의 다른 자리에 {listed} 이(가) 적혀 있습니다 — 여기서 읽은 것은 {mine} 입니다. '
             f'표와 앞면 박스의 열량이 서로 다른지 확인하세요.')
+
+    # ── 품목보고번호 ──────────────────────────────────────────────────────
+    #
+    # 한 포장지에 번호가 둘 적혀 있으면 하나는 다른 제품의 것이다 — 시안을
+    # 다른 제품에서 복사해 만들 때 나는 일이고, 인쇄된 뒤에는 회수 사유가 된다.
+    #
+    # **어느 쪽이 맞는지 말하지 않는다.** 우리가 고르면 틀린 쪽을 고를 수 있다.
+    read_no = str((data.get('prdlst_report_no') or {}).get('value') or '')
+    read_digits = re.sub(r'\D', '', read_no)
+    if read_digits:
+        others = {n for n in report_nos_in(text) if n != read_digits}
+        if others:
+            listed = ', '.join(sorted(others))
+            notes.setdefault('prdlst_report_no', []).append(
+                f'사진의 다른 자리에 품목보고번호로 보이는 {listed} 이(가) 적혀 '
+                f'있습니다 — 여기서 읽은 것은 {read_digits} 입니다. '
+                f'다른 제품의 번호가 섞이지 않았는지 확인하세요.')
 
     return notes
 

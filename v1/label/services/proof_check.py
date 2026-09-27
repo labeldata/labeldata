@@ -183,16 +183,27 @@ def note_for_record(data, checks, user=None, when=None):
     **값을 남기는 것이 핵심이다.** 규칙을 고친 뒤 옛 시안을 다시 보려면 값만
     있으면 된다 — 사진을 다시 읽지 않는다(시간당 판독 한도, 비용).
     """
+    from v1.label.services.ai_validation_service import name_issues
+
     values, _confidence, extras = split_reading(data)
     checks = checks or {}
+    # 무엇이 걸렸는지 **이름으로** 남긴다. 목록 화면은 개수만 적고 이름은 곁말에
+    # 쓴다 — 그러면 줄을 펼치지 않고도 "금지 문구, 원재료명 괄호" 를 알 수 있다.
+    named = name_issues(checks.get('issues') or [])
+    labels = []
+    for row in named:
+        label = row.get('label') or row.get('category') or ''
+        if label and label not in labels:
+            labels.append(label)
     return {
+        'issue_labels': labels,
         'checked_at': when.isoformat(timespec='seconds') if when else None,
         'checked_by': user.get_username() if user else '',
         'values': values,
         'extra_texts': extras[:40],
         'issue_count': int(checks.get('issue_count') or 0),
         'issues': [{k: i.get(k) for k in ('category', 'label', 'message', 'advisory', 'source')}
-                   for i in (checks.get('issues') or [])[:40]],
+                   for i in named[:40]],
         'unread': [u.get('label') or u.get('field') for u in (checks.get('unread') or [])],
         'unchecked_count': len(checks.get('unchecked') or []),
     }

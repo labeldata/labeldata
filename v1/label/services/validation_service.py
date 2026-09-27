@@ -142,6 +142,7 @@ _LEGAL_BASIS = {
     'nutrition_subset': '식약처 「영양성분 등록 요령」 영양성분 검토 규칙(당류 함량 ≤ 탄수화물 함량)',
     'nutrition_fat_sum': '식약처 「영양성분 등록 요령」 영양성분 검토 규칙(지방 ≥ 트랜스지방 + 포화지방 + 콜레스테롤/1,000)',
     'thawing_method': '「식품등의 표시기준」 냉동식품의 조리·해동방법 표시 규정',
+    'storage_temp': '「식품등의 표시기준」 보관방법 표시 규정(보존 온도를 명시)',
     'exchange_notice': '「소비자기본법」 소비자분쟁해결기준에 따른 제품 교환 안내',
     'origin_emphasis': '「농수산물의 원산지 표시 등에 관한 법률 시행규칙」 원산지 표시 방법(포장재 바탕색과 구분되는 색·굵기)',
 }
@@ -176,6 +177,7 @@ _ISSUE_FIELDS = {
     'font_size':             (),
     'calorie_macros':        ('content_weight',),
     'thawing_method':        ('cautions',),
+    'storage_temp':          ('storage_method',),
     'exchange_notice':       ('cautions',),
     'origin_emphasis':       ('rawmtrl_nm_display',),
     # forbidden_phrase / required_missing 은 지적마다 칸이 달라 그때그때 싣는다
@@ -2140,6 +2142,55 @@ def check_thawing_method(label) -> list[dict]:
     )]
 
 
+# 식품유형이 말하는 온도대와, 보관방법이 그 온도대를 적었는지.
+#
+# **한 방향만 본다.** "식품유형에 냉동이라고 적혀 있는데 보관방법에 냉동 지시가
+# 없다" 는 어느 조항을 들이대도 흠이다 — 보관방법은 보존 온도를 적는 칸이다.
+#
+# 거꾸로(보관방법은 냉동인데 식품유형에 부기가 없다)는 보지 않는다. 유형명에
+# 부기를 붙이라고 정한 자리가 유형마다 갈려서, 그것을 일률로 지적하면 멀쩡한
+# 라벨이 무더기로 걸린다 — 이 저장소가 오탐으로 여러 번 데인 자리다.
+_TEMP_BANDS = (
+    ('냉동', ('냉동', '-18', '−18', 'frozen')),
+    ('냉장', ('냉장', '0~10', '0∼10', '10℃ 이하', '10도 이하', 'chilled')),
+)
+
+
+def check_storage_temp_stated(label) -> list[dict]:
+    """
+    식품유형이 온도대를 말하는데 보관방법이 그 말을 안 하는가.
+
+    검수에서 반복해 나오는 자리다. 식품유형에 "가열하여 섭취하는 냉동식품" 이라고
+    적어 놓고 보관방법은 "직사광선을 피해 실온 보관" 인 라벨이 있다 — 둘 중 하나는
+    틀렸고, 인쇄물에 그대로 나간다.
+
+    **오탐을 만들지 않으려고 좁게 본다.** 보관방법 어디에라도 그 온도대 말이
+    있으면 넘어간다 — "-18℃ 이하 냉동보관, 해동 후 냉장 3일" 처럼 두 온도대가
+    함께 적히는 것이 정상이기 때문이다.
+    """
+    printed = (getattr(label, 'prdlst_dcnm', '') or '')
+    sub = (getattr(label, 'food_type', '') or '')
+    kind = f'{printed} {sub}'
+    storage = (getattr(label, 'storage_method', '') or '').strip()
+    if not storage:
+        return []      # 비어 있는 것은 check_required_fields 가 말한다
+
+    for name, words in _TEMP_BANDS:
+        if name not in kind:
+            continue
+        if any(word in storage for word in words):
+            return []
+        return [_issue(
+            'storage_temp',
+            f'식품유형은 "{name}" 인데 보관방법에 {name} 보관 표시가 없습니다 '
+            f'(보관방법: "{_short_name(storage, 30)}").',
+            f'보관방법에 보존 온도를 적으세요 '
+            f'(예: "{"-18℃ 이하 냉동보관" if name == "냉동" else "0~10℃ 냉장보관"}"). '
+            f'{name} 제품이 아니라면 식품유형을 고쳐 주세요.',
+        )]
+    return []
+
+
 def check_exchange_notice(label) -> list[dict]:
     """
     제품에 이상이 있을 때 어디서 바꿀 수 있는지 적혀 있는가.
@@ -2668,6 +2719,7 @@ _CHECKS = [
     check_calorie_matches_macros,
     check_nutrition_internal_consistency,
     check_thawing_method,
+    check_storage_temp_stated,
     check_exchange_notice,
     check_origin_emphasis,
     # 받은 시안을 직접 읽는 검사

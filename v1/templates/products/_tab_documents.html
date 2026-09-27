@@ -240,6 +240,41 @@
                                 <div class="doc-name-main" title="{{ doc.original_filename }}">{{ doc.original_filename }}</div>
                                 <div class="doc-name-meta">{{ doc.file_size|filesizeformat }} · {{ doc.uploaded_datetime|date:"y.m.d" }}</div>
                                 {% endif %}
+                                {% comment %}
+                                  **시안을 검증한 결과를 그 판에 붙여 적는다.**
+
+                                  값은 이미 metadata['proof'] 에 쌓이는데 화면에
+                                  아무 데도 안 나왔다. 그러면 "그때 뭘 봤더라" 를
+                                  다시 세야 하고, 무엇보다 **판 사이가 안 보인다** —
+                                  2판에서 두 건이던 것이 3판에서 없어졌는지가
+                                  이 기능의 값 절반이다.
+
+                                  못 읽은 항목은 지적과 **다른 색**이다. 시안에
+                                  없는지 판독이 놓쳤는지 모르는 것을 위반과 같이
+                                  세면 사람이 지적 전체를 안 믿는다.
+                                {% endcomment %}
+                                {% if doc.metadata.proof %}
+                                {% with pf=doc.metadata.proof %}
+                                <div class="doc-proof">
+                                    {% if pf.issue_count %}
+                                    <span class="doc-proof-bad"
+                                          title="시안에서 규정에 어긋난 곳{% if pf.issue_labels %} — {{ pf.issue_labels|join:", " }}{% endif %}">
+                                        <i class="bi bi-exclamation-triangle"></i>규정 {{ pf.issue_count }}건
+                                    </span>
+                                    {% else %}
+                                    <span class="doc-proof-ok" title="시안에서 규정에 어긋난 곳을 찾지 못했습니다">
+                                        <i class="bi bi-check-circle"></i>규정 이상 없음
+                                    </span>
+                                    {% endif %}
+                                    {% if pf.unread %}
+                                    <span class="doc-proof-unread"
+                                          title="시안에 없는지 판독이 놓친 것인지는 알 수 없습니다 — 사진에서 확인하세요">
+                                        못 읽음 {{ pf.unread|length }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% endwith %}
+                                {% endif %}
                             </div>
                         </div>
                     </td>
@@ -326,6 +361,21 @@
                                             title="지금 판독해 배합에 올립니다">판독 전 ›</button>
                                     {% endif %}
                                 </span>
+                                {% endif %}
+                                {% if old.metadata.proof %}
+                                {% with pf=old.metadata.proof %}
+                                <span class="doc-version-meta doc-proof">
+                                    {% if pf.issue_count %}
+                                    <span class="doc-proof-bad"
+                                          title="{{ pf.issue_labels|join:", " }}">규정 {{ pf.issue_count }}건</span>
+                                    {% else %}
+                                    <span class="doc-proof-ok">규정 이상 없음</span>
+                                    {% endif %}
+                                    {% if pf.unread %}
+                                    <span class="doc-proof-unread">못 읽음 {{ pf.unread|length }}</span>
+                                    {% endif %}
+                                </span>
+                                {% endwith %}
                                 {% endif %}
                                 <span class="doc-version-meta">{{ old.file_size|filesizeformat }} · {{ old.uploaded_datetime|date:"y.m.d" }}{% if old.uploaded_by %} · {% if old.uploaded_by == request.user %}나{% else %}{{ old.uploaded_by.get_full_name|default:old.uploaded_by.username }}{% endif %}{% endif %}</span>
                             </li>

@@ -58,6 +58,7 @@ _CATEGORY_LABELS = {
     'food_type_unknown': '식품유형 이름',
     'allergen_vocabulary': '알레르기 표시 명칭',
     'font_size': '활자 크기',
+    'storage_temp': '보관방법의 보존 온도',
     'calorie_macros': '열량-영양성분 계산',
     'calorie_macros_advice': '열량-영양성분 계산(권고)',
     'thawing_method': '해동방법 표시',
